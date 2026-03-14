@@ -1,5 +1,7 @@
 "use client"
 
+import { useState, useEffect } from "react"
+
 interface BottleProps {
   angle: number
   isSpinning: boolean
@@ -8,6 +10,12 @@ interface BottleProps {
 }
 
 export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }: BottleProps) {
+  const [imgError, setImgError] = useState(false)
+
+  useEffect(() => {
+    setImgError(false)
+  }, [skin])
+
   const skinToImg: Record<NonNullable<BottleProps["skin"]>, string> = {
     classic: "/assets/b_standart_v2.webp",
     ruby: "/assets/b_lemonade_v2.webp",
@@ -39,21 +47,26 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
         }}
       >
         {/* Реальная бутылочка из файла (адаптивный размер) */}
-        <div className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]">
+        <div
+          className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
+          style={{ display: imgError ? "none" : undefined }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            key={skin}
             src={skinToImg[skin]}
             alt="Бутылочка"
             className="h-full w-full object-contain"
             draggable={false}
+            loading="eager"
+            onError={() => setImgError(true)}
           />
         </div>
 
-        {/* SVG оставляем как фолбек (на случай отсутствия файла) */}
+        {/* SVG показываем при ошибке загрузки картинки или как фолбек */}
         <svg
-          style={{ display: "none" }}
-          width="140"
-          height="140"
+          className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
+          style={{ display: imgError ? "block" : "none" }}
           viewBox="0 0 120 120"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
