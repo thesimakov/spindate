@@ -239,6 +239,15 @@
   animation: pairArrowPulse 1.3s ease-in-out infinite;
 }
 
+/* Лоадер приложения — полоска прогресса */
+@keyframes app-loader-shimmer {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+}
+.app-loader-shimmer {
+  animation: app-loader-shimmer 1.5s ease-in-out infinite;
+}
+
 /* Big gift fade-in animation (when несколько подарков) */
 @keyframes giftFade {
   0% {

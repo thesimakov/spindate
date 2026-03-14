@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVk } from "@/lib/vk-bridge"
+import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
 import { GameRoom } from "@/components/game-room"
 import { ChatScreen } from "@/components/chat-screen"
@@ -41,17 +42,11 @@ export function GameApp() {
 
   if (showEntryLoader) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div
-            className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"
-            aria-hidden
-          />
-          <p className="text-sm font-medium text-muted-foreground">
-            {tableReady ? "Почти готово..." : "Подготовка стола..."}
-          </p>
-        </div>
-      </div>
+      <AppLoader
+        title={tableReady ? "Почти готово..." : "Подготовка стола..."}
+        subtitle="Собираем игроков и настраиваем игру"
+        hint="Крути и знакомься"
+      />
     )
   }
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { ArrowLeft, Heart, Trophy } from "lucide-react"
+import { AppLoader } from "@/components/app-loader"
 import { useGame, generateBots } from "@/lib/game-context"
 import type { Player } from "@/lib/game-types"
 
@@ -479,18 +480,12 @@ export function UgadaikaScreen() {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/98 text-slate-100 game-bg-animated">
-        <div className="flex flex-col items-center gap-6 px-4">
-          <div
-            className="h-16 w-16 animate-spin rounded-full border-4 border-slate-600 border-t-amber-400"
-            aria-hidden
-          />
-          <div className="flex flex-col items-center gap-1 text-center">
-            <p className="text-base font-semibold text-slate-200">Подготовка игры...</p>
-            <p className="text-xs text-slate-500">Загружаем участников и настройки</p>
-            <p className="text-[11px] text-slate-600">Угадай-ка</p>
-          </div>
-        </div>
+      <div className="fixed inset-0 z-[100] game-bg-animated">
+        <AppLoader
+          title="Подготовка игры..."
+          subtitle="Загружаем участников и настройки"
+          hint="Угадай-ка"
+        />
       </div>
     )
   }
