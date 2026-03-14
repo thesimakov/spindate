@@ -305,8 +305,8 @@ export function PlayerAvatar({
           </div>
         </div>
 
-        {/* Рамка-картинка (кролик, фея, лиса) — SVG поверх аватарки, подгон под круг аватарки */}
-        {svgFrameSrc && useFrameOnRim && (
+        {/* Рамка-картинка (кролик, фея, лиса) — SVG поверх аватарки, показываем всегда когда выбрана */}
+        {svgFrameSrc && (useFrameOnRim || isCurrentTurn || isTarget) && (
           <div
             className="pointer-events-none absolute inset-[-8px] z-[1] flex items-center justify-center"
             aria-hidden
