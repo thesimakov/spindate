@@ -38,7 +38,19 @@ const GIFT_IDS = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "t
 
 export function ProfileScreen() {
   const { state, dispatch } = useGame()
-  const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog } = state
+  const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog, avatarFrames } = state
+
+  const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
+  const PROFILE_FRAMES = [
+    { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none" },
+    { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)" },
+    { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)" },
+    { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)" },
+    { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)" },
+    { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)" },
+    { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none" },
+    { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)" },
+  ] as const
 
   const rosesBalance = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,
@@ -114,11 +126,22 @@ export function ProfileScreen() {
   }
 
   return (
-    <div className="flex h-dvh max-h-dvh flex-col items-center overflow-y-auto px-4 py-6 sm:py-8 pb-[max(2rem,env(safe-area-inset-bottom))] game-bg-animated">
-      <div className="w-full max-w-lg min-h-0 flex-shrink-0 space-y-4 rounded-2xl border border-slate-800 bg-[rgba(2,6,23,0.85)] px-4 sm:px-6 py-5 sm:py-7 shadow-[0_24px_50px_rgba(0,0,0,0.75)]">
+    <div className="flex h-dvh max-h-dvh flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated">
+      <div className="w-full max-w-lg flex-1 min-h-0 flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 sm:py-7 space-y-4">
         <div className="flex items-center gap-4">
-          <div className="relative h-16 w-16 overflow-hidden rounded-full border border-slate-700">
-            <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full object-cover" />
+          <div
+            className="relative h-16 w-16 overflow-hidden rounded-full flex-shrink-0 transition-all duration-200"
+            style={
+              currentFrameId !== "none"
+                ? (() => {
+                    const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                    return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
+                  })()
+                : { border: "2px solid #475569" }
+            }
+          >
+            <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full rounded-full object-cover" />
             {isVip && (
               <div
                 className="absolute flex items-center justify-center rounded-full"
@@ -204,6 +227,32 @@ export function ProfileScreen() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Рамка аватарки */}
+        <div className="rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3">
+          <div className="mb-3 text-[15px] font-semibold text-slate-100">Рамка аватарки</div>
+          <div className="grid grid-cols-4 gap-2">
+            {PROFILE_FRAMES.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() =>
+                  currentUser &&
+                  dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
+                }
+                className={`flex flex-col items-center gap-1 rounded-lg py-2 transition-all hover:bg-slate-600/50 ${
+                  currentFrameId === f.id ? "ring-2 ring-sky-400 bg-slate-600/60" : ""
+                }`}
+              >
+                <div
+                  className="h-10 w-10 rounded-full bg-slate-700 flex-shrink-0"
+                  style={{ border: f.border, boxShadow: f.shadow }}
+                />
+                <span className="text-[10px] text-slate-300 leading-tight">{f.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -349,6 +398,7 @@ export function ProfileScreen() {
           >
             {"Назад к столу"}
           </Button>
+        </div>
         </div>
       </div>
 

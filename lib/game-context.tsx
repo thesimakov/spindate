@@ -82,7 +82,7 @@ const initialState: GameState = {
   favorites: [],
   chatWith: null,
   chatMessages: {},
-  voiceBalance: 300,
+  voiceBalance: 0,
   bonusBalance: 0,
   tableId: Math.floor(Math.random() * 9999) + 1,
   gameLog: [],
