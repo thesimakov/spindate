@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots } from "@/lib/game-context"
+import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { StringLights, Candle, TableDecorations } from "@/components/decorations"
@@ -120,7 +121,7 @@ function renderActionIcon(action: PairAction): React.ReactNode {
       // eslint-disable-next-line @next/next/no-img-element
       return (
         <img
-          src="/assets/7786876.svg"
+          src={assetUrl(EMOJI_BANYA)}
           alt="Веник"
           className="h-4 w-4 object-contain"
           draggable={false}
@@ -455,13 +456,13 @@ export function GameRoom() {
   const userPrediction = predictions.find(p => p.playerId === currentUser?.id)
 
   const bottleSkins = [
-    { id: "classic" as const, name: "Классическая", img: "/assets/b_standart_v2.webp", cost: 0 },
-    { id: "ruby" as const, name: "Лимонад", img: "/assets/b_lemonade_v2.webp", cost: 5 },
-    { id: "neon" as const, name: "Виски", img: "/assets/b_jackdaniels_v3-20d33615-6586-4c75-923c-375c37dae0e3.webp", cost: 5 },
-    { id: "frost" as const, name: "Шампанское", img: "/assets/b_champagne_v3-9fde6437-79bd-474a-bff6-6ce9a8d187b0.webp", cost: 5 },
-    { id: "baby" as const, name: "Детская", img: "/assets/b_baby.webp", cost: 5 },
-    { id: "vip" as const, name: "VIP-бутылка", img: "/assets/b_vip_v2.webp", cost: 5 },
-    { id: "milk" as const, name: "Молочная", img: "/assets/b_milk_v2.webp", cost: 5 },
+    { id: "classic" as const, name: "Классическая", img: assetUrl(BOTTLE_IMAGES.classic), cost: 0 },
+    { id: "ruby" as const, name: "Лимонад", img: assetUrl(BOTTLE_IMAGES.ruby), cost: 5 },
+    { id: "neon" as const, name: "Виски", img: assetUrl(BOTTLE_IMAGES.neon), cost: 5 },
+    { id: "frost" as const, name: "Шампанское", img: assetUrl(BOTTLE_IMAGES.frost), cost: 5 },
+    { id: "baby" as const, name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby), cost: 5 },
+    { id: "vip" as const, name: "VIP-бутылка", img: assetUrl(BOTTLE_IMAGES.vip), cost: 5 },
+    { id: "milk" as const, name: "Молочная", img: assetUrl(BOTTLE_IMAGES.milk), cost: 5 },
   ]
 
   const cooldownLeftMs = useMemo(() => {
@@ -1027,7 +1028,7 @@ export function GameRoom() {
     }
 
     if (actionId === "banya") {
-      launchEmoji(spinnerIdx, targetIdx, undefined, "/assets/7786876.svg")
+      launchEmoji(spinnerIdx, targetIdx, undefined, assetUrl(EMOJI_BANYA))
       launchSteam(targetIdx)
     }
 
@@ -1097,7 +1098,7 @@ export function GameRoom() {
 
     if (actionId === "banya") {
       // Для ответной «бани» делаем ту же анимацию, что и при основном действии
-      launchEmoji(fromIdx, toIdx, undefined, "/assets/7786876.svg")
+      launchEmoji(fromIdx, toIdx, undefined, assetUrl(EMOJI_BANYA))
       launchSteam(toIdx)
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
