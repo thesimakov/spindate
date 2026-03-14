@@ -291,7 +291,16 @@ export function RegistrationScreen() {
           </Button>
 
           <p className="mt-1 text-center text-xs text-slate-400">
-            {"Нажимая кнопку, вы соглашаетесь с условиями использования"}
+            Нажимая кнопку, вы соглашаетесь с{" "}
+            <a
+              href="https://dev.vk.com/ru/mini-apps-rules"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-slate-300"
+            >
+              правилами размещения мини-приложений VK
+            </a>
+            . В игре используется только виртуальная валюта (сердечки), не обмениваемая на реальные деньги и не являющаяся азартной игрой.
           </p>
         </div>
       </div>

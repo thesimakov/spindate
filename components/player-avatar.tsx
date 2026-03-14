@@ -34,6 +34,8 @@ interface PlayerAvatarProps {
   frameId?: string
   /** Игрок сейчас в мини-игре «Угадай-ка» — показывать статус «в игре» */
   inGame?: boolean
+  /** Не крутил бутылочку 3+ хода — показывать «уснул» (zzz из центра аватарки) */
+  showAsleep?: boolean
 }
 
 export function PlayerAvatar({
@@ -48,6 +50,7 @@ export function PlayerAvatar({
   bigGiftHasMany,
   frameId,
   inGame = false,
+  showAsleep = false,
 }: PlayerAvatarProps) {
   const frameStyle = frameId && frameId !== "none" ? FRAME_STYLES[frameId] ?? FRAME_STYLES.none : null
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
@@ -62,6 +65,19 @@ export function PlayerAvatar({
         className="relative"
         style={{ width: outerSize, height: outerSize }}
       >
+        {/* zzz — игрок «уснул» / отошёл (не крутил 3+ хода), но онлайн */}
+        {showAsleep && !isCurrentTurn && !isTarget && (
+          <div
+            className="avatar-asleep-zzz absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none flex items-center justify-center gap-0.5"
+            style={{ width: outerSize, height: outerSize }}
+            aria-hidden
+          >
+            <span className="avatar-asleep-zzz-letter">z</span>
+            <span className="avatar-asleep-zzz-letter avatar-asleep-zzz-letter-2">z</span>
+            <span className="avatar-asleep-zzz-letter avatar-asleep-zzz-letter-3">z</span>
+          </div>
+        )}
+
         {/* Неоновый подсвет рамки для текущего хода / цели */}
         {(isCurrentTurn || isTarget) && (
           <div

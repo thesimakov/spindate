@@ -112,7 +112,7 @@ export const PAIR_ACTIONS: PairAction[] = [
   { id: "flowers", label: "Подарить цветы",     icon: "flowers",  cost: 5,  combo: ["MF", "FF"] },
   { id: "diamond", label: "Подарить бриллиант", icon: "diamond",  cost: 20, combo: ["MF"] },
   // M+M
-  { id: "beer",    label: "Выпить пива",        icon: "beer",     cost: 1,  combo: ["MM"] },
+  { id: "beer",    label: "Выпить пива",        icon: "beer",     cost: 0,  combo: ["MM"] },
   { id: "banya",   label: "Парить вениками",    icon: "banya",    cost: 5,  combo: ["MM"] },
   { id: "tools",   label: "Подарить инструменты", icon: "tools",  cost: 1,  combo: ["MM"] },
   // F+F
@@ -185,6 +185,10 @@ export interface GameState {
   playerInUgadaika?: number | null
   /** Показать анимацию «вернулся к нам» после выхода из мини-игры. */
   showReturnedFromUgadaika?: boolean
+  /** Сколько раз подряд игрок пропустил кручение (не крутил, когда был его ход). Если >= 3 — показываем «отошёл» (zzz). */
+  spinSkips?: Record<number, number>
+  /** Был ли текущий ход уже использован на кручение (чтобы в NEXT_TURN отличать пропуск от кручения). */
+  currentTurnDidSpin?: boolean
 }
 
 export type GameAction =

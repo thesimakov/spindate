@@ -23,7 +23,7 @@ import {
   Flower2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots } from "@/lib/game-context"
+import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
 import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
@@ -216,6 +216,7 @@ export function GameRoom() {
     ugadaikaFriendUnlocked,
     playerInUgadaika,
     showReturnedFromUgadaika,
+    spinSkips,
   } = state
 
   // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки»
@@ -236,6 +237,17 @@ export function GameRoom() {
       return () => clearTimeout(t)
     }
   }, [tableId])
+
+  // Рандомный бот периодически меняет себе рамку
+  useEffect(() => {
+    const bots = players.filter((p): p is Player => !!p.isBot)
+    if (bots.length === 0) return
+    const interval = setInterval(() => {
+      const bot = bots[Math.floor(Math.random() * bots.length)]
+      if (bot) dispatch({ type: "SET_AVATAR_FRAME", playerId: bot.id, frameId: randomAvatarFrame() })
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [players, dispatch])
 
   // Background music
   const MUSIC_SRC = "/music/you-know-why.mp3"
@@ -1168,27 +1180,55 @@ export function GameRoom() {
     dispatch({ type: "NEXT_TURN" })
   }
 
-  const handleThankDonor = useCallback(() => {
-    if (!bottleDonorId || !currentUser) return
-    const donorIdx = players.findIndex((p) => p.id === bottleDonorId)
-    const fromIdx = players.findIndex((p) => p.id === currentUser.id)
-    if (donorIdx === -1 || fromIdx === -1 || bottleDonorId === currentUser.id) return
+  const thankDonorFromPlayer = useCallback(
+    (fromPlayerId: number) => {
+      if (!bottleDonorId) return
+      const donorIdx = players.findIndex((p) => p.id === bottleDonorId)
+      const fromIdx = players.findIndex((p) => p.id === fromPlayerId)
+      if (donorIdx === -1 || fromIdx === -1 || bottleDonorId === fromPlayerId) return
 
-    launchEmoji(fromIdx, donorIdx, "🤝")
+      const fromPlayer = players.find((p) => p.id === fromPlayerId)
+      const donor = players.find((p) => p.id === bottleDonorId)
+      if (!fromPlayer || !donor) return
 
-    const donor = players.find((p) => p.id === bottleDonorId)
-    if (donor) {
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => launchEmoji(fromIdx, donorIdx, "⭐"), i * 120)
+      }
       dispatch({
         type: "ADD_LOG",
         entry: {
           id: generateLogId(),
           type: "system",
-          text: `${currentUser.name} благодарит ${donor.name} за бутылочку`,
+          text: `${fromPlayer.name} благодарит ${donor.name} за бутылочку`,
           timestamp: Date.now(),
         },
       })
-    }
-  }, [bottleDonorId, currentUser, players, launchEmoji, dispatch])
+    },
+    [bottleDonorId, players, launchEmoji, dispatch],
+  )
+
+  const handleThankDonor = useCallback(() => {
+    if (!currentUser) return
+    thankDonorFromPlayer(currentUser.id)
+  }, [currentUser, thankDonorFromPlayer])
+
+  /* ---- боты рандомно нажимают «Спасибо» донору бутылочки ---- */
+  useEffect(() => {
+    if (!bottleDonorId || players.length === 0) return
+    const donorId = bottleDonorId
+    const botsWhoCanThank = players.filter(
+      (p) => p.isBot && p.id !== donorId && p.id !== currentUser?.id,
+    )
+    if (botsWhoCanThank.length === 0) return
+
+    const interval = setInterval(() => {
+      if (Math.random() > 0.35) return
+      const bot = botsWhoCanThank[Math.floor(Math.random() * botsWhoCanThank.length)]
+      if (bot) thankDonorFromPlayer(bot.id)
+    }, 12000)
+
+    return () => clearInterval(interval)
+  }, [bottleDonorId, players, currentUser?.id, thankDonorFromPlayer])
 
   /* ---- bot auto-actions on result (random, 1–3 actions) ---- */
   useEffect(() => {
@@ -1707,6 +1747,107 @@ export function GameRoom() {
 
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных) ---- */}
       <div className="relative z-20 hidden md:flex w-[220px] shrink-0 flex-col p-3 pt-10 overflow-y-auto">
+        {/* ---- КНОПКИ ЭМОЦИЙ — чуть ниже верхнего края стола ---- */}
+        {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && isMyTurn && (
+          <div
+            className="mt-8 mb-2 rounded-lg p-2.5"
+            style={{
+              background: "rgba(15, 23, 42, 0.85)",
+              border: "2px solid #475569",
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
+              <span className="text-[11px] font-bold" style={{ color: "#e8c06a" }}>
+                {"Ваши действия"}
+              </span>
+            </div>
+            <p className="text-[10px] mb-2" style={{ color: "#94a3b8" }}>
+              {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {availableActions.map(action => {
+                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                const canAfford = action.cost === 0 || voiceBalance >= action.cost
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => handlePerformAction(action.id)}
+                    disabled={!canAfford}
+                    className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-bold text-[14px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                    style={{
+                      background: style.bg,
+                      color: style.text,
+                      border: `2px solid ${style.border}`,
+                      boxShadow: `0 2px 0 ${style.shadow}, 0 3px 6px rgba(0,0,0,0.3)`,
+                    }}
+                  >
+                    {renderActionIcon(action)}
+                    <span className="flex-1 text-left">{action.label}</span>
+                    {action.cost > 0 && (
+                      <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
+                        {action.cost}
+                        <Heart className="h-3.5 w-3.5" fill="currentColor" />
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && currentUser && !currentUser.isBot && !isMyTurn &&
+          (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
+          <div
+            className="mt-8 mb-2 rounded-lg p-2.5"
+            style={{
+              background: "rgba(15, 23, 42, 0.95)",
+              border: "2px solid #4b5563",
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-2">
+              <Sparkles className="h-3.5 w-3.5" style={{ color: "#e5e7eb" }} />
+              <span className="text-[11px] font-bold" style={{ color: "#e5e7eb" }}>
+                {"Ваши тоже действия"}
+              </span>
+            </div>
+            <p className="text-[10px] mb-2" style={{ color: "#9ca3af" }}>
+              {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {availableActions.map(action => {
+                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                const canAfford = action.cost === 0 || voiceBalance >= action.cost
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    disabled={!canAfford}
+                    onClick={() => handleResponseEmotion(action.id)}
+                    className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-semibold text-[14px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                    style={{
+                      background: style.bg,
+                      color: style.text,
+                      border: `1px solid ${style.border}`,
+                      boxShadow: `0 1px 0 ${style.shadow}, 0 2px 4px rgba(0,0,0,0.25)`,
+                    }}
+                  >
+                    {renderActionIcon(action)}
+                    <span className="flex-1 text-left">{action.label}</span>
+                    {action.cost > 0 && (
+                      <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
+                        {action.cost}
+                        <Heart className="h-3.5 w-3.5" fill="currentColor" />
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ---- PREDICTION SECTION ---- */}
         {!CASUAL_MODE && predictionPhase && !isSpinning && !showResult && (
           <div
@@ -1938,113 +2079,14 @@ export function GameRoom() {
                 </span>
               </div>
             )}
+            <p className="mt-1.5 text-[9px] text-slate-500 leading-tight">
+              Сердечки — игровая валюта. Не является азартной игрой на деньги (п. 2.3.8 правил VK Mini Apps).
+            </p>
           </div>
         )}
 
         {/* ---- BALANCES + КНОПКИ ---- */}
         <div className="mt-auto flex flex-col gap-1.5">
-          {/* GENDER-BASED ACTIONS (left panel) */}
-          {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && isMyTurn && (
-            <div
-              className="mb-2 rounded-lg p-2.5"
-              style={{
-                background: "rgba(15, 23, 42, 0.85)",
-                border: "2px solid #475569",
-              }}
-            >
-              <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
-                <span className="text-[11px] font-bold" style={{ color: "#e8c06a" }}>
-                  {"Ваши действия"}
-                </span>
-              </div>
-              <p className="text-[10px] mb-2" style={{ color: "#94a3b8" }}>
-                {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {availableActions.map(action => {
-                  const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                  const canAfford = action.cost === 0 || voiceBalance >= action.cost
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handlePerformAction(action.id)}
-                      disabled={!canAfford}
-                      className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-bold text-[14px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                      style={{
-                        background: style.bg,
-                        color: style.text,
-                        border: `2px solid ${style.border}`,
-                        boxShadow: `0 2px 0 ${style.shadow}, 0 3px 6px rgba(0,0,0,0.3)`,
-                      }}
-                    >
-                      {renderActionIcon(action)}
-                      <span className="flex-1 text-left">{action.label}</span>
-                      {action.cost > 0 && (
-                        <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
-                          {action.cost}
-                          <Heart className="h-3.5 w-3.5" fill="currentColor" />
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* GENDER-BASED ACTIONS FOR TARGET PLAYER (ответная эмоция живого пользователя) */}
-          {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && currentUser && !currentUser.isBot && !isMyTurn &&
-            (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
-            <div
-              className="mb-2 rounded-lg p-2.5"
-              style={{
-                background: "rgba(15, 23, 42, 0.95)",
-                border: "2px solid #4b5563",
-              }}
-            >
-              <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles className="h-3.5 w-3.5" style={{ color: "#e5e7eb" }} />
-                <span className="text-[11px] font-bold" style={{ color: "#e5e7eb" }}>
-                  {"Ваши тоже действия"}
-                </span>
-              </div>
-              <p className="text-[10px] mb-2" style={{ color: "#9ca3af" }}>
-                {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {availableActions.map(action => {
-                  const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                  const canAfford = action.cost === 0 || voiceBalance >= action.cost
-                  return (
-                    <button
-                      key={action.id}
-                      type="button"
-                      disabled={!canAfford}
-                      onClick={() => handleResponseEmotion(action.id)}
-                      className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-semibold text-[14px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                      style={{
-                        background: style.bg,
-                        color: style.text,
-                        border: `1px solid ${style.border}`,
-                        boxShadow: `0 1px 0 ${style.shadow}, 0 2px 4px rgba(0,0,0,0.25)`,
-                      }}
-                    >
-                      {renderActionIcon(action)}
-                      <span className="flex-1 text-left">{action.label}</span>
-                      {action.cost > 0 && (
-                        <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
-                          {action.cost}
-                          <Heart className="h-3.5 w-3.5" fill="currentColor" />
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Extra spin button */}
           {!isMyTurn && !isSpinning && !showResult && countdown === null && (
             <button
@@ -2438,6 +2480,7 @@ export function GameRoom() {
                   bigGiftHasMany={bigGift.hasMany}
                   frameId={avatarFrames?.[player.id]}
                   inGame={playerInUgadaika != null && player.id === playerInUgadaika}
+                  showAsleep={(spinSkips?.[player.id] ?? 0) >= 3}
                 />
               </div>
             )
@@ -2503,16 +2546,18 @@ export function GameRoom() {
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none">
               <button
                 onClick={handleSpin}
-                className="pointer-events-auto flex items-center justify-center gap-2 rounded-full font-bold transition-all hover:brightness-110 hover:scale-105 active:scale-95 whitespace-nowrap shadow-lg animate-pulse"
+                className="pointer-events-auto flex items-center justify-center gap-2 rounded-full font-bold transition-all hover:brightness-110 hover:scale-105 active:scale-95 whitespace-nowrap shadow-lg spin-btn-pulse"
                 style={{
                   minWidth: 72,
                   minHeight: 72,
                   padding: "14px 24px",
                   fontSize: "18px",
                   background: "linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
+                  backgroundColor: "#16a34a",
                   color: "#fff",
                   border: "3px solid #14532d",
-                  boxShadow: "0 0 0 4px rgba(34, 197, 94, 0.4), 0 6px 0 #14532d, 0 8px 24px rgba(0,0,0,0.5)",
+                  boxShadow: "0 4px 0 #14532d, 0 8px 24px rgba(0,0,0,0.5)",
+                  opacity: 1,
                 }}
               >
                 <RotateCw className="h-6 w-6 shrink-0" strokeWidth={2.5} />
@@ -2632,27 +2677,56 @@ export function GameRoom() {
 
       {/* ---- RIGHT CHAT PANEL (скрыто на мобильных) ---- */}
       <div className="relative z-20 hidden md:flex w-[230px] shrink-0 flex-col gap-3 pt-6 pb-3 pr-2">
-        {/* Угадай-ка — кнопка мини-игры над блоком поклонников */}
-        <button
-          onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
-          className="ugadaika-sidebar-btn group relative mx-2 flex flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-4 py-3.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
-          style={{
-            background: "linear-gradient(135deg, rgba(190, 24, 93, 0.35) 0%, rgba(136, 19, 55, 0.5) 50%, rgba(88, 28, 135, 0.4) 100%)",
-            border: "1px solid rgba(251, 113, 133, 0.5)",
-            boxShadow: "0 4px 20px rgba(190, 24, 93, 0.25), inset 0 1px 0 rgba(255,255,255,0.08)",
-          }}
-        >
-          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
-          <span className="relative text-[10px] font-semibold uppercase tracking-wider opacity-90" style={{ color: "#fbcfe8" }}>
-            Мини-игра
-          </span>
-          <span className="relative flex items-center justify-center gap-2">
-            <span className="text-2xl drop-shadow-md transition-transform duration-300 group-hover:scale-110" aria-hidden="true">💕</span>
-            <span className="text-sm font-bold tracking-wide" style={{ color: "#fce7f3" }}>
-              Угадай-ка
+        {/* Угадай-ка — кнопка мини-игры с лампочками по всему периметру (казино) */}
+        <div className="relative mx-2 py-2 px-1">
+          {/* Лампочки по всему периметру рамки */}
+          <div className="absolute inset-0 rounded-2xl pointer-events-none" aria-hidden>
+            {/* Верх */}
+            <div className="absolute top-0 left-0 right-0 flex justify-between px-1 pt-0.5">
+              {Array.from({ length: 14 }).map((_, i) => (
+                <span key={`t-${i}`} className="ugadaika-casino-bulb" />
+              ))}
+            </div>
+            {/* Низ */}
+            <div className="absolute bottom-0 left-0 right-0 flex justify-between px-1 pb-0.5">
+              {Array.from({ length: 14 }).map((_, i) => (
+                <span key={`b-${i}`} className="ugadaika-casino-bulb" />
+              ))}
+            </div>
+            {/* Лево */}
+            <div className="absolute top-0 bottom-0 left-0 flex flex-col justify-between py-1.5 pl-0.5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <span key={`l-${i}`} className="ugadaika-casino-bulb" />
+              ))}
+            </div>
+            {/* Право */}
+            <div className="absolute top-0 bottom-0 right-0 flex flex-col justify-between py-1.5 pr-0.5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <span key={`r-${i}`} className="ugadaika-casino-bulb" />
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
+            className="ugadaika-sidebar-btn ugadaika-block-pulse group relative w-full flex flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-4 py-3.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
+            style={{
+              background: "linear-gradient(135deg, rgba(190, 24, 93, 0.35) 0%, rgba(136, 19, 55, 0.5) 50%, rgba(88, 28, 135, 0.4) 100%)",
+              border: "1px solid rgba(251, 113, 133, 0.5)",
+              boxShadow: "0 4px 24px rgba(190, 24, 93, 0.4), 0 0 16px rgba(251, 113, 133, 0.15), inset 0 1px 0 rgba(255,255,255,0.08)",
+            }}
+          >
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
+            <span className="relative text-[10px] font-semibold uppercase tracking-wider opacity-90" style={{ color: "#fbcfe8" }}>
+              Мини-игра
             </span>
-          </span>
-        </button>
+            <span className="relative flex items-center justify-center gap-2">
+              <span className="text-2xl drop-shadow-md transition-transform duration-300 group-hover:scale-110" aria-hidden="true">💕</span>
+              <span className="text-sm font-bold tracking-wide" style={{ color: "#fce7f3" }}>
+                Угадай-ка
+              </span>
+            </span>
+          </button>
+        </div>
 
         {/* Followers / favorites strip */}
         {currentUser && (
@@ -3236,55 +3310,37 @@ export function GameRoom() {
             <div className="flex flex-col gap-5 sm:flex-row">
               {/* Левый блок: фото, имя, пол/возраст, город, интересы, знак зодиака */}
               <div className="flex w-[160px] shrink-0 flex-col items-start gap-3 sm:w-[180px]">
-                {(() => {
-                  const FRAME_STYLES: Record<string, { border: string; boxShadow: string }> = {
-                    none: { border: "2px solid #475569", boxShadow: "none" },
-                    gold: { border: "3px solid #e8c06a", boxShadow: "0 0 12px rgba(232,192,106,0.8)" },
-                    silver: { border: "3px solid #c0c0c0", boxShadow: "0 0 12px rgba(192,192,192,0.7)" },
-                    hearts: { border: "3px solid #e74c3c", boxShadow: "0 0 14px rgba(231,76,60,0.7)" },
-                    roses: { border: "3px solid #be123c", boxShadow: "0 0 14px rgba(190,18,60,0.6)" },
-                    gradient: { border: "3px solid #8b5cf6", boxShadow: "0 0 16px rgba(139,92,246,0.6)" },
-                    neon: { border: "3px solid rgba(0, 255, 255, 0.95)", boxShadow: "none" },
-                    snow: { border: "3px solid rgba(186, 230, 253, 0.95)", boxShadow: "0 0 12px rgba(186, 230, 253, 0.5)" },
-                  }
-                  const frameId = (avatarFrames ?? {})[playerMenuTarget.id] || "none"
-                  const frameStyle = FRAME_STYLES[frameId] ?? FRAME_STYLES.none
-                  return (
-                    <>
-                      <div
-                        className="relative h-28 w-28 shrink-0 rounded-2xl overflow-hidden"
-                        style={{ ...frameStyle, boxSizing: "border-box" }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={playerMenuTarget.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
-                        <button
-                          type="button"
-                          onClick={() => setShowRosesReceivedPopover((v) => !v)}
-                          className="absolute bottom-1 left-1 flex items-center justify-center rounded-md p-1 text-[16px] transition-opacity hover:opacity-90"
-                          style={{ background: "rgba(190,18,60,0.9)", boxShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
-                          aria-label="Показать подаренные розы"
-                        >
-                          🌹
-                        </button>
-                        {showRosesReceivedPopover && (
-                          <div
-                            className="absolute bottom-10 left-1 z-10 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-white shadow-lg"
-                            style={{ background: "rgba(30,41,59,0.98)", border: "1px solid #475569" }}
-                          >
-                            Подарено роз: {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowFramePicker(true)}
-                        className="rounded-lg border border-slate-500/60 bg-slate-700/50 px-2.5 py-1 text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-600/60"
-                      >
-                        Рамка
-                      </button>
-                    </>
-                  )
-                })()}
+                <div className="flex flex-col items-center gap-2">
+                  <PlayerAvatar
+                    player={playerMenuTarget}
+                    frameId={avatarFrames?.[playerMenuTarget.id] || "none"}
+                    compact
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRosesReceivedPopover((v) => !v)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-slate-600 bg-slate-800/80 px-2.5 py-1 text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-700/80"
+                    aria-label="Подаренные розы"
+                  >
+                    <span>🌹</span>
+                    <span>Подарено роз: {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}</span>
+                  </button>
+                  {showRosesReceivedPopover && (
+                    <div
+                      className="rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-white"
+                      style={{ background: "rgba(30,41,59,0.98)", border: "1px solid #475569" }}
+                    >
+                      Подарено роз: {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowFramePicker(true)}
+                    className="rounded-lg border border-slate-500/60 bg-slate-700/50 px-2.5 py-1 text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-600/60"
+                  >
+                    Рамка
+                  </button>
+                </div>
                 <div className="w-full text-left text-[15px]">
                   <h3 className="font-bold text-slate-100">{playerMenuTarget.name}</h3>
                   <p className="text-slate-400 mt-0.5">

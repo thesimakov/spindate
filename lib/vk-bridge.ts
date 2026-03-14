@@ -86,7 +86,7 @@ export const VK_ITEM_IDS = {
   vip: "vip",
 } as const
 
-/** Показать форму оплаты VK (голоса). amount — сумма в голосах; itemId — для платёжных уведомлений (get_item, order_status_change). */
+/** Показать форму оплаты VK. amount — сумма (по курсу VK: 1 голос = 1 сердце); itemId — для платёжных уведомлений (get_item, order_status_change). */
 export async function showPaymentWall(amount: number, itemId?: string): Promise<boolean> {
   const b = await getBridgeAsync()
   const appId = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_VK_APP_ID
@@ -96,7 +96,7 @@ export async function showPaymentWall(amount: number, itemId?: string): Promise<
     try {
       const params: Record<string, string> = {
         amount: String(amount),
-        description: `Покупка за ${amount} голосов`,
+        description: "Пополнение сердечек",
       }
       if (itemId) params.item = itemId
       const res = await b.send("VKWebAppOpenPayForm", {
@@ -124,7 +124,7 @@ export async function buyHearts1000(): Promise<boolean> {
   return showPaymentWall(2, VK_ITEM_IDS.hearts_1000)
 }
 
-/** Покупка VIP (99 голосов). */
+/** Покупка VIP (оплата через VK, курс: 1 голос = 1 сердце). */
 export async function buyVip(): Promise<boolean> {
   return showPaymentWall(99, VK_ITEM_IDS.vip)
 }

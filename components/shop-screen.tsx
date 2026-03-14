@@ -47,22 +47,10 @@ export function ShopScreen() {
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true })
   }
 
-  const handleTopUp500 = async () => {
-    const ok =
-      typeof vkBridge.buyHearts500 === "function"
-        ? await vkBridge.buyHearts500()
-        : await vkBridge.showPaymentWall(1)
+  const handleTopUp = async (amount: number) => {
+    const ok = await vkBridge.showPaymentWall(amount)
     if (!ok) return
-    dispatch({ type: "PAY_VOICES", amount: -500 })
-  }
-
-  const handleTopUp1000 = async () => {
-    const ok =
-      typeof vkBridge.buyHearts1000 === "function"
-        ? await vkBridge.buyHearts1000()
-        : await vkBridge.showPaymentWall(2)
-    if (!ok) return
-    dispatch({ type: "PAY_VOICES", amount: -1000 })
+    dispatch({ type: "PAY_VOICES", amount: -amount })
   }
 
   const handleInviteFriends = async () => {
@@ -91,9 +79,13 @@ export function ShopScreen() {
       </div>
       <div className="relative z-10 w-full flex flex-col items-center">
       <div className="w-full max-w-lg space-y-5 rounded-2xl border border-slate-600/80 bg-slate-900/95 px-6 py-7 shadow-[0_24px_50px_rgba(0,0,0,0.6)] backdrop-blur-sm">
-        <h1 className="mb-1 text-center text-2xl font-bold text-slate-100">{"Магазин"}</h1>
-        <p className="mb-4 text-center text-xs text-slate-400">
+        <h1 className="mb-1 text-center font-bold text-slate-100" style={{ fontSize: "16px" }}>{"Магазин"}</h1>
+        <p className="mb-2 text-center text-slate-400" style={{ fontSize: "14px" }}>
           {"Здесь можно выделиться за столом и пополнить запас сердец."}
+        </p>
+        <p className="mb-4 text-center text-[10px] text-slate-500">
+          Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. Соответствие п. 2.3.8{" "}
+          <a href="https://dev.vk.com/ru/mini-apps-rules" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-400">правил VK Mini Apps</a>.
         </p>
 
         {/* Баланс */}
@@ -104,14 +96,19 @@ export function ShopScreen() {
             <span className="text-sm font-bold text-slate-100">{voiceBalance}</span>
           </div>
         </div>
-        {/* Пополнение за голоса VK (товары для платёжных уведомлений) */}
+        {/* Пополнение сердечков (оплата через VK) */}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" className="text-[11px]" onClick={handleTopUp500}>
-            {"500 ❤ — 1 голос"}
-          </Button>
-          <Button size="sm" variant="outline" className="text-[11px]" onClick={handleTopUp1000}>
-            {"1000 ❤ — 2 голоса"}
-          </Button>
+          {[10, 20, 30, 50, 100, 150].map((amt) => (
+            <Button
+              key={amt}
+              size="sm"
+              variant="outline"
+              className="text-[11px] min-w-[3rem]"
+              onClick={() => handleTopUp(amt)}
+            >
+              {amt} ❤
+            </Button>
+          ))}
         </div>
 
         {/* VIP-статус + покупка */}
@@ -193,10 +190,10 @@ export function ShopScreen() {
           </div>
         </div>
 
-        {/* Обмен роз на голоса: 1 роза = 5 сердец */}
+        {/* Обмен роз на сердечки: 1 роза = 5 сердец */}
         <div className="rounded-xl border border-slate-600/80 bg-slate-800/95 px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-100">{"Обменять розы на голоса"}</span>
+            <span className="text-sm font-semibold text-slate-100">{"Обменять розы на сердечки"}</span>
             <span className="text-xs text-slate-400">{"1 🌹 = 5 ❤"}</span>
           </div>
           <p className="mb-2 text-[11px] text-slate-400">

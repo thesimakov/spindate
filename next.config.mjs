@@ -4,6 +4,9 @@ const isGitHubPages = process.env.GITHUB_ACTIONS === "true"
 const nextConfig = {
   basePath: basePath || undefined,
   ...(isGitHubPages && { output: "export" }),
+  turbopack: {
+    root: process.cwd(),
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

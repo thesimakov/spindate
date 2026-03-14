@@ -29,7 +29,7 @@ function shuffleWithSeed<T>(arr: T[], seed: number): T[] {
   return a
 }
 
-/** Четверо участников (2М + 2Ж) с перемешанным пулом по seed — разные боты при каждом новом seed */
+/** Четверо участников (2М + 2Ж): сначала боты со стола, при нехватке — из большого пула ботов для разнообразия */
 function getShuffledParticipants(
   currentUser: Player | null,
   players: Player[] | null,
@@ -39,11 +39,13 @@ function getShuffledParticipants(
   const needMale = currentUser.gender === "male" ? 1 : 2
   const needFemale = currentUser.gender === "female" ? 1 : 2
   const others = (players ?? []).filter((p) => p.id !== currentUser.id)
-  const bots = generateBots(40, currentUser.gender)
-  const pool = shuffleWithSeed([...others, ...bots], seed)
+  const shuffledOthers = shuffleWithSeed([...others], seed)
+  const bots = generateBots(80, currentUser.gender)
+  const shuffledBots = shuffleWithSeed(bots, seed + 1000)
+  const pool = [...shuffledOthers, ...shuffledBots]
   const males = pool.filter((p) => p.gender === "male").slice(0, needMale)
   const females = pool.filter((p) => p.gender === "female").slice(0, needFemale)
-  const fallback = generateBots(20, currentUser.gender)
+  const fallback = generateBots(30, currentUser.gender).map((p, i) => ({ ...p, id: 20000 + seed + i }))
   const males2 =
     males.length < needMale
       ? [...males, ...fallback.filter((p) => p.gender === "male").slice(0, needMale - males.length)]
@@ -257,13 +259,14 @@ export function UgadaikaScreen() {
     if (stayPlayers[0].id !== currentUser.id) return
     const currentRoundIds = new Set(gameParticipants.map((p) => p.id))
     const nextRoundNum = roundNumber + 1
-    const freshBots = generateBots(60, currentUser?.gender ?? "male").map((p, i) => ({
+    const freshBots = generateBots(80, currentUser?.gender ?? "male").map((p, i) => ({
       ...p,
       id: 50000 + nextRoundNum * 1000 + i,
     }))
     const others = (players ?? []).filter((p) => p.id !== currentUser?.id && !currentRoundIds.has(p.id))
-    const pool = [...others, ...freshBots]
-    const shuffledPool = shuffleWithSeed(pool, nextRoundNum * 1000 + Date.now())
+    const shuffledOthers = shuffleWithSeed([...others], nextRoundNum * 1000 + 1)
+    const shuffledBots = shuffleWithSeed(freshBots, nextRoundNum * 1000 + 2)
+    const shuffledPool = [...shuffledOthers, ...shuffledBots]
     const males = shuffledPool.filter((p) => p.gender === "male")
     const females = shuffledPool.filter((p) => p.gender === "female")
     const oneMale = males[0]
@@ -517,7 +520,32 @@ export function UgadaikaScreen() {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-lg font-bold">Угадай-ка</h1>
+        <h1
+          className="text-xl font-black tracking-tight inline-flex items-center gap-2"
+          style={{
+            background: "linear-gradient(135deg, #fce7f3 0%, #f472b6 40%, #ec4899 70%, #be185d 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+            filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4)) drop-shadow(0 0 12px rgba(236, 72, 153, 0.3))",
+          }}
+        >
+          <span className="inline-flex items-center gap-0.5 text-rose-400" style={{ WebkitTextFillColor: "unset" }}>
+            <Heart
+              className="ugadaika-logo-heart ugadaika-logo-heart-1 h-7 w-7 text-rose-400"
+              fill="currentColor"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            <Heart
+              className="ugadaika-logo-heart ugadaika-logo-heart-2 h-6 w-6 text-rose-400"
+              fill="currentColor"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+          </span>
+          <span>Угадай-ка</span>
+        </h1>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-slate-700/80 px-3 py-1.5 text-sm">
             <span className="text-amber-300">🌹</span>
@@ -531,21 +559,21 @@ export function UgadaikaScreen() {
       </header>
 
       <div className="relative flex flex-1 min-h-0 w-full">
-        {/* Топ 10 по Угадай-ка — слева, не сдвигает центр контента */}
-        <aside className="absolute left-0 top-0 bottom-0 z-10 hidden w-[200px] flex-col border-r border-slate-700 bg-slate-900/50 p-3 overflow-hidden md:flex">
-          <div className="flex items-center gap-1.5 mb-2 shrink-0">
-            <Trophy className="h-4 w-4 shrink-0 text-amber-400" />
-            <span className="text-xs font-bold text-amber-200">Топ 10</span>
+        {/* Топ 10 по Угадай-ка — слева, шире и с крупными ячейками */}
+        <aside className="absolute left-0 top-0 bottom-0 z-10 hidden w-[280px] flex-col border-r border-slate-700 bg-slate-900/50 p-4 overflow-hidden md:flex">
+          <div className="flex items-center gap-2 mb-3 shrink-0">
+            <Trophy className="h-5 w-5 shrink-0 text-amber-400" />
+            <span className="text-sm font-bold text-amber-200">Топ 10</span>
           </div>
-          <p className="text-[10px] text-slate-400 mb-1 shrink-0">Выиграно туров в Угадай-ка</p>
+          <p className="text-xs text-slate-400 mb-2 shrink-0">Выиграно туров в Угадай-ка</p>
           {myPlaceInTable > 0 && (
-            <p className="text-[11px] font-semibold text-amber-300 mb-2 shrink-0">
+            <p className="text-sm font-semibold text-amber-300 mb-3 shrink-0">
               Ваше место в таблице: {myPlaceInTable}
             </p>
           )}
-          <div className="flex flex-1 flex-col gap-2 overflow-y-auto min-h-0 py-0.5">
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto min-h-0 py-1">
             {fullLeaderboard.length === 0 ? (
-              <p className="text-[10px] text-slate-500 py-2">Пока нет данных</p>
+              <p className="text-xs text-slate-500 py-3">Пока нет данных</p>
             ) : (
               fullLeaderboard.map((item, i) => {
                 const place = i + 1
@@ -554,32 +582,57 @@ export function UgadaikaScreen() {
                 const prevPlace = prevPlacesRef.current[item.player.id]
                 const placeChanged = prevPlace !== undefined && prevPlace !== place
                 const scoreJustUpdated = lastUpdatedId === item.player.id
+                const isPodium = place <= 3
+                const placeColor =
+                  place === 1 ? "text-amber-300" : place === 2 ? "text-slate-300" : place === 3 ? "text-amber-700" : "text-amber-400/90"
                 return (
                   <div
                     key={item.player.id}
-                    className={`flex items-center gap-2 rounded-lg px-2.5 py-2 min-h-0 transition-colors duration-300 ${
+                    className={`flex items-center gap-3 rounded-2xl px-4 py-4 min-h-[56px] transition-all duration-300 border ${
                       scoreJustUpdated ? "ugadaika-top10-row-updated" : ""
-                    } ${placeChanged ? "ugadaika-top10-place-changed" : ""}`}
+                    } ${placeChanged ? "ugadaika-top10-place-changed" : ""} ${
+                      isYou
+                        ? "ring-2 ring-amber-400 shadow-[0_0_16px_rgba(251,191,36,0.3)] border-amber-500/50"
+                        : "border-slate-700/60"
+                    }`}
                     style={{
-                      background: isTop10 && !scoreJustUpdated ? "rgba(232, 192, 106, 0.12)" : undefined,
-                      borderLeft: isTop10 ? "3px solid rgb(251 191 36)" : "3px solid transparent",
+                      background: isYou
+                        ? "linear-gradient(135deg, rgba(251,191,36,0.22) 0%, rgba(245,158,11,0.12) 100%)"
+                        : isTop10 && !scoreJustUpdated
+                          ? "linear-gradient(135deg, rgba(30,41,59,0.9) 0%, rgba(51,65,85,0.5) 100%)"
+                          : "rgba(15,23,42,0.6)",
+                      boxShadow: isYou
+                        ? "inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 8px rgba(0,0,0,0.2)"
+                        : "inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 3px rgba(0,0,0,0.15)",
+                      borderLeft: isTop10 ? "4px solid rgb(251 191 36)" : "4px solid transparent",
                     }}
                   >
-                    <span className="w-5 shrink-0 text-[10px] font-bold tabular-nums text-amber-400/90">
+                    <span
+                      className={`w-8 shrink-0 text-base font-black tabular-nums ${placeColor}`}
+                    >
                       {place}.
                     </span>
-                    <span className="h-6 w-6 shrink-0 overflow-hidden rounded-full border border-slate-600 bg-slate-700">
+                    <span
+                      className="h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 shadow-md"
+                      style={{
+                        borderColor: isPodium ? "rgba(251,191,36,0.6)" : "rgba(71,85,105,0.8)",
+                        boxShadow: isPodium ? "0 2px 8px rgba(251,191,36,0.2)" : "0 2px 4px rgba(0,0,0,0.3)",
+                      }}
+                    >
                       {item.player.avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.player.avatar} alt="" className="h-full w-full object-cover" />
                       ) : (
-                        <span className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">?</span>
+                        <span className="flex h-full w-full items-center justify-center bg-slate-700 text-xs text-slate-400">?</span>
                       )}
                     </span>
-                    <span className="flex-1 min-w-0 truncate text-[11px] text-slate-200">
+                    <span className={`flex-1 min-w-0 truncate text-sm font-medium ${isYou ? "text-amber-100" : "text-slate-200"}`}>
                       {isYou ? `${item.player.name} (вы)` : item.player.name}
                     </span>
-                    <span className="text-[10px] font-semibold shrink-0 tabular-nums text-amber-300/90">
+                    <span
+                      className="text-base font-bold shrink-0 tabular-nums min-w-[2rem] text-right"
+                      style={{ color: isTop10 ? "#fcd34d" : "rgba(203, 213, 225, 0.9)" }}
+                    >
                       {item.rounds}
                     </span>
                   </div>
@@ -589,7 +642,7 @@ export function UgadaikaScreen() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto md:ml-[200px]">
+        <main className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto md:ml-[280px]">
       {phase === "idle" && (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-8">
           <div

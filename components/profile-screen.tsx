@@ -42,14 +42,14 @@ export function ProfileScreen() {
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
   const PROFILE_FRAMES = [
-    { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none" },
-    { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)" },
-    { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)" },
-    { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)" },
-    { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)" },
-    { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)" },
-    { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none" },
-    { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)" },
+    { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none", animationClass: undefined },
+    { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)", animationClass: "frame-preview-anim-gold" },
+    { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)", animationClass: "frame-preview-anim-silver" },
+    { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)", animationClass: "frame-preview-anim-hearts" },
+    { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)", animationClass: "frame-preview-anim-roses" },
+    { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)", animationClass: "frame-preview-anim-gradient" },
+    { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none", animationClass: "frame-preview-anim-neon" },
+    { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", animationClass: "frame-preview-anim-snow" },
   ] as const
 
   const rosesBalance = useMemo(
@@ -112,6 +112,7 @@ export function ProfileScreen() {
   const [name, setName] = useState(initialName)
   const [avatarInput, setAvatarInput] = useState(currentUser.avatar ?? "")
   const [showGiveRoseModal, setShowGiveRoseModal] = useState(false)
+  const [showFramesModal, setShowFramesModal] = useState(false)
   const nameTrimmed = name.trim()
   const canSaveName = nameTrimmed.length >= 2 && nameTrimmed.length <= 16 && nameTrimmed !== currentUser.name
   const canChangeAvatar = currentUser.authProvider === "login" && avatarInput.trim().length > 0 && avatarInput !== currentUser.avatar
@@ -130,40 +131,54 @@ export function ProfileScreen() {
       <div className="w-full max-w-lg flex-1 min-h-0 flex flex-col overflow-hidden rounded-2xl border border-slate-800 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]">
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 sm:py-7 space-y-4">
         <div className="flex items-center gap-4">
-          <div
-            className="relative h-16 w-16 overflow-hidden rounded-full flex-shrink-0 transition-all duration-200"
-            style={
-              currentFrameId !== "none"
-                ? (() => {
-                    const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                    return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
-                  })()
-                : { border: "2px solid #475569" }
-            }
-          >
-            <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full rounded-full object-cover" />
-            {isVip && (
-              <div
-                className="absolute flex items-center justify-center rounded-full"
-                style={{
-                  width: 22,
-                  height: 22,
-                  background: "linear-gradient(135deg,#facc15,#f97316)",
-                  color: "#111827",
-                  border: "2px solid #a15c10",
-                  top: 4,
-                  right: 4,
-                  boxShadow: "0 0 10px rgba(250,204,21,0.9)",
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M4 18h16l-1.5-7.5-3.5 3-3-6.5-3 6.5-3.5-3L4 18z"
-                    fill="#111827"
-                  />
-                </svg>
-              </div>
-            )}
+          <div className="flex flex-col items-center gap-2 flex-shrink-0">
+            <div
+              className={`relative h-16 w-16 overflow-hidden rounded-full transition-all duration-200 ${
+                (() => {
+                  const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                  return f?.animationClass ?? ""
+                })()
+              }`}
+              style={
+                currentFrameId !== "none"
+                  ? (() => {
+                      const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                      return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
+                    })()
+                  : { border: "2px solid #475569" }
+              }
+            >
+              <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full rounded-full object-cover" />
+              {isVip && (
+                <div
+                  className="absolute flex items-center justify-center rounded-full"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    background: "linear-gradient(135deg,#facc15,#f97316)",
+                    color: "#111827",
+                    border: "2px solid #a15c10",
+                    top: 4,
+                    right: 4,
+                    boxShadow: "0 0 10px rgba(250,204,21,0.9)",
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M4 18h16l-1.5-7.5-3.5 3-3-6.5-3 6.5-3.5-3L4 18z"
+                      fill="#111827"
+                    />
+                  </svg>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowFramesModal(true)}
+              className="w-full rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-[13px] font-semibold text-slate-100 transition-colors hover:bg-slate-700/60"
+            >
+              Рамки
+            </button>
           </div>
 
           <div className="flex flex-col">
@@ -227,32 +242,6 @@ export function ProfileScreen() {
                 </p>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Рамка аватарки */}
-        <div className="rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3">
-          <div className="mb-3 text-[15px] font-semibold text-slate-100">Рамка аватарки</div>
-          <div className="grid grid-cols-4 gap-2">
-            {PROFILE_FRAMES.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() =>
-                  currentUser &&
-                  dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
-                }
-                className={`flex flex-col items-center gap-1 rounded-lg py-2 transition-all hover:bg-slate-600/50 ${
-                  currentFrameId === f.id ? "ring-2 ring-sky-400 bg-slate-600/60" : ""
-                }`}
-              >
-                <div
-                  className="h-10 w-10 rounded-full bg-slate-700 flex-shrink-0"
-                  style={{ border: f.border, boxShadow: f.shadow }}
-                />
-                <span className="text-[10px] text-slate-300 leading-tight">{f.label}</span>
-              </button>
-            ))}
           </div>
         </div>
 
@@ -401,6 +390,54 @@ export function ProfileScreen() {
         </div>
         </div>
       </div>
+
+      {showFramesModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setShowFramesModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-3 text-[15px] font-bold text-slate-100">Рамка аватарки</h3>
+            <div className="grid grid-cols-4 gap-3">
+              {PROFILE_FRAMES.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    currentUser && dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
+                    setShowFramesModal(false)
+                  }}
+                  className={`flex flex-col items-center gap-2 rounded-xl py-3 transition-all hover:bg-slate-700/60 ${
+                    currentFrameId === f.id ? "ring-2 ring-sky-400 bg-slate-700/60" : ""
+                  }`}
+                >
+                  <div
+                    className={`h-14 w-14 overflow-hidden rounded-full flex-shrink-0 bg-slate-800 ${f.animationClass ?? ""}`}
+                    style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
+                  >
+                    <img
+                      src={currentUser.avatar}
+                      alt=""
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
+                </button>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              className="mt-4 w-full rounded-xl text-[15px]"
+              onClick={() => setShowFramesModal(false)}
+            >
+              Закрыть
+            </Button>
+          </div>
+        </div>
+      )}
 
       {showGiveRoseModal && (
         <div

@@ -45,12 +45,17 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
             ? "transform 6s cubic-bezier(0.17, 0.67, 0.12, 0.99)"
             : "none",
           filter: isSpinning ? "drop-shadow(0 0 12px rgba(74, 154, 53, 0.6))" : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
+          opacity: 1,
         }}
       >
-        {/* Реальная бутылочка из файла (адаптивный размер) */}
+        {/* Реальная бутылочка из файла (адаптивный размер, без прозрачности) */}
         <div
           className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
-          style={{ display: imgError ? "none" : undefined }}
+          style={{
+            display: imgError ? "none" : undefined,
+            opacity: 1,
+            background: "transparent",
+          }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -58,6 +63,7 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
             src={skinToImg[skin]}
             alt="Бутылочка"
             className="h-full w-full object-contain"
+            style={{ opacity: 1 }}
             draggable={false}
             loading="eager"
             onError={() => setImgError(true)}

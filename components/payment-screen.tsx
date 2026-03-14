@@ -40,7 +40,7 @@ export function PaymentScreen() {
             {"Подключите оплату"}
           </h2>
           <p className="text-sm text-muted-foreground text-center text-pretty">
-            {"Для игры потребуются сердца VK. Подключите способ оплаты для покупки сердец."}
+            {"Для игры потребуются сердечки. Подключите способ оплаты для пополнения сердечек."}
           </p>
         </div>
 

@@ -34,6 +34,13 @@ const CITIES = ["Москва", "Санкт-Петербург", "Минск", "
 const INTERESTS = ["Путешествия, музыка", "Книги, кино", "Спорт, природа", "Фотография, искусство", "Кулинария, вино", "Танцы, театр", "Наука, технологии", "Йога, медитация"]
 const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
 
+/** Идентификаторы рамок аватарки (для ботов и профиля) */
+export const AVATAR_FRAME_IDS = ["none", "gold", "silver", "hearts", "roses", "gradient", "neon", "snow"] as const
+
+export function randomAvatarFrame(): (typeof AVATAR_FRAME_IDS)[number] {
+  return AVATAR_FRAME_IDS[Math.floor(Math.random() * AVATAR_FRAME_IDS.length)]
+}
+
 export function generateBots(count: number, userGender: Gender): Player[] {
   const bots: Player[] = []
   for (let i = 0; i < count; i++) {
@@ -118,6 +125,8 @@ const initialState: GameState = {
   ugadaikaFriendUnlocked: {},
   playerInUgadaika: null,
   showReturnedFromUgadaika: false,
+  spinSkips: {},
+  currentTurnDidSpin: false,
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -290,11 +299,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ]
         }
 
+        // Рандомные рамки для ботов при посадке за стол
+        const nextFrames = { ...(state.avatarFrames ?? {}) }
+        for (const p of nextPlayers) {
+          if (p.isBot) nextFrames[p.id] = randomAvatarFrame()
+        }
+        const nextSpinSkips: Record<number, number> = {}
+        nextPlayers.forEach((p) => { nextSpinSkips[p.id] = 0 })
+
         return {
         ...state,
         players: nextPlayers,
         tableId: action.tableId,
         currentTurnIndex: spinnerIdx,
+        spinSkips: nextSpinSkips,
+        currentTurnDidSpin: false,
         isSpinning: false,
         countdown: null,
         bottleAngle,
@@ -308,6 +327,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         predictionPhase: false,
         roundNumber: 5 + Math.floor(Math.random() * 25),
         gameLog: seedLog.slice(-50),
+        avatarFrames: nextFrames,
         }
       }
     case "SET_TABLES_COUNT":
@@ -319,7 +339,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         countdown: state.countdown !== null && state.countdown > 1 ? state.countdown - 1 : null,
       }
-    case "START_SPIN":
+    case "START_SPIN": {
+      const spinnerId = state.players[state.currentTurnIndex]?.id
+      const nextSpinSkips = { ...(state.spinSkips ?? {}) }
+      if (spinnerId != null) nextSpinSkips[spinnerId] = 0
       return {
         ...state,
         isSpinning: true,
@@ -328,7 +351,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         targetPlayer: action.target,
         targetPlayer2: action.target2,
         predictionPhase: false,
+        spinSkips: nextSpinSkips,
+        currentTurnDidSpin: true,
       }
+    }
     case "STOP_SPIN":
       return { ...state, isSpinning: false, showResult: true, resultAction: action.action }
     case "NEXT_TURN": {
@@ -366,9 +392,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
+      const nextSpinSkips = { ...(state.spinSkips ?? {}) }
+      const playerWhoHadTurnId = state.players[state.currentTurnIndex]?.id
+      if (!state.currentTurnDidSpin && playerWhoHadTurnId != null) {
+        nextSpinSkips[playerWhoHadTurnId] = (state.spinSkips?.[playerWhoHadTurnId] ?? 0) + 1
+      }
+
       const normAngle = state.bottleAngle % 360
       return {
         ...state,
+        spinSkips: nextSpinSkips,
+        currentTurnDidSpin: false,
         currentTurnIndex: nextIndex,
         showResult: false,
         targetPlayer: null,
