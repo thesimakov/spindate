@@ -23,9 +23,12 @@ function getBasePath(): string {
   return ""
 }
 
-/** Возвращает URL статического файла из public/. В браузере — путь от корня (тот же origin), чтобы картинки грузились везде. */
+/** Возвращает URL статического файла из public/. В браузере — путь от корня (тот же origin). */
 export function assetUrl(path: string): string {
-  const p = path.startsWith("/") ? path.slice(1) : path
+  let p = path.startsWith("/") ? path.slice(1) : path
+  if (!p.startsWith("assets/") && !p.startsWith("images/")) {
+    p = "assets/" + p
+  }
   const base = getBasePath()
   const fullPath = (base ? base.replace(/\/$/, "") + "/" : "/") + p
 
