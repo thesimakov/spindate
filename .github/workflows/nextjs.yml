@@ -32,6 +32,8 @@ jobs:
   # Build job
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,8 +90,13 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml') }}-
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
+      # GitHub Pages — только статический экспорт; API routes не поддерживаются, временно убираем из сборки
+      - name: Hide API routes for static export
+        run: mv app/api app/api.bak
       - name: Build with Next.js
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
+      - name: Restore API routes
+        run: mv app/api.bak app/api
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
