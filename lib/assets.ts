@@ -1,23 +1,30 @@
 /**
  * Базовый путь при деплое в подпапку (NEXT_PUBLIC_BASE_PATH).
- * Полный URL приложения (NEXT_PUBLIC_APP_URL) — чтобы картинки грузились
- * с правильного домена в iframe / VK Mini App.
+ * Полный URL приложения (NEXT_PUBLIC_APP_URL) — для iframe / VK Mini App.
+ *
+ * В браузере URL собирается от текущего origin + basePath, чтобы картинки
+ * грузились и на GitHub Pages (/spindate/...), и на своём домене, и локально.
  */
 const BASE_PATH =
   typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH
-    ? process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "")
+    ? String(process.env.NEXT_PUBLIC_BASE_PATH).replace(/\/$/, "")
     : ""
 const APP_URL =
   typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL
-    ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+    ? String(process.env.NEXT_PUBLIC_APP_URL).replace(/\/$/, "")
     : ""
 
-/** Возвращает URL статического файла из public/ (абсолютный, если задан NEXT_PUBLIC_APP_URL). */
+/** Возвращает URL статического файла из public/. В браузере — от текущего origin + basePath (работает на GitHub Pages и своём домене). */
 export function assetUrl(path: string): string {
-  const p = path.startsWith("/") ? path : `/${path}`
-  const fullPath = BASE_PATH + p
-  if (APP_URL) return `${APP_URL}${fullPath}`
-  return fullPath || p
+  const p = path.startsWith("/") ? path.slice(1) : path
+  const fullPath = (BASE_PATH ? BASE_PATH.replace(/\/$/, "") + "/" : "/") + p
+
+  if (typeof window !== "undefined") {
+    return window.location.origin + fullPath
+  }
+
+  if (APP_URL) return `${APP_URL.replace(/\/$/, "")}${fullPath}`
+  return fullPath
 }
 
 /** Пути к картинкам бутылочек (каталог, игра) */
