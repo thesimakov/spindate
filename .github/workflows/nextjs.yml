@@ -104,13 +104,18 @@ jobs:
       - name: Restore API routes
         if: always()
         run: if [ -d .api-backup ]; then mv .api-backup app/api; fi
-      # Next.js с basePath + export не кладёт public/ в out/REPO_NAME/ — копируем в out/spindate/assets/
+      # Next.js с basePath + export не кладёт public/ в out/REPO_NAME/ — копируем в out/REPO/assets/
       - name: Ensure public assets in out (under basePath)
         run: |
           REPO="${{ github.event.repository.name }}"
           mkdir -p "out/${REPO}/assets"
-          cp -r public/assets/* "out/${REPO}/assets/" 2>/dev/null || true
+          if [ -d "public/assets" ]; then
+            cp -r public/assets/. "out/${REPO}/assets/"
+          fi
+          echo "Assets in out/${REPO}/assets/:"
           ls -la "out/${REPO}/assets/" || true
+          test -f "out/${REPO}/assets/7786876.svg" || (echo "Missing 7786876.svg (emotion); check public/assets" && exit 1)
+          test -f "out/${REPO}/assets/b_standart_v2.webp" || (echo "Missing bottle image; check public/assets" && exit 1)
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

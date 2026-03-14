@@ -1083,7 +1083,7 @@ export function GameRoom() {
     }
 
     if (actionId === "banya") {
-      launchEmoji(spinnerIdx, targetIdx, undefined, assetUrl(EMOJI_BANYA))
+      launchEmoji(spinnerIdx, targetIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(targetIdx)
     }
 
@@ -1152,8 +1152,8 @@ export function GameRoom() {
     }
 
     if (actionId === "banya") {
-      // Для ответной «бани» делаем ту же анимацию, что и при основном действии
-      launchEmoji(fromIdx, toIdx, undefined, assetUrl(EMOJI_BANYA))
+      // Для ответной «бани» делаем ту же анимацию, что и при основном действии (веник; при ошибке загрузки картинки показываем 🧹)
+      launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(toIdx)
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
