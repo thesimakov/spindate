@@ -23,12 +23,10 @@ function getBasePath(): string {
   return ""
 }
 
-/** Возвращает URL статического файла из public/. В браузере — путь от корня (тот же origin). */
+/** Возвращает URL статического файла из public/assets/. Все картинки лежат в assets. */
 export function assetUrl(path: string): string {
   let p = path.startsWith("/") ? path.slice(1) : path
-  if (!p.startsWith("assets/") && !p.startsWith("images/")) {
-    p = "assets/" + p
-  }
+  if (!p.startsWith("assets/")) p = "assets/" + p
   const base = getBasePath()
   const fullPath = (base ? base.replace(/\/$/, "") + "/" : "/") + p
 
@@ -53,3 +51,8 @@ export const BOTTLE_IMAGES = {
 
 /** Картинка эмоции «баня» (веник) */
 export const EMOJI_BANYA = "/assets/7786876.svg"
+
+/** Остальные картинки (фон, декор) — все в assets */
+export const ASSET_GROUP = "/assets/Group.png"
+export const ASSET_WOOD_BG = "/assets/wood-bg.jpg"
+export const ASSET_FELT_GREEN = "/assets/felt-green.jpg"
