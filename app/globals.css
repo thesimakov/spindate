@@ -397,11 +397,15 @@
 /* Градиентный фон игры: светлая (по умолчанию) и тёмная тема */
 .game-bg-animated {
   position: relative;
-  background:
+  min-height: 100%;
+  background-color: #fefce8;
+  background-image:
     radial-gradient(circle at 0% 0%, rgba(250, 204, 21, 0.2), transparent 55%),
     radial-gradient(circle at 100% 100%, rgba(59, 130, 246, 0.18), transparent 55%),
     radial-gradient(circle at 50% 120%, rgba(243, 244, 246, 0.9), transparent 70%),
     linear-gradient(180deg, #fefce8 0%, #fef9c3 40%, #fee2e2 100%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
   overflow: hidden;
 }
 
@@ -425,23 +429,29 @@
 }
 
 .dark .game-bg-animated {
-  background:
+  background-color: #020617;
+  background-image:
     radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.22), transparent 55%),
     radial-gradient(circle at 100% 100%, rgba(244, 63, 94, 0.22), transparent 55%),
     radial-gradient(circle at 50% 120%, rgba(15, 23, 42, 0.9), transparent 70%),
     linear-gradient(180deg, #020617 0%, #020617 40%, #020617 100%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 
 /* Фон экрана входа: тёмный и анимированный */
 .entry-bg-animated {
   position: relative;
-  background:
+  min-height: 100%;
+  background-color: #0f172a;
+  background-image:
     radial-gradient(ellipse 120% 80% at 20% 20%, rgba(30, 58, 95, 0.5), transparent 50%),
     radial-gradient(ellipse 100% 100% at 80% 80%, rgba(88, 28, 135, 0.35), transparent 50%),
     radial-gradient(ellipse 80% 120% at 50% 50%, rgba(15, 23, 42, 0.9), transparent 60%),
     linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #0f172a 50%, #1e3a5f 75%, #0f172a 100%);
   background-size: 100% 100%, 100% 100%, 100% 100%, 400% 400%;
   background-position: 0 0, 0 0, 0 0, 0% 50%;
+  background-repeat: no-repeat;
   animation: entryBgShift 14s ease-in-out infinite;
   overflow: hidden;
 }
