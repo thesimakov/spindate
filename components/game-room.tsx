@@ -68,6 +68,30 @@ interface FlyingEmoji {
   toY: number
 }
 
+function FlyingEmojiContent({ fe }: { fe: FlyingEmoji }) {
+  const [imgError, setImgError] = useState(false)
+  useEffect(() => setImgError(false), [fe.imgSrc])
+  if (fe.imgSrc && !imgError) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={fe.imgSrc}
+        alt=""
+        className="drop-shadow-lg"
+        style={{ width: "56px", height: "56px", objectFit: "contain" }}
+        draggable={false}
+        loading="eager"
+        onError={() => setImgError(true)}
+      />
+    )
+  }
+  return (
+    <span className="drop-shadow-lg" style={{ fontSize: "3.5rem" }}>
+      {fe.emoji ?? "✨"}
+    </span>
+  )
+}
+
 interface SteamPuff {
   id: string
   x: number
@@ -96,9 +120,9 @@ function renderActionIcon(action: PairAction): React.ReactNode {
       // eslint-disable-next-line @next/next/no-img-element
       return (
         <img
-          src="/assets/image-c0be6faa-1ab9-48f7-a9ff-7f6b0c624895.png"
+          src="/assets/7786876.svg"
           alt="Веник"
-          className="h-4 w-4 rounded-full object-cover"
+          className="h-4 w-4 object-contain"
           draggable={false}
         />
       )
@@ -2389,23 +2413,7 @@ export function GameRoom() {
                 "--fly-to-y": `${fe.toY - fe.fromY}vh`,
               }}
             >
-              {fe.imgSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={fe.imgSrc}
-                  alt=""
-                  className="drop-shadow-lg"
-                  style={{ width: "56px", height: "56px", objectFit: "contain" }}
-                  draggable={false}
-                />
-              ) : (
-                <span
-                  className="drop-shadow-lg"
-                  style={{ fontSize: "3.5rem" }}
-                >
-                  {fe.emoji}
-                </span>
-              )}
+              <FlyingEmojiContent fe={fe} />
             </div>
           ))}
 
