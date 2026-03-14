@@ -142,7 +142,6 @@
   body {
     @apply bg-background text-foreground min-h-screen overflow-hidden;
     font-size: 14px;
-    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
