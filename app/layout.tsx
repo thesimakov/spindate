@@ -32,8 +32,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ru" suppressHydrationWarning>
-      <body className={`${_inter.className} font-sans antialiased`}>
+    <html lang="ru" className="dark" suppressHydrationWarning>
+      <body className={`${_inter.className} font-sans antialiased bg-background text-foreground`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

@@ -4,9 +4,10 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Тёмно-синяя палитра */
+  /* Тёмно-синяя палитра (по умолчанию тёмная тема) */
   --background: #0f172a; /* тёмно-синий фон */
   --foreground: #f1f5f9;
+  color-scheme: dark;
   --card: #1e293b;
   --card-foreground: #e2e8f0;
   --popover: var(--card);
