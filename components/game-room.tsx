@@ -82,6 +82,7 @@ function FlyingEmojiContent({ fe }: { fe: FlyingEmoji }) {
         style={{ width: "56px", height: "56px", objectFit: "contain" }}
         draggable={false}
         loading="eager"
+        onLoad={() => setImgError(false)}
         onError={() => setImgError(true)}
       />
     )

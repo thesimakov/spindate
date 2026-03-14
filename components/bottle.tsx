@@ -13,10 +13,6 @@ interface BottleProps {
 export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }: BottleProps) {
   const [imgError, setImgError] = useState(false)
 
-  useEffect(() => {
-    setImgError(false)
-  }, [skin])
-
   const skinToImg: Record<NonNullable<BottleProps["skin"]>, string> = {
     classic: assetUrl(BOTTLE_IMAGES.classic),
     ruby: assetUrl(BOTTLE_IMAGES.ruby),
@@ -26,6 +22,11 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
     vip: assetUrl(BOTTLE_IMAGES.vip),
     milk: assetUrl(BOTTLE_IMAGES.milk),
   }
+
+  const imgSrc = skinToImg[skin]
+  useEffect(() => {
+    setImgError(false)
+  }, [skin, imgSrc])
 
   return (
     <div
@@ -60,12 +61,13 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             key={skin}
-            src={skinToImg[skin]}
+            src={imgSrc}
             alt="Бутылочка"
             className="h-full w-full object-contain"
             style={{ opacity: 1 }}
             draggable={false}
             loading="eager"
+            onLoad={() => setImgError(false)}
             onError={() => setImgError(true)}
           />
         </div>
