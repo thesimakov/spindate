@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ""
+const isGitHubPages = process.env.GITHUB_ACTIONS === "true"
 const nextConfig = {
   basePath: basePath || undefined,
+  ...(isGitHubPages && { output: "export" }),
   typescript: {
     ignoreBuildErrors: true,
   },
