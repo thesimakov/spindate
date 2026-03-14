@@ -231,7 +231,7 @@ export function RegistrationScreen() {
   }, [])
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-y-auto entry-bg-animated px-4 py-6 sm:py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div className="relative flex min-h-dvh h-dvh flex-col items-center justify-center overflow-y-auto entry-bg-animated px-4 py-6 sm:py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="game-particles" aria-hidden="true">
         {entryParticles.map((d, idx) => (
           <span
@@ -290,13 +290,13 @@ export function RegistrationScreen() {
             {"Войти по логину"}
           </Button>
 
-          <p className="mt-1 text-center text-xs text-slate-400">
+          <p className="mt-3 text-center text-xs text-slate-400 leading-relaxed max-w-[85%] mx-auto">
             Нажимая кнопку, вы соглашаетесь с{" "}
             <a
               href="https://dev.vk.com/ru/mini-apps-rules"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline hover:text-slate-300"
+              className="text-sky-300 underline underline-offset-1 hover:text-sky-200"
             >
               правилами размещения мини-приложений VK
             </a>
