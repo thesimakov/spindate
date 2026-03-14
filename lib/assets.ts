@@ -17,9 +17,13 @@ const APP_URL =
 function getBasePath(): string {
   if (typeof window === "undefined") return BUILD_BASE_PATH
   if (BUILD_BASE_PATH) return BUILD_BASE_PATH
-  const pathname = window.location.pathname
-  const segments = pathname.split("/").filter(Boolean)
-  if (segments.length > 0) return "/" + segments[0]
+  // Только на GitHub Pages первый сегмент пути — это имя репозитория (basePath)
+  const host = typeof window !== "undefined" ? window.location.hostname : ""
+  if (host.includes("github.io") || host.includes("github.com")) {
+    const pathname = window.location.pathname
+    const segments = pathname.split("/").filter(Boolean)
+    if (segments.length > 0) return "/" + segments[0]
+  }
   return ""
 }
 
