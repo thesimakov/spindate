@@ -90,10 +90,10 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock', '**/pnpm-lock.yaml') }}-
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
-      # GitHub Pages — только статический экспорт; API routes не поддерживаются, временно убираем из сборки
+      # GitHub Pages — только статический экспорт; API routes не поддерживаются. Выносим app/api за пределы app/, чтобы Next.js не видел маршруты
       - name: Hide API routes for static export
         run: |
-          if [ -d app/api ]; then mv app/api app/api.bak; fi
+          if [ -d app/api ]; then mv app/api .api-backup; fi
           ls -la app/
       - name: Clear Next.js cache before static build
         run: rm -rf .next
@@ -101,7 +101,7 @@ jobs:
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
       - name: Restore API routes
         if: always()
-        run: if [ -d app/api.bak ]; then mv app/api.bak app/api; fi
+        run: if [ -d .api-backup ]; then mv .api-backup app/api; fi
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

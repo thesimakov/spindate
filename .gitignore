@@ -2,6 +2,7 @@ node_modules
 .next
 .DS_Store
 .git_backup
+.api-backup
 .pnpm-store
 data
 out
