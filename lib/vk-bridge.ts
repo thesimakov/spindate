@@ -89,9 +89,14 @@ export const VK_ITEM_IDS = {
 /** Показать форму оплаты VK. amount — сумма (по курсу VK: 1 голос = 1 сердце); itemId — для платёжных уведомлений (get_item, order_status_change). */
 export async function showPaymentWall(amount: number, itemId?: string): Promise<boolean> {
   const b = await getBridgeAsync()
-  const appId = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_VK_APP_ID
-    ? Number(process.env.NEXT_PUBLIC_VK_APP_ID)
-    : undefined
+  let appId: number | undefined
+  try {
+    appId = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_VK_APP_ID
+      ? Number(process.env.NEXT_PUBLIC_VK_APP_ID)
+      : undefined
+  } catch {
+    appId = undefined
+  }
   if (b && isVkMiniApp() && appId) {
     try {
       const params: Record<string, string> = {

@@ -33,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className="dark" suppressHydrationWarning>
-      <body className={`${_inter.className} font-sans antialiased bg-background text-foreground`}>
+      <body className={`${_inter.className} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
