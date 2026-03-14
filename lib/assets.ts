@@ -1,15 +1,24 @@
 /**
- * Базовый путь для статики (например при деплое в подпапку).
- * Задаётся через NEXT_PUBLIC_BASE_PATH (без завершающего слэша).
+ * Базовый путь при деплое в подпапку (NEXT_PUBLIC_BASE_PATH).
+ * Полный URL приложения (NEXT_PUBLIC_APP_URL) — чтобы картинки грузились
+ * с правильного домена в iframe / VK Mini App.
  */
-const BASE = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH
-  ? process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "")
-  : ""
+const BASE_PATH =
+  typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH
+    ? process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "")
+    : ""
+const APP_URL =
+  (typeof process !== "undefined"
+    ? (process.env?.NEXT_PUBLIC_APP_URL ?? "https://spindate.lemnity.ru")
+    : ""
+  ).replace(/\/$/, "")
 
-/** Возвращает полный путь к статическому файлу из public/ */
+/** Возвращает URL статического файла из public/ (абсолютный, если задан NEXT_PUBLIC_APP_URL). */
 export function assetUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`
-  return BASE + p
+  const fullPath = BASE_PATH + p
+  if (APP_URL) return `${APP_URL}${fullPath}`
+  return fullPath || p
 }
 
 /** Пути к картинкам бутылочек (каталог, игра) */
