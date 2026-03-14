@@ -3626,71 +3626,109 @@ export function GameRoom() {
               )}
             </div>
 
-            {/* Окно выбора рамки для аватарки: выбор рамки → Подарить рамку (5 сердец) */}
+            {/* Окно выбора рамки для подарка — поверх модалки игрока */}
             {showFramePicker && (
               <div
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/60 p-4"
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 overflow-y-auto"
                 onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
               >
                 <div
-                  className="flex flex-col gap-3 rounded-xl p-4 shadow-xl"
+                  className="flex flex-col gap-4 rounded-2xl p-5 shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
                   style={{ background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)", border: "1px solid #334155" }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className="text-center text-[14px] font-semibold text-slate-200">Подарить рамку — 5 ❤</p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <p className="text-center text-[16px] font-bold text-slate-100">Подарить рамку</p>
+
+                  <p className="text-[13px] font-semibold text-slate-300">Бесплатные</p>
+                  <div className="grid grid-cols-4 gap-3">
                     {[
-                      { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none" },
-                      { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)" },
-                      { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)" },
-                      { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)" },
-                      { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)" },
-                      { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)" },
-                      { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none" },
-                      { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)" },
+                      { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none", svgPath: null as string | null, cost: 0 },
+                      { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)", svgPath: null, cost: 0 },
+                      { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)", svgPath: null, cost: 0 },
+                      { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)", svgPath: null, cost: 0 },
+                      { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)", svgPath: null, cost: 0 },
+                      { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)", svgPath: null, cost: 0 },
+                      { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none", svgPath: null, cost: 0 },
+                      { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", svgPath: null, cost: 0 },
                     ].map((f) => (
                       <button
                         key={f.id}
                         type="button"
                         onClick={() => setSelectedFrameForGift(f.id)}
-                        className={`flex flex-col items-center gap-1 rounded-lg py-2 transition-colors hover:bg-slate-600/50 ${selectedFrameForGift === f.id ? "ring-2 ring-sky-400 bg-slate-600/50" : ""}`}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 transition-colors hover:bg-slate-600/50 ${selectedFrameForGift === f.id ? "ring-2 ring-sky-400 bg-slate-600/50" : ""}`}
                       >
-                        <div
-                          className="h-12 w-12 rounded-full bg-slate-600"
-                          style={{ border: f.border, boxShadow: f.shadow }}
-                        />
-                        <span className="text-[11px] text-slate-300">{f.label}</span>
+                        <div className="relative h-14 w-14 flex-shrink-0">
+                          <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
+                          {f.svgPath && (
+                            <img src={assetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
                       </button>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (selectedFrameForGift != null && voiceBalance >= 5) {
-                        dispatch({ type: "PAY_VOICES", amount: 5 })
+
+                  <p className="text-[13px] font-semibold text-amber-200">Премиум — 5 ❤ за рамку</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", svgPath: "000030.svg", cost: 5 },
+                      { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", svgPath: "000010.svg", cost: 5 },
+                      { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", svgPath: "000020.svg", cost: 5 },
+                    ].map((f) => {
+                      const canAfford = voiceBalance >= f.cost
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setSelectedFrameForGift(f.id)}
+                          disabled={!canAfford}
+                          className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 transition-colors hover:bg-slate-600/50 disabled:opacity-50 disabled:cursor-not-allowed ${selectedFrameForGift === f.id ? "ring-2 ring-amber-400 bg-slate-600/50" : ""}`}
+                        >
+                          <div className="relative h-14 w-14 flex-shrink-0">
+                            <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
+                            {f.svgPath && (
+                              <img src={assetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
+                          <span className="text-[10px] text-amber-400 font-medium">{f.cost} ❤</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedFrameForGift == null) return
+                        const isPremium = ["fox", "rabbit", "fairy"].includes(selectedFrameForGift)
+                        const cost = isPremium ? 5 : 0
+                        if (cost > 0 && voiceBalance < cost) return
+                        if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
                         dispatch({ type: "SET_AVATAR_FRAME", playerId: playerMenuTarget.id, frameId: selectedFrameForGift })
                         setShowFramePicker(false)
                         setSelectedFrameForGift(null)
-                      }
-                    }}
-                    disabled={selectedFrameForGift == null || voiceBalance < 5}
-                    className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[14px] font-bold transition-all disabled:opacity-40"
-                    style={{
-                      background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
-                      color: "#0f172a",
-                      border: "2px solid #475569",
-                    }}
-                  >
-                    <Heart className="h-4 w-4" fill="currentColor" />
-                    Подарить рамку — 5 ❤
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
-                    className="rounded-lg bg-slate-600/80 px-3 py-1.5 text-[13px] text-slate-200 hover:bg-slate-500/80"
-                  >
-                    Закрыть
-                  </button>
+                      }}
+                      disabled={selectedFrameForGift == null || (["fox", "rabbit", "fairy"].includes(selectedFrameForGift ?? "") && voiceBalance < 5)}
+                      className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold transition-all disabled:opacity-40"
+                      style={{
+                        background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
+                        color: "#0f172a",
+                        border: "2px solid #475569",
+                      }}
+                    >
+                      <Heart className="h-4 w-4" fill="currentColor" />
+                      {selectedFrameForGift != null && ["fox", "rabbit", "fairy"].includes(selectedFrameForGift) ? "Подарить рамку — 5 ❤" : "Подарить рамку"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
+                      className="rounded-xl bg-slate-600/80 px-4 py-2 text-[13px] text-slate-200 hover:bg-slate-500/80"
+                    >
+                      Закрыть
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

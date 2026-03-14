@@ -56,6 +56,13 @@ export const BOTTLE_IMAGES = {
 /** Картинка эмоции «баня» (веник) */
 export const EMOJI_BANYA = "/assets/7786876.svg"
 
+/** Рамки-картинки для аватарки (SVG из assets) */
+export const FRAME_SVG = {
+  rabbit: "/assets/000010.svg",
+  fairy: "/assets/000020.svg",
+  fox: "/assets/000030.svg",
+} as const
+
 /** Остальные картинки (фон, декор) — все в assets */
 export const ASSET_GROUP = "/assets/Group.png"
 export const ASSET_WOOD_BG = "/assets/wood-bg.jpg"

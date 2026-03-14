@@ -1,6 +1,7 @@
 "use client"
 
 import type { Player } from "@/lib/game-types"
+import { assetUrl, FRAME_SVG } from "@/lib/assets"
 
 const FRAME_STYLES: Record<string, { border: string; boxShadow: string }> = {
   none: { border: "2px solid #475569", boxShadow: "none" },
@@ -11,7 +12,12 @@ const FRAME_STYLES: Record<string, { border: string; boxShadow: string }> = {
   gradient: { border: "3px solid #8b5cf6", boxShadow: "0 0 16px rgba(139,92,246,0.6)" },
   neon: { border: "3px solid rgba(0, 255, 255, 0.95)", boxShadow: "none" },
   snow: { border: "3px solid rgba(186, 230, 253, 0.95)", boxShadow: "0 0 12px rgba(186, 230, 253, 0.5)" },
+  rabbit: { border: "2px solid transparent", boxShadow: "none" },
+  fairy: { border: "2px solid transparent", boxShadow: "none" },
+  fox: { border: "2px solid transparent", boxShadow: "none" },
 }
+
+const FRAME_SVG_IDS = Object.keys(FRAME_SVG) as (keyof typeof FRAME_SVG)[]
 
 interface PlayerAvatarProps {
   player: Player
@@ -54,6 +60,8 @@ export function PlayerAvatar({
 }: PlayerAvatarProps) {
   const frameStyle = frameId && frameId !== "none" ? FRAME_STYLES[frameId] ?? FRAME_STYLES.none : null
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
+  const isSvgFrame = frameId && FRAME_SVG_IDS.includes(frameId as keyof typeof FRAME_SVG)
+  const svgFrameSrc = isSvgFrame && frameId in FRAME_SVG ? assetUrl((FRAME_SVG as Record<string, string>)[frameId]) : null
   const size = compact ? 52 : 72
   const borderSize = compact ? 3 : 4
   const outerSize = size + borderSize * 2 + 4
@@ -296,6 +304,30 @@ export function PlayerAvatar({
             </div>
           </div>
         </div>
+
+        {/* Рамка-картинка (кролик, фея, лиса) — SVG поверх аватарки, подгон под круг аватарки */}
+        {svgFrameSrc && useFrameOnRim && (
+          <div
+            className="pointer-events-none absolute inset-[-8px] z-[1] flex items-center justify-center"
+            aria-hidden
+          >
+            <img
+              src={svgFrameSrc}
+              alt=""
+              className="h-full w-full object-contain"
+              style={
+                frameId === "rabbit"
+                  ? { objectPosition: "center center", transform: "scale(1.15) translateY(-12px)" }
+                  : frameId === "fairy"
+                    ? { objectPosition: "center center", transform: "scale(1.5) translateY(-2px)" }
+                    : frameId === "fox"
+                      ? { objectPosition: "center center", transform: "scale(1.06) translateY(6px)" }
+                      : undefined
+              }
+              aria-hidden
+            />
+          </div>
+        )}
 
         {/* Статус «в игре» (мини-игра Угадай-ка) — снизу по центру */}
         {inGame && !isTarget && (

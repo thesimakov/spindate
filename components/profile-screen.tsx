@@ -5,6 +5,7 @@ import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
+import { assetUrl } from "@/lib/assets"
 
 function purposeLabel(purpose: string) {
   switch (purpose) {
@@ -41,16 +42,22 @@ export function ProfileScreen() {
   const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog, avatarFrames } = state
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
-  const PROFILE_FRAMES = [
-    { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none", animationClass: undefined },
-    { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)", animationClass: "frame-preview-anim-gold" },
-    { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)", animationClass: "frame-preview-anim-silver" },
-    { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)", animationClass: "frame-preview-anim-hearts" },
-    { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)", animationClass: "frame-preview-anim-roses" },
-    { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)", animationClass: "frame-preview-anim-gradient" },
-    { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none", animationClass: "frame-preview-anim-neon" },
-    { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", animationClass: "frame-preview-anim-snow" },
+  const FREE_FRAMES = [
+    { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none", animationClass: undefined, svgPath: undefined as string | undefined, cost: 0 },
+    { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)", animationClass: "frame-preview-anim-gold", svgPath: undefined, cost: 0 },
+    { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)", animationClass: "frame-preview-anim-silver", svgPath: undefined, cost: 0 },
+    { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)", animationClass: "frame-preview-anim-hearts", svgPath: undefined, cost: 0 },
+    { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)", animationClass: "frame-preview-anim-roses", svgPath: undefined, cost: 0 },
+    { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)", animationClass: "frame-preview-anim-gradient", svgPath: undefined, cost: 0 },
+    { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none", animationClass: "frame-preview-anim-neon", svgPath: undefined, cost: 0 },
+    { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", animationClass: "frame-preview-anim-snow", svgPath: undefined, cost: 0 },
   ] as const
+  const PREMIUM_FRAMES = [
+    { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "000030.svg", cost: 5 },
+    { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "000010.svg", cost: 5 },
+    { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "000020.svg", cost: 5 },
+  ] as const
+  const PROFILE_FRAMES = [...FREE_FRAMES, ...PREMIUM_FRAMES]
 
   const rosesBalance = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,
@@ -132,23 +139,36 @@ export function ProfileScreen() {
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 sm:py-7 space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex flex-col items-center gap-2 flex-shrink-0">
-            <div
-              className={`relative h-16 w-16 overflow-hidden rounded-full transition-all duration-200 ${
-                (() => {
-                  const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                  return f?.animationClass ?? ""
-                })()
-              }`}
-              style={
-                currentFrameId !== "none"
-                  ? (() => {
-                      const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                      return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
-                    })()
-                  : { border: "2px solid #475569" }
-              }
-            >
-              <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full rounded-full object-cover" />
+            <div className="relative h-16 w-16">
+              <div
+                className={`h-full w-full overflow-hidden rounded-full transition-all duration-200 ${
+                  (() => {
+                    const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                    return f?.animationClass ?? ""
+                  })()
+                }`}
+                style={
+                  currentFrameId !== "none"
+                    ? (() => {
+                        const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                        return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
+                      })()
+                    : { border: "2px solid #475569" }
+                }
+              >
+                <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full rounded-full object-cover" />
+              </div>
+              {(() => {
+                const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                return f?.svgPath ? (
+                  <img
+                    src={assetUrl(f.svgPath)}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                    aria-hidden
+                  />
+                ) : null
+              })()}
               {isVip && (
                 <div
                   className="absolute flex items-center justify-center rounded-full"
@@ -397,12 +417,14 @@ export function ProfileScreen() {
           onClick={() => setShowFramesModal(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+            className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-3 text-[15px] font-bold text-slate-100">Рамка аватарки</h3>
-            <div className="grid grid-cols-4 gap-3">
-              {PROFILE_FRAMES.map((f) => (
+            <h3 className="mb-4 text-[17px] font-bold text-slate-100">Рамка аватарки</h3>
+
+            <p className="mb-2 text-[13px] font-semibold text-slate-300">Бесплатные</p>
+            <div className="grid grid-cols-4 gap-3 mb-5">
+              {FREE_FRAMES.map((f) => (
                 <button
                   key={f.id}
                   type="button"
@@ -414,23 +436,69 @@ export function ProfileScreen() {
                     currentFrameId === f.id ? "ring-2 ring-sky-400 bg-slate-700/60" : ""
                   }`}
                 >
-                  <div
-                    className={`h-14 w-14 overflow-hidden rounded-full flex-shrink-0 bg-slate-800 ${f.animationClass ?? ""}`}
-                    style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
-                  >
-                    <img
-                      src={currentUser.avatar}
-                      alt=""
-                      className="h-full w-full rounded-full object-cover"
+                  <div className="relative h-14 w-14 flex-shrink-0">
+                    <div
+                      className={`h-full w-full overflow-hidden rounded-full bg-slate-700 ${f.animationClass ?? ""}`}
+                      style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
                     />
+                    {f.svgPath && (
+                      <img
+                        src={assetUrl(f.svgPath)}
+                        alt=""
+                        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                        aria-hidden
+                      />
+                    )}
                   </div>
                   <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
                 </button>
               ))}
             </div>
+
+            <p className="mb-2 text-[13px] font-semibold text-amber-200">Премиум — 5 ❤ за рамку</p>
+            <div className="grid grid-cols-3 gap-3">
+              {PREMIUM_FRAMES.map((f) => {
+                const canAfford = (voiceBalance ?? 0) >= f.cost
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    disabled={!canAfford}
+                    onClick={() => {
+                      if (!currentUser) return
+                      if (f.cost > 0 && (voiceBalance ?? 0) < f.cost) return
+                      if (f.cost > 0) dispatch({ type: "PAY_VOICES", amount: f.cost })
+                      dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
+                      setShowFramesModal(false)
+                    }}
+                    className={`flex flex-col items-center gap-2 rounded-xl py-3 transition-all hover:bg-slate-700/60 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      currentFrameId === f.id ? "ring-2 ring-amber-400 bg-slate-700/60" : ""
+                    }`}
+                  >
+                    <div className="relative h-14 w-14 flex-shrink-0">
+                      <div
+                        className="h-full w-full overflow-hidden rounded-full bg-slate-700"
+                        style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
+                      />
+                      {f.svgPath && (
+                        <img
+                          src={assetUrl(f.svgPath)}
+                          alt=""
+                          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
+                    <span className="text-[10px] text-amber-400 font-medium">{f.cost} ❤</span>
+                  </button>
+                )
+              })}
+            </div>
+
             <Button
               variant="outline"
-              className="mt-4 w-full rounded-xl text-[15px]"
+              className="mt-5 w-full rounded-xl text-[15px]"
               onClick={() => setShowFramesModal(false)}
             >
               Закрыть

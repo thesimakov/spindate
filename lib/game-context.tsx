@@ -35,7 +35,7 @@ const INTERESTS = ["Путешествия, музыка", "Книги, кино
 const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
-export const AVATAR_FRAME_IDS = ["none", "gold", "silver", "hearts", "roses", "gradient", "neon", "snow"] as const
+export const AVATAR_FRAME_IDS = ["none", "gold", "silver", "hearts", "roses", "gradient", "neon", "snow", "rabbit", "fairy", "fox"] as const
 
 export function randomAvatarFrame(): (typeof AVATAR_FRAME_IDS)[number] {
   return AVATAR_FRAME_IDS[Math.floor(Math.random() * AVATAR_FRAME_IDS.length)]
