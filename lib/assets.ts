@@ -23,7 +23,7 @@ function getBasePath(): string {
   return ""
 }
 
-/** Возвращает URL статического файла из public/assets/. Все картинки лежат в assets. */
+/** Возвращает URL статического файла из public/assets/. В браузере — полный URL (origin + path), чтобы картинки грузились в каталоге и в iframe. */
 export function assetUrl(path: string): string {
   let p = path.startsWith("/") ? path.slice(1) : path
   if (!p.startsWith("assets/")) p = "assets/" + p
@@ -31,7 +31,7 @@ export function assetUrl(path: string): string {
   const fullPath = (base ? base.replace(/\/$/, "") + "/" : "/") + p
 
   if (typeof window !== "undefined") {
-    return fullPath
+    return window.location.origin + fullPath
   }
 
   if (APP_URL) return `${APP_URL.replace(/\/$/, "")}${fullPath}`

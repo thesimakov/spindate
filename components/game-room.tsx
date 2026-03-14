@@ -2254,6 +2254,7 @@ export function GameRoom() {
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
+                        key={skin.img}
                         src={skin.img}
                         alt={skin.name}
                         className="h-full w-full object-contain"
