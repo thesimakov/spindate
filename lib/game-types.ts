@@ -235,6 +235,8 @@ export type GameAction =
   | { type: "EXCHANGE_VOICES_FOR_ROSES"; amount: number }
   /** Снять розы из инвентаря (например, вход в «Угадай-ка»). */
   | { type: "REMOVE_INVENTORY_ROSES"; amount: number }
+  /** Забрать приветственный подарок при первом заходе (500 сердец + 10 роз). */
+  | { type: "CLAIM_WELCOME_GIFT" }
   /** Угадай-ка: добавить выигранный тур; pairPartnerId — с кем в паре (для учёта «дружить профилями»). */
   | { type: "UGADAIKA_ADD_ROUND_WON"; pairPartnerId?: number }
   // Player menu

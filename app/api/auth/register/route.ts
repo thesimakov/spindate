@@ -3,10 +3,16 @@ import { getDb } from "@/lib/db"
 import { generateSalt, hashPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, sha256Base64 } from "@/lib/auth/session"
 
+const VALID_GENDERS = ["male", "female"] as const
+const VALID_PURPOSES = ["relationships", "communication", "love"] as const
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const username = typeof body?.username === "string" ? body.username.trim() : ""
   const password = typeof body?.password === "string" ? body.password : ""
+  const age = typeof body?.age === "number" ? body.age : typeof body?.age === "string" ? parseInt(body.age, 10) : 25
+  const gender = VALID_GENDERS.includes(body?.gender) ? body.gender : "male"
+  const purpose = VALID_PURPOSES.includes(body?.purpose) ? body.purpose : "communication"
 
   if (username.length < 3) {
     return NextResponse.json({ ok: false, error: "Логин слишком короткий" }, { status: 400 })
@@ -14,6 +20,7 @@ export async function POST(req: Request) {
   if (password.length < 6) {
     return NextResponse.json({ ok: false, error: "Пароль слишком короткий" }, { status: 400 })
   }
+  const ageNum = Number.isFinite(age) && age >= 18 && age <= 120 ? age : 25
 
   const db = getDb()
   const now = Date.now()
@@ -30,6 +37,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Логин уже занят" }, { status: 409 })
   }
 
+  const avatarUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
+  db.prepare(
+    `INSERT INTO player_profiles (user_id, display_name, avatar_url, gender, age, purpose, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(userId, username, avatarUrl, gender, ageNum, purpose, now, now)
+
   // session
   const token = newSessionToken()
   const tokenHash = sha256Base64(token)
@@ -42,7 +55,18 @@ export async function POST(req: Request) {
      VALUES (?, ?, ?, ?, ?)`,
   ).run(sessionId, userId, tokenHash, now, expiresAt)
 
-  const res = NextResponse.json({ ok: true })
+  const res = NextResponse.json({
+    ok: true,
+    user: {
+      id: userId,
+      username,
+      displayName: username,
+      avatarUrl,
+      gender,
+      age: ageNum,
+      purpose,
+    },
+  })
   const isProd = process.env.NODE_ENV === "production"
   res.cookies.set("session", token, {
     httpOnly: true,

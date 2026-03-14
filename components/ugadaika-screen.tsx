@@ -9,6 +9,8 @@ const SIMULATED_BOT_COUNT = 10
 const SIMULATED_UPDATE_INTERVAL_MS = 5000
 
 const ROUND_SECONDS = 10
+/** Минимальное время показа лоадера (мс), чтобы данные успели подгрузиться и интерфейс стабилизировался */
+const LOADER_MIN_MS = 600
 
 function nextSeed(s: number) {
   return (s * 9301 + 49297) % 233280
@@ -134,6 +136,7 @@ export function UgadaikaScreen() {
   const rosesCount = useMemo(() => inventory.filter((i) => i.type === "rose").length, [inventory])
 
   const [gameShuffleSeed, setGameShuffleSeed] = useState(() => Date.now())
+  const [isLoading, setIsLoading] = useState(true)
 
   const participants = useMemo(
     () => getShuffledParticipants(currentUser, players, gameShuffleSeed),
@@ -461,7 +464,29 @@ export function UgadaikaScreen() {
     prevPlacesRef.current = next
   }, [fullLeaderboard])
 
+  /** Лоадер: ждём готовности данных (currentUser, участники) и минимальное время для стабильного отображения */
+  useEffect(() => {
+    if (!currentUser || participants.length < 4) return
+    const timer = setTimeout(() => setIsLoading(false), LOADER_MIN_MS)
+    return () => clearTimeout(timer)
+  }, [currentUser, participants.length])
+
   if (!currentUser) return null
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/98 text-slate-100 game-bg-animated">
+        <div className="flex flex-col items-center gap-5">
+          <div
+            className="h-14 w-14 animate-spin rounded-full border-4 border-amber-500/30 border-t-amber-400"
+            aria-hidden
+          />
+          <p className="text-sm font-medium text-slate-300">Подготовка игры...</p>
+          <p className="text-xs text-slate-500">Угадай-ка</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-y-auto text-slate-100 pb-[env(safe-area-inset-bottom)] game-bg-animated">

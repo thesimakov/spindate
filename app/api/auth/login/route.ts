@@ -26,6 +26,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Неверный логин или пароль" }, { status: 401 })
   }
 
+  const profile = db
+    .prepare(
+      `SELECT display_name, avatar_url, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
+    )
+    .get(user.id) as
+    | { display_name: string; avatar_url: string; gender: string; age: number; purpose: string }
+    | undefined
+
+  const displayName = profile?.display_name ?? username
+  const avatarUrl = profile?.avatar_url || `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
+  const gender = profile?.gender ?? "male"
+  const age = profile?.age ?? 25
+  const purpose = profile?.purpose ?? "communication"
+
   const now = Date.now()
   const token = newSessionToken()
   const tokenHash = sha256Base64(token)
@@ -38,7 +52,18 @@ export async function POST(req: Request) {
      VALUES (?, ?, ?, ?, ?)`,
   ).run(sessionId, user.id, tokenHash, now, expiresAt)
 
-  const res = NextResponse.json({ ok: true })
+  const res = NextResponse.json({
+    ok: true,
+    user: {
+      id: user.id,
+      username,
+      displayName,
+      avatarUrl,
+      gender,
+      age,
+      purpose,
+    },
+  })
   const isProd = process.env.NODE_ENV === "production"
   res.cookies.set("session", token, {
     httpOnly: true,

@@ -523,6 +523,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const rosesLeft = roses.slice(toRemove)
       return { ...state, inventory: [...rest, ...rosesLeft] }
     }
+    case "CLAIM_WELCOME_GIFT": {
+      const now = Date.now()
+      const welcomeRoses = Array.from({ length: 10 }, (_, i) => ({
+        type: "rose" as const,
+        fromPlayerId: 0,
+        fromPlayerName: "Игра",
+        timestamp: now + i,
+      }))
+      return {
+        ...state,
+        voiceBalance: state.voiceBalance + 500,
+        inventory: [...state.inventory, ...welcomeRoses],
+      }
+    }
     case "UGADAIKA_ADD_ROUND_WON": {
       const uid = state.currentUser?.id
       const nextTotal = (state.ugadaikaRoundsWon ?? 0) + 1

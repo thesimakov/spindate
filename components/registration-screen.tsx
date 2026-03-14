@@ -111,7 +111,17 @@ export function RegistrationScreen() {
     }
   }
 
-  const handleContinueLogin = () => {
+  /** Преобразует строковый id пользователя (UUID) в число для Player.id */
+  const userIdToNumber = (id: string): number => {
+    let h = 0
+    for (let i = 0; i < id.length; i++) {
+      h = (h << 5) - h + id.charCodeAt(i)
+      h = h | 0
+    }
+    return Math.abs(h) || 1
+  }
+
+  const handleContinueLogin = async () => {
     const ageNum = ensureAgeValid()
     if (!ageNum) return
     if (!login || !password) {
@@ -119,17 +129,81 @@ export function RegistrationScreen() {
       return
     }
 
-    const user = {
-      id: Math.floor(Math.random() * 1000000) + 1,
-      name: login,
-      avatar: `https://api.dicebear.com/9.x/adventurer/svg?seed=Guest`,
-      gender,
-      age: ageNum,
-      purpose: defaultPurpose,
-      authProvider: "login" as const,
-    }
+    setLoading(true)
+    setError("")
 
-    buildTableAndEnter(user)
+    try {
+      // Сначала пробуем войти
+      let res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: login, password }),
+        credentials: "include",
+      })
+      const data = res.ok ? await res.json() : null
+
+      // Если не авторизован — пробуем зарегистрировать
+      if (res.status === 401) {
+        res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: login,
+            password,
+            age: ageNum,
+            gender,
+            purpose: defaultPurpose,
+          }),
+          credentials: "include",
+        })
+        const regData = res.ok ? await res.json() : null
+        if (res.status === 409) {
+          setError("Логин уже занят. Введите пароль или выберите другой логин.")
+          return
+        }
+        if (!res.ok) {
+          setError((regData?.error as string) || "Ошибка регистрации")
+          return
+        }
+        if (regData?.user) {
+          const u = regData.user
+          buildTableAndEnter({
+            id: userIdToNumber(u.id),
+            name: u.displayName ?? u.username,
+            avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
+            gender: u.gender === "female" ? "female" : "male",
+            age: u.age ?? ageNum,
+            purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
+            authProvider: "login",
+          })
+          setShowLoginModal(false)
+        }
+        return
+      }
+
+      if (!res.ok) {
+        setError((data?.error as string) || "Неверный логин или пароль")
+        return
+      }
+
+      if (data?.user) {
+        const u = data.user
+        buildTableAndEnter({
+          id: userIdToNumber(u.id),
+          name: u.displayName ?? u.username,
+          avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
+          gender: u.gender === "female" ? "female" : "male",
+          age: u.age ?? ageNum,
+          purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
+          authProvider: "login",
+        })
+        setShowLoginModal(false)
+      }
+    } catch {
+      setError("Ошибка сети. Попробуйте снова.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const entryParticles = useMemo(() => {

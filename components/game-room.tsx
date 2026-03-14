@@ -29,6 +29,7 @@ import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { StringLights, Candle, TableDecorations } from "@/components/decorations"
 import { DailyBonusDialog } from "@/components/daily-bonus-dialog"
+import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { RatingModal } from "@/components/rating-screen"
 import {
   PAIR_ACTIONS,
@@ -308,6 +309,40 @@ export function GameRoom() {
     }
   }, [playerMenuTarget])
 
+  // Приветственный подарок при первом заходе (по пользователю в localStorage)
+  const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
+  const [showWelcomeGift, setShowWelcomeGift] = useState(false)
+  const [welcomeClaimedForSession, setWelcomeClaimedForSession] = useState(false)
+
+  useEffect(() => {
+    if (!currentUser) return
+    try {
+      const raw = localStorage.getItem(WELCOME_GIFT_KEY)
+      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+      if (!stored[String(currentUser.id)]) {
+        setShowWelcomeGift(true)
+      }
+    } catch {
+      setShowWelcomeGift(true)
+    }
+  }, [currentUser?.id])
+
+  const handleClaimWelcomeGift = useCallback(() => {
+    dispatch({ type: "CLAIM_WELCOME_GIFT" })
+    if (currentUser) {
+      try {
+        const raw = localStorage.getItem(WELCOME_GIFT_KEY)
+        const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+        stored[String(currentUser.id)] = true
+        localStorage.setItem(WELCOME_GIFT_KEY, JSON.stringify(stored))
+      } catch {
+        // ignore
+      }
+    }
+    setShowWelcomeGift(false)
+    setWelcomeClaimedForSession(true)
+  }, [dispatch, currentUser])
+
   // Daily bonus (client-only, saved in localStorage)
   const [dailyOpen, setDailyOpen] = useState(false)
   const [dailyDay, setDailyDay] = useState(1)
@@ -329,6 +364,14 @@ export function GameRoom() {
   useEffect(() => {
     if (!currentUser) return
     try {
+      // Сначала показываем приветственный подарок при первом заходе
+      const welcomeRaw = localStorage.getItem(WELCOME_GIFT_KEY)
+      const welcomeStored = welcomeRaw ? (JSON.parse(welcomeRaw) as Record<string, boolean>) : {}
+      if (!welcomeStored[String(currentUser.id)]) {
+        setDailyOpen(false)
+        return
+      }
+
       const raw = localStorage.getItem("botl_daily_bonus_v1")
       const parsed = raw ? (JSON.parse(raw) as { lastClaimDate?: string; streakDay?: number }) : {}
       const last = parsed.lastClaimDate
@@ -350,7 +393,7 @@ export function GameRoom() {
       setDailyClaimedToday(false)
       setDailyOpen(true)
     }
-  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey])
+  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession])
 
   const handleClaimDaily = useCallback(() => {
     if (dailyClaimedToday) return
@@ -1621,6 +1664,13 @@ export function GameRoom() {
         day={dailyDay}
         claimedToday={dailyClaimedToday}
         onClaim={handleClaimDaily}
+      />
+
+      <WelcomeGiftDialog
+        open={showWelcomeGift}
+        onOpenChange={setShowWelcomeGift}
+        userName={currentUser?.name ?? ""}
+        onClaim={handleClaimWelcomeGift}
       />
 
       {/* Top-left controls */}
