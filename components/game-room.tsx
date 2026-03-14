@@ -2063,7 +2063,7 @@ export function GameRoom() {
             </button>
           )}
 
-          {/* Voice balance */}
+          {/* Банк сердец */}
           <div
             className="flex items-center gap-2 rounded-[999px] px-4 py-2"
             style={{
@@ -2071,25 +2071,12 @@ export function GameRoom() {
               border: "1px solid #334155",
             }}
           >
-            <Coins className="h-4 w-4" style={{ color: "#e8c06a" }} />
+            <Heart className="h-4 w-4" style={{ color: "#e8c06a" }} fill="currentColor" />
             <span className="text-xs font-bold" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-            <span className="text-[10px]" style={{ color: "#94a3b8" }}>{"сердец"}</span>
+            <span className="text-[10px]" style={{ color: "#94a3b8" }}>{"Банк сердец"}</span>
           </div>
 
-          {/* Favorites button */}
-          <button
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "favorites" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
-            style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
-            }}
-          >
-            <Star className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Избранные"}</span>
-          </button>
-
-          {/* Shop button */}
+          {/* Магазин */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
             className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
@@ -2103,7 +2090,7 @@ export function GameRoom() {
             <span className="text-xs font-semibold" style={{ color: "#1f2937" }}>{"Магазин"}</span>
           </button>
 
-          {/* Profile button */}
+          {/* Профиль */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "profile" })}
             className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
@@ -2116,20 +2103,7 @@ export function GameRoom() {
             <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
           </button>
 
-          {/* Rating button */}
-          <button
-            onClick={() => setShowRatingModal(true)}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
-            style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
-            }}
-          >
-            <Trophy className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
-          </button>
-
-          {/* Bottle catalog */}
+          {/* Бутылочка */}
           <button
             onClick={() => setShowBottleCatalog(true)}
             className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
@@ -2149,7 +2123,7 @@ export function GameRoom() {
             )}
           </button>
 
-          {/* Change table button */}
+          {/* Сменить стол */}
           <button
             onClick={handleChangeTable}
             className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
@@ -2162,6 +2136,33 @@ export function GameRoom() {
             <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
           </button>
 
+          {/* Рейтинг */}
+          <button
+            onClick={() => setShowRatingModal(true)}
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            style={{
+              background: "rgba(15, 23, 42, 0.9)",
+              border: "1px solid #334155",
+            }}
+          >
+            <Trophy className="h-4 w-4" style={{ color: "#e8c06a" }} />
+            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
+          </button>
+
+          {/* Избранное */}
+          <button
+            onClick={() => dispatch({ type: "SET_SCREEN", screen: "favorites" })}
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            style={{
+              background: "rgba(15, 23, 42, 0.9)",
+              border: "1px solid #334155",
+            }}
+          >
+            <Star className="h-4 w-4" style={{ color: "#e8c06a" }} />
+            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
+          </button>
+
+          {/* Количество столов */}
           <div className="flex items-center gap-2 rounded-[999px] px-4 py-2" style={{ background: "rgba(15, 23, 42, 0.8)" }}>
             <RotateCw className="h-3 w-3" style={{ color: "#94a3b8" }} />
             <span className="text-[10px]" style={{ color: "#94a3b8" }}>
