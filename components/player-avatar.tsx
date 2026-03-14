@@ -89,7 +89,7 @@ export function PlayerAvatar({
         {/* Неоновый подсвет рамки для текущего хода / цели */}
         {(isCurrentTurn || isTarget) && (
           <div
-            className="absolute inset-[-4px] rounded-full"
+            className="absolute inset-[-4px] z-[10] rounded-full"
             style={{
               border: isCurrentTurn
                 ? "3px solid rgba(80, 250, 255, 0.95)"
@@ -319,7 +319,7 @@ export function PlayerAvatar({
                 frameId === "rabbit"
                   ? { objectPosition: "center center", transform: "scale(1.15) translateY(-12px)" }
                   : frameId === "fairy"
-                    ? { objectPosition: "center center", transform: "scale(1.5) translateY(-2px)" }
+                    ? { objectPosition: "center center", transform: "scale(1.65) translateY(-2px)" }
                     : frameId === "fox"
                       ? { objectPosition: "center center", transform: "scale(1.06) translateY(6px)" }
                       : undefined
@@ -332,7 +332,7 @@ export function PlayerAvatar({
         {/* Статус «в игре» (мини-игра Угадай-ка) — снизу по центру */}
         {inGame && !isTarget && (
           <div
-            className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+            className="absolute left-1/2 z-[10] -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold"
             style={{
               bottom: compact ? -14 : -16,
               background: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)",
@@ -348,7 +348,7 @@ export function PlayerAvatar({
         {/* VIP badge (top-right, немного заходя на рамку) */}
         {isVip && !isTarget && (
           <div
-            className="absolute flex items-center justify-center rounded-full"
+            className="absolute z-[10] flex items-center justify-center rounded-full"
             style={{
               width: compact ? 18 : 20,
               height: compact ? 18 : 20,
@@ -376,7 +376,7 @@ export function PlayerAvatar({
         {/* Kiss counter (top-left, на уровне с VIP) */}
         {typeof kissCount === "number" && kissCount > 0 && !isTarget && (
           <div
-            className="absolute flex items-center justify-center rounded-full"
+            className="absolute z-[10] flex items-center justify-center rounded-full"
             style={{
               minWidth: compact ? 20 : 22,
               height: compact ? 18 : 20,
@@ -403,7 +403,7 @@ export function PlayerAvatar({
           const filtered = giftIcons.filter((icon) => icon !== "flowers" && icon !== "diamond" && icon !== "song")
           return filtered.length > 0 && !isTarget && (
             <div
-              className="absolute flex items-center"
+              className="absolute z-[10] flex items-center"
               style={{
                 bottom: -4,
                 left: -6,
@@ -430,7 +430,7 @@ export function PlayerAvatar({
         {/* Big gift overlay (нижняя правая часть, ~70x70 поверх аватарки, без фона и рамки) */}
         {bigGiftIcon && !isTarget && !compact && (
           <div
-            className="absolute flex items-center justify-center"
+            className="absolute z-[10] flex items-center justify-center"
             style={{
               width: 70,
               height: 70,
@@ -458,7 +458,7 @@ export function PlayerAvatar({
         {/* Heart indicator for target */}
         {isTarget && (
           <div
-            className="absolute flex items-center justify-center rounded-full"
+            className="absolute z-[10] flex items-center justify-center rounded-full"
             style={{
               width: 22,
               height: 22,
