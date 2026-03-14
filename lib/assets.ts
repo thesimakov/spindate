@@ -15,13 +15,12 @@ const APP_URL =
     : ""
 
 function getBasePath(): string {
+  // SSR: используем только переменную сборки
   if (typeof window === "undefined") return BUILD_BASE_PATH
-  if (BUILD_BASE_PATH) return BUILD_BASE_PATH
-  // Только на GitHub Pages первый сегмент пути — это имя репозитория (basePath)
-  const host = typeof window !== "undefined" ? window.location.hostname : ""
+  // В браузере всегда смотрим по хосту: одна сборка может быть на lemnity.ru (без basePath) и на GitHub Pages (с /spindate)
+  const host = window.location.hostname
   if (host.includes("github.io") || host.includes("github.com")) {
-    const pathname = window.location.pathname
-    const segments = pathname.split("/").filter(Boolean)
+    const segments = window.location.pathname.split("/").filter(Boolean)
     if (segments.length > 0) return "/" + segments[0]
   }
   return ""
