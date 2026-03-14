@@ -2,6 +2,3 @@ node_modules
 .next
 .DS_Store
 .git_backup
-.env
-.env.local
-.env.*.local

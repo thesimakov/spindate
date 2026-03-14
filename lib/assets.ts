@@ -8,10 +8,9 @@ const BASE_PATH =
     ? process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "")
     : ""
 const APP_URL =
-  (typeof process !== "undefined"
-    ? (process.env?.NEXT_PUBLIC_APP_URL ?? "https://spindate.lemnity.ru")
+  typeof process !== "undefined" && process.env?.NEXT_PUBLIC_APP_URL
+    ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
     : ""
-  ).replace(/\/$/, "")
 
 /** Возвращает URL статического файла из public/ (абсолютный, если задан NEXT_PUBLIC_APP_URL). */
 export function assetUrl(path: string): string {
