@@ -231,7 +231,7 @@ export function RegistrationScreen() {
   }, [])
 
   return (
-    <div className="relative flex min-h-dvh h-dvh flex-col items-center justify-center overflow-hidden entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
+    <div className="relative flex min-h-dvh h-dvh min-h-[100vh] flex-col items-center justify-center overflow-hidden entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
       <div className="game-particles" aria-hidden="true">
         {entryParticles.map((d, idx) => (
           <span
