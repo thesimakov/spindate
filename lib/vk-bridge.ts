@@ -79,21 +79,30 @@ export async function getUserInfo(): Promise<VkUserInfo> {
   }
 }
 
-/** Показать форму оплаты VK (голоса/рубли). amount — сумма в голосах. */
-export async function showPaymentWall(amount: number): Promise<boolean> {
+/** Идентификаторы товаров для VK Pay (должны совпадать с app/api/vk/payments). */
+export const VK_ITEM_IDS = {
+  hearts_500: "hearts_500",
+  hearts_1000: "hearts_1000",
+  vip: "vip",
+} as const
+
+/** Показать форму оплаты VK (голоса). amount — сумма в голосах; itemId — для платёжных уведомлений (get_item, order_status_change). */
+export async function showPaymentWall(amount: number, itemId?: string): Promise<boolean> {
   const b = await getBridgeAsync()
   const appId = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_VK_APP_ID
     ? Number(process.env.NEXT_PUBLIC_VK_APP_ID)
     : undefined
   if (b && isVkMiniApp() && appId) {
     try {
+      const params: Record<string, string> = {
+        amount: String(amount),
+        description: `Покупка за ${amount} голосов`,
+      }
+      if (itemId) params.item = itemId
       const res = await b.send("VKWebAppOpenPayForm", {
         app_id: appId,
         action: "pay-to-service",
-        params: {
-          amount: String(amount),
-          description: `Покупка за ${amount} голосов`,
-        },
+        params,
       })
       const r = res as { result?: { success?: boolean }; success?: boolean }
       return r?.result?.success === true || r?.success === true
@@ -105,9 +114,19 @@ export async function showPaymentWall(amount: number): Promise<boolean> {
   return new Promise((resolve) => setTimeout(() => resolve(true), 500))
 }
 
-/** Покупка VIP (отдельный товар в VK Pay при необходимости). */
+/** Покупка пака сердец (500). Для уведомлений VK вызывает get_item/order_status_change на сервер. */
+export async function buyHearts500(): Promise<boolean> {
+  return showPaymentWall(1, VK_ITEM_IDS.hearts_500)
+}
+
+/** Покупка пака сердец (1000). */
+export async function buyHearts1000(): Promise<boolean> {
+  return showPaymentWall(2, VK_ITEM_IDS.hearts_1000)
+}
+
+/** Покупка VIP (99 голосов). */
 export async function buyVip(): Promise<boolean> {
-  return showPaymentWall(99)
+  return showPaymentWall(99, VK_ITEM_IDS.vip)
 }
 
 /** Показать диалог приглашения друзей в приложение. */
@@ -128,8 +147,11 @@ export async function inviteFriends(): Promise<boolean> {
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
+  buyHearts500,
+  buyHearts1000,
   buyVip,
   inviteFriends,
   initVk,
   isVkMiniApp,
+  VK_ITEM_IDS,
 }

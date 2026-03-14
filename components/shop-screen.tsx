@@ -46,11 +46,16 @@ export function ShopScreen() {
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true })
   }
 
-  const handleTopUp = async () => {
-    // Пополнение через стену платежей (заглушка на 500 сердец)
-    const ok = await vkBridge.showPaymentWall(500)
+  const handleTopUp500 = async () => {
+    const ok = await vkBridge.buyHearts500()
     if (!ok) return
     dispatch({ type: "PAY_VOICES", amount: -500 })
+  }
+
+  const handleTopUp1000 = async () => {
+    const ok = await vkBridge.buyHearts1000()
+    if (!ok) return
+    dispatch({ type: "PAY_VOICES", amount: -1000 })
   }
 
   const handleInviteFriends = async () => {
@@ -90,10 +95,16 @@ export function ShopScreen() {
           <div className="flex items-center gap-2">
             <span className="text-sm text-rose-400">{"❤"}</span>
             <span className="text-sm font-bold text-slate-100">{voiceBalance}</span>
-            <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" onClick={handleTopUp}>
-              {"Пополнить"}
-            </Button>
           </div>
+        </div>
+        {/* Пополнение за голоса VK (товары для платёжных уведомлений) */}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="text-[11px]" onClick={handleTopUp500}>
+            {"500 ❤ — 1 голос"}
+          </Button>
+          <Button size="sm" variant="outline" className="text-[11px]" onClick={handleTopUp1000}>
+            {"1000 ❤ — 2 голоса"}
+          </Button>
         </div>
 
         {/* VIP-статус + покупка */}
