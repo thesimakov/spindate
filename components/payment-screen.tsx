@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { Coins, Shield, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame, vkBridge } from "@/lib/game-context"
+import { useGame } from "@/lib/game-context"
+import { vkBridge } from "@/lib/vk-bridge"
 
 export function PaymentScreen() {
   const { dispatch } = useGame()

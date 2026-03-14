@@ -3,7 +3,8 @@
 import { useMemo } from "react"
 import { Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame, vkBridge } from "@/lib/game-context"
+import { useGame } from "@/lib/game-context"
+import { vkBridge } from "@/lib/vk-bridge"
 
 export function ShopScreen() {
   const { state, dispatch } = useGame()
@@ -47,13 +48,19 @@ export function ShopScreen() {
   }
 
   const handleTopUp500 = async () => {
-    const ok = await vkBridge.buyHearts500()
+    const ok =
+      typeof vkBridge.buyHearts500 === "function"
+        ? await vkBridge.buyHearts500()
+        : await vkBridge.showPaymentWall(1)
     if (!ok) return
     dispatch({ type: "PAY_VOICES", amount: -500 })
   }
 
   const handleTopUp1000 = async () => {
-    const ok = await vkBridge.buyHearts1000()
+    const ok =
+      typeof vkBridge.buyHearts1000 === "function"
+        ? await vkBridge.buyHearts1000()
+        : await vkBridge.showPaymentWall(2)
     if (!ok) return
     dispatch({ type: "PAY_VOICES", amount: -1000 })
   }

@@ -648,8 +648,6 @@ export function useGame() {
   return context
 }
 
-export { vkBridge } from "./vk-bridge"
-
 export function getBotResponse(): string {
   const responses = [
     "Привет! Рада знакомству!",

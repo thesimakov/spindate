@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react"
 import { Heart, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame, vkBridge, generateBots } from "@/lib/game-context"
+import { useGame, generateBots } from "@/lib/game-context"
+import { vkBridge } from "@/lib/vk-bridge"
 import type { Gender, Player, Purpose } from "@/lib/game-types"
 
 export function RegistrationScreen() {
