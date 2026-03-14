@@ -74,3 +74,23 @@ sudo certbot --nginx -d spindate.lemnity.ru
 
 - Папка **data/** создаётся автоматически для SQLite (логин/сессии). На сервере она должна быть доступна на запись для процесса Node.
 - После смены `.env.local` выполните `npm run build` и перезапустите приложение (`pm2 restart spindate`).
+
+## 7. Картинки (бутылочки и т.д.)
+
+Все изображения лежат в **public/assets/** и отдаются по путям вида `/assets/...`. После обновления кода на сервере убедитесь, что папка есть и в ней есть файлы:
+
+```bash
+cd /var/www/spindate   # или ваш путь к проекту
+git pull
+ls -la public/assets/   # должны быть b_standart_v2.webp, b_lemonade_v2.webp и др.
+pnpm install
+pnpm run build
+pm2 restart spindate
+```
+
+Проверка с сервера (должен вернуться размер в байтах, не 404):
+
+```bash
+curl -sI http://127.0.0.1:3000/assets/b_standart_v2.webp | head -1
+# ожидается: HTTP/1.1 200 OK
+```

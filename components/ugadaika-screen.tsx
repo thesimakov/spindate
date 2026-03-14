@@ -9,8 +9,8 @@ const SIMULATED_BOT_COUNT = 10
 const SIMULATED_UPDATE_INTERVAL_MS = 5000
 
 const ROUND_SECONDS = 10
-/** Минимальное время показа лоадера (мс), чтобы данные успели подгрузиться и интерфейс стабилизировался */
-const LOADER_MIN_MS = 600
+/** Минимальное время показа лоадера (мс): подгрузка currentUser, участников и стабилизация кода перед стартом */
+const LOADER_MIN_MS = 900
 
 function nextSeed(s: number) {
   return (s * 9301 + 49297) % 233280
@@ -464,25 +464,32 @@ export function UgadaikaScreen() {
     prevPlacesRef.current = next
   }, [fullLeaderboard])
 
-  /** Лоадер: ждём готовности данных (currentUser, участники) и минимальное время для стабильного отображения */
+  /** Лоадер: ждём готовности данных (currentUser, 4 участника с валидными данными) и минимальное время — чтобы код успел подгрузиться и всё работало */
+  const participantsReady =
+    currentUser &&
+    participants.length === 4 &&
+    participants.every((p) => p != null && typeof p.id === "number" && (p.gender === "male" || p.gender === "female"))
   useEffect(() => {
-    if (!currentUser || participants.length < 4) return
+    if (!participantsReady) return
     const timer = setTimeout(() => setIsLoading(false), LOADER_MIN_MS)
     return () => clearTimeout(timer)
-  }, [currentUser, participants.length])
+  }, [participantsReady])
 
   if (!currentUser) return null
 
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/98 text-slate-100 game-bg-animated">
-        <div className="flex flex-col items-center gap-5">
+        <div className="flex flex-col items-center gap-6 px-4">
           <div
-            className="h-14 w-14 animate-spin rounded-full border-4 border-amber-500/30 border-t-amber-400"
+            className="h-16 w-16 animate-spin rounded-full border-4 border-slate-600 border-t-amber-400"
             aria-hidden
           />
-          <p className="text-sm font-medium text-slate-300">Подготовка игры...</p>
-          <p className="text-xs text-slate-500">Угадай-ка</p>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <p className="text-base font-semibold text-slate-200">Подготовка игры...</p>
+            <p className="text-xs text-slate-500">Загружаем участников и настройки</p>
+            <p className="text-[11px] text-slate-600">Угадай-ка</p>
+          </div>
         </div>
       </div>
     )

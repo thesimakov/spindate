@@ -23,19 +23,23 @@ function getBasePath(): string {
   return ""
 }
 
-/** Возвращает URL статического файла из public/assets/. В браузере — полный URL (origin + path), чтобы картинки грузились в каталоге и в iframe. */
+/** Версия для сброса кэша (менять после обновления картинок) */
+const ASSET_CACHE_VERSION = "2"
+
+/** Возвращает URL статического файла из public/assets/. В браузере — полный URL (origin + path). */
 export function assetUrl(path: string): string {
   let p = path.startsWith("/") ? path.slice(1) : path
   if (!p.startsWith("assets/")) p = "assets/" + p
   const base = getBasePath()
   const fullPath = (base ? base.replace(/\/$/, "") + "/" : "/") + p
+  const q = ASSET_CACHE_VERSION ? `?v=${ASSET_CACHE_VERSION}` : ""
 
   if (typeof window !== "undefined") {
-    return window.location.origin + fullPath
+    return window.location.origin + fullPath + q
   }
 
-  if (APP_URL) return `${APP_URL.replace(/\/$/, "")}${fullPath}`
-  return fullPath
+  if (APP_URL) return `${APP_URL.replace(/\/$/, "")}${fullPath}${q}`
+  return fullPath + q
 }
 
 /** Пути к картинкам бутылочек (каталог, игра) */

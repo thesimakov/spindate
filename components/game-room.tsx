@@ -28,9 +28,8 @@ import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { StringLights, Candle, TableDecorations } from "@/components/decorations"
-import { DailyBonusDialog } from "@/components/daily-bonus-dialog"
-import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { RatingModal } from "@/components/rating-screen"
+import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -387,11 +386,11 @@ export function GameRoom() {
       const nextDay = last === dailyBonusYesterdayKey ? Math.min(5, (streak || 0) + 1) : 1
       setDailyDay(nextDay)
       setDailyClaimedToday(false)
-      setDailyOpen(true)
+      setDailyOpen(false)
     } catch {
       setDailyDay(1)
       setDailyClaimedToday(false)
-      setDailyOpen(true)
+      setDailyOpen(false)
     }
   }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession])
 
@@ -1658,14 +1657,6 @@ export function GameRoom() {
   /* ================================================================ */
   return (
     <div className="relative flex h-dvh overflow-hidden game-bg-animated">
-      <DailyBonusDialog
-        open={dailyOpen}
-        onOpenChange={(o) => setDailyOpen(o)}
-        day={dailyDay}
-        claimedToday={dailyClaimedToday}
-        onClaim={handleClaimDaily}
-      />
-
       <WelcomeGiftDialog
         open={showWelcomeGift}
         onOpenChange={setShowWelcomeGift}
