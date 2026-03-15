@@ -23,6 +23,8 @@ import {
   Flower2,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
@@ -471,6 +473,7 @@ export function GameRoom() {
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
   const [showChatListModal, setShowChatListModal] = useState(false)
   const [followersBlockCollapsed, setFollowersBlockCollapsed] = useState(false)
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
   const [generalChatInput, setGeneralChatInput] = useState("")
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
@@ -3114,8 +3117,34 @@ export function GameRoom() {
 
       </div>
 
-      {/* ---- RIGHT CHAT PANEL (скрыто на мобильных) ---- */}
-      <div className="relative z-20 hidden md:flex w-[230px] shrink-0 flex-col gap-3 pt-6 pb-3 pr-2">
+      {/* ---- RIGHT PANEL: мини-игра + поклонники + чат — на ПК одно свёртываемое окно ---- */}
+      <div className="relative z-20 hidden md:flex shrink-0 flex-col border-l border-slate-700/60 bg-slate-900/40">
+        {rightPanelCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setRightPanelCollapsed(false)}
+            className="flex flex-col items-center justify-center gap-1.5 py-6 px-2 w-14 min-h-[100px] rounded-l-xl transition-colors hover:bg-slate-800/60"
+            style={{ borderRight: "1px solid rgba(71, 85, 105, 0.5)" }}
+            aria-label="Развернуть панель"
+          >
+            <MessageCircle className="h-5 w-5 shrink-0" style={{ color: "#e8c06a" }} />
+            <span className="text-[9px] font-medium text-slate-300 text-center leading-tight">Развернуть</span>
+            <ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" />
+          </button>
+        ) : (
+        <div className="flex w-[230px] flex-col gap-3 pt-2 pb-3 pr-2 pl-1">
+          {/* Заголовок панели с кнопкой свернуть */}
+          <div className="flex items-center justify-between gap-2 mx-2 mb-0.5 px-2 py-1.5 rounded-t-lg" style={{ background: "rgba(15, 23, 42, 0.9)", borderBottom: "1px solid rgba(71, 85, 105, 0.6)" }}>
+            <span className="text-xs font-bold truncate" style={{ color: "#e8c06a" }}>Свернуть</span>
+            <button
+              type="button"
+              onClick={() => setRightPanelCollapsed(true)}
+              className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 transition-colors"
+              aria-label="Свернуть панель"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         {/* Угадай-ка — кнопка мини-игры с лампочками по всему периметру (казино) */}
         <div className="relative mx-2 py-2 px-1">
           {/* Лампочки по всему периметру рамки */}
@@ -3147,7 +3176,7 @@ export function GameRoom() {
           </div>
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
-            className="ugadaika-sidebar-btn ugadaika-block-pulse group relative w-full flex flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-4 py-3.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
+            className="ugadaika-sidebar-btn ugadaika-block-pulse group relative w-full flex items-center justify-center overflow-hidden rounded-2xl px-2 py-2 min-h-[90px] transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
             style={{
               background: "linear-gradient(135deg, rgba(190, 24, 93, 0.35) 0%, rgba(136, 19, 55, 0.5) 50%, rgba(88, 28, 135, 0.4) 100%)",
               border: "1px solid rgba(251, 113, 133, 0.5)",
@@ -3155,15 +3184,8 @@ export function GameRoom() {
             }}
           >
             <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
-            <span className="relative text-[10px] font-semibold uppercase tracking-wider opacity-90" style={{ color: "#fbcfe8" }}>
-              Мини-игра
-            </span>
-            <span className="relative flex items-center justify-center gap-2">
-              <span className="text-2xl drop-shadow-md transition-transform duration-300 group-hover:scale-110" aria-hidden="true">💕</span>
-              <span className="text-sm font-bold tracking-wide" style={{ color: "#fce7f3" }}>
-                Угадай-ка
-              </span>
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={assetUrl("Frame 1171276192.webp")} alt="Угадай-ка" className="relative w-full h-full max-h-[76px] object-contain" />
           </button>
         </div>
 
@@ -3327,6 +3349,8 @@ export function GameRoom() {
             </div>
           </div>
         </div>
+        </div>
+        )}
       </div>
 
       {/* ---- МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ ---- */}

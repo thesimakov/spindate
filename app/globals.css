@@ -757,13 +757,14 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* Скролл игрового поля Угадай-ка на мобильной */
+/* Скролл игрового поля Угадай-ка (мобильная и ПК) */
 .ugadaika-main-scroll {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   min-height: 0;
+  flex: 1 1 0%;
 }
 .player-menu-left {
   animation: playerMenuQuoteIn 0.35s ease-out both;
