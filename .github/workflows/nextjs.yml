@@ -88,23 +88,23 @@ jobs:
       - name: Restore API routes
         if: always()
         run: if [ -d .api-backup ]; then mv .api-backup app/api; fi
-      # Next.js с basePath + export не кладёт public/ в out — копируем в ту же папку, что создал билд (out/REPO/)
+      # Next.js с basePath + export создаёт out/REPO_NAME/ и не кладёт туда public/ — копируем ассеты вручную
       - name: Ensure public assets in out (under basePath)
         run: |
           set -e
+          REPO="${{ github.event.repository.name }}"
           test -d out || (echo "out/ not found after build" && exit 1)
-          OUT_BASE=$(ls out | head -1)
-          test -n "$OUT_BASE" || (echo "out/ is empty" && exit 1)
+          test -d "out/${REPO}" || (echo "out/${REPO}/ not found (check basePath)" && exit 1)
           test -d "public/assets" || (echo "public/assets/ not found" && exit 1)
-          echo "Build output base dir: out/${OUT_BASE}"
-          mkdir -p "out/${OUT_BASE}/assets"
-          cp -r public/assets/. "out/${OUT_BASE}/assets/"
-          echo "Contents of out/${OUT_BASE}/assets/:"
-          ls -la "out/${OUT_BASE}/assets/"
+          echo "Build output base dir: out/${REPO}"
+          mkdir -p "out/${REPO}/assets"
+          cp -r public/assets/. "out/${REPO}/assets/"
+          echo "Contents of out/${REPO}/assets/:"
+          ls -la "out/${REPO}/assets/"
           for f in 7786876.svg 000010.svg 000020.svg 000030.svg b_standart_v2.webp; do
-            test -f "out/${OUT_BASE}/assets/${f}" || (echo "Missing: ${f}" && exit 1)
+            test -f "out/${REPO}/assets/${f}" || (echo "Missing: ${f}" && exit 1)
           done
-          FIRST=$(head -c 1 "out/${OUT_BASE}/assets/000020.svg")
+          FIRST=$(head -c 1 "out/${REPO}/assets/000020.svg")
           test "$FIRST" = "<" || (echo "000020.svg does not start with < (got: $FIRST)" && exit 1)
           echo "All required assets present and valid."
       - name: Upload artifact
