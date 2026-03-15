@@ -95,19 +95,22 @@ jobs:
       - name: Restore API routes
         if: always()
         run: if [ -d .api-backup ]; then mv .api-backup app/api; fi
-      # Next.js с basePath + export не кладёт public/ в out/REPO_NAME/ — копируем в out/REPO/assets/
+      # Next.js с basePath + export не кладёт public/ в out — копируем в ту же папку, что создал билд (out/REPO/)
       - name: Ensure public assets in out (under basePath)
         run: |
-          REPO="${{ github.event.repository.name }}"
-          echo "Repository name (basePath): ${REPO}"
-          mkdir -p "out/${REPO}/assets"
-          cp -r public/assets/. "out/${REPO}/assets/" 2>/dev/null || true
-          echo "Contents of out/${REPO}/assets/:"
-          ls -la "out/${REPO}/assets/"
+          set -e
+          OUT_BASE=$(ls out | head -1)
+          echo "Build output base dir: out/${OUT_BASE}"
+          mkdir -p "out/${OUT_BASE}/assets"
+          cp -r public/assets/. "out/${OUT_BASE}/assets/"
+          echo "Contents of out/${OUT_BASE}/assets/:"
+          ls -la "out/${OUT_BASE}/assets/"
           for f in 7786876.svg 000010.svg 000020.svg 000030.svg b_standart_v2.webp; do
-            test -f "out/${REPO}/assets/${f}" || (echo "Missing: ${f}" && exit 1)
+            test -f "out/${OUT_BASE}/assets/${f}" || (echo "Missing: ${f}" && exit 1)
           done
-          echo "All required assets present."
+          FIRST=$(head -c 1 "out/${OUT_BASE}/assets/000020.svg")
+          test "$FIRST" = "<" || (echo "000020.svg does not start with < (got: $FIRST)" && exit 1)
+          echo "All required assets present and valid."
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
