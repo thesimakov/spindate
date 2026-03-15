@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react"
-import type { GameState, GameAction, Player, ChatMessage, Gender, InventoryItem } from "./game-types"
+import type { GameState, GameAction, Player, ChatMessage, Gender, InventoryItem, GeneralChatMessage } from "./game-types"
 
 // Имена жителей стран СНГ (25+ женских и 25+ мужских)
 const FEMALE_NAMES: string[] = [
@@ -433,6 +433,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           [action.toId]: [...existing, action.message],
         },
       }
+    }
+    case "SEND_GENERAL_CHAT": {
+      const list = [...(state.generalChatMessages ?? []), action.message]
+      const kept = list.slice(-50)
+      return { ...state, generalChatMessages: kept }
     }
     case "PAY_VOICES":
       return { ...state, voiceBalance: Math.max(0, state.voiceBalance - action.amount) }

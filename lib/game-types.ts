@@ -30,6 +30,15 @@ export interface ChatMessage {
   gift?: string
 }
 
+/** Сообщение в общем чате стола */
+export interface GeneralChatMessage {
+  id: string
+  senderId: number
+  senderName: string
+  text: string
+  timestamp: number
+}
+
 export interface GameLogEntry {
   id: string
   type:
@@ -192,6 +201,8 @@ export interface GameState {
   currentTurnDidSpin?: boolean
   /** Включены ли звуки эмоций (по умолчанию true). Сохраняется в localStorage. */
   soundsEnabled?: boolean
+  /** Общий чат стола (последние сообщения). */
+  generalChatMessages?: GeneralChatMessage[]
 }
 
 export type GameAction =
@@ -213,6 +224,7 @@ export type GameAction =
   | { type: "ADD_FAVORITE"; player: Player }
   | { type: "OPEN_CHAT"; player: Player }
   | { type: "SEND_MESSAGE"; toId: number; message: ChatMessage }
+  | { type: "SEND_GENERAL_CHAT"; message: GeneralChatMessage }
   | { type: "PAY_VOICES"; amount: number }
   | { type: "ADD_VOICES"; amount: number }
   | { type: "RESTORE_GAME_STATE"; voiceBalance: number; inventory: InventoryItem[] }
