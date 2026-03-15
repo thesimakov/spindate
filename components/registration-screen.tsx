@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge } from "@/lib/vk-bridge"
-import { useIsMobile } from "@/lib/use-media-query"
+import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
 import type { Gender, Player, Purpose } from "@/lib/game-types"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
   const isMobile = useIsMobile()
+  const isTablet = useIsTablet()
+  const isMobileOrTablet = isMobile || isTablet
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
@@ -34,10 +36,10 @@ export function RegistrationScreen() {
   }) => {
     dispatch({ type: "SET_USER", user })
 
-    // На ПК — 10 участников, на мобильной — 6
-    const maxTableSize = isMobile ? 6 : 10
-    const targetMales = isMobile ? 3 : 5
-    const targetFemales = isMobile ? 3 : 5
+    // На ПК — 10 участников, на мобильной и планшете — 6
+    const maxTableSize = isMobileOrTablet ? 6 : 10
+    const targetMales = isMobileOrTablet ? 3 : 5
+    const targetFemales = isMobileOrTablet ? 3 : 5
 
     const liveCount = 1
     const neededBots = Math.max(0, maxTableSize - liveCount)

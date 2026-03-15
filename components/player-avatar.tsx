@@ -46,6 +46,8 @@ interface PlayerAvatarProps {
   inGame?: boolean
   /** Не крутил бутылочку 3+ хода — показывать «уснул» (zzz из центра аватарки) */
   showAsleep?: boolean
+  /** Явный размер аватарки в px (если задан, переопределяет compact) */
+  size?: number
 }
 
 export function PlayerAvatar({
@@ -61,14 +63,16 @@ export function PlayerAvatar({
   frameId,
   inGame = false,
   showAsleep = false,
+  size: sizeProp,
 }: PlayerAvatarProps) {
   const frameStyle = frameId && frameId !== "none" ? FRAME_STYLES[frameId] ?? FRAME_STYLES.none : null
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
   const isSvgFrame = frameId && FRAME_SVG_IDS.includes(frameId as keyof typeof FRAME_SVG)
   const svgFrameSrc = isSvgFrame && frameId in FRAME_SVG ? assetUrl((FRAME_SVG as Record<string, string>)[frameId]) : null
-  const size = compact ? 52 : 70
-  const borderSize = compact ? 3 : 4
+  const size = sizeProp ?? (compact ? 52 : 70)
+  const borderSize = size <= 52 ? 3 : 4
   const outerSize = size + borderSize * 2 + 4
+  const effectiveCompact = size <= 52
   const isVip = !!player.isVip
 
   return (
@@ -127,7 +131,7 @@ export function PlayerAvatar({
               {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
                 const angleDeg = i * 45
                 const radius = outerSize / 2 + 4
-                const heartSize = compact ? 10 : 14
+                const heartSize = effectiveCompact ? 10 : 14
                 return (
                   <span
                     key={i}
@@ -178,7 +182,7 @@ export function PlayerAvatar({
             >
               {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
                 const angleDeg = i * 45
-                const roseSize = compact ? 14 : 18
+                const roseSize = effectiveCompact ? 14 : 18
                 const radius = outerSize / 2 + 2
                 return (
                   <div
@@ -231,7 +235,7 @@ export function PlayerAvatar({
             >
               {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
                 const angleDeg = i * 45
-                const flakeSize = compact ? 12 : 16
+                const flakeSize = effectiveCompact ? 12 : 16
                 const radius = outerSize / 2 + 2
                 return (
                   <div
@@ -312,7 +316,7 @@ export function PlayerAvatar({
         {svgFrameSrc && (useFrameOnRim || isCurrentTurn || isTarget) && (
           <div
             className="pointer-events-none absolute z-[1] flex items-center justify-center"
-            style={{ inset: compact ? -28 : -40 }}
+            style={{ inset: effectiveCompact ? -28 : -40 }}
             aria-hidden
           >
             <img
@@ -333,7 +337,7 @@ export function PlayerAvatar({
           <div
             className="absolute left-1/2 z-[10] -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold"
             style={{
-              bottom: compact ? -14 : -16,
+              bottom: effectiveCompact ? -14 : -16,
               background: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)",
               color: "#fff",
               boxShadow: "0 0 8px rgba(14,165,233,0.6)",
@@ -349,8 +353,8 @@ export function PlayerAvatar({
           <div
             className="absolute z-[10] flex items-center justify-center rounded-full"
             style={{
-              width: compact ? 18 : 20,
-              height: compact ? 18 : 20,
+              width: effectiveCompact ? 18 : 20,
+              height: effectiveCompact ? 18 : 20,
               background: "linear-gradient(135deg,#facc15,#f97316)",
               border: "2px solid #b45309",
               top: 2,
@@ -359,8 +363,8 @@ export function PlayerAvatar({
             }}
           >
             <svg
-              width={compact ? 10 : 11}
-              height={compact ? 10 : 11}
+              width={effectiveCompact ? 10 : 11}
+              height={effectiveCompact ? 10 : 11}
               viewBox="0 0 24 24"
               aria-hidden="true"
             >
@@ -377,21 +381,21 @@ export function PlayerAvatar({
           <div
             className="absolute z-[10] flex items-center justify-center rounded-full"
             style={{
-              minWidth: compact ? 18 : 22,
-              height: compact ? 16 : 20,
-              padding: compact ? "0 3px" : "0 5px",
+              minWidth: effectiveCompact ? 18 : 22,
+              height: effectiveCompact ? 16 : 20,
+              padding: effectiveCompact ? "0 3px" : "0 5px",
               background: "linear-gradient(135deg,#e85d04,#d00000)",
-              border: compact ? "1px solid #9d0208" : "2px solid #7c2d12",
-              top: compact ? 1 : 2,
-              left: compact ? 1 : 2,
+              border: effectiveCompact ? "1px solid #9d0208" : "2px solid #7c2d12",
+              top: effectiveCompact ? 1 : 2,
+              left: effectiveCompact ? 1 : 2,
               boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
             }}
           >
             <span
               className="font-semibold leading-none"
-              style={{ color: "#fff", fontSize: compact ? 9 : 10 }}
+              style={{ color: "#fff", fontSize: effectiveCompact ? 9 : 10 }}
             >
-              {compact ? kissCount : (<>{"💋 "}{kissCount}</>)}
+              {effectiveCompact ? kissCount : (<>{"💋 "}{kissCount}</>)}
             </span>
           </div>
         )}
@@ -413,7 +417,7 @@ export function PlayerAvatar({
                   className="drop-shadow-lg"
                   aria-hidden="true"
                   style={{
-                    fontSize: compact ? "20px" : "24px",
+                    fontSize: effectiveCompact ? "20px" : "24px",
                     marginLeft: index === 0 ? 0 : -8,
                   }}
                 >
@@ -426,7 +430,7 @@ export function PlayerAvatar({
         })()}
 
         {/* Big gift overlay (нижняя правая часть, ~70x70 поверх аватарки, без фона и рамки) */}
-        {bigGiftIcon && !isTarget && !compact && (
+        {bigGiftIcon && !isTarget && !effectiveCompact && (
           <div
             className="absolute z-[10] flex items-center justify-center"
             style={{
@@ -510,15 +514,15 @@ export function PlayerAvatar({
         className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
         style={{
           backgroundColor: "rgba(15, 23, 42, 0.9)",
-          minWidth: compact ? 44 : 60,
-          maxWidth: compact ? 88 : 84,
+          minWidth: effectiveCompact ? 44 : 60,
+          maxWidth: effectiveCompact ? 88 : 84,
           boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
         }}
       >
         <span
           className="truncate text-center font-semibold leading-tight block w-full"
           style={{
-            fontSize: compact ? 9 : 11,
+            fontSize: effectiveCompact ? 9 : 11,
             color: "#f0e0c8",
           }}
         >
@@ -532,7 +536,7 @@ export function PlayerAvatar({
           className="flex items-center justify-center rounded-full px-2 py-0.5 animate-in fade-in zoom-in duration-300"
           style={{
             backgroundColor: "rgba(46, 204, 113, 0.9)",
-            minWidth: compact ? 48 : 60,
+            minWidth: effectiveCompact ? 48 : 60,
             boxShadow: "0 2px 6px rgba(46, 204, 113, 0.4)",
             marginTop: -2,
           }}
@@ -540,7 +544,7 @@ export function PlayerAvatar({
           <span
             className="truncate text-center font-bold leading-tight"
             style={{
-              fontSize: compact ? 8 : 9,
+              fontSize: effectiveCompact ? 8 : 9,
               color: "#fff",
               textTransform: "uppercase",
               letterSpacing: "0.5px",

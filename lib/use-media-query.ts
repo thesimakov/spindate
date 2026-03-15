@@ -19,3 +19,8 @@ export function useMediaQuery(query: string): boolean {
 export function useIsMobile(): boolean {
   return useMediaQuery("(max-width: 767px)")
 }
+
+/** Планшет: от 768px до 1023px (md, но не lg) */
+export function useIsTablet(): boolean {
+  return useMediaQuery("(min-width: 768px) and (max-width: 1023px)")
+}

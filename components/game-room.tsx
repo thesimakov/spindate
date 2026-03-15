@@ -43,7 +43,7 @@ import {
   type InventoryItem,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
-import { useIsMobile } from "@/lib/use-media-query"
+import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -190,6 +190,8 @@ export function GameRoom() {
   const { state, dispatch } = useGame()
   useTheme()
   const isMobile = useIsMobile()
+  const isTablet = useIsTablet()
+  const isMobileOrTablet = isMobile || isTablet
   const {
     players,
     currentTurnIndex,
@@ -520,10 +522,10 @@ export function GameRoom() {
     typeof drunkUntil[currentTurnPlayer.id] === "number" &&
     drunkUntil[currentTurnPlayer.id] > nowTs
 
-  // Игровой круг: радиус для мобильной и ПК.
-  const radius = isMobile ? 26 : 28
+  // Игровой круг: радиус для мобильной и планшета (как мобильная), для ПК — больше.
+  const radius = isMobile ? 26 : isTablet ? 27 : 28
   const radiusX = radius
-  const radiusY = isMobile ? 28 : Math.round(radius * (6 / 5)) // на ПК стол 6:5 — Y для визуально округлого круга
+  const radiusY = isMobile ? 28 : Math.round(radius * (6 / 5)) // на ПК/планшете стол 6:5 — Y для визуально округлого круга
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -1707,9 +1709,9 @@ export function GameRoom() {
     if (!currentUser) return
 
     // На ПК — 10 участников, на мобильной — 6
-    const maxTableSize = isMobile ? 6 : 10
-    const targetMales = isMobile ? 3 : 5
-    const targetFemales = isMobile ? 3 : 5
+    const maxTableSize = isMobileOrTablet ? 6 : 10
+    const targetMales = isMobileOrTablet ? 3 : 5
+    const targetFemales = isMobileOrTablet ? 3 : 5
 
     const liveCount = Math.max(1, players.filter((p) => !p.isBot).length)
     const neededBots = Math.max(0, maxTableSize - liveCount)
@@ -1768,7 +1770,7 @@ export function GameRoom() {
 
       {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
       <div
-        className={`fixed z-40 flex gap-1.5 rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${isMobile ? "left-2 top-2 flex-row items-center" : "left-1 top-1 flex-col"}`}
+        className={`fixed z-40 flex gap-1.5 rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${isMobileOrTablet ? "left-2 top-2 flex-row items-center" : "left-1 top-1 flex-col"}`}
         style={{
           borderColor: "rgba(71, 85, 105, 0.8)",
           background: "rgba(15, 23, 42, 0.88)",
@@ -2327,17 +2329,17 @@ export function GameRoom() {
             <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
           </button>
 
-          {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто) */}
-          <div className="lg:hidden">
+          {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто); на планшете — по ширине как остальные кнопки меню */}
+          <div className="lg:hidden w-full">
             <button
               onClick={() => setShowChatListModal(true)}
-              className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+              className="flex w-full items-center justify-start gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
               style={{
                 background: "rgba(15, 23, 42, 0.9)",
                 border: "1px solid #334155",
               }}
             >
-              <MessageCircle className="h-4 w-4" style={{ color: "#e8c06a" }} />
+              <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
               <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
             </button>
           </div>
@@ -2547,7 +2549,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pb-20 md:pb-[220px] lg:pb-2 lg:justify-center px-0.5 sm:px-1 ${isMobile && mobileChatCollapsed ? "pt-10" : "pt-1"}`}
+        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pb-20 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${isMobileOrTablet && mobileChatCollapsed ? "pt-10" : "pt-1"}`}
         ref={boardRef}
       >
         {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}
@@ -2589,7 +2591,7 @@ export function GameRoom() {
         {/* Статус подаренной бутылки */}
         {bottleDonorName && (
           <div
-            className="absolute top-1 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold"
+            className="absolute top-1 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold lg:top-5"
             style={{
               background: "rgba(15,23,42,0.9)",
               border: "1px solid #475569",
@@ -2633,14 +2635,14 @@ export function GameRoom() {
         )}
         {/* Обёртка игрового поля + статуса: при свёрнутом чате — flex-1 и центрирование; при открытом — без flex-1, чтобы чат заполнил пространство до низа */}
         <div
-          className={`flex min-h-0 flex-col ${isMobile && mobileChatCollapsed ? "flex-1 min-h-0 justify-center" : ""} ${isMobile && !mobileChatCollapsed ? "pt-8 shrink-0" : ""}`}
+          className={`flex min-h-0 flex-col ${isMobileOrTablet && mobileChatCollapsed ? "flex-1 min-h-0 justify-center" : ""} ${isMobileOrTablet && !mobileChatCollapsed ? "pt-8 shrink-0" : ""}`}
         >
         {/* Прямоугольный стол: на мобильном резиновый; на планшете ограничена высота */}
         <div
-          className={`relative flex items-center justify-center w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0 border-2 sm:border-[3px] ${isMobile ? "mt-3 mx-auto rounded-2xl" : "mt-1 rounded-2xl sm:rounded-[32px]"}`}
+          className={`relative flex items-center justify-center w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0 border-2 sm:border-[3px] ${isMobileOrTablet ? "mt-3 mx-auto rounded-2xl" : "mt-1 rounded-2xl sm:rounded-[32px]"}`}
           style={{
-            aspectRatio: isMobile ? "1 / 1" : "6 / 5",
-            ...(isMobile
+            aspectRatio: isMobileOrTablet ? "1 / 1" : "6 / 5",
+            ...(isMobileOrTablet
               ? {
                   width: "min(92vw, calc(100vh - 260px))",
                   height: "min(92vw, calc(100vh - 260px))",
@@ -2649,14 +2651,14 @@ export function GameRoom() {
               : {}),
             borderColor: "rgba(51, 65, 85, 0.95)",
             background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
-            boxShadow: isMobile
+            boxShadow: isMobileOrTablet
               ? "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)"
               : "0 20px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(30,41,59,0.9), inset 0 0 40px rgba(0,0,0,0.7)",
           }}
         >
           {/* Внутренняя теплая золотая рамка */}
           <div
-            className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobile ? "inset-2 sm:inset-4" : "inset-4"}`}
+            className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobileOrTablet ? "inset-2 sm:inset-4" : "inset-4"}`}
             style={{
               border: "3px solid rgba(244, 193, 107, 0.95)",
               boxShadow: "0 0 22px rgba(244,193,107,0.75), inset 0 0 26px rgba(0,0,0,0.85)",
@@ -2664,7 +2666,7 @@ export function GameRoom() {
           />
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
-            className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobile ? "inset-2" : "inset-3"}`}
+            className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobileOrTablet ? "inset-2" : "inset-3"}`}
             style={{
               boxShadow: "inset 0 0 50px rgba(0,0,0,0.8)",
               background:
@@ -2699,6 +2701,7 @@ export function GameRoom() {
                 <PlayerAvatar
                   player={player}
                   compact={isMobile}
+                  size={isTablet ? 76 : undefined}
                   // Во время результата подсвечиваем только пару, а не крутящего
                   isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
                   isTarget={
@@ -2771,7 +2774,7 @@ export function GameRoom() {
 
           {/* ---- BOTTLE in the centre (на мобильной — крупнее) ---- */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-            <div style={isMobile ? { transform: "scale(1.4)" } : undefined}>
+            <div style={isMobile ? { transform: "scale(1.4)" } : isTablet ? { transform: "scale(0.9)" } : undefined}>
               <Bottle
                 angle={bottleAngle}
                 isSpinning={isSpinning}
@@ -3013,20 +3016,23 @@ export function GameRoom() {
         </div>
         </div>
 
-        {/* ---- Общий чат под столом (только мобильная версия); при открытом — flex-1 заполняет пространство до статуса и до навигации ---- */}
-        <div className={`mt-2 sm:mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 md:hidden pb-0 ${isMobile ? (mobileChatCollapsed ? "mt-auto shrink-0" : "mt-4 flex-1 min-h-0 flex flex-col") : "shrink-0"}`}>
+        {/* ---- Общий чат под столом (мобильная и планшет); на планшете — по ширине как игровое поле ---- */}
+        <div
+          className={`mt-2 sm:mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 lg:hidden pb-0 ${isTablet ? "md:mx-auto" : ""} ${isMobileOrTablet ? (mobileChatCollapsed ? "mt-auto shrink-0" : "mt-4 flex-1 min-h-0 flex flex-col min-h-[140px]") : "shrink-0"}`}
+          style={isTablet ? { width: "min(92vw, calc(100vh - 260px))", maxWidth: "720px", marginLeft: "auto", marginRight: "auto" } : undefined}
+        >
           <div
-            className={`overflow-hidden flex flex-col min-h-0 ${isMobile ? "rounded-2xl" : "rounded-xl"} ${isMobile && !mobileChatCollapsed ? "flex-1 min-h-0" : ""}`}
+            className={`overflow-hidden flex flex-col shrink-0 ${isMobileOrTablet ? "rounded-2xl" : "rounded-xl"} ${isMobileOrTablet && !mobileChatCollapsed ? "flex-1 min-h-0 flex flex-col max-h-full" : ""}`}
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
               border: "1px solid rgba(71, 85, 105, 0.6)",
-              boxShadow: isMobile ? "0 2px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 4px 20px rgba(0,0,0,0.35)",
+              boxShadow: isMobileOrTablet ? "0 2px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 4px 20px rgba(0,0,0,0.35)",
             }}
           >
             <button
               type="button"
               onClick={() => setMobileChatCollapsed((c) => !c)}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 border-b text-left"
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 border-b text-left shrink-0"
               style={{ borderColor: "rgba(71, 85, 105, 0.4)" }}
             >
               <div className="flex items-center gap-2">
@@ -3047,7 +3053,7 @@ export function GameRoom() {
             </button>
             {!mobileChatCollapsed && (
             <>
-            <div className="px-2 py-1 space-y-0.5 min-h-[56px] flex-1 min-h-0 overflow-y-auto">
+            <div className="px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-y-auto max-h-[min(40vh,280px)] overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
               {generalChatMessages.slice(-4).map((msg) => (
                 <div key={msg.id} className="text-[11px] leading-tight">
                   <span className="font-semibold" style={{ color: "#e8c06a" }}>{msg.senderName}:</span>
@@ -3058,7 +3064,7 @@ export function GameRoom() {
                 <p className="text-[11px]" style={{ color: "#64748b" }}>Пока нет сообщений</p>
               )}
             </div>
-            <div className="flex gap-1 p-1 border-t" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
+            <div className="flex gap-1 p-1 border-t shrink-0" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
               <input
                 type="text"
                 placeholder="Написать..."

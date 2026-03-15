@@ -713,18 +713,18 @@ export function UgadaikaScreen() {
 
       <div className="relative flex min-h-0 flex-1 w-full flex-row overflow-x-hidden overflow-y-hidden">
         {/* Топ 10 по Угадай-ка — слева, шире и с крупными ячейками */}
-        <aside className="absolute left-0 top-0 bottom-0 z-10 hidden w-[280px] flex-col border-r border-slate-700 bg-slate-900/50 p-4 overflow-hidden md:flex">
-          <div className="flex items-center gap-2 mb-3 shrink-0">
-            <Trophy className="h-5 w-5 shrink-0 text-amber-400" />
-            <span className="text-sm font-bold text-amber-200">Топ 10</span>
+        <aside className="absolute left-0 top-0 bottom-0 z-10 hidden w-[280px] md:max-[1161px]:w-[200px] flex-col border-r border-slate-700 bg-slate-900/50 p-4 md:max-[1161px]:p-3 overflow-hidden md:flex">
+          <div className="flex items-center gap-2 mb-3 shrink-0 max-[1161px]:mb-2">
+            <Trophy className="h-5 w-5 max-[1161px]:h-4 max-[1161px]:w-4 shrink-0 text-amber-400" />
+            <span className="text-sm font-bold text-amber-200 max-[1161px]:text-xs">Топ 10</span>
           </div>
-          <p className="text-xs text-slate-400 mb-2 shrink-0">Выиграно туров в Угадай-ка</p>
+          <p className="text-xs text-slate-400 mb-2 shrink-0 max-[1161px]:text-[10px] max-[1161px]:mb-1">Выиграно туров в Угадай-ка</p>
           {myPlaceInTable > 0 && (
             <p className="text-sm font-semibold text-amber-300 mb-3 shrink-0">
               Ваше место в таблице: {myPlaceInTable}
             </p>
           )}
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto min-h-0 py-1">
+          <div className="flex flex-1 flex-col gap-4 max-[1161px]:gap-2 overflow-y-auto min-h-0 py-1">
             {fullLeaderboard.length === 0 ? (
               <p className="text-xs text-slate-500 py-3">Пока нет данных</p>
             ) : (
@@ -741,7 +741,7 @@ export function UgadaikaScreen() {
                 return (
                   <div
                     key={item.player.id}
-                    className={`flex items-center gap-3 rounded-2xl px-4 py-4 min-h-[56px] transition-all duration-300 border ${
+                    className={`flex items-center gap-3 max-[1161px]:gap-2 max-[1161px]:px-3 max-[1161px]:py-3 max-[1161px]:min-h-[48px] rounded-2xl px-4 py-4 min-h-[56px] transition-all duration-300 border ${
                       scoreJustUpdated ? "ugadaika-top10-row-updated" : ""
                     } ${placeChanged ? "ugadaika-top10-place-changed" : ""} ${
                       isYou
@@ -795,7 +795,7 @@ export function UgadaikaScreen() {
           </div>
         </aside>
 
-        <main className="ugadaika-main-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-[280px]">
+        <main className="ugadaika-main-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-[200px] min-[1162px]:ml-[280px]">
           <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain pb-8 md:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
       {phase === "idle" && (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-8">
@@ -839,8 +839,8 @@ export function UgadaikaScreen() {
       )}
 
       {(phase === "playing" || phase === "reveal") && (
-        <div className="flex min-w-0 flex-col items-center justify-start gap-3 sm:gap-4 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 pb-6 sm:pb-8 lg:flex-1 lg:min-h-0 lg:justify-center lg:gap-4 lg:py-6">
-          <div className="flex shrink-0 items-center justify-between w-full max-w-2xl">
+        <div className="flex min-w-0 flex-col items-center justify-start gap-3 sm:gap-4 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 pb-6 sm:pb-8 max-[1161px]:px-3 max-[1161px]:py-4 max-[1161px]:gap-3 lg:flex-1 lg:min-h-0 lg:justify-center lg:gap-4 lg:py-6">
+          <div className="flex shrink-0 items-center justify-between w-full max-w-2xl max-[1161px]:max-w-xl">
             <div className="rounded-xl border border-amber-500/30 bg-slate-800/90 px-4 py-2 shadow-[0_0_20px_rgba(251,191,36,0.08)]">
               <span className="text-sm font-semibold text-amber-200/90">Раунд </span>
               <span className="text-lg font-black text-amber-300">{roundNumber}</span>
@@ -855,7 +855,7 @@ export function UgadaikaScreen() {
           </div>
 
           <div
-            className="ugadaika-game-field relative w-full max-w-2xl min-w-0 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col overflow-visible lg:flex-1 lg:min-h-0 lg:max-h-[72vh] lg:overflow-y-auto lg:overflow-x-hidden lg:pb-8"
+            className="ugadaika-game-field relative w-full max-w-2xl min-w-0 max-[1161px]:max-w-xl max-[1161px]:p-3 max-[1161px]:rounded-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col overflow-visible lg:flex-1 lg:min-h-0 lg:max-h-[72vh] lg:overflow-y-auto lg:overflow-x-hidden lg:pb-8"
             style={{
               background: "linear-gradient(165deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.94) 35%, rgba(15, 23, 42, 0.97) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.2)",
@@ -868,7 +868,7 @@ export function UgadaikaScreen() {
             <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_70%_80%_at_50%_100%,rgba(30,41,59,0.6)_0%,transparent_60%)]" aria-hidden />
 
             {/* Раскладка: на мобильной — сверху претенденты, центр барабан, снизу игроки; на десктопе — слева претенденты, центр барабан, справа игроки; на ПК резиново по высоте */}
-            <div className="relative flex w-full min-w-0 shrink-0 flex-col items-stretch justify-center gap-3 sm:gap-4 my-1 sm:my-2 min-h-0 lg:flex-row">
+            <div className="relative flex w-full min-w-0 shrink-0 flex-col items-stretch justify-center gap-3 sm:gap-4 max-[1161px]:gap-2 max-[1161px]:my-0.5 my-1 sm:my-2 min-h-0 lg:flex-row">
               {/* Претенденты: на мобильной — сверху, в ряд; на десктопе — слева, колонка */}
               <div className="flex flex-col items-center gap-1.5 sm:gap-2 shrink-0 order-1 lg:flex-col lg:order-none">
                 <span className="text-xs font-bold text-amber-200/95 w-full lg:w-auto text-center">
@@ -898,14 +898,14 @@ export function UgadaikaScreen() {
                       } ${canClick ? "cursor-pointer" : "cursor-default"}`}
                     >
                       <div
-                        className={`h-12 w-12 sm:h-14 sm:w-14 overflow-hidden rounded-full border-2 shadow-lg transition-all shrink-0 ${
+                        className={`h-12 w-12 sm:h-14 sm:w-14 max-[1161px]:h-10 max-[1161px]:w-10 max-[1161px]:sm:h-12 max-[1161px]:sm:w-12 overflow-hidden rounded-full border-2 shadow-lg transition-all shrink-0 ${
                           isChosen ? "border-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.5)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                       </div>
-                      <span className={`text-[9px] sm:text-[10px] font-medium truncate max-w-[3.5rem] ${isChosen ? "text-amber-300 font-bold" : "text-slate-200"}`}>
+                      <span className={`text-[9px] sm:text-[10px] max-[1161px]:text-[8px] font-medium truncate max-w-[3.5rem] max-[1161px]:max-w-[2.5rem] ${isChosen ? "text-amber-300 font-bold" : "text-slate-200"}`}>
                         {p.name}
                       </span>
                       {isChosen && (
@@ -918,7 +918,7 @@ export function UgadaikaScreen() {
               </div>
 
               {/* Центр: рамка слот-машины — барабан (на мобильной — по центру между претендентами и игроками) */}
-            <div className="ugadaika-slot-casing flex flex-col items-stretch justify-center shrink-0 my-0 mx-1 sm:mx-4 order-2 lg:order-none">
+            <div className="ugadaika-slot-casing flex flex-col items-stretch justify-center shrink-0 my-0 mx-1 sm:mx-4 max-[1161px]:mx-2 order-2 lg:order-none">
               {/* Верхняя полоса с лампочками — по верхнему краю, поднята */}
               <div className="ugadaika-slot-band ugadaika-slot-band-top flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 w-full mb-2 sm:mb-4">
                 {Array.from({ length: 10 }, (_, i) => (
@@ -932,7 +932,7 @@ export function UgadaikaScreen() {
                   <span className="ugadaika-jackpot-dot text-amber-300 top-1.5 right-1.5" aria-hidden />
                   <span className="ugadaika-jackpot-dot text-amber-300 bottom-1.5 left-1.5" aria-hidden />
                   <span className="ugadaika-jackpot-dot text-amber-300 bottom-1.5 right-1.5" aria-hidden />
-                  <div className="ugadaika-avatar-cell ugadaika-avatar-cell-gold h-16 w-16 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.5),0_0_32px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.25)] bg-slate-800 ring-2 ring-amber-400/60">
+                  <div className="ugadaika-avatar-cell ugadaika-avatar-cell-gold h-16 w-16 sm:h-24 sm:w-24 max-[1161px]:h-12 max-[1161px]:w-12 max-[1161px]:sm:h-16 max-[1161px]:sm:w-16 overflow-hidden rounded-full border-2 border-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.5),0_0_32px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.25)] bg-slate-800 ring-2 ring-amber-400/60">
                     {currentUser?.avatar && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={currentUser.avatar} alt="" className="h-full w-full object-cover" />
@@ -941,7 +941,7 @@ export function UgadaikaScreen() {
                   <span className="text-xs font-black text-amber-200 mt-2 tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]">Ты</span>
                 </div>
                 {/* Правая ячейка — барабан (одинаковый размер с левой, контент по центру); на мобильной компактнее */}
-                <div className="ugadaika-jackpot-right flex flex-col items-center justify-center w-28 h-56 sm:w-36 sm:h-72 shrink-0 overflow-hidden relative rounded-xl">
+                <div className="ugadaika-jackpot-right flex flex-col items-center justify-center w-28 h-56 sm:w-36 sm:h-72 max-[1161px]:w-24 max-[1161px]:h-48 max-[1161px]:sm:w-28 max-[1161px]:sm:h-56 shrink-0 overflow-hidden relative rounded-xl">
                   <span className="ugadaika-jackpot-dot text-rose-300 top-1.5 left-1.5" aria-hidden />
                   <span className="ugadaika-jackpot-dot text-rose-300 top-1.5 right-1.5" aria-hidden />
                   <span className="ugadaika-jackpot-dot text-rose-300 bottom-1.5 left-1.5" aria-hidden />
@@ -976,7 +976,7 @@ export function UgadaikaScreen() {
                             className="flex flex-col items-center justify-center shrink-0"
                             style={{ height: REEL_SLOT_HEIGHT }}
                           >
-                            <div className="ugadaika-avatar-cell ugadaika-avatar-cell-rose h-16 w-16 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-rose-300 shadow-[0_0_14px_rgba(244,63,94,0.4),0_0_28px_rgba(225,29,72,0.15),inset_0_1px_0_rgba(255,255,255,0.2)] bg-slate-800 ring-2 ring-rose-400/50">
+                            <div className="ugadaika-avatar-cell ugadaika-avatar-cell-rose h-16 w-16 sm:h-24 sm:w-24 max-[1161px]:h-12 max-[1161px]:w-12 max-[1161px]:sm:h-16 max-[1161px]:sm:w-16 overflow-hidden rounded-full border-2 border-rose-300 shadow-[0_0_14px_rgba(244,63,94,0.4),0_0_28px_rgba(225,29,72,0.15),inset_0_1px_0_rgba(255,255,255,0.2)] bg-slate-800 ring-2 ring-rose-400/50">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                             </div>
@@ -1020,14 +1020,14 @@ export function UgadaikaScreen() {
                       }`}
                     >
                       <div
-                        className={`h-12 w-12 sm:h-14 sm:w-14 overflow-hidden rounded-full border-2 shadow-lg shrink-0 ${
+                        className={`h-12 w-12 sm:h-14 sm:w-14 max-[1161px]:h-10 max-[1161px]:w-10 max-[1161px]:sm:h-12 max-[1161px]:sm:w-12 overflow-hidden rounded-full border-2 shadow-lg shrink-0 ${
                           isYou ? "border-amber-500/70 shadow-[0_0_12px_rgba(251,191,36,0.25)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                       </div>
-                      <span className={`text-[9px] sm:text-[10px] font-medium truncate max-w-[3.5rem] ${isYou ? "text-amber-200" : "text-slate-200"}`}>
+                      <span className={`text-[9px] sm:text-[10px] max-[1161px]:text-[8px] font-medium truncate max-w-[3.5rem] max-[1161px]:max-w-[2.5rem] ${isYou ? "text-amber-200" : "text-slate-200"}`}>
                         {isYou ? "Вы" : p.name}
                       </span>
                     </div>
