@@ -43,8 +43,8 @@ jobs:
             exit 0
           fi
           mkdir -p ~/.ssh
-          # Ключ в секрете храним в base64, чтобы не ломались переносы строк (error in libcrypto)
-          echo "$SERVER_SSH_KEY" | base64 -d > ~/.ssh/deploy_key
+          # Убираем \r (Windows) и лишние пробелы в конце строк — иначе "Load key: error in libcrypto"
+          echo "$SERVER_SSH_KEY" | sed 's/\r$//' | sed 's/[[:space:]]*$//' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "Creating directory on server..."
