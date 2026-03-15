@@ -73,10 +73,7 @@ jobs:
         with:
           node-version: "24"
           cache: ${{ steps.detect-package-manager.outputs.manager }}
-      # basePath и output: export задаём через env (NEXT_PUBLIC_BASE_PATH, BUILD_FOR_PAGES) в next.config.mjs.
-      # Не используем static_site_generator: next — парсер configure-pages падает на нашем конфиге (TypeError: reading 'type').
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      # basePath и output: export задаём через env в next.config.mjs. Шаг configure-pages убран — парсит конфиг и падает (TypeError).
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       # GitHub Pages — только статический экспорт; API routes не поддерживаются. Выносим app/api за пределы app/, чтобы Next.js не видел маршруты
@@ -95,7 +92,10 @@ jobs:
       - name: Ensure public assets in out (under basePath)
         run: |
           set -e
+          test -d out || (echo "out/ not found after build" && exit 1)
           OUT_BASE=$(ls out | head -1)
+          test -n "$OUT_BASE" || (echo "out/ is empty" && exit 1)
+          test -d "public/assets" || (echo "public/assets/ not found" && exit 1)
           echo "Build output base dir: out/${OUT_BASE}"
           mkdir -p "out/${OUT_BASE}/assets"
           cp -r public/assets/. "out/${OUT_BASE}/assets/"
