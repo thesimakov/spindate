@@ -36,6 +36,7 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
+          set -e
           if [ -z "$SERVER_SSH_KEY" ] || [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ]; then
             echo "SERVER_SSH_KEY, SERVER_HOST or SERVER_USER not set — skipping deploy."
             echo "Add secrets in repo Settings → Secrets and variables → Actions."
@@ -45,7 +46,9 @@ jobs:
           echo "$SERVER_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "Creating directory on server..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
+          echo "Syncing files..."
           rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             .next/ \
             public/ \
@@ -54,5 +57,7 @@ jobs:
             next.config.mjs \
             ecosystem.config.cjs \
             "$SERVER_USER@$SERVER_HOST:/var/www/spindate/"
+          echo "Running npm ci and pm2 on server..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" \
             "cd /var/www/spindate && npm ci && (pm2 restart spindate || pm2 start ecosystem.config.cjs) && pm2 save"
+          echo "Deploy finished."
