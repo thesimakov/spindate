@@ -1628,6 +1628,7 @@ export function GameRoom() {
 
   const [activeQuestIndex, setActiveQuestIndex] = useState<number | null>(null)
   const [dailyCollapsed, setDailyCollapsed] = useState(true)
+  const prevProgressRef = useRef<Record<string, number>>({})
 
   useEffect(() => {
     if (!currentUser || activeQuestIndex !== null) return
@@ -1636,7 +1637,9 @@ export function GameRoom() {
     for (let i = 0; i < 5; i++) {
       const q = todayQuests[i]
       const progress = getProgressForType(q.type)
-      if (progress >= q.target && !claimed[i]) {
+      const prev = prevProgressRef.current[q.type] ?? progress
+      prevProgressRef.current[q.type] = progress
+      if (progress >= q.target && !claimed[i] && prev < q.target) {
         setActiveQuestIndex(i)
         return
       }
@@ -3088,60 +3091,83 @@ export function GameRoom() {
         </div>
       )}
 
-      {/* ---- DAILY QUEST REWARD MODAL (награда — 1 роза, макс. 5 роз в день) ---- */}
+      {/* ---- DAILY QUEST REWARD MODAL (награда — 1 роза, макс. 5 роз в день); показывается после завершения действия на столе ---- */}
       {currentUser && activeQuestIndex !== null && todayQuests[activeQuestIndex] && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+        >
           <div
-            className="w-full max-w-xs rounded-2xl p-4 shadow-2xl"
+            className="w-full max-w-sm rounded-3xl p-6 sm:p-7 overflow-hidden animate-in zoom-in-95 duration-300"
             style={{
-              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-              border: "2px solid #475569",
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
+              border: "2px solid rgba(251, 191, 36, 0.5)",
+              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.15), inset 0 1px 0 rgba(255,255,255,0.06), 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 40px -10px rgba(251, 191, 36, 0.2)",
             }}
           >
-            <h3 className="mb-2 text-sm font-bold" style={{ color: "#f0e0c8" }}>
-              {"Ежедневное задание выполнено!"}
-            </h3>
-            <p className="mb-1 text-xs" style={{ color: "#e8c06a" }}>
-              {todayQuests[activeQuestIndex].label}
-            </p>
-            <p className="mb-2 text-[11px]" style={{ color: "#d1d5db" }}>
-              {getProgressForType(todayQuests[activeQuestIndex].type)}/{todayQuests[activeQuestIndex].target} · Награда: 1 🌹
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button
-                className="flex-1 rounded-xl py-2 text-xs font-semibold"
-                style={{
-                  background: "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
-                  color: "#ecfdf5",
-                  border: "1px solid #15803d",
-                }}
-                onClick={() => {
-                  dispatch({ type: "CLAIM_DAILY_QUEST", questIndex: activeQuestIndex, dateKey: todayKey })
-                  dispatch({
-                    type: "ADD_INVENTORY_ITEM",
-                    item: {
-                      type: "rose",
-                      fromPlayerId: 0,
-                      fromPlayerName: "Система",
-                      timestamp: Date.now(),
-                    },
-                  })
-                  setActiveQuestIndex(null)
-                }}
+            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.08)_0%,transparent_50%)]" aria-hidden />
+            <div className="relative">
+              <h3
+                className="mb-2 text-lg font-black tracking-tight"
+                style={{ color: "#fef3c7", textShadow: "0 0 20px rgba(251, 191, 36, 0.3)" }}
               >
-                {"Получить розу"}
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-xl px-3 py-2 text-xs"
-                style={{
-                  borderColor: "#334155",
-                  color: "#e5e7eb",
-                }}
-                onClick={() => setActiveQuestIndex(null)}
+                {"Ежедневное задание выполнено!"}
+              </h3>
+              <p
+                className="mb-2 text-sm font-semibold"
+                style={{ color: "#fcd34d" }}
               >
-                {"Позже"}
-              </Button>
+                {todayQuests[activeQuestIndex].label}
+              </p>
+              <p
+                className="mb-4 text-sm font-medium flex items-center gap-1.5"
+                style={{ color: "#e2e8f0" }}
+              >
+                <span className="font-bold" style={{ color: "#a5f3fc" }}>
+                  {getProgressForType(todayQuests[activeQuestIndex].type)}/{todayQuests[activeQuestIndex].target}
+                </span>
+                <span>·</span>
+                <span>Награда: 1</span>
+                <span className="text-lg" aria-hidden>🌹</span>
+              </p>
+              <div className="mt-4 flex gap-3">
+                <Button
+                  className="flex-1 rounded-xl py-3 text-sm font-bold shadow-lg transition-all hover:scale-[1.02]"
+                  style={{
+                    background: "linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
+                    color: "#ecfdf5",
+                    border: "2px solid rgba(34, 197, 94, 0.6)",
+                    boxShadow: "0 4px 14px rgba(22, 163, 74, 0.4)",
+                  }}
+                  onClick={() => {
+                    dispatch({ type: "CLAIM_DAILY_QUEST", questIndex: activeQuestIndex, dateKey: todayKey })
+                    dispatch({
+                      type: "ADD_INVENTORY_ITEM",
+                      item: {
+                        type: "rose",
+                        fromPlayerId: 0,
+                        fromPlayerName: "Система",
+                        timestamp: Date.now(),
+                      },
+                    })
+                    setActiveQuestIndex(null)
+                  }}
+                >
+                  {"Получить розу"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-xl px-4 py-3 text-sm font-semibold"
+                  style={{
+                    border: "2px solid #475569",
+                    color: "#e2e8f0",
+                    background: "rgba(51, 65, 85, 0.5)",
+                  }}
+                  onClick={() => setActiveQuestIndex(null)}
+                >
+                  {"Позже"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
