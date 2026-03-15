@@ -197,9 +197,15 @@ export function UgadaikaScreen() {
   const prevPlacesRef = useRef<Record<number, number>>({})
   /** Раунд, за который уже начислена победа (чтобы не считать дважды) */
   const lastCreditedWinRoundRef = useRef<number | null>(null)
-  /** Смещение барабана 777 (вниз = полоса вверх): после выбора игрока анимация останавливается на нём */
+  const lastNoChoiceRoseRoundRef = useRef<number | null>(null)
+  /** Смещение барабана (вниз = полоса вверх): после выбора игрока анимация останавливается на выбранном */
   const [reelTranslateY, setReelTranslateY] = useState(0)
-  const REEL_ITEM_HEIGHT = 96
+  /** Флаг для анимации «приземления» после остановки барабана */
+  const [reelJustStopped, setReelJustStopped] = useState(false)
+  /** Высота одного слота в ленте (отступ между аватарками) */
+  const REEL_SLOT_HEIGHT = 112
+  /** Высота видимого окна барабана (с превью сверху/снизу) */
+  const REEL_WINDOW_HEIGHT = 160
   const REEL_CYCLES = 3
 
   /** Участники текущего раунда (8 человек: 0–3 same, 4–7 opposite) */
@@ -259,6 +265,7 @@ export function UgadaikaScreen() {
     setConsecutiveWins(0)
     setShowFiveWinsPopup(false)
     lastCreditedWinRoundRef.current = null
+    lastNoChoiceRoseRoundRef.current = null
     setGameParticipants(eight)
     setPhase("playing")
     setSelectedIds([])
@@ -331,18 +338,32 @@ export function UgadaikaScreen() {
     setSelectedIds([index])
   }, [phase, selectedIds.length, currentUserIndex, participantsInRound])
 
-  /** После выбора игрока — анимация барабана 777: крутится вниз и останавливается на выбранном */
+  /** После выбора игрока — анимация барабана: крутится с отскоком и останавливается по центру */
   useEffect(() => {
     if (phase !== "playing" || selectedIds.length !== 1 || oppositeIndices.length === 0) return
     const chosenIdx = selectedIds[0]
     if (chosenIdx === undefined) return
     const targetReelIndex = oppositeIndices.indexOf(chosenIdx)
     if (targetReelIndex < 0) return
-    const finalY = -(REEL_CYCLES * oppositeIndices.length + targetReelIndex) * REEL_ITEM_HEIGHT
+    setReelJustStopped(false)
+    const selectedSlotTop = (REEL_CYCLES * oppositeIndices.length + targetReelIndex) * REEL_SLOT_HEIGHT
+    const selectedSlotCenter = selectedSlotTop + REEL_SLOT_HEIGHT / 2
+    const finalY = REEL_WINDOW_HEIGHT / 2 - selectedSlotCenter
     setReelTranslateY(0)
     const t = setTimeout(() => setReelTranslateY(finalY), 100)
     return () => clearTimeout(t)
   }, [phase, selectedIds, oppositeIndices])
+
+  const handleReelTransitionEnd = useCallback(() => {
+    if (selectedIds.length !== 1) return
+    setReelJustStopped(true)
+  }, [selectedIds.length])
+
+  useEffect(() => {
+    if (!reelJustStopped) return
+    const t = setTimeout(() => setReelJustStopped(false), 600)
+    return () => clearTimeout(t)
+  }, [reelJustStopped])
 
   const guessedWhoChoseMe = selectedIds[0] ?? null
 
@@ -370,6 +391,21 @@ export function UgadaikaScreen() {
     }
     dispatch({ type: "UGADAIKA_ADD_ROUND_WON", pairPartnerId: myPairPartner?.id })
   }, [phase, guessedCorrectly, roundNumber, consecutiveWins, dispatch, myPairPartner?.id])
+
+  useEffect(() => {
+    if (phase !== "reveal" || whoChoseMe.length > 0) return
+    if (lastNoChoiceRoseRoundRef.current === roundNumber) return
+    lastNoChoiceRoseRoundRef.current = roundNumber
+    dispatch({
+      type: "ADD_INVENTORY_ITEM",
+      item: {
+        type: "rose",
+        fromPlayerId: 0,
+        fromPlayerName: "Угадай-ка",
+        timestamp: Date.now(),
+      },
+    })
+  }, [phase, whoChoseMe.length, roundNumber, dispatch])
 
   const amIInMutualPairForCountdown = phase === "reveal" && whoChoseMe.length > 0 && amIInMutualPair && guessedCorrectly
   useEffect(() => {
@@ -719,104 +755,126 @@ export function UgadaikaScreen() {
 
       {(phase === "playing" || phase === "reveal") && (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4 py-6 min-h-0">
-          <div className="flex items-center justify-between w-full max-w-md">
-            <span className="text-slate-400">Раунд {roundNumber}</span>
-            <div className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2">
-              <span className="text-2xl font-mono font-bold tabular-nums text-amber-400">{timer}</span>
-              <span className="text-slate-400">сек</span>
+          <div className="flex items-center justify-between w-full max-w-2xl">
+            <div className="rounded-xl border border-amber-500/30 bg-slate-800/90 px-4 py-2 shadow-[0_0_20px_rgba(251,191,36,0.08)]">
+              <span className="text-sm font-semibold text-amber-200/90">Раунд </span>
+              <span className="text-lg font-black text-amber-300">{roundNumber}</span>
+            </div>
+            <div
+              className="flex items-center gap-2 rounded-xl border-2 border-amber-400/40 bg-gradient-to-b from-slate-800 to-slate-900 px-5 py-2.5 shadow-[0_0_24px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]"
+              style={{ boxShadow: "0 0 0 1px rgba(251,191,36,0.15), 0 0 24px rgba(251,191,36,0.12), inset 0 1px 0 rgba(255,255,255,0.06)" }}
+            >
+              <span className="text-2xl font-mono font-black tabular-nums text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">{timer}</span>
+              <span className="text-slate-400 text-sm font-medium">сек</span>
             </div>
           </div>
 
           <div
-            className="relative w-full max-w-2xl rounded-3xl border-2 border-slate-600/80 p-5 sm:p-6 overflow-hidden"
+            className="ugadaika-game-field relative w-full max-w-2xl rounded-3xl p-5 sm:p-6 overflow-hidden"
             style={{
-              background: "linear-gradient(165deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.88) 40%, rgba(15, 23, 42, 0.94) 100%)",
-              backdropFilter: "blur(12px)",
-              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.08), inset 0 1px 0 rgba(255,255,255,0.04), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 60px -20px rgba(139, 92, 246, 0.15)",
+              background: "linear-gradient(165deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.94) 35%, rgba(15, 23, 42, 0.97) 100%)",
+              border: "2px solid rgba(251, 191, 36, 0.2)",
+              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.12), inset 0 1px 0 rgba(255,255,255,0.06), 0 25px 50px -12px rgba(0, 0, 0, 0.55), 0 0 48px -16px rgba(251, 191, 36, 0.18)",
+              backdropFilter: "blur(14px)",
             }}
           >
-            <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-white/5" />
-            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
-            {/* Верхний ряд: 4 противоположного пола — нажатие выбирает участника */}
-            <div className="relative flex justify-center gap-3 sm:gap-4 mb-4">
-              {oppositeIndices.map((idx) => {
-                const p = participantsInRound[idx]
-                if (!p) return null
-                const isChosen = selectedIds[0] === idx
-                const choseMe = phase === "reveal" && whoChoseMe.includes(idx)
-                const canClick = phase === "playing" && selectedIds.length < 1
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleAvatarClick(idx)}
-                    disabled={!canClick}
-                    className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-2 transition-all duration-300 text-left ${
-                      isChosen
-                        ? "border-amber-400 bg-amber-500/25 ring-2 ring-amber-400 shadow-[0_0_24px_rgba(251,191,36,0.35)] scale-105"
-                        : ""
-                    } ${choseMe ? "border-emerald-500/70 bg-emerald-500/15" : ""} ${
-                      !isChosen && !choseMe
-                        ? "border-slate-600/90 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-700/50"
-                        : ""
-                    } ${canClick ? "cursor-pointer" : "cursor-default"}`}
-                  >
-                    <div
-                      className={`h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-full border-2 shadow-lg transition-all ${
-                        isChosen ? "border-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.5)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                      }`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.avatar} alt="" className="h-full w-full object-cover" />
-                    </div>
-                    <span className={`text-[10px] font-medium truncate max-w-[4rem] ${isChosen ? "text-amber-300 font-bold" : "text-slate-200"}`}>
-                      {p.name}
-                    </span>
-                    {isChosen && (
-                      <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wide">Твой выбор</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-amber-400/10" aria-hidden />
+            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_90%_60%_at_50%_0%,rgba(251,191,36,0.08)_0%,transparent_55%)]" aria-hidden />
+            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_70%_80%_at_50%_100%,rgba(30,41,59,0.6)_0%,transparent_60%)]" aria-hidden />
 
-            {/* Центр: две ячейки в формате джекпота — слева пользователь, справа барабан */}
-            <div className="flex flex-col items-center my-4">
-              <div className="flex items-stretch justify-center gap-4">
-                <div className="ugadaika-jackpot-left flex flex-col items-center justify-center w-32 h-40 sm:w-36 sm:h-44 shrink-0 overflow-hidden relative">
-                  <span className="ugadaika-jackpot-dot text-amber-400 top-1.5 left-1.5" aria-hidden />
-                  <span className="ugadaika-jackpot-dot text-amber-400 top-1.5 right-1.5" aria-hidden />
-                  <span className="ugadaika-jackpot-dot text-amber-400 bottom-1.5 left-1.5" aria-hidden />
-                  <span className="ugadaika-jackpot-dot text-amber-400 bottom-1.5 right-1.5" aria-hidden />
-                  <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-amber-400/80 shadow-[0_0_16px_rgba(251,191,36,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] bg-slate-700 ring-2 ring-amber-500/40">
+            {/* Раскладка: слева — выбор (4 противоположного пола), центр — барабан, справа — твоя группа (4 того же пола) */}
+            <div className="relative flex items-stretch justify-center gap-3 sm:gap-4 my-2 min-h-0">
+              {/* Левый борт: 4 противоположного пола — нажатие выбирает участника */}
+              <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 shrink-0">
+                {oppositeIndices.map((idx) => {
+                  const p = participantsInRound[idx]
+                  if (!p) return null
+                  const isChosen = selectedIds[0] === idx
+                  const choseMe = phase === "reveal" && whoChoseMe.includes(idx)
+                  const canClick = phase === "playing" && selectedIds.length < 1
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleAvatarClick(idx)}
+                      disabled={!canClick}
+                      className={`flex flex-col items-center gap-0.5 rounded-2xl border-2 p-1.5 sm:p-2 transition-all duration-300 text-left ${
+                        isChosen
+                          ? "border-amber-400 bg-amber-500/25 ring-2 ring-amber-400 shadow-[0_0_24px_rgba(251,191,36,0.35)] scale-105"
+                          : ""
+                      } ${choseMe ? "border-emerald-500/70 bg-emerald-500/15" : ""} ${
+                        !isChosen && !choseMe
+                          ? "border-slate-600/90 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-700/50"
+                          : ""
+                      } ${canClick ? "cursor-pointer" : "cursor-default"}`}
+                    >
+                      <div
+                        className={`h-12 w-12 sm:h-14 sm:w-14 overflow-hidden rounded-full border-2 shadow-lg transition-all shrink-0 ${
+                          isChosen ? "border-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.5)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.avatar} alt="" className="h-full w-full object-cover" />
+                      </div>
+                      <span className={`text-[9px] sm:text-[10px] font-medium truncate max-w-[3.5rem] ${isChosen ? "text-amber-300 font-bold" : "text-slate-200"}`}>
+                        {p.name}
+                      </span>
+                      {isChosen && (
+                        <span className="text-[8px] font-bold text-amber-400 uppercase tracking-wide">Выбор</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Центр: рамка слот-машины — барабан */}
+            <div className="ugadaika-slot-casing flex flex-col items-stretch justify-center shrink-0 my-0 mx-2 sm:mx-4">
+              {/* Верхняя полоса с лампочками — по верхнему краю, поднята */}
+              <div className="ugadaika-slot-band ugadaika-slot-band-top flex items-center justify-center gap-1 px-3 py-2 w-full mb-3 sm:mb-4">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <span key={i} className="ugadaika-slot-bulb" aria-hidden />
+                ))}
+              </div>
+              <div className="flex flex-1 min-h-0 items-center justify-center gap-4 sm:gap-6 px-4 sm:px-5 py-2">
+                {/* Левая ячейка — Ты (одинаковый размер с правой, контент по центру) */}
+                <div className="ugadaika-jackpot-left flex flex-col items-center justify-center w-32 h-60 sm:w-36 sm:h-72 shrink-0 overflow-hidden relative rounded-xl">
+                  <span className="ugadaika-jackpot-dot text-amber-300 top-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-amber-300 top-1.5 right-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-amber-300 bottom-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-amber-300 bottom-1.5 right-1.5" aria-hidden />
+                  <div className="ugadaika-avatar-cell ugadaika-avatar-cell-gold h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.5),0_0_32px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.25)] bg-slate-800 ring-2 ring-amber-400/60">
                     {currentUser?.avatar && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={currentUser.avatar} alt="" className="h-full w-full object-cover" />
                     )}
                   </div>
-                  <span className="text-xs font-black text-amber-300 mt-2 tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.3)]">Ты</span>
+                  <span className="text-xs font-black text-amber-200 mt-2 tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]">Ты</span>
                 </div>
-                <div className="ugadaika-jackpot-right flex flex-col items-center w-32 h-40 sm:w-36 sm:h-44 shrink-0 overflow-hidden relative pt-2 pb-8">
-                  <span className="ugadaika-jackpot-dot text-rose-400 top-1.5 left-1.5" aria-hidden />
-                  <span className="ugadaika-jackpot-dot text-rose-400 top-1.5 right-1.5" aria-hidden />
-                  <span className="ugadaika-jackpot-dot text-rose-400 bottom-8 left-1.5" aria-hidden />
-                  <span className="ugadaika-jackpot-dot text-rose-400 bottom-8 right-1.5" aria-hidden />
+                {/* Правая ячейка — барабан (одинаковый размер с левой, контент по центру) */}
+                <div className="ugadaika-jackpot-right flex flex-col items-center justify-center w-32 h-60 sm:w-36 sm:h-72 shrink-0 overflow-hidden relative rounded-xl">
+                  <span className="ugadaika-jackpot-dot text-rose-300 top-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-rose-300 top-1.5 right-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-rose-300 bottom-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-rose-300 bottom-1.5 right-1.5" aria-hidden />
                   <div
-                    className="w-full overflow-hidden rounded-xl flex justify-center mx-0.5 shrink-0"
-                    style={{ height: REEL_ITEM_HEIGHT }}
+                    className={`ugadaika-reel-window relative w-full overflow-hidden rounded-lg flex justify-center mx-0.5 shrink-0 ${reelJustStopped ? "ugadaika-reel-landing" : ""}`}
+                    style={{ height: REEL_WINDOW_HEIGHT }}
                   >
+                    <div className="ugadaika-reel-edge ugadaika-reel-edge-top pointer-events-none absolute left-0 right-0 top-0 z-10 h-5 sm:h-6" aria-hidden />
+                    <div className="ugadaika-reel-edge ugadaika-reel-edge-bottom pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-5 sm:h-6" aria-hidden />
                     <div
                       className={`flex flex-col items-center ugadaika-reel-strip ${selectedIds.length === 0 ? "ugadaika-reel-idle" : ""}`}
                       style={{
-                        height: REEL_ITEM_HEIGHT * 16,
+                        height: REEL_SLOT_HEIGHT * 16,
                         ...(selectedIds.length === 1
                           ? {
                               transform: `translate3d(0, ${reelTranslateY}px, 0)`,
-                              transition: "transform 2.8s cubic-bezier(0.15, 0.85, 0.35, 1)",
+                              transition: "transform 2.6s cubic-bezier(0.22, 1.15, 0.36, 1)",
                               willChange: "transform",
                             }
                           : { willChange: "transform" }),
                       }}
+                      onTransitionEnd={handleReelTransitionEnd}
                     >
                       {Array.from({ length: 16 }, (_, i) => {
                         const idx = oppositeIndices[i % oppositeIndices.length]
@@ -826,9 +884,9 @@ export function UgadaikaScreen() {
                           <div
                             key={`${p.id}-${i}`}
                             className="flex flex-col items-center justify-center shrink-0"
-                            style={{ height: REEL_ITEM_HEIGHT }}
+                            style={{ height: REEL_SLOT_HEIGHT }}
                           >
-                            <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-rose-400/60 shadow-[0_0_12px_rgba(244,63,94,0.25)] bg-slate-700 ring-2 ring-rose-500/30">
+                            <div className="ugadaika-avatar-cell ugadaika-avatar-cell-rose h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-rose-300 shadow-[0_0_14px_rgba(244,63,94,0.4),0_0_28px_rgba(225,29,72,0.15),inset_0_1px_0_rgba(255,255,255,0.2)] bg-slate-800 ring-2 ring-rose-400/50">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                             </div>
@@ -837,53 +895,63 @@ export function UgadaikaScreen() {
                       })}
                     </div>
                   </div>
-                  <div className="absolute bottom-2 left-0 right-0 flex justify-center flex-shrink-0">
+                  <div className="mt-1.5 flex justify-center flex-shrink-0">
                     {selectedIds[0] !== undefined && participantsInRound[selectedIds[0]] ? (
-                      <span className="text-[10px] font-bold text-rose-200 truncate text-center px-0.5 drop-shadow-[0_0_4px_rgba(0,0,0,0.6)]">
+                      <span className="text-[10px] font-bold text-rose-100 truncate text-center px-0.5 drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]">
                         {participantsInRound[selectedIds[0]].name}
                       </span>
                     ) : (
-                      <span className="text-slate-400 text-[10px] font-medium">?</span>
+                      <span className="text-slate-400 text-[9px] font-medium">?</span>
                     )}
                   </div>
                 </div>
               </div>
+              {/* Нижняя полоса с лампочками — прижата к нижнему краю */}
+              <div className="ugadaika-slot-band ugadaika-slot-band-bottom flex items-center justify-center gap-1 px-3 py-2 w-full mt-auto pt-3 sm:pt-4">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <span key={i} className="ugadaika-slot-bulb" aria-hidden />
+                ))}
+              </div>
+            </div>
+
+              {/* Правый борт: 4 того же пола (индексы 0–3), пользователь среди них */}
+              <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 shrink-0">
+                {sameIndices.map((idx) => {
+                  const p = participantsInRound[idx]
+                  if (!p) return null
+                  const isYou = p.id === currentUser?.id
+                  return (
+                    <div
+                      key={p.id}
+                      className={`flex flex-col items-center gap-0.5 rounded-2xl border-2 p-1.5 sm:p-2 ${
+                        isYou ? "border-amber-500/80 bg-amber-500/20 shadow-[0_0_16px_rgba(251,191,36,0.2)]" : "border-slate-600/90 bg-slate-800/50"
+                      }`}
+                    >
+                      <div
+                        className={`h-12 w-12 sm:h-14 sm:w-14 overflow-hidden rounded-full border-2 shadow-lg shrink-0 ${
+                          isYou ? "border-amber-500/70 shadow-[0_0_12px_rgba(251,191,36,0.25)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.avatar} alt="" className="h-full w-full object-cover" />
+                      </div>
+                      <span className={`text-[9px] sm:text-[10px] font-medium truncate max-w-[3.5rem] ${isYou ? "text-amber-200" : "text-slate-200"}`}>
+                        {isYou ? "Вы" : p.name}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
             {phase === "playing" && selectedIds.length === 0 && (
-              <p className="text-center text-sm text-slate-400 my-3 px-2" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
-                Нажми на участника противоположного пола — выбери пару
+              <p
+                className="text-center text-sm font-medium my-3 px-3 py-2 rounded-xl bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto"
+                style={{ textShadow: "0 0 12px rgba(251,191,36,0.15), 0 1px 2px rgba(0,0,0,0.3)" }}
+              >
+                Нажми на участника слева — выбери пару
               </p>
             )}
-
-            {/* Нижний ряд: 4 того же пола (индексы 0–3), пользователь среди них */}
-            <div className="relative flex justify-center gap-3 sm:gap-4 mt-1">
-              {sameIndices.map((idx) => {
-                const p = participantsInRound[idx]
-                if (!p) return null
-                const isYou = p.id === currentUser?.id
-                return (
-                  <div
-                    key={p.id}
-                    className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-2 ${
-                      isYou ? "border-amber-500/80 bg-amber-500/20 shadow-[0_0_16px_rgba(251,191,36,0.2)]" : "border-slate-600/90 bg-slate-800/50"
-                    }`}
-                  >
-                    <div
-                      className={`h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-full border-2 shadow-lg ${
-                        isYou ? "border-amber-500/70 shadow-[0_0_12px_rgba(251,191,36,0.25)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                      }`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.avatar} alt="" className="h-full w-full object-cover" />
-                    </div>
-                    <span className={`text-[10px] font-medium truncate max-w-[4rem] ${isYou ? "text-amber-200" : "text-slate-200"}`}>
-                      {isYou ? "Вы" : p.name}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
 
             {phase === "playing" && selectedIds.length === 1 && guessedWhoChoseMe !== null && (
               <div className="mt-4 flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-400/60 bg-gradient-to-r from-amber-500/15 to-amber-500/10 px-5 py-2.5 shadow-[0_0_20px_rgba(251,191,36,0.15)]">
@@ -895,28 +963,31 @@ export function UgadaikaScreen() {
             )}
 
             {phase === "reveal" && guessedWhoChoseMe !== null && (
-              <div className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-slate-800/70 px-5 py-2.5 shadow-inner">
-                <span className="text-sm text-slate-400">Твоя пара:</span>
-                <span className="text-sm font-semibold text-slate-200">{participantsInRound[guessedWhoChoseMe].name}</span>
+              <div
+                className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-amber-500/25 bg-gradient-to-r from-slate-800/90 to-slate-800/70 px-5 py-2.5"
+                style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 0 16px rgba(251,191,36,0.06)" }}
+              >
+                <span className="text-sm text-amber-200/80 font-medium">Твоя пара:</span>
+                <span className="text-sm font-bold text-amber-100">{participantsInRound[guessedWhoChoseMe].name}</span>
               </div>
             )}
 
             <div
-              className="mt-4 flex items-center justify-between rounded-2xl border border-slate-600/80 bg-gradient-to-r from-slate-800/80 to-slate-900/80 px-4 py-3"
-              style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)" }}
+              className="mt-4 flex items-center justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-slate-800/90 via-slate-800/85 to-slate-900/90 px-4 py-3"
+              style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 0 20px rgba(251,191,36,0.06), 0 4px 12px rgba(0,0,0,0.2)" }}
             >
-              <span className="text-[12px] text-slate-300">
+              <span className="text-[12px] text-slate-200 font-medium">
                 {phase === "playing"
-                  ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на участника сверху.")
+                  ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на участника слева.")
                   : whoChoseMe.length === 0
-                    ? "Никто не выбрал тебя. Ещё один шанс!"
+                    ? "Не расстраивайся — это игра! Вот тебе 1 роза 🌹"
                     : !amIInMutualPair
                       ? "Пара не совпала — выходишь из игры."
                       : guessedCorrectly
                         ? "Пара совпала! Вы остаётесь в игре."
                         : "Пара не совпала — вылетаешь из игры."}
               </span>
-              <span className="text-[12px] font-semibold text-slate-200">
+              <span className="text-[12px] font-bold text-amber-200/90">
                 Рейтинг: {totalRoundsWon}
               </span>
             </div>
@@ -937,7 +1008,7 @@ export function UgadaikaScreen() {
                         className="text-base sm:text-lg font-bold text-center text-amber-100 drop-shadow-[0_0_12px_rgba(251,191,36,0.25)]"
                         style={{ textShadow: "0 0 20px rgba(251, 191, 36, 0.2)" }}
                       >
-                        Никто не выбрал тебя
+                        Никто не выбрал тебя — не расстраивайся!
                       </p>
                       <div className="flex flex-wrap justify-center gap-4">
                         {participantsInRound.filter((p) => p.id !== currentUser?.id && p.gender !== currentUser?.gender).map((p) => (
@@ -957,9 +1028,9 @@ export function UgadaikaScreen() {
                     </div>
                     <div className="mt-6 pt-5 border-t border-amber-500/20">
                       <p className="text-xl font-black text-center text-amber-200 tracking-tight" style={{ textShadow: "0 0 16px rgba(251, 191, 36, 0.3)" }}>
-                        Ещё один шанс!
+                        Это игра. Вот тебе 1 роза! 🌹
                       </p>
-                      <p className="mt-2 text-center text-sm text-slate-400">Выиграно туров в этой игре: <span className="font-semibold text-slate-300">{roundsWonThisGame}</span></p>
+                      <p className="mt-2 text-center text-sm text-slate-400">Роза добавлена в инвентарь. Выиграно туров: <span className="font-semibold text-slate-300">{roundsWonThisGame}</span></p>
                     </div>
                     <div className="mt-6 flex flex-col sm:flex-row flex-wrap items-stretch justify-center gap-3">
                       <button
@@ -1049,7 +1120,7 @@ export function UgadaikaScreen() {
                           {whoChoseMe.length > 0 ? (
                             <>Тебя выбрал{whoChoseMe.length === 1 ? "а" : "и"}: {whoChoseMe.map((i) => participantsInRound[i].name).join(" и ")}</>
                           ) : (
-                            "Тебя никто не выбрал"
+                            "Тебя никто не выбрал — не расстраивайся, это игра!"
                           )}
                         </p>
                       </div>
@@ -1176,7 +1247,7 @@ export function UgadaikaScreen() {
                           {whoChoseMe.length > 0 ? (
                             <>Тебя выбрал{whoChoseMe.length === 1 ? "а" : "и"}: {whoChoseMe.map((i) => participantsInRound[i].name).join(" и ")}</>
                           ) : (
-                            "Тебя никто не выбрал"
+                            "Тебя никто не выбрал — не расстраивайся, это игра!"
                           )}
                         </p>
                       </div>
