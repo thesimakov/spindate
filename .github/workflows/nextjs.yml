@@ -73,14 +73,10 @@ jobs:
         with:
           node-version: "24"
           cache: ${{ steps.detect-package-manager.outputs.manager }}
+      # basePath и output: export задаём через env (NEXT_PUBLIC_BASE_PATH, BUILD_FOR_PAGES) в next.config.mjs.
+      # Не используем static_site_generator: next — парсер configure-pages падает на нашем конфиге (TypeError: reading 'type').
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          # Automatically inject basePath in your Next.js configuration file and disable
-          # server side image optimization (https://nextjs.org/docs/api-reference/next/image#unoptimized).
-          #
-          # You may remove this line if you want to manage the configuration yourself.
-          static_site_generator: next
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       # GitHub Pages — только статический экспорт; API routes не поддерживаются. Выносим app/api за пределы app/, чтобы Next.js не видел маршруты
