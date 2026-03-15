@@ -757,12 +757,10 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* Скролл игрового поля Угадай-ка (мобильная и ПК) */
+/* Контейнер игрового поля Угадай-ка: ограничение высоты для скролла (мобильная и ПК) */
 .ugadaika-main-scroll {
-  overflow-y: auto;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+  overflow-y: hidden;
   min-height: 0;
   flex: 1 1 0%;
 }

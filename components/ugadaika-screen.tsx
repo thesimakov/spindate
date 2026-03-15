@@ -795,7 +795,8 @@ export function UgadaikaScreen() {
           </div>
         </aside>
 
-        <main className="ugadaika-main-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden md:ml-[280px]">
+        <main className="ugadaika-main-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-[280px]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain pb-8 md:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
       {phase === "idle" && (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-8">
           <div
@@ -854,7 +855,7 @@ export function UgadaikaScreen() {
           </div>
 
           <div
-            className="ugadaika-game-field relative w-full max-w-2xl min-w-0 flex-1 min-h-0 lg:max-h-[72vh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 overflow-hidden flex flex-col"
+            className="ugadaika-game-field relative w-full max-w-2xl min-w-0 rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col overflow-visible lg:flex-1 lg:min-h-0 lg:max-h-[72vh] lg:overflow-y-auto lg:overflow-x-hidden lg:pb-8"
             style={{
               background: "linear-gradient(165deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.94) 35%, rgba(15, 23, 42, 0.97) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.2)",
@@ -867,7 +868,7 @@ export function UgadaikaScreen() {
             <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_70%_80%_at_50%_100%,rgba(30,41,59,0.6)_0%,transparent_60%)]" aria-hidden />
 
             {/* Раскладка: на мобильной — сверху претенденты, центр барабан, снизу игроки; на десктопе — слева претенденты, центр барабан, справа игроки; на ПК резиново по высоте */}
-            <div className="relative flex w-full min-w-0 flex-col items-stretch justify-center gap-3 sm:gap-4 my-1 sm:my-2 min-h-0 lg:flex-row">
+            <div className="relative flex w-full min-w-0 shrink-0 flex-col items-stretch justify-center gap-3 sm:gap-4 my-1 sm:my-2 min-h-0 lg:flex-row">
               {/* Претенденты: на мобильной — сверху, в ряд; на десктопе — слева, колонка */}
               <div className="flex flex-col items-center gap-1.5 sm:gap-2 shrink-0 order-1 lg:flex-col lg:order-none">
                 <span className="text-xs font-bold text-amber-200/95 w-full lg:w-auto text-center">
@@ -1038,7 +1039,7 @@ export function UgadaikaScreen() {
 
             {phase === "playing" && selectedIds.length === 0 && (
               <p
-                className="text-center text-sm font-medium my-3 px-3 py-2 rounded-xl bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto"
+                className="shrink-0 text-center text-sm font-medium my-3 px-3 py-2 rounded-xl bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto"
                 style={{ textShadow: "0 0 12px rgba(251,191,36,0.15), 0 1px 2px rgba(0,0,0,0.3)" }}
               >
                 <span className="inline lg:hidden">Нажми на претендента выше — выбери пару</span>
@@ -1066,7 +1067,7 @@ export function UgadaikaScreen() {
             )}
 
             <div
-              className="mt-4 flex items-center justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-slate-800/90 via-slate-800/85 to-slate-900/90 px-4 py-3"
+              className="shrink-0 mt-4 flex items-center justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-slate-800/90 via-slate-800/85 to-slate-900/90 px-4 py-3"
               style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 0 20px rgba(251,191,36,0.06), 0 4px 12px rgba(0,0,0,0.2)" }}
             >
               <span className="text-[12px] text-slate-200 font-medium">
@@ -1423,6 +1424,7 @@ export function UgadaikaScreen() {
           </div>
         </div>
       )}
+          </div>
         </main>
       </div>
     </div>
