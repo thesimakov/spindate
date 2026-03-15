@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge } from "@/lib/vk-bridge"
+import { useIsMobile } from "@/lib/use-media-query"
 import type { Gender, Player, Purpose } from "@/lib/game-types"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
+  const isMobile = useIsMobile()
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
@@ -32,17 +34,17 @@ export function RegistrationScreen() {
   }) => {
     dispatch({ type: "SET_USER", user })
 
-    const MAX_TABLE_SIZE = 10
+    // На ПК — 10 участников, на мобильной — 6
+    const maxTableSize = isMobile ? 6 : 10
+    const targetMales = isMobile ? 3 : 5
+    const targetFemales = isMobile ? 3 : 5
+
     const liveCount = 1
-    const neededBots = Math.max(0, MAX_TABLE_SIZE - liveCount)
+    const neededBots = Math.max(0, maxTableSize - liveCount)
 
     const allBots = generateBots(170, user.gender)
 
-    // 50/50 по гендеру при 10 игроках: считаем пользователя
     const userIsMale = user.gender === "male"
-    const targetMales = 5
-    const targetFemales = 5
-
     let needMalesFromBots = targetMales - (userIsMale ? 1 : 0)
     let needFemalesFromBots = targetFemales - (!userIsMale ? 1 : 0)
     if (needMalesFromBots < 0) needMalesFromBots = 0
@@ -62,7 +64,7 @@ export function RegistrationScreen() {
       selectedBots = selectedBots.concat(extraPool.slice(0, remaining))
     }
 
-    const finalPlayersAtTableBase = [user, ...selectedBots].slice(0, MAX_TABLE_SIZE)
+    const finalPlayersAtTableBase = [user, ...selectedBots].slice(0, maxTableSize)
     // Перемешиваем порядок за столом, чтобы мужчины/женщины
     // не сидели всегда по разным сторонам.
     const finalPlayersAtTable = [...finalPlayersAtTableBase].sort(() => Math.random() - 0.5)

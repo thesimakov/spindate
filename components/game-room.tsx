@@ -470,6 +470,7 @@ export function GameRoom() {
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
   const [showChatListModal, setShowChatListModal] = useState(false)
+  const [followersBlockCollapsed, setFollowersBlockCollapsed] = useState(false)
   const [generalChatInput, setGeneralChatInput] = useState("")
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
@@ -516,10 +517,10 @@ export function GameRoom() {
     typeof drunkUntil[currentTurnPlayer.id] === "number" &&
     drunkUntil[currentTurnPlayer.id] > nowTs
 
-  // Игровой круг: на мобильном чуть больше радиус и лёгкий овал, чтобы игроки не теснились.
-  const radius = isMobile ? 35 : 31
+  // Игровой круг: радиус для мобильной и ПК.
+  const radius = isMobile ? 26 : 28
   const radiusX = radius
-  const radiusY = isMobile ? 37 : radius
+  const radiusY = isMobile ? 28 : Math.round(radius * (6 / 5)) // на ПК стол 6:5 — Y для визуально округлого круга
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -1702,19 +1703,19 @@ export function GameRoom() {
   const handleChangeTable = () => {
     if (!currentUser) return
 
-    const MAX_TABLE_SIZE = 10
+    // На ПК — 10 участников, на мобильной — 6
+    const maxTableSize = isMobile ? 6 : 10
+    const targetMales = isMobile ? 3 : 5
+    const targetFemales = isMobile ? 3 : 5
+
     const liveCount = Math.max(1, players.filter((p) => !p.isBot).length)
-    const neededBots = Math.max(0, MAX_TABLE_SIZE - liveCount)
+    const neededBots = Math.max(0, maxTableSize - liveCount)
 
     // Берём свежий список ботов и убираем тех, кто уже сидит за текущим столом,
     // чтобы при смене стола лица менялись.
     const currentBotIds = new Set(players.filter((p) => p.isBot).map((p) => p.id))
     const allBotsRaw = generateBots(170, currentUser.gender)
     const allBots = allBotsRaw.filter((b) => !currentBotIds.has(b.id))
-
-    // целимcя в 5 мужчин и 5 женщин за столом
-    const targetMales = 5
-    const targetFemales = 5
 
     const liveMales = players.filter((p) => !p.isBot && p.gender === "male").length
     const liveFemales = players.filter((p) => !p.isBot && p.gender === "female").length
@@ -1739,7 +1740,7 @@ export function GameRoom() {
       selectedBots = selectedBots.concat(extraPool.slice(0, remaining))
     }
 
-    const finalPlayersAtTableBase = [currentUser, ...selectedBots].slice(0, MAX_TABLE_SIZE)
+    const finalPlayersAtTableBase = [currentUser, ...selectedBots].slice(0, maxTableSize)
     // Перемешиваем порядок посадки за новым столом,
     // чтобы парни и девушки не сидели «стенками» слева/справа.
     const finalPlayersAtTable = [...finalPlayersAtTableBase].sort(() => Math.random() - 0.5)
@@ -1762,8 +1763,15 @@ export function GameRoom() {
         onClaim={handleClaimWelcomeGift}
       />
 
-      {/* Top-left controls: музыка и звуки эмоций */}
-      <div className="fixed left-1 top-1 z-40 flex flex-col gap-1">
+      {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
+      <div
+        className={`fixed z-40 flex gap-1.5 rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${isMobile ? "left-2 top-2 flex-row items-center" : "left-1 top-1 flex-col"}`}
+        style={{
+          borderColor: "rgba(71, 85, 105, 0.8)",
+          background: "rgba(15, 23, 42, 0.88)",
+          backdropFilter: "blur(10px)",
+        }}
+      >
         <div
           className="relative flex items-center"
           onMouseEnter={() => {
@@ -1804,31 +1812,31 @@ export function GameRoom() {
           <button
             type="button"
             onClick={() => setMusicEnabled((v) => !v)}
-            className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+            className="flex items-center gap-1 rounded-xl border px-2.5 py-1.5 sm:py-1 text-[11px] sm:text-[11px] font-semibold shadow-sm min-h-[32px] sm:min-h-0"
             style={{
-              borderColor: "rgba(148, 163, 184, 0.7)",
-              background: "rgba(15, 23, 42, 0.75)",
+              borderColor: "rgba(148, 163, 184, 0.6)",
+              background: "rgba(30, 41, 59, 0.6)",
               color: "#e5e7eb",
-              backdropFilter: "blur(8px)",
             }}
           >
             <span aria-hidden="true">{musicEnabled ? "🔊" : "🔇"}</span>
-            <span>{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
+            <span className="hidden sm:inline">{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
+            <span className="sm:hidden">{musicEnabled ? "Муз вкл" : "Муз выкл"}</span>
           </button>
         </div>
         <button
           type="button"
           onClick={() => dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false })}
-          className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+          className="flex items-center gap-1 rounded-xl border px-2.5 py-1.5 sm:py-1 text-[11px] font-semibold shadow-sm min-h-[32px] sm:min-h-0"
           style={{
-            borderColor: "rgba(148, 163, 184, 0.7)",
-            background: "rgba(15, 23, 42, 0.75)",
+            borderColor: "rgba(148, 163, 184, 0.6)",
+            background: "rgba(30, 41, 59, 0.6)",
             color: "#e5e7eb",
-            backdropFilter: "blur(8px)",
           }}
         >
           <span aria-hidden="true">{soundsEnabled === false ? "🔇" : "🔊"}</span>
-          <span>{soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}</span>
+          <span className="hidden sm:inline">{soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}</span>
+          <span className="sm:hidden">{soundsEnabled === false ? "Звук выкл" : "Звук вкл"}</span>
         </button>
       </div>
 
@@ -2197,22 +2205,24 @@ export function GameRoom() {
 
         {/* ---- BALANCES + КНОПКИ ---- */}
         <div className="mt-auto flex flex-col gap-1.5">
-          {/* Extra spin button */}
+          {/* Крутить вне очереди — только на мобильной (на ПК убрано из бокового меню) */}
           {!isMyTurn && !isSpinning && !showResult && countdown === null && (
-            <button
-              onClick={handleExtraSpin}
-              disabled={voiceBalance < 10}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-              style={{
-                background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
-                color: "#fff",
-                border: "2px solid #7d3c98",
-                boxShadow: "0 2px 0 #5b2c6f",
-              }}
-            >
-              <RotateCw className="h-3.5 w-3.5" />
-              {"Крутить вне очереди (10)"}
-            </button>
+            <div className="md:hidden">
+              <button
+                onClick={handleExtraSpin}
+                disabled={voiceBalance < 10}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                style={{
+                  background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
+                  color: "#fff",
+                  border: "2px solid #7d3c98",
+                  boxShadow: "0 2px 0 #5b2c6f",
+                }}
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                {"Крутить вне очереди (10)"}
+              </button>
+            </div>
           )}
 
           {/* Банк сердец */}
@@ -2314,18 +2324,20 @@ export function GameRoom() {
             <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
           </button>
 
-          {/* Сообщения — мини-чат */}
-          <button
-            onClick={() => setShowChatListModal(true)}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
-            style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
-            }}
-          >
-            <MessageCircle className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
-          </button>
+          {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто) */}
+          <div className="lg:hidden">
+            <button
+              onClick={() => setShowChatListModal(true)}
+              className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+              style={{
+                background: "rgba(15, 23, 42, 0.9)",
+                border: "1px solid #334155",
+              }}
+            >
+              <MessageCircle className="h-4 w-4" style={{ color: "#e8c06a" }} />
+              <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
+            </button>
+          </div>
 
           {/* Ежедневные задачи */}
           {currentUser && (
@@ -2532,7 +2544,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pt-1 pb-20 md:pb-[220px] lg:pb-2 px-0.5 sm:px-1"
+        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pb-20 md:pb-[220px] lg:pb-2 lg:justify-center px-0.5 sm:px-1 ${isMobile && mobileChatCollapsed ? "pt-10" : "pt-1"}`}
         ref={boardRef}
       >
         {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}
@@ -2622,25 +2634,26 @@ export function GameRoom() {
         >
         {/* Прямоугольный стол: на мобильном резиновый; на планшете ограничена высота */}
         <div
-          className="relative mt-1 flex items-center justify-center rounded-2xl sm:rounded-[32px] border-2 sm:border-[3px] w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0"
+          className={`relative flex items-center justify-center w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0 border-2 sm:border-[3px] ${isMobile ? "mt-3 mx-auto rounded-2xl" : "mt-1 rounded-2xl sm:rounded-[32px]"}`}
           style={{
-            aspectRatio: isMobile ? "1 / 1" : "4 / 3",
+            aspectRatio: isMobile ? "1 / 1" : "6 / 5",
             ...(isMobile
               ? {
-                  width: "min(94vw, calc(100vh - 260px))",
-                  height: "min(94vw, calc(100vh - 260px))",
+                  width: "min(92vw, calc(100vh - 260px))",
+                  height: "min(92vw, calc(100vh - 260px))",
                   maxHeight: "calc(100vh - 260px)",
                 }
               : {}),
-            borderColor: "#334155",
+            borderColor: "rgba(51, 65, 85, 0.95)",
             background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
-            boxShadow:
-              "0 20px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(30,41,59,0.9), inset 0 0 40px rgba(0,0,0,0.7)",
+            boxShadow: isMobile
+              ? "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)"
+              : "0 20px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(30,41,59,0.9), inset 0 0 40px rgba(0,0,0,0.7)",
           }}
         >
           {/* Внутренняя теплая золотая рамка */}
           <div
-            className="pointer-events-none absolute inset-4 rounded-[24px]"
+            className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobile ? "inset-2 sm:inset-4" : "inset-4"}`}
             style={{
               border: "3px solid rgba(244, 193, 107, 0.95)",
               boxShadow: "0 0 22px rgba(244,193,107,0.75), inset 0 0 26px rgba(0,0,0,0.85)",
@@ -2648,7 +2661,7 @@ export function GameRoom() {
           />
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
-            className="pointer-events-none absolute inset-3 rounded-[26px]"
+            className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobile ? "inset-2" : "inset-3"}`}
             style={{
               boxShadow: "inset 0 0 50px rgba(0,0,0,0.8)",
               background:
@@ -2925,19 +2938,19 @@ export function GameRoom() {
           )}
         </div>
 
-        {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) + кнопка «Крутить вне очереди» сбоку ---- */}
-        <div className={`${isMobile && !mobileChatCollapsed ? "mt-3" : "mt-0.5"} md:mt-1.5 mb-0.5 flex min-h-[56px] md:min-h-[64px] w-full flex-col items-center justify-center gap-1.5 px-2 shrink-0`}>
-          <div className="flex flex-wrap items-center justify-center gap-2">
+        {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) + кнопка «Крутить вне очереди»; на мобильной — ниже и крупнее ---- */}
+        <div className="mt-6 md:mt-1.5 lg:mt-6 mb-0.5 flex min-h-[72px] md:min-h-[64px] lg:min-h-[80px] w-full flex-col items-center justify-center gap-2 md:gap-1.5 lg:gap-3 px-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 md:gap-2 lg:gap-4">
             {/* Who's turn label */}
             {!isSpinning && !showResult && countdown === null && currentTurnPlayer && (
               <div
-                className="rounded-full px-3 py-1.5 shadow-lg whitespace-nowrap"
+                className="rounded-full px-4 py-2.5 md:px-3 md:py-1.5 lg:px-5 lg:py-2.5 shadow-lg whitespace-nowrap"
                 style={{
                   background: "rgba(15, 23, 42, 0.85)",
                   border: "1px solid #475569",
                 }}
               >
-                <span className="text-xs sm:text-sm font-bold" style={{ color: "#e8c06a" }}>
+                <span className="text-sm md:text-xs lg:text-base font-bold" style={{ color: "#e8c06a" }}>
                   {isMyTurn ? "Ваш ход!" : `Ход: ${currentTurnPlayer.name}`}
                 </span>
               </div>
@@ -2946,7 +2959,7 @@ export function GameRoom() {
             {/* Pair status directly under the board when result is shown */}
             {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && currentTurnPlayer && (
               <div
-                className="rounded-full px-4 py-1 text-[12px] sm:text-[13px] font-bold"
+                className="rounded-full px-5 py-2.5 md:px-4 md:py-1 lg:px-6 lg:py-2.5 text-sm md:text-[12px] lg:text-[15px] font-bold"
                 style={{
                   background: "rgba(15,23,42,0.95)",
                   border: "1px solid rgba(248,250,252,0.35)",
@@ -2963,25 +2976,25 @@ export function GameRoom() {
             {/* Spinning status */}
             {isSpinning && (
               <div
-                className="rounded-full px-3 py-1.5 shadow-lg whitespace-nowrap"
+                className="rounded-full px-4 py-2.5 md:px-3 md:py-1.5 lg:px-5 lg:py-2.5 shadow-lg whitespace-nowrap"
                 style={{
                   background: "rgba(15, 23, 42, 0.85)",
                   border: "1px solid #334155",
                 }}
               >
-                <p className="text-xs sm:text-sm font-semibold animate-pulse" style={{ color: "#e8c06a" }}>
+                <p className="text-sm md:text-xs lg:text-base font-semibold animate-pulse" style={{ color: "#e8c06a" }}>
                   {"Крутится..."}
                 </p>
               </div>
             )}
 
-            {/* Крутить вне очереди — сбоку от статуса */}
+            {/* Крутить вне очереди — сбоку от статуса; на мобильной компактнее */}
             {!isMyTurn && !isSpinning && !showResult && countdown === null && currentUser && (
               <button
                 type="button"
                 onClick={handleExtraSpin}
                 disabled={voiceBalance < 10}
-                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold shadow-lg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                className="flex items-center gap-1.5 lg:gap-2.5 rounded-full px-3 py-1.5 lg:px-5 lg:py-2.5 text-[11px] lg:text-sm font-bold shadow-lg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                 style={{
                   background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
                   color: "#fff",
@@ -2989,7 +3002,7 @@ export function GameRoom() {
                   boxShadow: "0 2px 0 #5b2c6f",
                 }}
               >
-                <RotateCw className="h-3 w-3 shrink-0" />
+                <RotateCw className="h-3 w-3 lg:h-4 lg:w-4 shrink-0" />
                 <span className="whitespace-nowrap">Крутить вне очереди (10)</span>
               </button>
             )}
@@ -2997,21 +3010,21 @@ export function GameRoom() {
         </div>
         </div>
 
-        {/* ---- Общий чат под столом (только мобильная версия); при открытом — flex-1 заполняет пространство до статуса (отступ 20px) и до навигации ---- */}
-        <div className={`mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-0.5 sm:px-1 md:hidden pb-0 ${isMobile ? (mobileChatCollapsed ? "mt-auto shrink-0" : "mt-5 flex-1 min-h-0 flex flex-col") : "shrink-0"}`}>
+        {/* ---- Общий чат под столом (только мобильная версия); при открытом — flex-1 заполняет пространство до статуса и до навигации ---- */}
+        <div className={`mt-2 sm:mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 md:hidden pb-0 ${isMobile ? (mobileChatCollapsed ? "mt-auto shrink-0" : "mt-4 flex-1 min-h-0 flex flex-col") : "shrink-0"}`}>
           <div
-            className={`rounded-xl overflow-hidden flex flex-col min-h-0 ${isMobile && !mobileChatCollapsed ? "flex-1 min-h-0" : ""}`}
+            className={`overflow-hidden flex flex-col min-h-0 ${isMobile ? "rounded-2xl" : "rounded-xl"} ${isMobile && !mobileChatCollapsed ? "flex-1 min-h-0" : ""}`}
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
-              border: "2px solid rgba(71, 85, 105, 0.8)",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
+              border: "1px solid rgba(71, 85, 105, 0.6)",
+              boxShadow: isMobile ? "0 2px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 4px 20px rgba(0,0,0,0.35)",
             }}
           >
             <button
               type="button"
               onClick={() => setMobileChatCollapsed((c) => !c)}
-              className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 border-b text-left"
-              style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 border-b text-left"
+              style={{ borderColor: "rgba(71, 85, 105, 0.4)" }}
             >
               <div className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
@@ -3154,7 +3167,7 @@ export function GameRoom() {
           </button>
         </div>
 
-        {/* Followers / favorites strip */}
+        {/* Followers / favorites strip — можно свернуть */}
         {currentUser && (
           <div
             className="mx-2 rounded-2xl px-2 py-1.5"
@@ -3164,17 +3177,29 @@ export function GameRoom() {
               border: "1px solid rgba(232,192,106,0.9)",
             }}
           >
-            <div className="mb-1 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setFollowersBlockCollapsed((c) => !c)}
+              className="mb-0 flex w-full items-center justify-between gap-2 rounded-lg py-0.5 text-left transition-opacity hover:opacity-90"
+            >
               <span
                 className="font-semibold tracking-wide"
                 style={{ color: "#e8c06a", fontSize: "14px" }}
               >
                 {"Твои поклонники"}
               </span>
-              <span className="text-[9px]" style={{ color: "#64748b" }}>
-                {"онлайн"}
+              <span className="flex items-center gap-1">
+                <span className="text-[9px]" style={{ color: "#64748b" }}>
+                  {"онлайн"}
+                </span>
+                {followersBlockCollapsed ? (
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: "#94a3b8" }} />
+                ) : (
+                  <ChevronUp className="h-3.5 w-3.5 shrink-0" style={{ color: "#94a3b8" }} />
+                )}
               </span>
-            </div>
+            </button>
+            {!followersBlockCollapsed && (
             <div className="mt-1 flex items-center gap-1.5 overflow-x-auto pb-1 pr-1">
               {gameLog
                 .filter(
@@ -3229,6 +3254,7 @@ export function GameRoom() {
                 </span>
               )}
             </div>
+            )}
           </div>
         )}
 
@@ -3711,9 +3737,9 @@ export function GameRoom() {
         const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
         const zodiacDisplay = playerMenuTarget.zodiac ?? ZODIAC_SIGNS[playerMenuTarget.id % 12]
         return (
-        <div className="player-menu-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-hidden">
+        <div className="player-menu-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4 overflow-y-auto overflow-x-hidden">
           <div
-            className="player-menu-modal player-menu-modal-glow relative w-full max-w-4xl rounded-2xl p-5 pt-12 overflow-hidden"
+            className="player-menu-modal player-menu-modal-glow relative w-full max-w-4xl max-h-[90dvh] rounded-2xl p-4 sm:p-5 pt-12 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden"
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.25)",
@@ -3724,14 +3750,14 @@ export function GameRoom() {
             <button
               type="button"
               onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100"
+              className="absolute right-2 top-2 sm:right-3 sm:top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="relative flex flex-col gap-5 sm:flex-row">
+            <div className="relative flex flex-col gap-4 sm:gap-5 sm:flex-row min-w-0">
               {/* Левый блок: фото, имя, пол/возраст, город, интересы, знак зодиака */}
-              <div className="player-menu-left flex w-[160px] shrink-0 flex-col items-start gap-3 sm:w-[180px]">
+              <div className="player-menu-left flex w-full sm:w-[180px] sm:shrink-0 flex-col items-center sm:items-start gap-3">
                 <div className="flex flex-col items-center gap-2">
                   <PlayerAvatar
                     player={playerMenuTarget}
@@ -3763,7 +3789,7 @@ export function GameRoom() {
                     Рамка
                   </button>
                 </div>
-                <div className="w-full text-left text-[15px]">
+                <div className="w-full text-center sm:text-left text-[15px]">
                   <h3 className="font-bold text-slate-100">{playerMenuTarget.name}</h3>
                   <p className="text-slate-400 mt-0.5">
                     {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
@@ -3779,7 +3805,7 @@ export function GameRoom() {
               </div>
 
               {/* Центральный блок: цитата дня + кнопки действий */}
-              <div className="player-menu-actions flex min-w-0 max-w-sm flex-1 flex-col gap-3">
+              <div className="player-menu-actions flex min-w-0 w-full sm:max-w-sm flex-1 flex-col gap-3">
                 {/* Цитата дня */}
                 <div
                   className="player-menu-quote rounded-xl px-3 py-2.5 text-[15px]"
@@ -3968,7 +3994,7 @@ export function GameRoom() {
 
               {/* Правая колонка: каталог подарков */}
               {currentUser && (
-                <div className="player-menu-catalog mt-4 flex w-[340px] min-h-0 shrink-0 flex-col self-stretch sm:mt-0">
+                <div className="player-menu-catalog mt-2 sm:mt-4 flex w-full sm:w-[340px] min-w-0 min-h-0 shrink-0 flex-col self-stretch sm:mt-0">
                   <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-3 transition-colors"
                     style={{ background: "rgba(15,23,42,0.95)", boxShadow: "inset 0 1px 0 rgba(251,191,36,0.05), 0 4px 16px rgba(0,0,0,0.2)" }}
                   >
@@ -3979,7 +4005,7 @@ export function GameRoom() {
                     </span>
                   </div>
 
-                  <div className="player-menu-gifts-scroll grid grid-cols-3 content-start gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[270px] min-h-0">
+                  <div className="player-menu-gifts-scroll grid grid-cols-3 content-start gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[220px] sm:max-h-[270px] min-h-0">
                     {[
                       { id: "toy_bear" as InventoryItem["type"], name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
                       { id: "plush_heart" as InventoryItem["type"], name: "Подушка-сердце", emoji: "❤️", cost: 8 },

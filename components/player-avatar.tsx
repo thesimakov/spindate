@@ -372,27 +372,26 @@ export function PlayerAvatar({
           </div>
         )}
 
-        {/* Kiss counter (top-left, на уровне с VIP) */}
+        {/* Kiss counter (top-left); на мобильной компактнее, чтобы не перегружать */}
         {typeof kissCount === "number" && kissCount > 0 && !isTarget && (
           <div
             className="absolute z-[10] flex items-center justify-center rounded-full"
             style={{
-              minWidth: compact ? 20 : 22,
-              height: compact ? 18 : 20,
-              padding: compact ? "0 4px" : "0 5px",
-              background: "linear-gradient(135deg,#f97316,#ec4899)",
-              border: "2px solid #7c2d12",
-              top: 2,
-              left: 2,
-              boxShadow: "0 0 10px rgba(248,113,113,0.9)",
+              minWidth: compact ? 18 : 22,
+              height: compact ? 16 : 20,
+              padding: compact ? "0 3px" : "0 5px",
+              background: "linear-gradient(135deg,#e85d04,#d00000)",
+              border: compact ? "1px solid #9d0208" : "2px solid #7c2d12",
+              top: compact ? 1 : 2,
+              left: compact ? 1 : 2,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
             }}
           >
             <span
-              className="text-[10px] font-semibold leading-none"
-              style={{ color: "#fff" }}
+              className="font-semibold leading-none"
+              style={{ color: "#fff", fontSize: compact ? 9 : 10 }}
             >
-              {"💋 "}
-              {kissCount}
+              {compact ? kissCount : (<>{"💋 "}{kissCount}</>)}
             </span>
           </div>
         )}
@@ -506,17 +505,18 @@ export function PlayerAvatar({
         )}
       </div>
 
-      {/* Name label - dark badge style like reference */}
+      {/* Name label - dark badge style; на мобильной (compact) шире, чтобы имя не обрезалось */}
       <div
-        className="flex items-center justify-center rounded-full px-3 py-0.5"
+        className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
         style={{
-          backgroundColor: "rgba(15, 23, 42, 0.85)",
-          minWidth: compact ? 48 : 60,
-          maxWidth: compact ? 64 : 84,
+          backgroundColor: "rgba(15, 23, 42, 0.9)",
+          minWidth: compact ? 44 : 60,
+          maxWidth: compact ? 88 : 84,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
         }}
       >
         <span
-          className="truncate text-center font-semibold leading-tight"
+          className="truncate text-center font-semibold leading-tight block w-full"
           style={{
             fontSize: compact ? 9 : 11,
             color: "#f0e0c8",
