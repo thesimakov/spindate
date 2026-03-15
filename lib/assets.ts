@@ -38,7 +38,8 @@ export function assetUrl(path: string): string {
   const q = ASSET_CACHE_VERSION ? `?v=${ASSET_CACHE_VERSION}` : ""
 
   if (typeof window !== "undefined") {
-    return window.location.origin + fullPath + q
+    // Относительный путь на том же origin — надёжнее на GitHub Pages и кэш CDN
+    return fullPath + q
   }
 
   if (APP_URL) return `${APP_URL.replace(/\/$/, "")}${fullPath}${q}`
