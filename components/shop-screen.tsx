@@ -62,7 +62,7 @@ export function ShopScreen() {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-y-auto entry-bg-animated px-4 py-6 sm:py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden entry-bg-animated">
       <div className="game-particles" aria-hidden="true">
         {shopParticles.map((d, idx) => (
           <span
@@ -77,8 +77,8 @@ export function ShopScreen() {
           />
         ))}
       </div>
-      <div className="relative z-10 w-full flex flex-col items-center">
-      <div className="w-full max-w-lg space-y-5 rounded-2xl border border-slate-600/80 bg-slate-900/95 px-6 py-7 shadow-[0_24px_50px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center overflow-y-auto overflow-x-hidden px-4 py-6 sm:py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-lg shrink-0 space-y-5 rounded-2xl border border-slate-600/80 bg-slate-900/95 px-6 py-7 shadow-[0_24px_50px_rgba(0,0,0,0.6)] backdrop-blur-sm">
         <h1 className="mb-1 text-center font-bold text-slate-100" style={{ fontSize: "16px" }}>{"Магазин"}</h1>
         <p className="mb-2 text-center text-slate-400" style={{ fontSize: "14px" }}>
           {"Здесь можно выделиться за столом и пополнить запас сердец."}

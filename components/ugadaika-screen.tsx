@@ -144,6 +144,75 @@ export function UgadaikaScreen() {
   const { inventory, ugadaikaRoundsWon, ugadaikaRoundsByPlayer, currentUser, players, voiceBalance } = state
   const rosesCount = useMemo(() => inventory.filter((i) => i.type === "rose").length, [inventory])
 
+  const ugadaikaMusicRef = useRef<HTMLAudioElement | null>(null)
+  const [musicEnabled, setMusicEnabled] = useState(false)
+
+  const getMusicUrl = useCallback(() => {
+    if (typeof window === "undefined") return ""
+    const base = (() => {
+      const segs = window.location.pathname.split("/").filter(Boolean)
+      return segs.length > 0 ? `/${segs[0]}` : ""
+    })()
+    const file = "Origami-chosic.com_.mp3"
+    return `${window.location.origin}${base}/music/${file}`
+  }, [])
+
+  const stopMusic = useCallback(() => {
+    const a = ugadaikaMusicRef.current
+    if (!a) return
+    a.pause()
+    a.currentTime = 0
+  }, [])
+
+  const ensureAudio = useCallback(() => {
+    if (ugadaikaMusicRef.current) return ugadaikaMusicRef.current
+    const url = getMusicUrl()
+    if (!url) return null
+    const a = new Audio(url)
+    a.loop = true
+    a.volume = 0.35
+    a.preload = "auto"
+    ugadaikaMusicRef.current = a
+    return a
+  }, [getMusicUrl])
+
+  const startMusic = useCallback(async () => {
+    const a = ensureAudio()
+    if (!a) return
+    try {
+      await a.play()
+    } catch {
+      // autoplay policy or load error (e.g. file missing)
+    }
+  }, [ensureAudio])
+
+  const toggleMusic = useCallback(() => {
+    setMusicEnabled((prev) => {
+      const next = !prev
+      if (next) {
+        const a = ensureAudio()
+        if (a) {
+          a.volume = 0.35
+          a.play().catch(() => {})
+        }
+      } else {
+        stopMusic()
+      }
+      return next
+    })
+  }, [ensureAudio, stopMusic])
+
+  useEffect(() => {
+    if (!musicEnabled) stopMusic()
+  }, [musicEnabled, stopMusic])
+
+  useEffect(() => {
+    return () => {
+      stopMusic()
+      ugadaikaMusicRef.current = null
+    }
+  }, [stopMusic])
+
   const [gameShuffleSeed, setGameShuffleSeed] = useState(() => Date.now())
   const [isLoading, setIsLoading] = useState(true)
 
@@ -560,7 +629,7 @@ export function UgadaikaScreen() {
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-y-auto text-slate-100 pb-[env(safe-area-inset-bottom)] game-bg-animated">
+    <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden text-slate-100 pb-[env(safe-area-inset-bottom)] game-bg-animated">
       <div className="game-particles" aria-hidden="true">
         {bgDots.map((d, idx) => (
           <span
@@ -577,7 +646,7 @@ export function UgadaikaScreen() {
           />
         ))}
       </div>
-      <div className="relative z-10 flex min-h-dvh flex-col">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
         <button
           type="button"
@@ -624,7 +693,25 @@ export function UgadaikaScreen() {
         </div>
       </header>
 
-      <div className="relative flex flex-1 min-h-0 w-full">
+      {/* Кнопка музыки под верхней строкой, справа */}
+      <div className="flex shrink-0 justify-end px-4 py-1.5 border-b border-slate-700/50 bg-slate-900/30">
+        <button
+          type="button"
+          onClick={toggleMusic}
+          className="flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold shadow-sm"
+          style={{
+            borderColor: "rgba(148, 163, 184, 0.7)",
+            background: "rgba(15, 23, 42, 0.85)",
+            color: "#e5e7eb",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <span aria-hidden="true">{musicEnabled ? "🔊" : "🔇"}</span>
+          <span>{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
+        </button>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 w-full overflow-hidden">
         {/* Топ 10 по Угадай-ка — слева, шире и с крупными ячейками */}
         <aside className="absolute left-0 top-0 bottom-0 z-10 hidden w-[280px] flex-col border-r border-slate-700 bg-slate-900/50 p-4 overflow-hidden md:flex">
           <div className="flex items-center gap-2 mb-3 shrink-0">
@@ -708,7 +795,7 @@ export function UgadaikaScreen() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto md:ml-[280px]">
+        <main className="ugadaika-main-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-[280px]">
       {phase === "idle" && (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-8">
           <div
@@ -751,7 +838,7 @@ export function UgadaikaScreen() {
       )}
 
       {(phase === "playing" || phase === "reveal") && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4 py-6 min-h-0">
+        <div className="flex min-w-0 shrink-0 flex-col items-center justify-start gap-5 overflow-x-hidden px-4 py-6 pb-8">
           <div className="flex items-center justify-between w-full max-w-2xl">
             <div className="rounded-xl border border-amber-500/30 bg-slate-800/90 px-4 py-2 shadow-[0_0_20px_rgba(251,191,36,0.08)]">
               <span className="text-sm font-semibold text-amber-200/90">Раунд </span>
@@ -767,7 +854,7 @@ export function UgadaikaScreen() {
           </div>
 
           <div
-            className="ugadaika-game-field relative w-full max-w-2xl rounded-3xl p-5 sm:p-6 overflow-hidden"
+            className="ugadaika-game-field relative w-full max-w-2xl min-w-0 rounded-3xl p-5 sm:p-6 overflow-hidden"
             style={{
               background: "linear-gradient(165deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.94) 35%, rgba(15, 23, 42, 0.97) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.2)",
@@ -779,13 +866,14 @@ export function UgadaikaScreen() {
             <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_90%_60%_at_50%_0%,rgba(251,191,36,0.08)_0%,transparent_55%)]" aria-hidden />
             <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_70%_80%_at_50%_100%,rgba(30,41,59,0.6)_0%,transparent_60%)]" aria-hidden />
 
-            {/* Раскладка: слева — выбор (4 противоположного пола), центр — барабан, справа — твоя группа (4 того же пола) */}
-            <div className="relative flex items-stretch justify-center gap-3 sm:gap-4 my-2 min-h-0">
-              {/* Левый борт: 4 противоположного пола — нажатие выбирает участника */}
-              <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 shrink-0">
-                <span className="text-xs font-bold text-amber-200/95 mb-0.5">
+            {/* Раскладка: на мобильной — сверху претенденты, центр барабан, снизу игроки; на десктопе — слева претенденты, центр барабан, справа игроки */}
+            <div className="relative flex w-full min-w-0 flex-col items-stretch justify-center gap-3 sm:gap-4 my-2 min-h-0 lg:flex-row">
+              {/* Претенденты: на мобильной — сверху, в ряд; на десктопе — слева, колонка */}
+              <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 shrink-0 order-1 lg:flex-col lg:order-none">
+                <span className="text-xs font-bold text-amber-200/95 mb-0.5 w-full lg:w-auto text-center">
                   {currentUser?.gender === "female" ? "Претенденты" : "Претендентки"}
                 </span>
+                <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 lg:flex-col">
                 {oppositeIndices.map((idx) => {
                   const p = participantsInRound[idx]
                   if (!p) return null
@@ -825,10 +913,11 @@ export function UgadaikaScreen() {
                     </button>
                   )
                 })}
+                </div>
               </div>
 
-              {/* Центр: рамка слот-машины — барабан */}
-            <div className="ugadaika-slot-casing flex flex-col items-stretch justify-center shrink-0 my-0 mx-2 sm:mx-4">
+              {/* Центр: рамка слот-машины — барабан (на мобильной — по центру между претендентами и игроками) */}
+            <div className="ugadaika-slot-casing flex flex-col items-stretch justify-center shrink-0 my-0 mx-2 sm:mx-4 order-2 lg:order-none">
               {/* Верхняя полоса с лампочками — по верхнему краю, поднята */}
               <div className="ugadaika-slot-band ugadaika-slot-band-top flex items-center justify-center gap-1 px-3 py-2 w-full mb-3 sm:mb-4">
                 {Array.from({ length: 10 }, (_, i) => (
@@ -914,9 +1003,10 @@ export function UgadaikaScreen() {
               </div>
             </div>
 
-              {/* Правый борт: 4 того же пола (индексы 0–3), пользователь среди них */}
-              <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 shrink-0">
-                <span className="text-xs font-bold text-amber-200/95 mb-0.5">Игроки</span>
+              {/* Игроки: на мобильной — снизу, в ряд; на десктопе — справа, колонка */}
+              <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 shrink-0 order-3 lg:flex-col lg:order-none">
+                <span className="text-xs font-bold text-amber-200/95 mb-0.5 w-full lg:w-auto text-center">Игроки</span>
+                <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 lg:flex-col">
                 {sameIndices.map((idx) => {
                   const p = participantsInRound[idx]
                   if (!p) return null
@@ -942,6 +1032,7 @@ export function UgadaikaScreen() {
                     </div>
                   )
                 })}
+                </div>
               </div>
             </div>
 
@@ -950,7 +1041,8 @@ export function UgadaikaScreen() {
                 className="text-center text-sm font-medium my-3 px-3 py-2 rounded-xl bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto"
                 style={{ textShadow: "0 0 12px rgba(251,191,36,0.15), 0 1px 2px rgba(0,0,0,0.3)" }}
               >
-                Нажми на участника слева — выбери пару
+                <span className="inline lg:hidden">Нажми на претендента выше — выбери пару</span>
+                <span className="hidden lg:inline">Нажми на участника слева — выбери пару</span>
               </p>
             )}
 
@@ -979,7 +1071,7 @@ export function UgadaikaScreen() {
             >
               <span className="text-[12px] text-slate-200 font-medium">
                 {phase === "playing"
-                  ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на участника слева.")
+                  ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на претендента выше.")
                   : whoChoseMe.length === 0
                     ? "Не расстраивайся — это игра! Вот тебе 1 роза 🌹"
                     : !amIInMutualPair

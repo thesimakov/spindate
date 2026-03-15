@@ -21,6 +21,8 @@ import {
   Target,
   Trophy,
   Flower2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
@@ -471,6 +473,7 @@ export function GameRoom() {
   const [generalChatInput, setGeneralChatInput] = useState("")
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
+  const [mobileChatCollapsed, setMobileChatCollapsed] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
@@ -2529,7 +2532,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto pt-1 pb-14 md:pb-[220px] lg:pb-2 px-0.5 sm:px-1"
+        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pt-1 pb-20 md:pb-[220px] lg:pb-2 px-0.5 sm:px-1"
         ref={boardRef}
       >
         {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}
@@ -2613,6 +2616,10 @@ export function GameRoom() {
             <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
           </div>
         )}
+        {/* Обёртка игрового поля + статуса: при свёрнутом чате — flex-1 и центрирование; при открытом — без flex-1, чтобы чат заполнил пространство до низа */}
+        <div
+          className={`flex min-h-0 flex-col ${isMobile && mobileChatCollapsed ? "flex-1 min-h-0 justify-center" : ""} ${isMobile && !mobileChatCollapsed ? "pt-8 shrink-0" : ""}`}
+        >
         {/* Прямоугольный стол: на мобильном резиновый; на планшете ограничена высота */}
         <div
           className="relative mt-1 flex items-center justify-center rounded-2xl sm:rounded-[32px] border-2 sm:border-[3px] w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0"
@@ -2919,7 +2926,7 @@ export function GameRoom() {
         </div>
 
         {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) + кнопка «Крутить вне очереди» сбоку ---- */}
-        <div className="mt-0.5 md:mt-1.5 mb-0.5 flex min-h-[56px] md:min-h-[64px] w-full flex-col items-center justify-center gap-1.5 px-2 shrink-0">
+        <div className={`${isMobile && !mobileChatCollapsed ? "mt-3" : "mt-0.5"} md:mt-1.5 mb-0.5 flex min-h-[56px] md:min-h-[64px] w-full flex-col items-center justify-center gap-1.5 px-2 shrink-0`}>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {/* Who's turn label */}
             {!isSpinning && !showResult && countdown === null && currentTurnPlayer && (
@@ -2988,22 +2995,43 @@ export function GameRoom() {
             )}
           </div>
         </div>
+        </div>
 
-        {/* ---- Общий чат под столом (только мобильная версия), по ширине как игровое поле ---- */}
-        <div className="mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-0.5 sm:px-1 md:hidden shrink-0 pb-0">
+        {/* ---- Общий чат под столом (только мобильная версия); при открытом — flex-1 заполняет пространство до статуса (отступ 20px) и до навигации ---- */}
+        <div className={`mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-0.5 sm:px-1 md:hidden pb-0 ${isMobile ? (mobileChatCollapsed ? "mt-auto shrink-0" : "mt-5 flex-1 min-h-0 flex flex-col") : "shrink-0"}`}>
           <div
-            className="rounded-xl overflow-hidden"
+            className={`rounded-xl overflow-hidden flex flex-col min-h-0 ${isMobile && !mobileChatCollapsed ? "flex-1 min-h-0" : ""}`}
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
               border: "2px solid rgba(71, 85, 105, 0.8)",
               boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
             }}
           >
-            <div className="flex items-center gap-1.5 px-2 py-1.5 border-b" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
-              <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-              <span className="text-xs font-bold" style={{ color: "#fef3c7" }}>Общий чат</span>
-            </div>
-            <div className="px-2 py-1.5 space-y-0.5 min-h-[88px] max-h-[140px] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setMobileChatCollapsed((c) => !c)}
+              className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 border-b text-left"
+              style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}
+            >
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
+                <span className="text-xs font-bold" style={{ color: "#fef3c7" }}>Общий чат</span>
+                {generalChatMessages.length > 0 && (
+                  <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold min-w-[1.25rem] text-center" style={{ background: "rgba(251, 191, 36, 0.35)", color: "#fef3c7" }}>
+                    +{generalChatMessages.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-medium" style={{ color: "#94a3b8" }}>
+                  {mobileChatCollapsed ? "Развернуть" : "Свернуть"}
+                </span>
+                {mobileChatCollapsed ? <ChevronUp className="h-4 w-4 shrink-0" style={{ color: "#94a3b8" }} /> : <ChevronDown className="h-4 w-4 shrink-0" style={{ color: "#94a3b8" }} />}
+              </div>
+            </button>
+            {!mobileChatCollapsed && (
+            <>
+            <div className="px-2 py-1 space-y-0.5 min-h-[56px] flex-1 min-h-0 overflow-y-auto">
               {generalChatMessages.slice(-4).map((msg) => (
                 <div key={msg.id} className="text-[11px] leading-tight">
                   <span className="font-semibold" style={{ color: "#e8c06a" }}>{msg.senderName}:</span>
@@ -3014,7 +3042,7 @@ export function GameRoom() {
                 <p className="text-[11px]" style={{ color: "#64748b" }}>Пока нет сообщений</p>
               )}
             </div>
-            <div className="flex gap-1.5 p-1.5 border-t" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
+            <div className="flex gap-1 p-1 border-t" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
               <input
                 type="text"
                 placeholder="Написать..."
@@ -3066,6 +3094,8 @@ export function GameRoom() {
                 <Send className="h-4 w-4" />
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
 
@@ -3337,8 +3367,9 @@ export function GameRoom() {
                 onClick={() => setShowMobileMoreMenu(false)}
               />
               <div
-                className="absolute bottom-full left-1/2 z-[2] mb-2 flex w-48 -translate-x-1/2 flex-col rounded-xl border py-2 shadow-xl"
+                className="fixed right-4 left-auto z-[2] flex w-48 flex-col rounded-xl border py-2 shadow-xl"
                 style={{
+                  bottom: "calc(4.5rem + max(0.5rem, env(safe-area-inset-bottom)))",
                   background: "rgba(19,10,4,0.98)",
                   borderColor: "#334155",
                 }}
@@ -4028,16 +4059,17 @@ export function GameRoom() {
             {/* Окно выбора рамки для подарка — поверх модалки игрока */}
             {showFramePicker && (
               <div
-                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 overflow-y-auto"
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 overflow-y-auto overscroll-contain"
                 onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
               >
                 <div
-                  className="flex flex-col gap-4 rounded-2xl p-5 shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+                  className="flex min-h-0 max-h-[90dvh] w-full max-w-lg flex-col gap-4 overflow-hidden rounded-2xl p-5 shadow-xl"
                   style={{ background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)", border: "1px solid #334155" }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <p className="text-center text-[16px] font-bold text-slate-100">Подарить рамку</p>
+                  <p className="shrink-0 text-center text-[16px] font-bold text-slate-100">Подарить рамку</p>
 
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
                   <p className="text-[13px] font-semibold text-slate-300">Бесплатные</p>
                   <div className="grid grid-cols-4 gap-3">
                     {[
@@ -4099,8 +4131,9 @@ export function GameRoom() {
                       )
                     })}
                   </div>
+                  </div>
 
-                  <div className="flex flex-col gap-2">
+                  <div className="flex shrink-0 flex-col gap-2">
                     <button
                       type="button"
                       onClick={() => {

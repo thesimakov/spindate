@@ -434,12 +434,12 @@ export function ProfileScreen() {
 
       {showFramesModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
           style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
           onClick={() => setShowFramesModal(false)}
         >
           <div
-            className="w-full max-w-lg rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-300"
+            className="w-full max-w-lg max-h-[90dvh] min-h-0 overflow-y-auto rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-300 overscroll-contain"
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.25)",
