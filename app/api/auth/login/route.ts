@@ -40,6 +40,19 @@ export async function POST(req: Request) {
   const age = profile?.age ?? 25
   const purpose = profile?.purpose ?? "communication"
 
+  const gameStateRow = db
+    .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
+    .get(user.id) as { voice_balance: number; inventory_json: string } | undefined
+  const voiceBalance = gameStateRow?.voice_balance ?? 0
+  let inventory: unknown[] = []
+  if (gameStateRow?.inventory_json) {
+    try {
+      inventory = JSON.parse(gameStateRow.inventory_json) as unknown[]
+    } catch {
+      inventory = []
+    }
+  }
+
   const now = Date.now()
   const token = newSessionToken()
   const tokenHash = sha256Base64(token)
@@ -63,6 +76,8 @@ export async function POST(req: Request) {
       age,
       purpose,
     },
+    voiceBalance,
+    inventory,
   })
   const isProd = process.env.NODE_ENV === "production"
   res.cookies.set("session", token, {

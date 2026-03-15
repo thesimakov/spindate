@@ -215,6 +215,7 @@ export type GameAction =
   | { type: "SEND_MESSAGE"; toId: number; message: ChatMessage }
   | { type: "PAY_VOICES"; amount: number }
   | { type: "ADD_VOICES"; amount: number }
+  | { type: "RESTORE_GAME_STATE"; voiceBalance: number; inventory: InventoryItem[] }
   | { type: "ADD_BONUS"; amount: number }
   | { type: "RESET_ROUND" }
   | { type: "ADD_LOG"; entry: GameLogEntry }

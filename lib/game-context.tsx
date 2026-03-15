@@ -438,6 +438,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, voiceBalance: Math.max(0, state.voiceBalance - action.amount) }
     case "ADD_VOICES":
       return { ...state, voiceBalance: state.voiceBalance + action.amount }
+    case "RESTORE_GAME_STATE":
+      return {
+        ...state,
+        voiceBalance: Math.max(0, action.voiceBalance),
+        inventory: Array.isArray(action.inventory) ? [...action.inventory] : [],
+      }
     case "ADD_BONUS":
       return { ...state, bonusBalance: state.bonusBalance + action.amount }
     case "RESET_ROUND":
@@ -690,6 +696,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // ignore
     }
   }, [])
+
+  // Сохранение сердец и роз на сервере для пользователей по логину
+  useEffect(() => {
+    if (state.currentUser?.authProvider !== "login" || typeof window === "undefined") return
+    const t = setTimeout(() => {
+      fetch("/api/user/state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          voiceBalance: state.voiceBalance,
+          inventory: state.inventory,
+        }),
+      }).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [state.currentUser?.authProvider, state.voiceBalance, state.inventory])
+
   return (
     <GameContext.Provider value={{ state, dispatch }}>
       {children}

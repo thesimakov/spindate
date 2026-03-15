@@ -260,6 +260,9 @@ export function GameRoom() {
   // Background music
   const MUSIC_SRC = "/music/you-know-why.mp3"
   const [musicEnabled, setMusicEnabled] = useState(false)
+  const [showMusicTooltip, setShowMusicTooltip] = useState(false)
+  const [musicVolume, setMusicVolume] = useState(35) // 0–100
+  const musicTooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const stopMusic = useCallback(() => {
@@ -274,10 +277,15 @@ export function GameRoom() {
     const a = new Audio(MUSIC_SRC)
     a.loop = true
     a.preload = "auto"
-    a.volume = 0.35
+    a.volume = musicVolume / 100
     audioRef.current = a
     return a
   }, [])
+
+  useEffect(() => {
+    const a = audioRef.current
+    if (a) a.volume = musicVolume / 100
+  }, [musicVolume])
 
   const startMusic = useCallback(async () => {
     const a = ensureAudio()
@@ -1750,20 +1758,58 @@ export function GameRoom() {
 
       {/* Top-left controls: музыка и звуки эмоций */}
       <div className="fixed left-2 top-2 z-40 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={() => setMusicEnabled((v) => !v)}
-          className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm"
-          style={{
-            borderColor: "rgba(148, 163, 184, 0.7)",
-            background: "rgba(15, 23, 42, 0.75)",
-            color: "#e5e7eb",
-            backdropFilter: "blur(8px)",
+        <div
+          className="relative flex items-center"
+          onMouseEnter={() => {
+            if (musicTooltipTimeoutRef.current) {
+              clearTimeout(musicTooltipTimeoutRef.current)
+              musicTooltipTimeoutRef.current = null
+            }
+            setShowMusicTooltip(true)
+          }}
+          onMouseLeave={() => {
+            musicTooltipTimeoutRef.current = setTimeout(() => setShowMusicTooltip(false), 200)
           }}
         >
-          <span aria-hidden="true">{musicEnabled ? "🔊" : "🔇"}</span>
-          <span>{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
-        </button>
+          {showMusicTooltip && (
+            <div
+              className="absolute left-full z-50 ml-2 flex items-center gap-2 rounded-lg border border-slate-500/80 bg-slate-800/95 px-3 py-2 shadow-lg"
+              style={{ backdropFilter: "blur(8px)" }}
+              onMouseEnter={() => {
+                if (musicTooltipTimeoutRef.current) {
+                  clearTimeout(musicTooltipTimeoutRef.current)
+                  musicTooltipTimeoutRef.current = null
+                }
+                setShowMusicTooltip(true)
+              }}
+              onMouseLeave={() => setShowMusicTooltip(false)}
+            >
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={musicVolume}
+                onChange={(e) => setMusicVolume(Number(e.target.value))}
+                className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-slate-600 accent-amber-500"
+                aria-label="Громкость музыки"
+              />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setMusicEnabled((v) => !v)}
+            className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+            style={{
+              borderColor: "rgba(148, 163, 184, 0.7)",
+              background: "rgba(15, 23, 42, 0.75)",
+              color: "#e5e7eb",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <span aria-hidden="true">{musicEnabled ? "🔊" : "🔇"}</span>
+            <span>{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false })}
@@ -3112,6 +3158,7 @@ export function GameRoom() {
                 <button
                   type="button"
                   onClick={() => { setMusicEnabled((v) => !v); setShowMobileMoreMenu(false) }}
+                  title="Громкость"
                   className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >

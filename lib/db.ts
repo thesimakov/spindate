@@ -43,6 +43,14 @@ function migrate(database: Database.Database) {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_game_state (
+      user_id TEXT PRIMARY KEY,
+      voice_balance INTEGER NOT NULL DEFAULT 0,
+      inventory_json TEXT NOT NULL DEFAULT '[]',
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
   `)

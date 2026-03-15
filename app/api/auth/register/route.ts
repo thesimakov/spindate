@@ -10,6 +10,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const username = typeof body?.username === "string" ? body.username.trim() : ""
   const password = typeof body?.password === "string" ? body.password : ""
+  const displayName = typeof body?.displayName === "string" ? body.displayName.trim() : ""
   const age = typeof body?.age === "number" ? body.age : typeof body?.age === "string" ? parseInt(body.age, 10) : 25
   const gender = VALID_GENDERS.includes(body?.gender) ? body.gender : "male"
   const purpose = VALID_PURPOSES.includes(body?.purpose) ? body.purpose : "communication"
@@ -38,10 +39,16 @@ export async function POST(req: Request) {
   }
 
   const avatarUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
+  const profileDisplayName = displayName.length > 0 ? displayName : username
   db.prepare(
     `INSERT INTO player_profiles (user_id, display_name, avatar_url, gender, age, purpose, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(userId, username, avatarUrl, gender, ageNum, purpose, now, now)
+  ).run(userId, profileDisplayName, avatarUrl, gender, ageNum, purpose, now, now)
+
+  db.prepare(
+    `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
+     VALUES (?, 0, '[]', ?)`,
+  ).run(userId, now)
 
   // session
   const token = newSessionToken()
@@ -60,12 +67,14 @@ export async function POST(req: Request) {
     user: {
       id: userId,
       username,
-      displayName: username,
+      displayName: profileDisplayName,
       avatarUrl,
       gender,
       age: ageNum,
       purpose,
     },
+    voiceBalance: 0,
+    inventory: [],
   })
   const isProd = process.env.NODE_ENV === "production"
   res.cookies.set("session", token, {

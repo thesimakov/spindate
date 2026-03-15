@@ -14,10 +14,12 @@ export function RegistrationScreen() {
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
   const [password, setPassword] = useState("")
+  const [displayName, setDisplayName] = useState("")
   const [isRegistered, setIsRegistered] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [loginModalMode, setLoginModalMode] = useState<"login" | "register">("login")
   const defaultPurpose: Purpose = "communication"
 
   const buildTableAndEnter = (user: {
@@ -123,73 +125,25 @@ export function RegistrationScreen() {
     return Math.abs(h) || 1
   }
 
-  const handleContinueLogin = async () => {
-    const ageNum = ensureAgeValid()
-    if (!ageNum) return
-    if (!login || !password) {
+  const handleLogin = async () => {
+    if (!login.trim() || !password) {
       setError("Введите логин и пароль")
       return
     }
-
     setLoading(true)
     setError("")
-
     try {
-      // Сначала пробуем войти
-      let res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: login, password }),
+        body: JSON.stringify({ username: login.trim(), password }),
         credentials: "include",
       })
       const data = res.ok ? await res.json() : null
-
-      // Если не авторизован — пробуем зарегистрировать
-      if (res.status === 401) {
-        res = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: login,
-            password,
-            age: ageNum,
-            gender,
-            purpose: defaultPurpose,
-          }),
-          credentials: "include",
-        })
-        const regData = res.ok ? await res.json() : null
-        if (res.status === 409) {
-          setError("Логин уже занят. Введите пароль или выберите другой логин.")
-          return
-        }
-        if (!res.ok) {
-          setError((regData?.error as string) || "Ошибка регистрации")
-          return
-        }
-        if (regData?.user) {
-          const u = regData.user
-          const user = {
-            id: userIdToNumber(u.id),
-            name: u.displayName ?? u.username,
-            avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
-            gender: (u.gender === "female" ? "female" : "male") as Gender,
-            age: u.age ?? ageNum,
-            purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
-            authProvider: "login" as const,
-          }
-          addToDevRegistry(user, login)
-          buildTableAndEnter(user)
-          setShowLoginModal(false)
-        }
-        return
-      }
-
       if (!res.ok) {
         setError((data?.error as string) || "Неверный логин или пароль")
         return
       }
-
       if (data?.user) {
         const u = data.user
         const user = {
@@ -197,11 +151,71 @@ export function RegistrationScreen() {
           name: u.displayName ?? u.username,
           avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
           gender: (u.gender === "female" ? "female" : "male") as Gender,
+          age: u.age ?? 25,
+          purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
+          authProvider: "login" as const,
+        }
+        const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+        const inventory = Array.isArray(data.inventory) ? data.inventory : []
+        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+        addToDevRegistry(user, login.trim())
+        buildTableAndEnter(user)
+        setShowLoginModal(false)
+      }
+    } catch {
+      setError("Ошибка сети. Попробуйте снова.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRegister = async () => {
+    const ageNum = ensureAgeValid()
+    if (!ageNum) return
+    if (!login.trim() || !password) {
+      setError("Введите логин и пароль")
+      return
+    }
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: login.trim(),
+          password,
+          displayName: displayName.trim() || undefined,
+          age: ageNum,
+          gender,
+          purpose: defaultPurpose,
+        }),
+        credentials: "include",
+      })
+      const data = res.ok ? await res.json() : null
+      if (res.status === 409) {
+        setError("Логин уже занят. Выберите другой логин.")
+        return
+      }
+      if (!res.ok) {
+        setError((data?.error as string) || "Ошибка регистрации")
+        return
+      }
+      if (data?.user) {
+        const u = data.user
+        const user = {
+          id: userIdToNumber(u.id),
+          name: (u.displayName ?? displayName.trim()) || u.username,
+          avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
+          gender: (u.gender === "female" ? "female" : "male") as Gender,
           age: u.age ?? ageNum,
           purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
           authProvider: "login" as const,
         }
-        addToDevRegistry(user, login)
+        const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+        const inventory = Array.isArray(data.inventory) ? data.inventory : []
+        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+        addToDevRegistry(user, login.trim())
         buildTableAndEnter(user)
         setShowLoginModal(false)
       }
@@ -287,7 +301,7 @@ export function RegistrationScreen() {
           </Button>
 
           <Button
-            onClick={() => { setError(""); setShowLoginModal(true) }}
+            onClick={() => { setError(""); setLoginModalMode("login"); setShowLoginModal(true) }}
             disabled={loading}
             variant="outline"
             className="w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50"
@@ -311,97 +325,158 @@ export function RegistrationScreen() {
       </div>
       </div>
 
-      {/* Модалка "Войти по логину" */}
+      {/* Модалка: Вход по логину / Регистрация */}
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div
             className="w-full max-w-sm rounded-2xl border border-slate-600/80 bg-slate-900/98 px-5 py-6 shadow-[0_24px_50px_rgba(0,0,0,0.8)]"
           >
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-100">{"Вход по логину"}</h2>
-                <p className="text-xs text-slate-400">
-                  {"Если вы уже заходили — введите ваш логин и пароль. Иначе мы создадим новый аккаунт."}
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-4 space-y-3">
-              <input
-                type="text"
-                placeholder="Логин"
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
-              />
-              <input
-                type="password"
-                placeholder="Пароль"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
-              />
-            </div>
-
-            <div className="mb-4 space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-200">{"Возраст (для регистрации)"}</label>
-                <input
-                  type="number"
-                  min={18}
-                  max={99}
-                  placeholder="25"
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  className="w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-200">{"Пол (для анкеты)"}</label>
-                <div className="inline-flex gap-2">
+            {loginModalMode === "login" ? (
+              <>
+                <div className="mb-4">
+                  <h2 className="text-lg font-bold text-slate-100">Вход</h2>
+                  <p className="text-xs text-slate-400">Введите логин и пароль</p>
+                </div>
+                <div className="mb-4 space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Логин"
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                    className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Пароль"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
+                  />
+                </div>
+                {error && <p className="mb-3 text-center text-sm text-destructive">{error}</p>}
+                <div className="mb-3 flex gap-2">
+                  <Button
+                    className="flex-1 rounded-xl py-3 text-sm font-semibold"
+                    disabled={loading}
+                    onClick={handleLogin}
+                  >
+                    Войти
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 rounded-xl py-3 text-sm font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50"
+                    onClick={() => { setShowLoginModal(false); setError(""); }}
+                  >
+                    Отмена
+                  </Button>
+                </div>
+                <div className="flex flex-col items-center gap-2 border-t border-slate-600/80 pt-3">
+                  <span className="text-sm text-slate-400">Нет логина?</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full rounded-xl py-2.5 text-sm font-semibold border-amber-500/50 text-amber-200 hover:bg-amber-500/20"
+                    onClick={() => { setLoginModalMode("register"); setError(""); }}
+                  >
+                    Регистрация
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <h2 className="text-lg font-bold text-slate-100">Регистрация</h2>
+                  <p className="text-xs text-slate-400">Логин, пароль, имя, возраст, пол</p>
+                </div>
+                <div className="mb-4 space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Логин"
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                    className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Пароль"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Имя"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full rounded-xl border-2 border-border bg-card px-4 py-3 text-card-foreground placeholder:text-card-foreground/60 focus:border-primary focus:outline-none transition-colors"
+                  />
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-200">Возраст (18+)</label>
+                    <input
+                      type="number"
+                      min={18}
+                      max={99}
+                      placeholder="25"
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      className="w-full rounded-xl border-2 border-border bg-card px-3 py-2 text-card-foreground text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-200">Пол</label>
+                    <div className="inline-flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setGender("male")}
+                        className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                          gender === "male" ? "border-primary text-primary bg-primary/10" : "border-slate-500 text-slate-300"
+                        }`}
+                      >
+                        Мужской
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGender("female")}
+                        className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                          gender === "female" ? "border-primary text-primary bg-primary/10" : "border-slate-500 text-slate-300"
+                        }`}
+                      >
+                        Женский
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {error && <p className="mb-3 text-center text-sm text-destructive">{error}</p>}
+                <div className="mb-3 flex gap-2">
+                  <Button
+                    className="flex-1 rounded-xl py-3 text-sm font-semibold"
+                    disabled={loading}
+                    onClick={handleRegister}
+                  >
+                    Зарегистрироваться
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 rounded-xl py-3 text-sm font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50"
+                    onClick={() => { setShowLoginModal(false); setError(""); }}
+                  >
+                    Отмена
+                  </Button>
+                </div>
+                <div className="flex flex-col items-center gap-2 border-t border-slate-600/80 pt-3">
+                  <span className="text-sm text-slate-400">Уже есть логин?</span>
                   <button
                     type="button"
-                    onClick={() => setGender("male")}
-                    className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                      gender === "male" ? "border-primary text-primary bg-primary/10" : "border-slate-500 text-slate-300"
-                    }`}
+                    className="text-sm font-medium text-amber-200 hover:underline"
+                    onClick={() => { setLoginModalMode("login"); setError(""); }}
                   >
-                    {"Мужской"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGender("female")}
-                    className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                      gender === "female" ? "border-primary text-primary bg-primary/10" : "border-slate-500 text-slate-300"
-                    }`}
-                  >
-                    {"Женский"}
+                    Войти
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {error && (
-              <p className="mb-3 text-center text-sm text-destructive">{error}</p>
+              </>
             )}
-
-            <div className="flex gap-2">
-              <Button
-                className="flex-1 rounded-xl py-3 text-sm font-semibold"
-                disabled={loading}
-                onClick={handleContinueLogin}
-              >
-                {"Продолжить"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 rounded-xl py-3 text-sm font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50"
-                onClick={() => { setShowLoginModal(false); setError(""); }}
-              >
-                {"Отмена"}
-              </Button>
-            </div>
           </div>
         </div>
       )}
