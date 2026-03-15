@@ -43,9 +43,13 @@ jobs:
             exit 0
           fi
           mkdir -p ~/.ssh
-          # Убираем \r (Windows) и лишние пробелы в конце строк — иначе "Load key: error in libcrypto"
+          # Сырой ключ: убираем \r (Windows) и пробелы в конце строк — иначе "Load key: error in libcrypto"
           echo "$SERVER_SSH_KEY" | sed 's/\r$//' | sed 's/[[:space:]]*$//' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          if ! grep -q "-----BEGIN" ~/.ssh/deploy_key; then
+            echo "::error::SERVER_SSH_KEY не похож на приватный ключ (нет -----BEGIN). Вставь полное содержимое deploy_key через cat deploy_key."
+            exit 1
+          fi
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "Creating directory on server..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"

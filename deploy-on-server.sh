@@ -11,4 +11,4 @@ echo "=== Сборка ==="
 npm run build
 echo "=== Перезапуск PM2 ==="
 pm2 restart spindate
-echo "=== Готово. Проверь https://spindate.lemnity.ru ==="
+echo "=== Готово. Проверь свой домен или http://IP:3000 ==="
