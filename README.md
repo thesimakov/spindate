@@ -13,17 +13,29 @@ npm start
 
 ## Подключение к ВКонтакте
 
-- **Пошагово для чайника (сделал — дальше):** **[ПОШАГОВО_ЧАЙНИК.md](./ПОШАГОВО_ЧАЙНИК.md)** — один шаг за раз, без лишнего.
-- **Простая инструкция (для начинающих):** [ПОДКЛЮЧЕНИЕ_ПРОСТО.md](./ПОДКЛЮЧЕНИЕ_ПРОСТО.md) — что нажать, что вписать, без сложных терминов.
+- **Пошагово для чайника:** [ПОШАГОВО_ЧАЙНИК.md](./ПОШАГОВО_ЧАЙНИК.md)
+- **Простая инструкция:** [ПОДКЛЮЧЕНИЕ_ПРОСТО.md](./ПОДКЛЮЧЕНИЕ_ПРОСТО.md)
 - **Краткая техническая:** [ПОДКЛЮЧЕНИЕ.md](./ПОДКЛЮЧЕНИЕ.md)
-- **Развёртывание на своём сервере (VPS):** [SERVER_DEPLOY.md](./SERVER_DEPLOY.md)
+- **Публикация и оплаты:** [docs/VK_PUBLICATION.md](./docs/VK_PUBLICATION.md)
 
-- Домен: **https://spindate.lemnity.ru**
+## Развёртывание на сервере
+
+- **Краткий чеклист:** [SERVER_DEPLOY.md](./SERVER_DEPLOY.md)
+- **С нуля (новый VPS):** [docs/DEPLOY_FROM_SCRATCH.md](./docs/DEPLOY_FROM_SCRATCH.md)
+- **Перепривязка домена:** [docs/DOMAIN_NEW_SERVER.md](./docs/DOMAIN_NEW_SERVER.md)
+- **Деплой с GitHub на сервер по SSH:** [docs/GITHUB_DEPLOY_SECRETS.md](./docs/GITHUB_DEPLOY_SECRETS.md)
+
+## Картинки и ассеты
+
+Все статические файлы (бутылочки, рамки, эмоции) — в **public/assets/**. Описание каталога и путей: [public/assets/README.md](./public/assets/README.md). В коде пути задаются в `lib/assets.ts` и используются через `assetUrl()`.
+
+## Ссылки
+
+- Домен (пример): **https://spindate.lemnity.ru**
 - ID приложения VK: **54483214**
-- Подробности по оплатам и масштабированию: **docs/VK_PUBLICATION.md**
 
 ## Технологии
 
 - Next.js 16, React 19
-- VK Bridge (@vkontakte/vk-bridge) — авторизация, оплаты, приглашение друзей
+- VK Bridge — авторизация, оплаты, приглашение друзей
 - Tailwind CSS

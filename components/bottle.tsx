@@ -67,7 +67,11 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
             style={{ opacity: 1 }}
             draggable={false}
             loading="eager"
-            onLoad={() => setImgError(false)}
+            onLoad={(e) => {
+              const img = e.currentTarget
+              if (img.naturalWidth === 0 || img.naturalHeight === 0) setImgError(true)
+              else setImgError(false)
+            }}
             onError={() => setImgError(true)}
           />
         </div>

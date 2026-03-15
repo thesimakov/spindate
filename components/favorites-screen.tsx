@@ -29,7 +29,7 @@ export function FavoritesScreen() {
       </header>
 
       {/* List */}
-      <div className="flex-1 px-4 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         {favorites.length === 0 ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary">

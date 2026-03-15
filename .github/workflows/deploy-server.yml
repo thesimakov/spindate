@@ -1,0 +1,53 @@
+# Сборка и деплой на свой сервер по SSH (после push в main)
+name: Build and deploy to own server
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (for Node server, no static export)
+        run: npm run build
+
+      - name: Deploy to server via SSH
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          if [ -z "$SERVER_SSH_KEY" ] || [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ]; then
+            echo "SERVER_SSH_KEY, SERVER_HOST or SERVER_USER not set — skipping deploy."
+            echo "Add secrets in repo Settings → Secrets and variables → Actions."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$SERVER_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            .next/ \
+            public/ \
+            package.json \
+            package-lock.json \
+            next.config.mjs \
+            ecosystem.config.cjs \
+            "$SERVER_USER@$SERVER_HOST:/var/www/spindate/"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" \
+            "cd /var/www/spindate && npm ci && (pm2 restart spindate || pm2 start ecosystem.config.cjs) && pm2 save"

@@ -82,7 +82,11 @@ function FlyingEmojiContent({ fe }: { fe: FlyingEmoji }) {
         style={{ width: "56px", height: "56px", objectFit: "contain" }}
         draggable={false}
         loading="eager"
-        onLoad={() => setImgError(false)}
+        onLoad={(e) => {
+          const img = e.currentTarget
+          if (img.naturalWidth === 0 || img.naturalHeight === 0) setImgError(true)
+          else setImgError(false)
+        }}
         onError={() => setImgError(true)}
       />
     )
@@ -510,6 +514,7 @@ export function GameRoom() {
 
   const userPrediction = predictions.find(p => p.playerId === currentUser?.id)
 
+  /** Каталог бутылочек: id и пути из lib/assets.ts (BOTTLE_IMAGES), названия и стоимость в UI */
   const bottleSkins = [
     { id: "classic" as const, name: "Классическая", img: assetUrl(BOTTLE_IMAGES.classic), cost: 0 },
     { id: "ruby" as const, name: "Лимонад", img: assetUrl(BOTTLE_IMAGES.ruby), cost: 5 },
@@ -1083,7 +1088,7 @@ export function GameRoom() {
     }
 
     if (actionId === "banya") {
-      launchEmoji(spinnerIdx, targetIdx, undefined, assetUrl(EMOJI_BANYA))
+      launchEmoji(spinnerIdx, targetIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(targetIdx)
     }
 
@@ -1152,7 +1157,7 @@ export function GameRoom() {
     }
 
     if (actionId === "banya") {
-      launchEmoji(fromIdx, toIdx, undefined, assetUrl(EMOJI_BANYA))
+      launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(toIdx)
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
@@ -2292,6 +2297,7 @@ export function GameRoom() {
                         src={skin.img}
                         alt={skin.name}
                         className="h-full w-full object-contain"
+                        loading="eager"
                       />
                     </div>
                     <span className="text-sm font-semibold text-amber-100">{skin.name}</span>
@@ -2321,7 +2327,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className="relative z-10 flex min-w-0 flex-1 flex-col items-center justify-center gap-4 pt-2 pb-20 md:pb-2 px-1 sm:px-2"
+        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto pt-2 pb-20 md:pb-2 px-1 sm:px-2"
         ref={boardRef}
       >
         {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}

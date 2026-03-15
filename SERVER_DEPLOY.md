@@ -1,96 +1,55 @@
 # Развёртывание на сервере (VPS)
 
-Краткий чеклист для запуска приложения на своём сервере (Ubuntu/Debian). Подробная пошаговая инструкция — в [ПОДКЛЮЧЕНИЕ_ПРОСТО.md](./ПОДКЛЮЧЕНИЕ_ПРОСТО.md).
+Краткий чеклист. Подробная инструкция с нуля — [docs/DEPLOY_FROM_SCRATCH.md](./docs/DEPLOY_FROM_SCRATCH.md). Деплой с GitHub по SSH — [docs/GITHUB_DEPLOY_SECRETS.md](./docs/GITHUB_DEPLOY_SECRETS.md).
 
 ## 1. Требования
 
-- Node.js 18+
-- Домен, направленный на IP сервера (A-запись)
+- Node.js 20+
+- Папка **public/** (в т.ч. **public/assets/** с картинками) должна быть на сервере
 
-## 2. Установка на сервере
+## 2. Установка и первый запуск
 
 ```bash
-# Перейти в каталог (или клонировать репозиторий)
-cd /var/www/spindate   # или ваш путь
-
-# Переменные окружения
-echo 'NEXT_PUBLIC_VK_APP_ID=54483214' > .env.local
-echo 'NEXT_PUBLIC_APP_URL=https://spindate.lemnity.ru' >> .env.local
-
-# Сборка и запуск
+cd /var/www/spindate
+echo 'NEXT_PUBLIC_APP_URL=https://ваш-домен.ru' >> .env.local
 npm ci
 npm run build
-npm start
-```
-
-Приложение будет слушать порт **3000**. Для проверки: `http://IP_СЕРВЕРА:3000`.
-
-## 3. Постоянный запуск (PM2)
-
-```bash
-sudo npm install -g pm2
-pm2 start npm --name "spindate" -- start
+pm2 start ecosystem.config.cjs
 pm2 save
 pm2 startup
 # Выполнить команду, которую выведет pm2 startup
 ```
 
-## 4. Nginx + HTTPS
+Приложение слушает порт **3000**. Проверка: `http://IP:3000`.
 
-Создайте конфиг `/etc/nginx/sites-available/spindate`:
+## 3. Nginx и HTTPS
 
-```nginx
-server {
-    listen 80;
-    server_name spindate.lemnity.ru;
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+Пример конфига: [docs/DEPLOY_FROM_SCRATCH.md](./docs/DEPLOY_FROM_SCRATCH.md#8-nginx-как-обратный-прокси). Перепривязка домена к новому серверу: [docs/DOMAIN_NEW_SERVER.md](./docs/DOMAIN_NEW_SERVER.md).
 
-Включите сайт и получите сертификат:
+## 4. Картинки (бутылочки, рамки, эмоции)
 
-```bash
-sudo ln -sf /etc/nginx/sites-available/spindate /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-sudo certbot --nginx -d spindate.lemnity.ru
-```
+Все файлы в **public/assets/**. Next.js отдаёт их по `/assets/...`. Убедись, что при деплое папка **public** копируется на сервер (при деплое через GitHub Actions это делается автоматически).
 
-## 5. Настройки ВКонтакте
-
-В [Управление приложениями](https://vk.com/apps?act=manage) → ваше приложение → **Настройки** → **Адрес приложения**:  
-`https://spindate.lemnity.ru` (без слеша в конце).
-
-## 6. Важно
-
-- Папка **data/** создаётся автоматически для SQLite (логин/сессии). На сервере она должна быть доступна на запись для процесса Node.
-- После смены `.env.local` выполните `npm run build` и перезапустите приложение (`pm2 restart spindate`).
-
-## 7. Картинки (бутылочки и т.д.)
-
-Все изображения лежат в **public/assets/** и отдаются по путям вида `/assets/...`. После обновления кода на сервере убедитесь, что папка есть и в ней есть файлы:
-
-```bash
-cd /var/www/spindate   # или ваш путь к проекту
-git pull
-ls -la public/assets/   # должны быть b_standart_v2.webp, b_lemonade_v2.webp и др.
-pnpm install
-pnpm run build
-pm2 restart spindate
-```
-
-Проверка с сервера (должен вернуться размер в байтах, не 404):
+Проверка с сервера:
 
 ```bash
 curl -sI http://127.0.0.1:3000/assets/b_standart_v2.webp | head -1
 # ожидается: HTTP/1.1 200 OK
 ```
+
+Описание каталога ассетов: [public/assets/README.md](./public/assets/README.md).
+
+## 5. Обновление после изменений
+
+Вручную:
+
+```bash
+cd /var/www/spindate
+git pull
+rm -rf .next
+npm ci
+npm run build
+pm2 restart spindate
+```
+
+Или используй деплой с GitHub (настрой секреты по [docs/GITHUB_DEPLOY_SECRETS.md](./docs/GITHUB_DEPLOY_SECRETS.md)) — после push в `main` сборка и выкладка на сервер выполняются автоматически.

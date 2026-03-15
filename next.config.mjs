@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ""
-const isGitHubPages = process.env.GITHUB_ACTIONS === "true"
+/** В CI только workflow GitHub Pages задаёт BUILD_FOR_PAGES — тогда статический экспорт. Для деплоя на свой сервер сборка без export. */
+const isGitHubPages = process.env.BUILD_FOR_PAGES === "true"
 const nextConfig = {
   basePath: basePath || undefined,
   ...(isGitHubPages && { output: "export" }),

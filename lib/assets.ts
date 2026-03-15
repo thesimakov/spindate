@@ -45,7 +45,7 @@ export function assetUrl(path: string): string {
   return fullPath + q
 }
 
-/** Пути к картинкам бутылочек (каталог, игра) */
+/** Пути к картинкам бутылочек (каталог в игре + отображение на столе). Полный список — public/assets/README.md */
 export const BOTTLE_IMAGES = {
   classic: "/assets/b_standart_v2.webp",
   ruby: "/assets/b_lemonade_v2.webp",

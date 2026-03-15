@@ -170,7 +170,7 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border shadow-xl"
+        className="flex w-full max-w-md max-h-[85vh] flex-col rounded-2xl border shadow-xl overflow-hidden"
         style={{
           background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
           borderColor: "#334155",
@@ -178,7 +178,7 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок */}
-        <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "#334155" }}>
+        <div className="flex shrink-0 items-center justify-between border-b px-4 py-3" style={{ borderColor: "#334155" }}>
           <div className="flex items-center gap-2">
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
@@ -205,7 +205,7 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Табы */}
-        <div className="flex border-b px-2" style={{ borderColor: "#334155" }}>
+        <div className="flex shrink-0 border-b px-2" style={{ borderColor: "#334155" }}>
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -223,7 +223,7 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Контент выбранного таба */}
-        <div className="px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           <p className="mb-3 text-xs text-slate-400">{subtitle}</p>
           {content()}
         </div>

@@ -34,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      BUILD_FOR_PAGES: "true"
       # Путь приложения на GitHub Pages (https://user.github.io/REPO_NAME/) — без этого картинки из public/ не грузятся
       NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
     steps:
