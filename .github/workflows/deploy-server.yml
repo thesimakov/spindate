@@ -46,8 +46,8 @@ jobs:
           # Сырой ключ: убираем \r (Windows) и пробелы в конце строк — иначе "Load key: error in libcrypto"
           echo "$SERVER_SSH_KEY" | sed 's/\r$//' | sed 's/[[:space:]]*$//' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          if ! grep -q "BEGIN" ~/.ssh/deploy_key || ! grep -q "PRIVATE KEY" ~/.ssh/deploy_key; then
-            echo "::error::SERVER_SSH_KEY не похож на приватный ключ. В GitHub → Settings → Secrets вставь ВЕСЬ вывод команды: cat deploy_key (от -----BEGIN до -----END включительно, со всеми строками)."
+          if ! grep -q -- "BEGIN" ~/.ssh/deploy_key || ! grep -q -- "PRIVATE KEY" ~/.ssh/deploy_key; then
+            echo "::error::SERVER_SSH_KEY не похож на приватный ключ. Вставь в Secrets полное содержимое deploy_key (cat deploy_key)."
             exit 1
           fi
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
