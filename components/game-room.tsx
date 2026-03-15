@@ -511,10 +511,10 @@ export function GameRoom() {
     typeof drunkUntil[currentTurnPlayer.id] === "number" &&
     drunkUntil[currentTurnPlayer.id] > nowTs
 
-  // Игровой круг — ровный круг (как на референсе).
-  const radius = 34
+  // Игровой круг: на мобильном чуть больше радиус и лёгкий овал, чтобы игроки не теснились.
+  const radius = isMobile ? 38 : 34
   const radiusX = radius
-  const radiusY = radius
+  const radiusY = isMobile ? 40 : radius
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -2511,7 +2511,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto pt-2 pb-20 md:pb-2 px-1 sm:px-2"
+        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto pt-2 pb-20 md:pb-[220px] px-1 sm:px-2"
         ref={boardRef}
       >
         {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}
@@ -2595,11 +2595,18 @@ export function GameRoom() {
             <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
           </div>
         )}
-        {/* Прямоугольный стол в тёплой деревянной стилистике */}
+        {/* Прямоугольный стол: на мобильном резиновый, заполняет доступное место по ширине и высоте */}
         <div
-          className="relative mt-2 flex items-center justify-center rounded-2xl sm:rounded-[32px] border-2 sm:border-[3px] w-[95vw] sm:w-[min(90vw,720px)] max-w-[720px]"
+          className="relative mt-2 flex items-center justify-center rounded-2xl sm:rounded-[32px] border-2 sm:border-[3px] w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] min-h-0 shrink-0"
           style={{
-            aspectRatio: "4 / 3",
+            aspectRatio: isMobile ? "1 / 1" : "4 / 3",
+            ...(isMobile
+              ? {
+                  width: "min(94vw, calc(100vh - 180px))",
+                  height: "min(94vw, calc(100vh - 180px))",
+                  maxHeight: "calc(100vh - 180px)",
+                }
+              : {}),
             borderColor: "#334155",
             background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
             boxShadow:
