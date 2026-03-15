@@ -27,7 +27,7 @@ function getBasePath(): string {
 }
 
 /** Версия для сброса кэша (менять после обновления картинок) */
-const ASSET_CACHE_VERSION = "3"
+const ASSET_CACHE_VERSION = "4"
 
 /** Возвращает URL статического файла из public/assets/. В браузере — полный URL (origin + path). */
 export function assetUrl(path: string): string {

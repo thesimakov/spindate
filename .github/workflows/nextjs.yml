@@ -99,14 +99,15 @@ jobs:
       - name: Ensure public assets in out (under basePath)
         run: |
           REPO="${{ github.event.repository.name }}"
+          echo "Repository name (basePath): ${REPO}"
           mkdir -p "out/${REPO}/assets"
-          if [ -d "public/assets" ]; then
-            cp -r public/assets/. "out/${REPO}/assets/"
-          fi
-          echo "Assets in out/${REPO}/assets/:"
-          ls -la "out/${REPO}/assets/" || true
-          test -f "out/${REPO}/assets/7786876.svg" || (echo "Missing 7786876.svg (emotion); check public/assets" && exit 1)
-          test -f "out/${REPO}/assets/b_standart_v2.webp" || (echo "Missing bottle image; check public/assets" && exit 1)
+          cp -r public/assets/. "out/${REPO}/assets/" 2>/dev/null || true
+          echo "Contents of out/${REPO}/assets/:"
+          ls -la "out/${REPO}/assets/"
+          for f in 7786876.svg 000010.svg 000020.svg 000030.svg b_standart_v2.webp; do
+            test -f "out/${REPO}/assets/${f}" || (echo "Missing: ${f}" && exit 1)
+          done
+          echo "All required assets present."
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
