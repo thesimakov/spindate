@@ -51,6 +51,7 @@ export interface GameLogEntry {
     | "lipstick"
     | "chat"
     | "laugh"
+    | "cocktail"
     | "prediction"
     | "care"
   fromPlayer?: Player
@@ -117,7 +118,7 @@ export const PAIR_ACTIONS: PairAction[] = [
   { id: "tools",   label: "Подарить инструменты", icon: "tools",  cost: 1,  combo: ["MM"] },
   // F+F
   { id: "lipstick", label: "Губная помада",     icon: "lipstick", cost: 5,  combo: ["FF"] },
-  { id: "laugh",   label: "Смех",               icon: "laugh",    cost: 0,  combo: ["FF"] },
+  { id: "cocktail", label: "Коктейль",          icon: "cocktail", cost: 0,  combo: ["FF"] },
   // Universal
   { id: "skip",    label: "Пропустить",         icon: "skip",     cost: 0,  combo: ["MM", "MF", "FF"] },
 ]
@@ -189,11 +190,14 @@ export interface GameState {
   spinSkips?: Record<number, number>
   /** Был ли текущий ход уже использован на кручение (чтобы в NEXT_TURN отличать пропуск от кручения). */
   currentTurnDidSpin?: boolean
+  /** Включены ли звуки эмоций (по умолчанию true). Сохраняется в localStorage. */
+  soundsEnabled?: boolean
 }
 
 export type GameAction =
   | { type: "SET_SCREEN"; screen: GameState["screen"] }
   | { type: "SET_USER"; user: Player }
+  | { type: "CLEAR_USER" }
   | { type: "UPDATE_USER_NAME"; playerId: number; name: string }
   | { type: "UPDATE_USER_AVATAR"; playerId: number; avatar: string }
   | { type: "ADD_DRUNK_TIME"; playerId: number; ms: number }
@@ -255,3 +259,5 @@ export type GameAction =
   | { type: "SET_BOTTLE_SKIN"; skin: "classic" | "ruby" | "neon" | "frost" | "baby" | "vip" | "milk" }
   /** Сбросить анимацию «вернулся к нам» после показа. */
   | { type: "CLEAR_RETURNED_FROM_UGADAIKA" }
+  /** Включить/выключить звуки эмоций (сохраняется в localStorage). */
+  | { type: "SET_SOUNDS_ENABLED"; enabled: boolean }

@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { Heart, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
+import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge } from "@/lib/vk-bridge"
 import type { Gender, Player, Purpose } from "@/lib/game-types"
 
@@ -103,7 +104,7 @@ export function RegistrationScreen() {
         purpose: defaultPurpose,
         authProvider: "vk" as const,
       }
-
+      addToDevRegistry(user)
       buildTableAndEnter(user)
     } catch {
       setError("Ошибка авторизации. Попробуйте снова.")
@@ -168,15 +169,17 @@ export function RegistrationScreen() {
         }
         if (regData?.user) {
           const u = regData.user
-          buildTableAndEnter({
+          const user = {
             id: userIdToNumber(u.id),
             name: u.displayName ?? u.username,
             avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
-            gender: u.gender === "female" ? "female" : "male",
+            gender: (u.gender === "female" ? "female" : "male") as Gender,
             age: u.age ?? ageNum,
             purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
-            authProvider: "login",
-          })
+            authProvider: "login" as const,
+          }
+          addToDevRegistry(user, login)
+          buildTableAndEnter(user)
           setShowLoginModal(false)
         }
         return
@@ -189,15 +192,17 @@ export function RegistrationScreen() {
 
       if (data?.user) {
         const u = data.user
-        buildTableAndEnter({
+        const user = {
           id: userIdToNumber(u.id),
           name: u.displayName ?? u.username,
           avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
-          gender: u.gender === "female" ? "female" : "male",
+          gender: (u.gender === "female" ? "female" : "male") as Gender,
           age: u.age ?? ageNum,
           purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
-          authProvider: "login",
-        })
+          authProvider: "login" as const,
+        }
+        addToDevRegistry(user, login)
+        buildTableAndEnter(user)
         setShowLoginModal(false)
       }
     } catch {

@@ -24,7 +24,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
-import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA } from "@/lib/assets"
+import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { StringLights, Candle, TableDecorations } from "@/components/decorations"
@@ -150,6 +150,8 @@ function renderActionIcon(action: PairAction): React.ReactNode {
       return <MessageCircle className="h-4 w-4" />
     case "laugh":
       return <span className="text-base">{"😂"}</span>
+    case "cocktail":
+      return <span className="text-base">{"🍹"}</span>
     case "skip":
       return <ArrowRight className="h-4 w-4" />
     default:
@@ -171,7 +173,7 @@ const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow:
   gift_voice:{ bg: "linear-gradient(180deg, #f1c40f 0%, #f39c12 100%)", border: "#d68910", shadow: "#9a6408", text: "#111827" },
   lipstick:  { bg: "linear-gradient(180deg, #ff6b81 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
   chat:      { bg: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)", border: "#7d3c98", shadow: "#5b2c6f", text: "#f9fafb" },
-  laugh:     { bg: "linear-gradient(180deg, #f1c40f 0%, #f39c12 100%)", border: "#d68910", shadow: "#9a6408", text: "#111827" },
+  cocktail:  { bg: "linear-gradient(180deg, #f39c12 0%, #e67e22 100%)", border: "#d35400", shadow: "#a04000", text: "#111827" },
   song:      { bg: "linear-gradient(180deg, #5dade2 0%, #2e86c1 100%)", border: "#21618c", shadow: "#154360", text: "#f9fafb" },
   rose:      { bg: "linear-gradient(180deg, #ff5a7a 0%, #c2185b 100%)", border: "#880e4f", shadow: "#4a0a2a", text: "#ffffff" },
   hug:       { bg: "linear-gradient(180deg, #2ecc71 0%, #27ae60 100%)", border: "#1e8449", shadow: "#145a32", text: "#ecfdf5" },
@@ -222,6 +224,7 @@ export function GameRoom() {
     playerInUgadaika,
     showReturnedFromUgadaika,
     spinSkips,
+    soundsEnabled,
   } = state
 
   // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки»
@@ -455,6 +458,7 @@ export function GameRoom() {
   const [showRosesReceivedPopover, setShowRosesReceivedPopover] = useState(false)
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
+  const [showChatListModal, setShowChatListModal] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
@@ -499,11 +503,10 @@ export function GameRoom() {
     typeof drunkUntil[currentTurnPlayer.id] === "number" &&
     drunkUntil[currentTurnPlayer.id] > nowTs
 
-  // Стол имеет пропорцию 4:3, поэтому одинаковые радиусы в % дают визуально "овальный" круг.
-  // Компенсируем аспект: уменьшаем X-радиус относительно Y.
-  const tableAspect = 4 / 3
-  const radiusY = 36
-  const radiusX = radiusY / tableAspect
+  // Игровой круг — ровный круг (как на референсе).
+  const radius = 34
+  const radiusX = radius
+  const radiusY = radius
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -814,6 +817,21 @@ export function GameRoom() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdown])
 
+  /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
+  const playEmotionSound = useCallback((actionId: string) => {
+    if (state.soundsEnabled === false) return
+    const path = EMOTION_SOUNDS[actionId]
+    if (!path || typeof window === "undefined") return
+    try {
+      const url = assetUrl(path)
+      const a = new Audio(url)
+      a.volume = 0.7
+      a.play().catch(() => {})
+    } catch {
+      // ignore
+    }
+  }, [state.soundsEnabled])
+
   /* ---- launch flying emoji ---- */
   const launchEmoji = useCallback(
     (spinnerIdx: number, targetIdx: number, emoji?: string, imgSrc?: string) => {
@@ -1000,7 +1018,7 @@ export function GameRoom() {
       let defaultAction: GameLogEntry["type"] | "skip" = "skip"
       if (combo === "MF") defaultAction = "kiss"
       else if (combo === "MM") defaultAction = "beer"
-      else if (combo === "FF") defaultAction = "laugh"
+      else if (combo === "FF") defaultAction = "cocktail"
 
       const spinnerIsBot = !!currentTurnPlayer.isBot
 
@@ -1012,11 +1030,12 @@ export function GameRoom() {
         const emojiMap: Record<string, string> = {
           kiss: "\uD83D\uDC8B",
           beer: "\uD83C\uDF7A",
-          laugh: "\uD83D\uDE02",
+          cocktail: "\uD83C\uDF79",
           skip: "",
         }
         if (emojiMap[defaultAction]) {
           launchEmoji(spinnerIdx, targetIdx, emojiMap[defaultAction])
+          playEmotionSound(defaultAction)
         }
 
         const pairText = `${spinner.name} & ${target.name}`
@@ -1038,7 +1057,7 @@ export function GameRoom() {
       }
     }, 6000)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players, currentTurnPlayer, dispatch, launchEmoji, predictions, bets, pot, currentUser])
+  }, [players, currentTurnPlayer, dispatch, launchEmoji, playEmotionSound, predictions, bets, pot, currentUser])
 
   const handleSpin = () => {
     if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
@@ -1050,6 +1069,9 @@ export function GameRoom() {
 
   /* ---- perform gender-based action ---- */
   const handlePerformAction = (actionId: string) => {
+    // Звук сразу по клику, пока контекст жеста пользователя активен (требование браузера)
+    playEmotionSound(actionId)
+
     const tp = resolvedTargetPlayer
     const tp2 = resolvedTargetPlayer2
     if (!currentTurnPlayer || !tp || !tp2) return
@@ -1073,11 +1095,11 @@ export function GameRoom() {
       flowers: "\uD83C\uDF37",
       diamond: "\uD83D\uDC8E",
       beer: "\uD83C\uDF7A",
+      cocktail: "\uD83C\uDF79",
       gift_voice: "\uD83E\uDE99",
       tools: "\uD83D\uDEE0",
       lipstick: "\uD83D\uDC84",
       chat: "\uD83D\uDCAC",
-      laugh: "\uD83D\uDE02",
       hug: "\uD83E\uDD17",
       selfie: "\uD83D\uDCF8",
       song: "\uD83C\uDFB5",
@@ -1092,7 +1114,7 @@ export function GameRoom() {
       launchSteam(targetIdx)
     }
 
-    if (actionId === "beer") {
+    if (actionId === "beer" || actionId === "cocktail") {
       dispatch({ type: "ADD_DRUNK_TIME", playerId: currentTurnPlayer.id, ms: 60_000 })
     }
 
@@ -1146,16 +1168,18 @@ export function GameRoom() {
       flowers: "💐",
       diamond: "💎",
       beer: "🍺",
+      cocktail: "🍹",
       tools: "🛠️",
       lipstick: "💄",
       chat: "💬",
-      laugh: "😂",
       song: "🎵",
       rose: "🌹",
       hug: "🤗",
       selfie: "📸",
     }
 
+    // Звук сразу по клику (контекст жеста пользователя)
+    playEmotionSound(actionId)
     if (actionId === "banya") {
       launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(toIdx)
@@ -1360,7 +1384,7 @@ export function GameRoom() {
     if (resultTimerRef.current) clearInterval(resultTimerRef.current)
 
     const combo = getPairGenderCombo(tp, tp2)
-    const mutualActionId = combo === "MF" ? "kiss" : combo === "MM" ? "beer" : "lipstick"
+    const mutualActionId = combo === "MF" ? "kiss" : combo === "MM" ? "beer" : "cocktail"
 
     const otherPlayer =
       currentUser.id === tp.id ? tp2
@@ -1372,13 +1396,15 @@ export function GameRoom() {
     const mutualEmoji: Record<string, string> = {
       kiss: "\uD83D\uDC8B",
       beer: "\uD83C\uDF7A",
+      cocktail: "\uD83C\uDF79",
       lipstick: "\uD83D\uDC84",
     }
     if (fromIdx !== -1 && toIdx !== -1 && mutualEmoji[mutualActionId]) {
       launchEmoji(fromIdx, toIdx, mutualEmoji[mutualActionId])
+      playEmotionSound(mutualActionId)
     }
 
-    if (mutualActionId === "beer") {
+    if (mutualActionId === "beer" || mutualActionId === "cocktail") {
       dispatch({ type: "ADD_DRUNK_TIME", playerId: currentUser.id, ms: 60_000 })
     }
 
@@ -1395,7 +1421,9 @@ export function GameRoom() {
             ? `${currentUser.name} поцеловал(а) в ответ ${otherPlayer.name}`
             : mutualActionId === "beer"
               ? `${currentUser.name} выпил(а) пива вместе с ${otherPlayer.name}`
-              : `${currentUser.name} подарил(а) помаду ${otherPlayer.name}`,
+              : mutualActionId === "cocktail"
+                ? `${currentUser.name} выпил(а) коктейль вместе с ${otherPlayer.name}`
+                : `${currentUser.name} подарил(а) помаду ${otherPlayer.name}`,
         timestamp: Date.now(),
       },
     })
@@ -1533,9 +1561,9 @@ export function GameRoom() {
         ).length
       : 0
 
-  /** Эмоции/действия: поцелуй, пиво, цветы, бриллиант, баня, инструменты, помада, смех */
+  /** Эмоции/действия: поцелуй, пиво, коктейль, цветы, бриллиант, баня, инструменты, помада */
   const EMOTION_LOG_TYPES = new Set([
-    "kiss", "beer", "flowers", "diamond", "banya", "tools", "lipstick", "laugh",
+    "kiss", "beer", "cocktail", "flowers", "diamond", "banya", "tools", "lipstick",
   ])
   const emotionsToday =
     currentUser
@@ -1626,27 +1654,35 @@ export function GameRoom() {
     [giftsToday, emotionsToday, careToday, spinsToday, predictionsToday],
   )
 
-  const [activeQuestIndex, setActiveQuestIndex] = useState<number | null>(null)
   const [dailyCollapsed, setDailyCollapsed] = useState(true)
-  const prevProgressRef = useRef<Record<string, number>>({})
-
-  useEffect(() => {
-    if (!currentUser || activeQuestIndex !== null) return
-    const dq = dailyQuests?.dateKey === todayKey ? dailyQuests : undefined
-    const claimed = dq?.claimed ?? [false, false, false, false, false]
-    for (let i = 0; i < 5; i++) {
-      const q = todayQuests[i]
-      const progress = getProgressForType(q.type)
-      const prev = prevProgressRef.current[q.type] ?? progress
-      prevProgressRef.current[q.type] = progress
-      if (progress >= q.target && !claimed[i] && prev < q.target) {
-        setActiveQuestIndex(i)
-        return
-      }
-    }
-  }, [currentUser, activeQuestIndex, dailyQuests, todayKey, todayQuests, getProgressForType])
+  const [confettiQuestIndex, setConfettiQuestIndex] = useState<number | null>(null)
 
   const completedQuests = (dailyQuests?.dateKey === todayKey ? (dailyQuests.claimed.filter(Boolean).length) : 0)
+
+  const handleClaimDailyQuest = useCallback(
+    (questIndex: number) => {
+      if (!currentUser) return
+      const dq = dailyQuests?.dateKey === todayKey ? dailyQuests : undefined
+      const claimed = dq?.claimed ?? [false, false, false, false, false]
+      if (claimed[questIndex]) return
+      const q = todayQuests[questIndex]
+      const progress = getProgressForType(q.type)
+      if (progress < q.target) return
+      dispatch({ type: "CLAIM_DAILY_QUEST", questIndex, dateKey: todayKey })
+      dispatch({
+        type: "ADD_INVENTORY_ITEM",
+        item: {
+          type: "rose",
+          fromPlayerId: 0,
+          fromPlayerName: "Система",
+          timestamp: Date.now(),
+        },
+      })
+      setConfettiQuestIndex(questIndex)
+      setTimeout(() => setConfettiQuestIndex(null), 2200)
+    },
+    [currentUser, dailyQuests, todayKey, todayQuests, getProgressForType, dispatch],
+  )
 
   /* ---- смена стола ---- */
   const handleChangeTable = () => {
@@ -1712,7 +1748,7 @@ export function GameRoom() {
         onClaim={handleClaimWelcomeGift}
       />
 
-      {/* Top-left controls */}
+      {/* Top-left controls: музыка и звуки эмоций */}
       <div className="fixed left-2 top-2 z-40 flex flex-col gap-2">
         <button
           type="button"
@@ -1727,6 +1763,20 @@ export function GameRoom() {
         >
           <span aria-hidden="true">{musicEnabled ? "🔊" : "🔇"}</span>
           <span>{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false })}
+          className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+          style={{
+            borderColor: "rgba(148, 163, 184, 0.7)",
+            background: "rgba(15, 23, 42, 0.75)",
+            color: "#e5e7eb",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <span aria-hidden="true">{soundsEnabled === false ? "🔇" : "🔊"}</span>
+          <span>{soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}</span>
         </button>
       </div>
 
@@ -2212,6 +2262,19 @@ export function GameRoom() {
             <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
           </button>
 
+          {/* Сообщения — мини-чат */}
+          <button
+            onClick={() => setShowChatListModal(true)}
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            style={{
+              background: "rgba(15, 23, 42, 0.9)",
+              border: "1px solid #334155",
+            }}
+          >
+            <MessageCircle className="h-4 w-4" style={{ color: "#e8c06a" }} />
+            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
+          </button>
+
           {/* Количество столов */}
           <div className="flex items-center gap-2 rounded-[999px] px-4 py-2" style={{ background: "rgba(15, 23, 42, 0.8)" }}>
             <RotateCw className="h-3 w-3" style={{ color: "#94a3b8" }} />
@@ -2224,6 +2287,78 @@ export function GameRoom() {
 
       {/* Модалка каталога бутылочек */}
       {showRatingModal && <RatingModal onClose={() => setShowRatingModal(false)} />}
+
+      {/* Модалка: выбор собеседника для приватного чата */}
+      {showChatListModal && currentUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+          onClick={() => setShowChatListModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+            style={{
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
+              border: "2px solid rgba(251, 191, 36, 0.25)",
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" style={{ color: "#fcd34d" }} />
+                <span className="font-bold text-slate-100">Сообщения</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChatListModal(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-600/50 hover:text-slate-200"
+                aria-label="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="px-4 pt-2 pb-1 text-xs text-slate-400">Выберите, кому написать</p>
+            <div className="max-h-72 overflow-y-auto px-2 pb-3">
+              {players
+                .filter((p) => p.id !== currentUser.id)
+                .map((player) => {
+                  const msgCount = (state.chatMessages[player.id] ?? []).length
+                  return (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => {
+                        dispatch({ type: "OPEN_CHAT", player })
+                        setShowChatListModal(false)
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-600/50"
+                    >
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-slate-500">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={player.avatar} alt="" className="h-full w-full object-cover" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-slate-100">{player.name}</p>
+                        <p className="text-xs text-slate-400">
+                          {player.gender === "female" ? "Ж" : "М"}, {player.age} лет
+                          {msgCount > 0 && ` · ${msgCount} сообщ.`}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium" style={{ background: "rgba(251, 191, 36, 0.2)", color: "#fcd34d" }}>
+                        Написать
+                      </span>
+                    </button>
+                  )
+                })}
+              {players.filter((p) => p.id !== currentUser.id).length === 0 && (
+                <p className="py-6 text-center text-sm text-slate-400">Нет других игроков за столом</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showBottleCatalog && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -2985,6 +3120,15 @@ export function GameRoom() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => { dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false }); setShowMobileMoreMenu(false) }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  style={{ color: "#f0e0c8" }}
+                >
+                  <span aria-hidden>{soundsEnabled === false ? "🔇" : "🔊"}</span>
+                  {soundsEnabled === false ? "Звуки выкл" : "Звуки вкл"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => { setShowRatingModal(true); setShowMobileMoreMenu(false) }}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
@@ -3001,6 +3145,15 @@ export function GameRoom() {
                   <span aria-hidden>💕</span>
                   Угадай-ка
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowChatListModal(true); setShowMobileMoreMenu(false) }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  style={{ color: "#f0e0c8" }}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Сообщения
+                </button>
               </div>
             </>
           )}
@@ -3014,49 +3167,45 @@ export function GameRoom() {
           style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
           <div
-            className="pointer-events-auto flex w-full max-w-lg flex-col gap-1.5 rounded-t-2xl px-4 py-2.5 shadow-[0_-6px_20px_rgba(0,0,0,0.75)]"
+            className="pointer-events-auto flex w-full max-w-lg flex-col gap-2 rounded-t-2xl px-4 py-3 overflow-hidden"
             style={{
-              background: "linear-gradient(180deg, rgba(15,8,3,0.98) 0%, rgba(10,5,2,0.98) 100%)",
-              borderTop: "1px solid rgba(92,58,36,0.9)",
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
+              border: "1px solid rgba(251, 191, 36, 0.2)",
+              borderBottom: "none",
+              boxShadow: "0 -4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(251, 191, 36, 0.08)",
             }}
           >
-            <div className="mb-1 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4" style={{ color: "#e8c06a" }} />
-                <span className="text-xs sm:text-sm font-semibold" style={{ color: "#f0e0c8" }}>
-                  {"Ежедневные задачи"}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(251, 191, 36, 0.15)", border: "1px solid rgba(251, 191, 36, 0.3)" }}>
+                  <Sparkles className="h-4 w-4" style={{ color: "#fcd34d" }} />
+                </div>
+                <span className="text-sm font-bold" style={{ color: "#fef3c7", textShadow: "0 0 12px rgba(251, 191, 36, 0.2)" }}>
+                  Ежедневные задачи
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
+                <div className="h-2 w-20 rounded-full overflow-hidden" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(71, 85, 105, 0.6)" }}>
                   <div
-                    className="h-1.5 w-16 rounded-full overflow-hidden"
-                    style={{ background: "rgba(55, 34, 20, 0.9)", border: "1px solid rgba(120, 80, 40, 0.8)" }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${(completedQuests / 5) * 100}%`,
-                        background: "linear-gradient(90deg, #22c55e 0%, #e8c06a 100%)",
-                        boxShadow: "0 0 6px rgba(34,197,94,0.6)",
-                      }}
-                    />
-                  </div>
-                  <span
-                    className={`text-[11px] ${dailyCollapsed && completedQuests < 5 ? "animate-pulse" : ""}`}
-                    style={{ color: dailyCollapsed && completedQuests < 5 ? "#e8c06a" : "#9ca3af" }}
-                  >
-                    {completedQuests}/5
-                  </span>
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${(completedQuests / 5) * 100}%`,
+                      background: "linear-gradient(90deg, #22c55e 0%, #e8c06a 100%)",
+                      boxShadow: "0 0 8px rgba(34, 197, 94, 0.5)",
+                    }}
+                  />
                 </div>
+                <span className="text-xs font-bold tabular-nums" style={{ color: completedQuests >= 5 ? "#86efac" : "#fcd34d" }}>
+                  {completedQuests}/5
+                </span>
                 <button
                   type="button"
                   onClick={() => setDailyCollapsed((v) => !v)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full border text-[12px] font-bold"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition-colors hover:opacity-90"
                   style={{
-                    borderColor: "rgba(148,163,184,0.6)",
-                    color: "#e5e7eb",
-                    background: "rgba(15,23,42,0.7)",
+                    border: "1px solid rgba(251, 191, 36, 0.4)",
+                    color: "#fef3c7",
+                    background: "rgba(251, 191, 36, 0.12)",
                   }}
                 >
                   {dailyCollapsed ? "∨" : "∧"}
@@ -3064,111 +3213,64 @@ export function GameRoom() {
               </div>
             </div>
             {!dailyCollapsed && (
-              <div className="max-h-40 overflow-y-auto space-y-1.5 text-[11px] pr-1">
+              <div className="max-h-44 overflow-y-auto space-y-2 pr-1 -mx-1">
                 {todayQuests.map((q, i) => {
                   const progress = getProgressForType(q.type)
                   const claimed = dailyQuests?.dateKey === todayKey && dailyQuests.claimed[i]
+                  const canClaim = !claimed && progress >= q.target
+                  const showConfetti = claimed && confettiQuestIndex === i
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded-lg px-3 py-1.5"
+                      className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 transition-all"
                       style={{
-                        background: "rgba(15,23,42,0.9)",
-                        opacity: claimed ? 0.7 : 1,
+                        background: claimed ? "rgba(34, 197, 94, 0.08)" : "rgba(15, 23, 42, 0.6)",
+                        border: claimed ? "1px solid rgba(34, 197, 94, 0.25)" : "1px solid rgba(71, 85, 105, 0.4)",
+                        opacity: claimed ? 0.95 : 1,
                       }}
                     >
-                      <span style={{ color: claimed ? "#6b7280" : "#e5e7eb" }}>{q.label}</span>
-                      <span style={{ color: "#9ca3af" }}>
-                        {claimed ? "✓" : `${Math.min(progress, q.target)}/${q.target}`}
-                        {!claimed && " · 1 🌹"}
+                      <span className="text-[12px] font-medium flex-1 min-w-0" style={{ color: claimed ? "#9ca3af" : "#e2e8f0" }}>
+                        {q.label}
                       </span>
+                      <div className="flex items-center gap-2 shrink-0 relative min-w-[100px] justify-end">
+                        {claimed ? (
+                          <span className="daily-quest-confetti-cell flex items-center gap-1.5 relative">
+                            {showConfetti && (
+                              <span className="daily-quest-confetti-burst" aria-hidden>
+                                {[0, 1, 2, 3, 4, 5, 6, 7].map((j) => (
+                                  <span key={j} className="daily-quest-confetti-dot" style={{ ["--i" as string]: j }} />
+                                ))}
+                              </span>
+                            )}
+                            <span className="text-emerald-400 font-bold">✓</span>
+                            <span className="text-[11px]" aria-hidden>🌹</span>
+                          </span>
+                        ) : canClaim ? (
+                          <button
+                            type="button"
+                            onClick={() => handleClaimDailyQuest(i)}
+                            className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all hover:scale-105 active:scale-95"
+                            style={{
+                              background: "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)",
+                              color: "#ecfdf5",
+                              border: "1px solid rgba(34, 197, 94, 0.5)",
+                              boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
+                            }}
+                          >
+                            Забрать
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-medium" style={{ color: "#94a3b8" }}>
+                            {Math.min(progress, q.target)}/{q.target}
+                            <span className="ml-1 opacity-90">· 1 🌹</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ---- DAILY QUEST REWARD MODAL (награда — 1 роза, макс. 5 роз в день); показывается после завершения действия на столе ---- */}
-      {currentUser && activeQuestIndex !== null && todayQuests[activeQuestIndex] && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
-          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
-        >
-          <div
-            className="w-full max-w-sm rounded-3xl p-6 sm:p-7 overflow-hidden animate-in zoom-in-95 duration-300"
-            style={{
-              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
-              border: "2px solid rgba(251, 191, 36, 0.5)",
-              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.15), inset 0 1px 0 rgba(255,255,255,0.06), 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 40px -10px rgba(251, 191, 36, 0.2)",
-            }}
-          >
-            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.08)_0%,transparent_50%)]" aria-hidden />
-            <div className="relative">
-              <h3
-                className="mb-2 text-lg font-black tracking-tight"
-                style={{ color: "#fef3c7", textShadow: "0 0 20px rgba(251, 191, 36, 0.3)" }}
-              >
-                {"Ежедневное задание выполнено!"}
-              </h3>
-              <p
-                className="mb-2 text-sm font-semibold"
-                style={{ color: "#fcd34d" }}
-              >
-                {todayQuests[activeQuestIndex].label}
-              </p>
-              <p
-                className="mb-4 text-sm font-medium flex items-center gap-1.5"
-                style={{ color: "#e2e8f0" }}
-              >
-                <span className="font-bold" style={{ color: "#a5f3fc" }}>
-                  {getProgressForType(todayQuests[activeQuestIndex].type)}/{todayQuests[activeQuestIndex].target}
-                </span>
-                <span>·</span>
-                <span>Награда: 1</span>
-                <span className="text-lg" aria-hidden>🌹</span>
-              </p>
-              <div className="mt-4 flex gap-3">
-                <Button
-                  className="flex-1 rounded-xl py-3 text-sm font-bold shadow-lg transition-all hover:scale-[1.02]"
-                  style={{
-                    background: "linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
-                    color: "#ecfdf5",
-                    border: "2px solid rgba(34, 197, 94, 0.6)",
-                    boxShadow: "0 4px 14px rgba(22, 163, 74, 0.4)",
-                  }}
-                  onClick={() => {
-                    dispatch({ type: "CLAIM_DAILY_QUEST", questIndex: activeQuestIndex, dateKey: todayKey })
-                    dispatch({
-                      type: "ADD_INVENTORY_ITEM",
-                      item: {
-                        type: "rose",
-                        fromPlayerId: 0,
-                        fromPlayerName: "Система",
-                        timestamp: Date.now(),
-                      },
-                    })
-                    setActiveQuestIndex(null)
-                  }}
-                >
-                  {"Получить розу"}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-xl px-4 py-3 text-sm font-semibold"
-                  style={{
-                    border: "2px solid #475569",
-                    color: "#e2e8f0",
-                    background: "rgba(51, 65, 85, 0.5)",
-                  }}
-                  onClick={() => setActiveQuestIndex(null)}
-                >
-                  {"Позже"}
-                </Button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -3321,27 +3423,27 @@ export function GameRoom() {
         const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
         const zodiacDisplay = playerMenuTarget.zodiac ?? ZODIAC_SIGNS[playerMenuTarget.id % 12]
         return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200">
+        <div className="player-menu-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-hidden">
           <div
-            className="relative w-full max-w-4xl rounded-2xl p-5 pt-12 shadow-2xl animate-in zoom-in-95 duration-300"
+            className="player-menu-modal player-menu-modal-glow relative w-full max-w-4xl rounded-2xl p-5 pt-12 overflow-hidden"
             style={{
-              background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
-              border: "1px solid #334155",
-              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
+              border: "2px solid rgba(251, 191, 36, 0.25)",
               fontSize: "15px",
             }}
           >
+            <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
             <button
               type="button"
               onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-600/50 hover:text-slate-200"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="flex flex-col gap-5 sm:flex-row">
+            <div className="relative flex flex-col gap-5 sm:flex-row">
               {/* Левый блок: фото, имя, пол/возраст, город, интересы, знак зодиака */}
-              <div className="flex w-[160px] shrink-0 flex-col items-start gap-3 sm:w-[180px]">
+              <div className="player-menu-left flex w-[160px] shrink-0 flex-col items-start gap-3 sm:w-[180px]">
                 <div className="flex flex-col items-center gap-2">
                   <PlayerAvatar
                     player={playerMenuTarget}
@@ -3368,7 +3470,7 @@ export function GameRoom() {
                   <button
                     type="button"
                     onClick={() => setShowFramePicker(true)}
-                    className="rounded-lg border border-slate-500/60 bg-slate-700/50 px-2.5 py-1 text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-600/60"
+                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[12px] font-medium text-amber-200/95 transition-all duration-200 hover:scale-105 hover:bg-amber-500/20 hover:border-amber-500/50"
                   >
                     Рамка
                   </button>
@@ -3389,10 +3491,17 @@ export function GameRoom() {
               </div>
 
               {/* Центральный блок: цитата дня + кнопки действий */}
-              <div className="flex min-w-0 max-w-sm flex-1 flex-col gap-3">
+              <div className="player-menu-actions flex min-w-0 max-w-sm flex-1 flex-col gap-3">
                 {/* Цитата дня */}
-                <div className="rounded-xl px-3 py-2.5 text-[15px]" style={{ background: "rgba(51,65,85,0.5)", border: "1px solid #475569" }}>
-                  <p className="font-semibold text-amber-400/90 uppercase tracking-wide mb-1">Цитата дня</p>
+                <div
+                  className="player-menu-quote rounded-xl px-3 py-2.5 text-[15px]"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.7) 100%)",
+                    border: "1px solid rgba(251, 191, 36, 0.2)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  <p className="font-semibold text-amber-400/95 uppercase tracking-wide mb-1">Цитата дня</p>
                   <p className="text-slate-300 italic">&quot;{quoteOfDay.text}&quot;</p>
                   <p className="text-slate-500 mt-1">— {quoteOfDay.author}</p>
                 </div>
@@ -3571,9 +3680,9 @@ export function GameRoom() {
 
               {/* Правая колонка: каталог подарков */}
               {currentUser && (
-                <div className="mt-4 flex w-[340px] min-h-0 shrink-0 flex-col self-stretch sm:mt-0">
-                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-600/50 p-3"
-                    style={{ background: "rgba(15,23,42,0.95)" }}
+                <div className="player-menu-catalog mt-4 flex w-[340px] min-h-0 shrink-0 flex-col self-stretch sm:mt-0">
+                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-3 transition-colors"
+                    style={{ background: "rgba(15,23,42,0.95)", boxShadow: "inset 0 1px 0 rgba(251,191,36,0.05), 0 4px 16px rgba(0,0,0,0.2)" }}
                   >
                   <div className="mb-2 shrink-0 text-[15px]">
                     <span className="font-bold text-slate-200">{"Каталог подарков"}</span>
@@ -3582,7 +3691,7 @@ export function GameRoom() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 content-start gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[270px]">
+                  <div className="player-menu-gifts-scroll grid grid-cols-3 content-start gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[270px] min-h-0">
                     {[
                       { id: "toy_bear" as InventoryItem["type"], name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
                       { id: "plush_heart" as InventoryItem["type"], name: "Подушка-сердце", emoji: "❤️", cost: 8 },
@@ -3628,13 +3737,14 @@ export function GameRoom() {
                           key={gift.id}
                           type="button"
                           onClick={handleClick}
-                          className="group flex flex-col items-center gap-1 shrink-0"
+                          className="player-menu-gift-item group flex flex-col items-center gap-1 shrink-0 rounded-xl p-1.5 transition-colors hover:bg-slate-700/40"
                           disabled={disabled}
                         >
                           <div
-                            className={`flex h-16 w-16 items-center justify-center ${
+                            className={`flex h-16 w-16 items-center justify-center rounded-xl ${
                               disabled ? "opacity-40" : "opacity-100"
                             }`}
+                            style={!disabled ? { background: "rgba(51,65,85,0.4)", border: "1px solid rgba(71,85,105,0.5)" } : undefined}
                           >
                             <span className="text-3xl leading-none">{gift.emoji}</span>
                           </div>
@@ -3701,11 +3811,15 @@ export function GameRoom() {
                   </div>
 
                   <p className="text-[13px] font-semibold text-amber-200">Премиум — 5 ❤ за рамку</p>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-3">
                     {[
-                      { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", svgPath: "000030.svg", cost: 5 },
-                      { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", svgPath: "000010.svg", cost: 5 },
-                      { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", svgPath: "000020.svg", cost: 5 },
+                      { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", svgPath: "ram-lis.svg", cost: 5 },
+                      { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", svgPath: "ram-rabbit.svg", cost: 5 },
+                      { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", svgPath: "ram-fea.svg", cost: 5 },
+                      { id: "mag", label: "Маг сердца", border: "2px solid transparent", shadow: "none", svgPath: "ram-mag.svg", cost: 5 },
+                      { id: "malif", label: "Милифисента", border: "2px solid transparent", shadow: "none", svgPath: "ram-malif.svg", cost: 5 },
+                      { id: "mir", label: "Миру мир", border: "2px solid transparent", shadow: "none", svgPath: "ram-mir.svg", cost: 5 },
+                      { id: "vesna", label: "Весна", border: "2px solid transparent", shadow: "none", svgPath: "ram-vesna.svg", cost: 5 },
                     ].map((f) => {
                       const canAfford = voiceBalance >= f.cost
                       return (
@@ -3734,7 +3848,7 @@ export function GameRoom() {
                       type="button"
                       onClick={() => {
                         if (selectedFrameForGift == null) return
-                        const isPremium = ["fox", "rabbit", "fairy"].includes(selectedFrameForGift)
+                        const isPremium = ["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift)
                         const cost = isPremium ? 5 : 0
                         if (cost > 0 && voiceBalance < cost) return
                         if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
@@ -3742,7 +3856,7 @@ export function GameRoom() {
                         setShowFramePicker(false)
                         setSelectedFrameForGift(null)
                       }}
-                      disabled={selectedFrameForGift == null || (["fox", "rabbit", "fairy"].includes(selectedFrameForGift ?? "") && voiceBalance < 5)}
+                      disabled={selectedFrameForGift == null || (["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift ?? "") && voiceBalance < 5)}
                       className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold transition-all disabled:opacity-40"
                       style={{
                         background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
@@ -3751,7 +3865,7 @@ export function GameRoom() {
                       }}
                     >
                       <Heart className="h-4 w-4" fill="currentColor" />
-                      {selectedFrameForGift != null && ["fox", "rabbit", "fairy"].includes(selectedFrameForGift) ? "Подарить рамку — 5 ❤" : "Подарить рамку"}
+                      {selectedFrameForGift != null && ["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift) ? "Подарить рамку — 5 ❤" : "Подарить рамку"}
                     </button>
                     <button
                       type="button"

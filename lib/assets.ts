@@ -60,11 +60,26 @@ export const BOTTLE_IMAGES = {
 /** Картинка эмоции «баня» (веник) */
 export const EMOJI_BANYA = "/assets/7786876.svg"
 
-/** Рамки-картинки для аватарки (SVG из assets) */
+/** Звуки при эмоциях (MP3 в public/assets/) */
+export const EMOTION_SOUNDS: Record<string, string> = {
+  kiss: "kiss_mkqxy6eu.mp3",
+  diamond: "001_38372.mp3",
+  flowers: "546546745.mp3",
+  beer: "dne-can-open-medium.mp3",
+  cocktail: "9160bfefbb62e94654645.mp3",
+  banya: "2de04e7deb74c4b.mp3",
+  tools: "power_tool_electric_screwdriver_2.mp3",
+}
+
+/** Рамки-картинки для аватарки (SVG из assets, один формат — центрируем одинаково) */
 export const FRAME_SVG = {
-  rabbit: "/assets/000010.svg",
-  fairy: "/assets/000020.svg",
-  fox: "/assets/000030.svg",
+  rabbit: "/assets/ram-rabbit.svg",
+  fairy: "/assets/ram-fea.svg",
+  fox: "/assets/ram-lis.svg",
+  mag: "/assets/ram-mag.svg",
+  malif: "/assets/ram-malif.svg",
+  mir: "/assets/ram-mir.svg",
+  vesna: "/assets/ram-vesna.svg",
 } as const
 
 /** Остальные картинки (фон, декор) — все в assets */

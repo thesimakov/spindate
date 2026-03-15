@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useReducer, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react"
 import type { GameState, GameAction, Player, ChatMessage, Gender, InventoryItem } from "./game-types"
 
 // Имена жителей стран СНГ (25+ женских и 25+ мужских)
@@ -35,7 +35,7 @@ const INTERESTS = ["Путешествия, музыка", "Книги, кино
 const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
-export const AVATAR_FRAME_IDS = ["none", "gold", "silver", "hearts", "roses", "gradient", "neon", "snow", "rabbit", "fairy", "fox"] as const
+export const AVATAR_FRAME_IDS = ["none", "gold", "silver", "hearts", "roses", "gradient", "neon", "snow", "rabbit", "fairy", "fox", "mag", "malif", "mir", "vesna"] as const
 
 export function randomAvatarFrame(): (typeof AVATAR_FRAME_IDS)[number] {
   return AVATAR_FRAME_IDS[Math.floor(Math.random() * AVATAR_FRAME_IDS.length)]
@@ -142,6 +142,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case "SET_USER":
       return { ...state, currentUser: action.user }
+    case "CLEAR_USER":
+      return { ...state, currentUser: undefined, players: [], tableId: undefined }
     case "ADD_DRUNK_TIME": {
       const now = Date.now()
       const current = state.drunkUntil?.[action.playerId] ?? 0
@@ -265,7 +267,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           const combo = getPairGenderCombo(target1, target2)
           if (combo === "MF") resultAction = "kiss"
           else if (combo === "MM") resultAction = "beer"
-          else resultAction = "laugh"
+          else resultAction = "cocktail"
 
           const pairText = `${target1.name} & ${target2.name}`
           seedLog = [
@@ -457,6 +459,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, bottleDonorId: action.playerId, bottleDonorName: action.playerName }
     case "CLEAR_RETURNED_FROM_UGADAIKA":
       return { ...state, showReturnedFromUgadaika: false }
+    case "SET_SOUNDS_ENABLED": {
+      try {
+        if (typeof window !== "undefined") window.localStorage.setItem("spindate_sounds_enabled", action.enabled ? "1" : "0")
+      } catch {
+        // ignore
+      }
+      return { ...state, soundsEnabled: action.enabled }
+    }
 
     // ---- Daily quests ----
     case "CLAIM_DAILY_QUEST": {
@@ -667,8 +677,19 @@ const GameContext = createContext<{
   dispatch: React.Dispatch<GameAction>
 } | null>(null)
 
+const SOUNDS_ENABLED_KEY = "spindate_sounds_enabled"
+
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage.getItem(SOUNDS_ENABLED_KEY) === "0") {
+        dispatch({ type: "SET_SOUNDS_ENABLED", enabled: false })
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
   return (
     <GameContext.Provider value={{ state, dispatch }}>
       {children}

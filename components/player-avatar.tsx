@@ -15,6 +15,10 @@ const FRAME_STYLES: Record<string, { border: string; boxShadow: string }> = {
   rabbit: { border: "2px solid transparent", boxShadow: "none" },
   fairy: { border: "2px solid transparent", boxShadow: "none" },
   fox: { border: "2px solid transparent", boxShadow: "none" },
+  mag: { border: "2px solid transparent", boxShadow: "none" },
+  malif: { border: "2px solid transparent", boxShadow: "none" },
+  mir: { border: "2px solid transparent", boxShadow: "none" },
+  vesna: { border: "2px solid transparent", boxShadow: "none" },
 }
 
 const FRAME_SVG_IDS = Object.keys(FRAME_SVG) as (keyof typeof FRAME_SVG)[]
@@ -62,7 +66,7 @@ export function PlayerAvatar({
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
   const isSvgFrame = frameId && FRAME_SVG_IDS.includes(frameId as keyof typeof FRAME_SVG)
   const svgFrameSrc = isSvgFrame && frameId in FRAME_SVG ? assetUrl((FRAME_SVG as Record<string, string>)[frameId]) : null
-  const size = compact ? 52 : 72
+  const size = compact ? 52 : 70
   const borderSize = compact ? 3 : 4
   const outerSize = size + borderSize * 2 + 4
   const isVip = !!player.isVip
@@ -73,11 +77,10 @@ export function PlayerAvatar({
         className="relative"
         style={{ width: outerSize, height: outerSize }}
       >
-        {/* zzz — игрок «уснул» / отошёл (не крутил 3+ хода), но онлайн */}
+        {/* zzz — игрок «уснул» / отошёл: сверху, заходят на аватарку на 30% */}
         {showAsleep && !isCurrentTurn && !isTarget && (
           <div
-            className="avatar-asleep-zzz absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none flex items-center justify-center gap-0.5"
-            style={{ width: outerSize, height: outerSize }}
+            className="avatar-asleep-zzz absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-[70%] pointer-events-none select-none flex items-center justify-center gap-0.5"
             aria-hidden
           >
             <span className="avatar-asleep-zzz-letter">z</span>
@@ -308,22 +311,18 @@ export function PlayerAvatar({
         {/* Рамка-картинка (кролик, фея, лиса) — SVG поверх аватарки, показываем всегда когда выбрана */}
         {svgFrameSrc && (useFrameOnRim || isCurrentTurn || isTarget) && (
           <div
-            className="pointer-events-none absolute inset-[-8px] z-[1] flex items-center justify-center"
+            className="pointer-events-none absolute z-[1] flex items-center justify-center"
+            style={{ inset: compact ? -28 : -40 }}
             aria-hidden
           >
             <img
               src={svgFrameSrc}
               alt=""
               className="h-full w-full object-contain"
-              style={
-                frameId === "rabbit"
-                  ? { objectPosition: "center center", transform: "scale(1.15) translateY(-12px)" }
-                  : frameId === "fairy"
-                    ? { objectPosition: "center center", transform: "scale(1.65) translateY(-2px)" }
-                    : frameId === "fox"
-                      ? { objectPosition: "center center", transform: "scale(1.06) translateY(6px)" }
-                      : undefined
-              }
+              style={{
+                // Рамка кролика: центр «дырки» в SVG смещён — выравниваем по аватарке
+                objectPosition: frameId === "rabbit" ? "50% 35%" : "center center",
+              }}
               aria-hidden
             />
           </div>

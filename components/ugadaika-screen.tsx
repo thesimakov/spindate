@@ -723,10 +723,7 @@ export function UgadaikaScreen() {
               <h2 className="text-center text-xl font-bold text-slate-100">Как играть</h2>
               <div className="space-y-3 text-center">
                 <p className="text-[15px] leading-relaxed text-slate-300">
-                  Участвуют 8 человек: сверху — 4 человека противоположного пола, снизу — 4 твоего (включая тебя).
-                </p>
-                <p className="text-[15px] leading-relaxed text-slate-300">
-                  Сверху — 4 человека противоположного пола, снизу — 4 твоего. Нажми на того, кто тебе нравится: вы с ним образуете пару на раунд. Если вы выбрали друг друга — пара переходит в следующий раунд.
+                  Участвуют 8 человек: Нажми на того, кто тебе нравится: вы с ним образуете пару на раунд. Если вы выбрали друг друга — пара переходит в следующий раунд.
                 </p>
                 <p className="text-sm font-medium text-amber-200/90">
                   Таймер 10 сек. Совпала пара — остаётесь, к вам добавляют 6 новых. Не совпала — вылетаешь.
@@ -786,6 +783,9 @@ export function UgadaikaScreen() {
             <div className="relative flex items-stretch justify-center gap-3 sm:gap-4 my-2 min-h-0">
               {/* Левый борт: 4 противоположного пола — нажатие выбирает участника */}
               <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 shrink-0">
+                <span className="text-xs font-bold text-amber-200/95 mb-0.5">
+                  {currentUser?.gender === "female" ? "Претенденты" : "Претендентки"}
+                </span>
                 {oppositeIndices.map((idx) => {
                   const p = participantsInRound[idx]
                   if (!p) return null
@@ -916,6 +916,7 @@ export function UgadaikaScreen() {
 
               {/* Правый борт: 4 того же пола (индексы 0–3), пользователь среди них */}
               <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 shrink-0">
+                <span className="text-xs font-bold text-amber-200/95 mb-0.5">Игроки</span>
                 {sameIndices.map((idx) => {
                   const p = participantsInRound[idx]
                   if (!p) return null

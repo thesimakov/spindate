@@ -632,7 +632,7 @@
   50% { opacity: 0.7; transform: scale(0.95); filter: brightness(1.2); }
 }
 
-/* Игрок «уснул» / отошёл — zzz красиво вылетают из центра аватарки */
+/* Игрок «уснул» / отошёл — zzz сверху, заходят на аватарку на ~30%, лёгкое покачивание вверх */
 .avatar-asleep-zzz {
   display: flex;
   align-items: center;
@@ -647,26 +647,21 @@
     0 0 10px rgba(255, 255, 255, 0.9),
     0 0 20px rgba(186, 230, 253, 0.5),
     0 1px 2px rgba(0, 0, 0, 0.4);
-  animation: avatar-zzz-float 2.2s ease-in-out infinite;
+  animation: avatar-zzz-float-up 2.2s ease-in-out infinite;
   display: inline-block;
 }
 .avatar-asleep-zzz-letter-2 { animation-delay: 0.25s; }
 .avatar-asleep-zzz-letter-3 { animation-delay: 0.5s; }
-@keyframes avatar-zzz-float {
+@keyframes avatar-zzz-float-up {
   0%, 100% {
-    opacity: 0.5;
-    transform: translateY(4px) translateX(0) scale(0.88);
+    opacity: 0.6;
+    transform: translateY(4px) scale(0.9);
     text-shadow: 0 0 6px rgba(255,255,255,0.6), 0 0 12px rgba(186, 230, 253, 0.25), 0 1px 2px rgba(0,0,0,0.4);
   }
-  35% {
+  50% {
     opacity: 1;
-    transform: translateY(-14px) translateX(2px) scale(1.12);
+    transform: translateY(-6px) scale(1.08);
     text-shadow: 0 0 14px rgba(255,255,255,0.95), 0 0 24px rgba(186, 230, 253, 0.6), 0 2px 4px rgba(0,0,0,0.3);
-  }
-  70% {
-    opacity: 0.85;
-    transform: translateY(-8px) translateX(-1px) scale(1.02);
-    text-shadow: 0 0 10px rgba(255,255,255,0.8), 0 0 18px rgba(186, 230, 253, 0.4), 0 1px 2px rgba(0,0,0,0.35);
   }
 }
 
@@ -701,6 +696,115 @@
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+/* Окно профиля игрока: красивое появление и лёгкое свечение */
+.player-menu-backdrop {
+  backdrop-filter: blur(10px);
+  animation: playerMenuBackdropIn 0.25s ease-out;
+}
+@keyframes playerMenuBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.player-menu-modal {
+  animation: playerMenuModalIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.55), 0 0 60px -20px rgba(251, 191, 36, 0.12);
+}
+@keyframes playerMenuModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.player-menu-modal-glow {
+  animation: playerMenuGlow 3s ease-in-out infinite;
+}
+@keyframes playerMenuGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 50px -15px rgba(251, 191, 36, 0.1); }
+  50% { box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.3), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 70px -15px rgba(251, 191, 36, 0.18); }
+}
+.player-menu-quote {
+  animation: playerMenuQuoteIn 0.4s ease-out 0.1s both;
+}
+@keyframes playerMenuQuoteIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.player-menu-gift-item {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.player-menu-gift-item:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+.player-menu-gift-item:active:not(:disabled) {
+  transform: scale(0.98);
+}
+/* Скролл каталога подарков — без «проскальзывания» на фон */
+.player-menu-gifts-scroll {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.player-menu-left {
+  animation: playerMenuQuoteIn 0.35s ease-out both;
+}
+.player-menu-actions {
+  animation: playerMenuQuoteIn 0.4s ease-out 0.05s both;
+}
+.player-menu-catalog {
+  animation: playerMenuQuoteIn 0.45s ease-out 0.1s both;
+}
+
+/* Конфетти в блоке ежедневных задач (выполненное задание) */
+.daily-quest-confetti-cell {
+  position: relative;
+}
+.daily-quest-confetti-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.daily-quest-confetti-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  animation: daily-quest-confetti-dot 1.6s ease-out forwards;
+  animation-delay: calc(var(--i) * 0.04s);
+  opacity: 0;
+}
+.daily-quest-confetti-dot:nth-child(1) { background: #22c55e; }
+.daily-quest-confetti-dot:nth-child(2) { background: #e8c06a; }
+.daily-quest-confetti-dot:nth-child(3) { background: #f43f5e; }
+.daily-quest-confetti-dot:nth-child(4) { background: #38bdf8; }
+.daily-quest-confetti-dot:nth-child(5) { background: #a78bfa; }
+.daily-quest-confetti-dot:nth-child(6) { background: #fcd34d; }
+.daily-quest-confetti-dot:nth-child(7) { background: #34d399; }
+.daily-quest-confetti-dot:nth-child(8) { background: #fb923c; }
+@keyframes daily-quest-confetti-dot {
+  0% {
+    transform: translate(-50%, -50%) rotate(calc(var(--i) * 45deg)) translateY(0) scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(calc(var(--i) * 45deg)) translateY(-18px) scale(1);
+    opacity: 0;
   }
 }
 

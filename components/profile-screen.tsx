@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Sparkles } from "lucide-react"
+import { Sparkles, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
@@ -39,7 +39,7 @@ const GIFT_IDS = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "t
 
 export function ProfileScreen() {
   const { state, dispatch } = useGame()
-  const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog, avatarFrames } = state
+  const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog, avatarFrames, soundsEnabled } = state
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
   const FREE_FRAMES = [
@@ -53,9 +53,13 @@ export function ProfileScreen() {
     { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", animationClass: "frame-preview-anim-snow", svgPath: undefined, cost: 0 },
   ] as const
   const PREMIUM_FRAMES = [
-    { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "000030.svg", cost: 5 },
-    { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "000010.svg", cost: 5 },
-    { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "000020.svg", cost: 5 },
+    { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-lis.svg", cost: 5 },
+    { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-rabbit.svg", cost: 5 },
+    { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-fea.svg", cost: 5 },
+    { id: "mag", label: "Маг сердца", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-mag.svg", cost: 5 },
+    { id: "malif", label: "Милифисента", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-malif.svg", cost: 5 },
+    { id: "mir", label: "Миру мир", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-mir.svg", cost: 5 },
+    { id: "vesna", label: "Весна", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-vesna.svg", cost: 5 },
   ] as const
   const PROFILE_FRAMES = [...FREE_FRAMES, ...PREMIUM_FRAMES]
 
@@ -198,6 +202,23 @@ export function ProfileScreen() {
               className="w-full rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-[13px] font-semibold text-slate-100 transition-colors hover:bg-slate-700/60"
             >
               Рамки
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false })}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-[13px] font-semibold text-slate-100 transition-colors hover:bg-slate-700/60"
+            >
+              {soundsEnabled === false ? (
+                <>
+                  <VolumeX className="h-4 w-4" />
+                  Включить звуки
+                </>
+              ) : (
+                <>
+                  <Volume2 className="h-4 w-4" />
+                  Отключить звуки
+                </>
+              )}
             </button>
           </div>
 
@@ -413,52 +434,73 @@ export function ProfileScreen() {
 
       {showFramesModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
           onClick={() => setShowFramesModal(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
+            className="w-full max-w-lg rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-300"
+            style={{
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
+              border: "2px solid rgba(251, 191, 36, 0.25)",
+              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.1), 0 25px 50px -12px rgba(0,0,0,0.5), 0 0 40px -10px rgba(251, 191, 36, 0.15)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-4 text-[17px] font-bold text-slate-100">Рамка аватарки</h3>
+            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)] pointer-events-none" aria-hidden />
+            <h3 className="relative mb-5 text-[18px] font-black tracking-tight" style={{ color: "#fef3c7", textShadow: "0 0 20px rgba(251, 191, 36, 0.25)" }}>
+              Рамка аватарки
+            </h3>
 
-            <p className="mb-2 text-[13px] font-semibold text-slate-300">Бесплатные</p>
-            <div className="grid grid-cols-4 gap-3 mb-5">
-              {FREE_FRAMES.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => {
-                    currentUser && dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
-                    setShowFramesModal(false)
-                  }}
-                  className={`flex flex-col items-center gap-2 rounded-xl py-3 transition-all hover:bg-slate-700/60 ${
-                    currentFrameId === f.id ? "ring-2 ring-sky-400 bg-slate-700/60" : ""
-                  }`}
-                >
-                  <div className="relative h-14 w-14 flex-shrink-0">
-                    <div
-                      className={`h-full w-full overflow-hidden rounded-full bg-slate-700 ${f.animationClass ?? ""}`}
-                      style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
-                    />
-                    {f.svgPath && (
-                      <img
-                        src={assetUrl(f.svgPath)}
-                        alt=""
-                        className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-                        aria-hidden
+            <p className="relative mb-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: "#94a3b8" }}>
+              Бесплатные
+            </p>
+            <div className="relative grid grid-cols-4 gap-3 mb-6">
+              {FREE_FRAMES.map((f) => {
+                const isSelected = currentFrameId === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      currentUser && dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
+                      setShowFramesModal(false)
+                    }}
+                    className="flex flex-col items-center gap-2 rounded-2xl py-3 px-2 transition-all duration-200 hover:scale-105 hover:shadow-lg disabled:opacity-50"
+                    style={{
+                      background: isSelected ? "rgba(56, 189, 248, 0.15)" : "rgba(51, 65, 85, 0.4)",
+                      border: isSelected ? "2px solid rgba(56, 189, 248, 0.6)" : "1px solid rgba(71, 85, 105, 0.5)",
+                      boxShadow: isSelected ? "0 0 20px rgba(56, 189, 248, 0.25)" : "0 4px 12px rgba(0,0,0,0.2)",
+                    }}
+                  >
+                    <div className="relative h-14 w-14 flex-shrink-0 rounded-full overflow-hidden ring-2 ring-slate-600/50">
+                      <div
+                        className={`h-full w-full rounded-full bg-slate-800 ${f.animationClass ?? ""}`}
+                        style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
                       />
-                    )}
-                  </div>
-                  <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
-                </button>
-              ))}
+                      {f.svgPath && (
+                        <img
+                          src={assetUrl(f.svgPath)}
+                          alt=""
+                          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                          aria-hidden
+                        />
+                      )}
+                    </div>
+                    <span className="text-[10px] font-medium text-slate-200 leading-tight text-center">{f.label}</span>
+                  </button>
+                )
+              })}
             </div>
 
-            <p className="mb-2 text-[13px] font-semibold text-amber-200">Премиум — 5 ❤ за рамку</p>
-            <div className="grid grid-cols-3 gap-3">
+            <p className="relative mb-3 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider" style={{ color: "#fcd34d" }}>
+              <span>Премиум</span>
+              <span className="text-[11px] font-semibold normal-case opacity-90">5 ❤ за рамку</span>
+            </p>
+            <div className="relative grid grid-cols-3 gap-3">
               {PREMIUM_FRAMES.map((f) => {
                 const canAfford = (voiceBalance ?? 0) >= f.cost
+                const isSelected = currentFrameId === f.id
                 return (
                   <button
                     key={f.id}
@@ -471,13 +513,16 @@ export function ProfileScreen() {
                       dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
                       setShowFramesModal(false)
                     }}
-                    className={`flex flex-col items-center gap-2 rounded-xl py-3 transition-all hover:bg-slate-700/60 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      currentFrameId === f.id ? "ring-2 ring-amber-400 bg-slate-700/60" : ""
-                    }`}
+                    className="flex flex-col items-center gap-2 rounded-2xl py-3 px-2 transition-all duration-200 hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    style={{
+                      background: isSelected ? "rgba(251, 191, 36, 0.12)" : "rgba(51, 65, 85, 0.4)",
+                      border: isSelected ? "2px solid rgba(251, 191, 36, 0.7)" : "1px solid rgba(71, 85, 105, 0.5)",
+                      boxShadow: isSelected ? "0 0 24px rgba(251, 191, 36, 0.3)" : "0 4px 12px rgba(0,0,0,0.2)",
+                    }}
                   >
-                    <div className="relative h-14 w-14 flex-shrink-0">
+                    <div className="relative h-14 w-14 flex-shrink-0 rounded-full overflow-hidden ring-2 ring-amber-500/30">
                       <div
-                        className="h-full w-full overflow-hidden rounded-full bg-slate-700"
+                        className="h-full w-full rounded-full bg-slate-800"
                         style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
                       />
                       {f.svgPath && (
@@ -489,8 +534,8 @@ export function ProfileScreen() {
                         />
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
-                    <span className="text-[10px] text-amber-400 font-medium">{f.cost} ❤</span>
+                    <span className="text-[10px] font-medium text-slate-200 leading-tight text-center">{f.label}</span>
+                    <span className="text-[10px] font-bold text-amber-300">{f.cost} ❤</span>
                   </button>
                 )
               })}
@@ -498,7 +543,8 @@ export function ProfileScreen() {
 
             <Button
               variant="outline"
-              className="mt-5 w-full rounded-xl text-[15px]"
+              className="relative mt-6 w-full rounded-xl text-[15px] font-semibold border-2 transition-all hover:scale-[1.01] active:scale-[0.99]"
+              style={{ borderColor: "rgba(251, 191, 36, 0.4)", color: "#fef3c7" }}
               onClick={() => setShowFramesModal(false)}
             >
               Закрыть
