@@ -46,11 +46,21 @@ ssh -i deploy_key root@ВАШ_IP "echo OK"
 
 | Name             | Value                                      |
 |------------------|--------------------------------------------|
-| `SERVER_SSH_KEY` | Весь текст из файла **deploy_key** (приватный ключ), включая строки `-----BEGIN ... KEY-----` и `-----END ... KEY-----` |
+| `SERVER_SSH_KEY` | **Ключ в base64** (см. ниже) — так избегаем ошибки «Load key: error in libcrypto» из-за переносов строк в секрете. |
 | `SERVER_HOST`    | IP сервера или домен, например `79.174.77.47` или `spindate.lemnity.ru` |
 | `SERVER_USER`    | Имя пользователя SSH, например `root`     |
 
-Сохрани. Секреты в логах не показываются.
+**Как получить значение для SERVER_SSH_KEY (base64):**
+
+На своём компьютере в папке, где лежит `deploy_key`:
+
+- **macOS / Linux:**  
+  `base64 -w 0 deploy_key`  
+  (или просто `base64 < deploy_key` — скопируй одну длинную строку целиком)
+- **Windows (PowerShell):**  
+  `[Convert]::ToBase64String([IO.File]::ReadAllBytes("deploy_key"))`
+
+Скопируй вывод (одну строку без переносов) и вставь в значение секрета **SERVER_SSH_KEY**. Сохрани. Секреты в логах не показываются.
 
 ---
 
