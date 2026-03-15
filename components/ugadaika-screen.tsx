@@ -29,83 +29,89 @@ function shuffleWithSeed<T>(arr: T[], seed: number): T[] {
   return a
 }
 
-/** Четверо участников (2М + 2Ж): сначала боты со стола, при нехватке — из большого пула ботов для разнообразия */
+const SAME_SEX_COUNT = 4
+const OPPOSITE_SEX_COUNT = 4
+const PARTICIPANTS_TOTAL = SAME_SEX_COUNT + OPPOSITE_SEX_COUNT // 8
+
+/** 8 участников: 4 одного пола с пользователем (индексы 0–3, снизу), 4 противоположного (индексы 4–7, сверху). Сначала боты со стола, при нехватке — из пула ботов. */
 function getShuffledParticipants(
   currentUser: Player | null,
   players: Player[] | null,
   seed: number,
 ): Player[] {
   if (!currentUser) return []
-  const needMale = currentUser.gender === "male" ? 1 : 2
-  const needFemale = currentUser.gender === "female" ? 1 : 2
+  const needSame = SAME_SEX_COUNT   // 4 того же пола (включая пользователя)
+  const needOpposite = OPPOSITE_SEX_COUNT // 4 противоположного пола
   const others = (players ?? []).filter((p) => p.id !== currentUser.id)
   const shuffledOthers = shuffleWithSeed([...others], seed)
-  const bots = generateBots(80, currentUser.gender)
+  const bots = generateBots(120, currentUser.gender)
   const shuffledBots = shuffleWithSeed(bots, seed + 1000)
   const pool = [...shuffledOthers, ...shuffledBots]
-  const males = pool.filter((p) => p.gender === "male").slice(0, needMale)
-  const females = pool.filter((p) => p.gender === "female").slice(0, needFemale)
-  const fallback = generateBots(30, currentUser.gender).map((p, i) => ({ ...p, id: 20000 + seed + i }))
-  const males2 =
-    males.length < needMale
-      ? [...males, ...fallback.filter((p) => p.gender === "male").slice(0, needMale - males.length)]
-      : males
-  const females2 =
-    females.length < needFemale
-      ? [...females, ...fallback.filter((p) => p.gender === "female").slice(0, needFemale - females.length)]
-      : females
-  const list = [currentUser, ...males2, ...females2].slice(0, 4)
-  return shuffleWithSeed(list, seed + 1)
+  const sameSex = pool.filter((p) => p.gender === currentUser.gender)
+  const oppositeSex = pool.filter((p) => p.gender !== currentUser.gender)
+  const fallback = generateBots(40, currentUser.gender).map((p, i) => ({ ...p, id: 20000 + seed + i }))
+  const sameSexPool = [...sameSex, ...fallback.filter((p) => p.gender === currentUser.gender)]
+  const oppositeSexPool = [...oppositeSex, ...fallback.filter((p) => p.gender !== currentUser.gender)]
+  const sameFour: Player[] = [currentUser]
+  for (let i = 0; i < needSame - 1; i++) {
+    sameFour.push(sameSexPool[i] ?? fallback[i])
+  }
+  const oppositeFour: Player[] = oppositeSexPool.slice(0, needOpposite)
+  while (oppositeFour.length < needOpposite) {
+    oppositeFour.push(fallback.filter((p) => p.gender !== currentUser.gender)[oppositeFour.length] ?? fallback[0])
+  }
+  return [...shuffleWithSeed(sameFour, seed + 1), ...shuffleWithSeed(oppositeFour, seed + 2)]
 }
 
-/** Каждый участник независимо выбирает одного человека противоположного пола. Возвращает likes: кто кого выбрал.
- * myIndex — если передан, задаём «живое» распределение: с равной вероятностью 0, 1 или 2 человека противоположного пола выбирают тебя. */
+/** Индексы: 0–3 = того же пола, что пользователь (снизу), 4–7 = противоположного (сверху). Каждый выбирает одного из противоположной группы. */
+function getSameSexIndices(participants: Player[], currentUserIndex: number): number[] {
+  const userGender = participants[currentUserIndex]?.gender
+  return participants.map((p, i) => i).filter((i) => participants[i].gender === userGender)
+}
+function getOppositeSexIndices(participants: Player[], currentUserIndex: number): number[] {
+  const userGender = participants[currentUserIndex]?.gender
+  return participants.map((p, i) => i).filter((i) => participants[i].gender !== userGender)
+}
+
+/** 8 участников: 0–3 same, 4–7 opposite. Каждый выбирает одного противоположного пола. myIndex — индекс пользователя (в 0–3), задаём, сколько из 4 противоположных выбирают его (0–4). */
 function getRandomChoicesOppositeSex(
   participants: Player[],
   seed: number,
   myIndex?: number,
 ): Record<number, number> | null {
-  const maleIdx = participants.map((p, i) => i).filter((i) => participants[i].gender === "male")
-  const femaleIdx = participants.map((p, i) => i).filter((i) => participants[i].gender === "female")
-  if (maleIdx.length !== 2 || femaleIdx.length !== 2) return null
+  const sameIdx = participants.length === PARTICIPANTS_TOTAL && myIndex !== undefined && myIndex >= 0
+    ? getSameSexIndices(participants, myIndex)
+    : participants.map((p, i) => i).filter((i) => participants[i].gender === "male")
+  const oppositeIdx = participants.length === PARTICIPANTS_TOTAL && myIndex !== undefined && myIndex >= 0
+    ? getOppositeSexIndices(participants, myIndex)
+    : participants.map((p, i) => i).filter((i) => participants[i].gender === "female")
+  if (sameIdx.length !== OPPOSITE_SEX_COUNT || oppositeIdx.length !== OPPOSITE_SEX_COUNT) return null
   const likes: Record<number, number> = {}
   let s = seed
 
-  if (myIndex !== undefined && myIndex >= 0) {
-    const isUserMale = participants[myIndex]?.gender === "male"
-    const oppositeIdx = isUserMale ? femaleIdx : maleIdx
-    const sameIdx = isUserMale ? maleIdx : femaleIdx
-    const otherSame = sameIdx.find((i) => i !== myIndex)
-    if (otherSame !== undefined && oppositeIdx.length === 2) {
+  if (myIndex !== undefined && myIndex >= 0 && sameIdx.length === 4 && oppositeIdx.length === 4) {
+    const otherSame = sameIdx.filter((i) => i !== myIndex)
+    s = nextSeed(s)
+    const howManyChooseUser = Math.floor((s / 233280) * 5)
+    const countChooseUser = Math.min(howManyChooseUser, 4)
+    const chooserIndices = shuffleWithSeed([...oppositeIdx], s).slice(0, countChooseUser)
+    const otherOpposite = oppositeIdx.filter((i) => !chooserIndices.includes(i))
+    for (const i of chooserIndices) likes[i] = myIndex
+    for (const i of otherOpposite) {
       s = nextSeed(s)
-      const roll = (s / 233280) * 3
-      const howManyChooseUser = roll < 1 ? 0 : roll < 2 ? 1 : 2
-      if (howManyChooseUser === 0) {
-        likes[oppositeIdx[0]] = otherSame
-        likes[oppositeIdx[1]] = otherSame
-      } else if (howManyChooseUser === 1) {
-        s = nextSeed(s)
-        const whoChoosesUser = (s / 233280) < 0.5 ? 0 : 1
-        likes[oppositeIdx[whoChoosesUser]] = myIndex
-        likes[oppositeIdx[1 - whoChoosesUser]] = otherSame
-      } else {
-        likes[oppositeIdx[0]] = myIndex
-        likes[oppositeIdx[1]] = myIndex
-      }
+      likes[i] = otherSame[Math.floor((s / 233280) * otherSame.length)]
     }
   }
 
-  for (const m of maleIdx) {
-    if (likes[m] !== undefined) continue
+  for (const i of sameIdx) {
+    if (likes[i] !== undefined) continue
     s = nextSeed(s)
-    const pick = Math.floor((s / 233280) * 2)
-    likes[m] = femaleIdx[pick]
+    likes[i] = oppositeIdx[Math.floor((s / 233280) * oppositeIdx.length)]
   }
-  for (const f of femaleIdx) {
-    if (likes[f] !== undefined) continue
+  for (const i of oppositeIdx) {
+    if (likes[i] !== undefined) continue
     s = nextSeed(s)
-    const pick = Math.floor((s / 233280) * 2)
-    likes[f] = maleIdx[pick]
+    likes[i] = sameIdx[Math.floor((s / 233280) * sameIdx.length)]
   }
   return likes
 }
@@ -191,9 +197,25 @@ export function UgadaikaScreen() {
   const prevPlacesRef = useRef<Record<number, number>>({})
   /** Раунд, за который уже начислена победа (чтобы не считать дважды) */
   const lastCreditedWinRoundRef = useRef<number | null>(null)
+  /** Смещение барабана 777 (вниз = полоса вверх): после выбора игрока анимация останавливается на нём */
+  const [reelTranslateY, setReelTranslateY] = useState(0)
+  const REEL_ITEM_HEIGHT = 96
+  const REEL_CYCLES = 3
 
-  /** Участники текущего раунда (4 человека) */
+  /** Участники текущего раунда (8 человек: 0–3 same, 4–7 opposite) */
   const participantsInRound = gameParticipants ?? participants
+  const oppositeIndices = useMemo(
+    () => (participantsInRound.length === PARTICIPANTS_TOTAL && currentUser
+      ? getOppositeSexIndices(participantsInRound, participantsInRound.findIndex((p) => p.id === currentUser.id))
+      : [4, 5, 6, 7]),
+    [participantsInRound, currentUser],
+  )
+  const sameIndices = useMemo(
+    () => (participantsInRound.length === PARTICIPANTS_TOTAL && currentUser
+      ? getSameSexIndices(participantsInRound, participantsInRound.findIndex((p) => p.id === currentUser.id))
+      : [0, 1, 2, 3]),
+    [participantsInRound, currentUser],
+  )
   const currentUserIndex = useMemo(
     () => (currentUser ? participantsInRound.findIndex((p) => p.id === currentUser.id) : -1),
     [currentUser, participantsInRound],
@@ -231,22 +253,23 @@ export function UgadaikaScreen() {
   const startGame = useCallback(() => {
     const seed = Date.now()
     setGameShuffleSeed(seed)
-    const four = getShuffledParticipants(currentUser, players, seed)
+    const eight = getShuffledParticipants(currentUser, players, seed)
     setRoundNumber(1)
     setRoundsWonThisGame(0)
     setConsecutiveWins(0)
     setShowFiveWinsPopup(false)
     lastCreditedWinRoundRef.current = null
-    setGameParticipants(four)
+    setGameParticipants(eight)
     setPhase("playing")
     setSelectedIds([])
+    setReelTranslateY(0)
     setTimer(ROUND_SECONDS)
-    const myIdx = four.findIndex((p) => p.id === currentUser.id)
-    setActualLikes(getRandomChoicesOppositeSex(four, seed + 1, myIdx >= 0 ? myIdx : undefined) ?? {})
+    const myIdx = eight.findIndex((p) => p.id === currentUser.id)
+    setActualLikes(getRandomChoicesOppositeSex(eight, seed + 1, myIdx >= 0 ? myIdx : undefined) ?? {})
   }, [currentUser, players])
 
   const startNextRound = useCallback(() => {
-    if (!currentUser || !gameParticipants || gameParticipants.length !== 4 || !actualLikes) return
+    if (!currentUser || !gameParticipants || gameParticipants.length !== PARTICIPANTS_TOTAL || !actualLikes) return
     const likesForPair = effectiveLikes ?? actualLikes
     const pairs = getMutualPairs(likesForPair)
     const myPair = pairs.find(([a, b]) => a === currentUserIndex || b === currentUserIndex)
@@ -255,40 +278,33 @@ export function UgadaikaScreen() {
     const playerA = gameParticipants[stayA]
     const playerB = gameParticipants[stayB]
     if (!playerA || !playerB) return
-    let stayPlayers: Player[] = playerA.id === currentUser.id ? [playerA, playerB] : [playerB, playerA]
-    if (stayPlayers[0].id !== currentUser.id) return
+    const partner = playerA.id === currentUser.id ? playerB : playerA
     const currentRoundIds = new Set(gameParticipants.map((p) => p.id))
     const nextRoundNum = roundNumber + 1
-    const freshBots = generateBots(80, currentUser?.gender ?? "male").map((p, i) => ({
+    const freshBots = generateBots(120, currentUser.gender).map((p, i) => ({
       ...p,
       id: 50000 + nextRoundNum * 1000 + i,
     }))
-    const others = (players ?? []).filter((p) => p.id !== currentUser?.id && !currentRoundIds.has(p.id))
+    const others = (players ?? []).filter((p) => p.id !== currentUser?.id && p.id !== partner.id && !currentRoundIds.has(p.id))
     const shuffledOthers = shuffleWithSeed([...others], nextRoundNum * 1000 + 1)
     const shuffledBots = shuffleWithSeed(freshBots, nextRoundNum * 1000 + 2)
-    const shuffledPool = [...shuffledOthers, ...shuffledBots]
-    const males = shuffledPool.filter((p) => p.gender === "male")
-    const females = shuffledPool.filter((p) => p.gender === "female")
-    const oneMale = males[0]
-    const oneFemale = females[0]
-    const newPlayers: Player[] = []
-    if (oneMale) newPlayers.push(oneMale)
-    if (oneFemale) newPlayers.push(oneFemale)
-    if (newPlayers.length < 2) {
-      const extra = generateBots(10, currentUser?.gender ?? "male").map((p, i) => ({
-        ...p,
-        id: 60000 + nextRoundNum * 1000 + i,
-      }))
-      if (!oneMale) newPlayers.unshift(extra.filter((p) => p.gender === "male")[0] ?? extra[0])
-      if (!oneFemale) newPlayers.push(extra.filter((p) => p.gender === "female")[0] ?? extra[1] ?? extra[0])
-    }
-    const nextFour: Player[] = [...stayPlayers, ...newPlayers.slice(0, 2)]
-    let nextLikes = getRandomChoicesOppositeSex(nextFour, Date.now() + nextRoundNum + 100, 0)
+    const pool = [...shuffledOthers, ...shuffledBots]
+    const sameSexPool = pool.filter((p) => p.gender === currentUser.gender)
+    const oppositeSexPool = pool.filter((p) => p.gender !== currentUser.gender)
+    const needSame = SAME_SEX_COUNT - 1
+    const needOpposite = OPPOSITE_SEX_COUNT - 1
+    const newSame = sameSexPool.slice(0, needSame)
+    const newOpposite = oppositeSexPool.slice(0, needOpposite)
+    const fallback = generateBots(20, currentUser.gender).map((p, i) => ({ ...p, id: 60000 + nextRoundNum * 1000 + i }))
+    while (newSame.length < needSame) newSame.push(fallback.filter((p) => p.gender === currentUser.gender)[newSame.length] ?? fallback[0])
+    while (newOpposite.length < needOpposite) newOpposite.push(fallback.filter((p) => p.gender !== currentUser.gender)[newOpposite.length] ?? fallback[0])
+    const nextEight: Player[] = [currentUser, ...newSame.slice(0, 3), partner, ...newOpposite.slice(0, 3)]
+    const nextLikes = getRandomChoicesOppositeSex(nextEight, Date.now() + nextRoundNum + 100, 0)
     if (!nextLikes) return
-    nextLikes = { ...nextLikes, 0: 1, 1: 0 }
-    setGameParticipants(nextFour)
+    setGameParticipants(nextEight)
     setRoundNumber((r) => r + 1)
     setSelectedIds([])
+    setReelTranslateY(0)
     setTimer(ROUND_SECONDS)
     setActualLikes(nextLikes)
     setPhase("playing")
@@ -307,13 +323,26 @@ export function UgadaikaScreen() {
     }
   }, [phase, timer, selectedIds.length])
 
-  /** Один клик: угадать, кто выбрал тебя. Выбрать можно только противоположный пол. */
-  const handleAvatarClick = (index: number) => {
+  /** Клик по участнику противоположного пола — выбираешь его (твой выбор на раунд). */
+  const handleAvatarClick = useCallback((index: number) => {
     if (phase !== "playing" || selectedIds.length >= 1) return
     if (index === currentUserIndex) return
     if (participantsInRound[index].gender === participantsInRound[currentUserIndex].gender) return
     setSelectedIds([index])
-  }
+  }, [phase, selectedIds.length, currentUserIndex, participantsInRound])
+
+  /** После выбора игрока — анимация барабана 777: крутится вниз и останавливается на выбранном */
+  useEffect(() => {
+    if (phase !== "playing" || selectedIds.length !== 1 || oppositeIndices.length === 0) return
+    const chosenIdx = selectedIds[0]
+    if (chosenIdx === undefined) return
+    const targetReelIndex = oppositeIndices.indexOf(chosenIdx)
+    if (targetReelIndex < 0) return
+    const finalY = -(REEL_CYCLES * oppositeIndices.length + targetReelIndex) * REEL_ITEM_HEIGHT
+    setReelTranslateY(0)
+    const t = setTimeout(() => setReelTranslateY(finalY), 100)
+    return () => clearTimeout(t)
+  }, [phase, selectedIds, oppositeIndices])
 
   const guessedWhoChoseMe = selectedIds[0] ?? null
 
@@ -394,6 +423,7 @@ export function UgadaikaScreen() {
     const seed = Date.now() + roundNumber + Math.floor(Math.random() * 1e6)
     setActualLikes(getRandomChoicesOppositeSex(participantsInRound, seed, currentUserIndex >= 0 ? currentUserIndex : undefined) ?? {})
     setSelectedIds([])
+    setReelTranslateY(0)
     setTimer(ROUND_SECONDS)
     setPhase("playing")
   }, [participantsInRound, roundNumber, currentUserIndex])
@@ -468,10 +498,10 @@ export function UgadaikaScreen() {
     prevPlacesRef.current = next
   }, [fullLeaderboard])
 
-  /** Лоадер: ждём готовности данных (currentUser, 4 участника с валидными данными) и минимальное время — чтобы код успел подгрузиться и всё работало */
+  /** Лоадер: ждём готовности данных (currentUser, 8 участников) и минимальное время */
   const participantsReady =
     currentUser &&
-    participants.length === 4 &&
+    participants.length === PARTICIPANTS_TOTAL &&
     participants.every((p) => p != null && typeof p.id === "number" && (p.gender === "male" || p.gender === "female"))
   useEffect(() => {
     if (!participantsReady) return
@@ -657,13 +687,13 @@ export function UgadaikaScreen() {
               <h2 className="text-center text-xl font-bold text-slate-100">Как играть</h2>
               <div className="space-y-3 text-center">
                 <p className="text-[15px] leading-relaxed text-slate-300">
-                  Четверо участников (2 парня и 2 девушки). Каждый выбирает одного человека противоположного пола. Твоя задача — угадать, кто выбрал тебя.
+                  Участвуют 8 человек: сверху — 4 человека противоположного пола, снизу — 4 твоего (включая тебя).
                 </p>
                 <p className="text-[15px] leading-relaxed text-slate-300">
-                  Кто угадал свою пару — остаётся; кто не угадал — выходит. К оставшейся паре подключаются два новых участника.
+                  Сверху — 4 человека противоположного пола, снизу — 4 твоего. Нажми на того, кто тебе нравится: вы с ним образуете пару на раунд. Если вы выбрали друг друга — пара переходит в следующий раунд.
                 </p>
                 <p className="text-sm font-medium text-amber-200/90">
-                  Таймер 10 сек. Не в паре или не угадал — вылетаешь. Никто не выбрал тебя — ещё один шанс.
+                  Таймер 10 сек. Совпала пара — остаётесь, к вам добавляют 6 новых. Не совпала — вылетаешь.
                 </p>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2">
@@ -698,84 +728,193 @@ export function UgadaikaScreen() {
           </div>
 
           <div
-            className="relative w-full max-w-md rounded-[28px] border border-slate-700 bg-[rgba(2,6,23,0.55)] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
+            className="relative w-full max-w-2xl rounded-3xl border-2 border-slate-600/80 p-5 sm:p-6 overflow-hidden"
             style={{
-              backdropFilter: "blur(8px)",
+              background: "linear-gradient(165deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.88) 40%, rgba(15, 23, 42, 0.94) 100%)",
+              backdropFilter: "blur(12px)",
+              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.08), inset 0 1px 0 rgba(255,255,255,0.04), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 60px -20px rgba(139, 92, 246, 0.15)",
             }}
           >
-            <div className="pointer-events-none absolute inset-0 rounded-[28px] ring-1 ring-white/5" />
-            <div className="relative grid w-full grid-cols-2 gap-5 sm:gap-6">
-            {participantsInRound.map((p, index) => {
-              const isNotClickable =
-                phase === "playing" &&
-                (index === currentUserIndex || participantsInRound[index].gender === participantsInRound[currentUserIndex].gender)
-              return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleAvatarClick(index)}
-                disabled={phase !== "playing" || selectedIds.length >= 1 || isNotClickable}
-                title={isNotClickable ? "Выбирать можно только того, кто мог выбрать тебя (противоположный пол)" : undefined}
-                className={`relative flex flex-col items-center gap-1 rounded-2xl border-2 p-2 transition-all ${
-                  isNotClickable
-                    ? "cursor-not-allowed opacity-50 border-slate-600 bg-slate-800/80"
-                    : selectedIds.includes(index)
-                      ? "border-amber-400 bg-amber-500/20 ring-2 ring-amber-400/50"
-                      : phase === "reveal" && whoChoseMe.length > 0
-                        ? whoChoseMe.includes(index)
-                          ? "border-emerald-500 bg-emerald-500/20"
-                          : "border-slate-600 bg-slate-800/80"
-                        : "border-slate-600 bg-slate-800/80 hover:border-slate-500"
-                }`}
-              >
-                <div className="h-28 w-28 sm:h-32 sm:w-32 overflow-hidden rounded-full border-2 border-slate-600 shadow-[0_10px_25px_rgba(0,0,0,0.55)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.avatar} alt="" className="h-full w-full object-cover" />
+            <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-white/5" />
+            <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
+            {/* Верхний ряд: 4 противоположного пола — нажатие выбирает участника */}
+            <div className="relative flex justify-center gap-3 sm:gap-4 mb-4">
+              {oppositeIndices.map((idx) => {
+                const p = participantsInRound[idx]
+                if (!p) return null
+                const isChosen = selectedIds[0] === idx
+                const choseMe = phase === "reveal" && whoChoseMe.includes(idx)
+                const canClick = phase === "playing" && selectedIds.length < 1
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleAvatarClick(idx)}
+                    disabled={!canClick}
+                    className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-2 transition-all duration-300 text-left ${
+                      isChosen
+                        ? "border-amber-400 bg-amber-500/25 ring-2 ring-amber-400 shadow-[0_0_24px_rgba(251,191,36,0.35)] scale-105"
+                        : ""
+                    } ${choseMe ? "border-emerald-500/70 bg-emerald-500/15" : ""} ${
+                      !isChosen && !choseMe
+                        ? "border-slate-600/90 bg-slate-800/50 hover:border-slate-500 hover:bg-slate-700/50"
+                        : ""
+                    } ${canClick ? "cursor-pointer" : "cursor-default"}`}
+                  >
+                    <div
+                      className={`h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-full border-2 shadow-lg transition-all ${
+                        isChosen ? "border-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.5)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.avatar} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <span className={`text-[10px] font-medium truncate max-w-[4rem] ${isChosen ? "text-amber-300 font-bold" : "text-slate-200"}`}>
+                      {p.name}
+                    </span>
+                    {isChosen && (
+                      <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wide">Твой выбор</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Центр: две ячейки в формате джекпота — слева пользователь, справа барабан */}
+            <div className="flex flex-col items-center my-4">
+              <div className="flex items-stretch justify-center gap-4">
+                <div className="ugadaika-jackpot-left flex flex-col items-center justify-center w-32 h-40 sm:w-36 sm:h-44 shrink-0 overflow-hidden relative">
+                  <span className="ugadaika-jackpot-dot text-amber-400 top-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-amber-400 top-1.5 right-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-amber-400 bottom-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-amber-400 bottom-1.5 right-1.5" aria-hidden />
+                  <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full border-2 border-amber-400/80 shadow-[0_0_16px_rgba(251,191,36,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] bg-slate-700 ring-2 ring-amber-500/40">
+                    {currentUser?.avatar && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={currentUser.avatar} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <span className="text-xs font-black text-amber-300 mt-2 tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.3)]">Ты</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-200 truncate max-w-full">
-                  {p.id === currentUser.id ? `${p.name} (вы)` : p.name}
-                </span>
-                {phase === "playing" && selectedIds.includes(index) && (
-                  <span className="text-[10px] font-medium text-amber-400">твой выбор</span>
-                )}
-                {phase === "reveal" && actualLikes && actualLikes[index] !== undefined && (
-                  <p className="text-sm font-medium text-rose-300 flex items-center gap-1">
-                    <Heart className="h-4 w-4 fill-current shrink-0" />
-                    → {participantsInRound[actualLikes[index]].name}
-                  </p>
-                )}
-              </button>
-              );
-            })}
+                <div className="ugadaika-jackpot-right flex flex-col items-center w-32 h-40 sm:w-36 sm:h-44 shrink-0 overflow-hidden relative pt-2 pb-8">
+                  <span className="ugadaika-jackpot-dot text-rose-400 top-1.5 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-rose-400 top-1.5 right-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-rose-400 bottom-8 left-1.5" aria-hidden />
+                  <span className="ugadaika-jackpot-dot text-rose-400 bottom-8 right-1.5" aria-hidden />
+                  <div
+                    className="w-full overflow-hidden rounded-xl flex justify-center mx-0.5 shrink-0"
+                    style={{ height: REEL_ITEM_HEIGHT }}
+                  >
+                    <div
+                      className={`flex flex-col items-center ugadaika-reel-strip ${selectedIds.length === 0 ? "ugadaika-reel-idle" : ""}`}
+                      style={{
+                        height: REEL_ITEM_HEIGHT * 16,
+                        ...(selectedIds.length === 1
+                          ? {
+                              transform: `translate3d(0, ${reelTranslateY}px, 0)`,
+                              transition: "transform 2.8s cubic-bezier(0.15, 0.85, 0.35, 1)",
+                              willChange: "transform",
+                            }
+                          : { willChange: "transform" }),
+                      }}
+                    >
+                      {Array.from({ length: 16 }, (_, i) => {
+                        const idx = oppositeIndices[i % oppositeIndices.length]
+                        const p = participantsInRound[idx]
+                        if (!p) return null
+                        return (
+                          <div
+                            key={`${p.id}-${i}`}
+                            className="flex flex-col items-center justify-center shrink-0"
+                            style={{ height: REEL_ITEM_HEIGHT }}
+                          >
+                            <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-rose-400/60 shadow-[0_0_12px_rgba(244,63,94,0.25)] bg-slate-700 ring-2 ring-rose-500/30">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={p.avatar} alt="" className="h-full w-full object-cover" />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center flex-shrink-0">
+                    {selectedIds[0] !== undefined && participantsInRound[selectedIds[0]] ? (
+                      <span className="text-[10px] font-bold text-rose-200 truncate text-center px-0.5 drop-shadow-[0_0_4px_rgba(0,0,0,0.6)]">
+                        {participantsInRound[selectedIds[0]].name}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 text-[10px] font-medium">?</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {phase === "playing" && selectedIds.length === 0 && (
+              <p className="text-center text-sm text-slate-400 my-3 px-2" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
+                Нажми на участника противоположного пола — выбери пару
+              </p>
+            )}
+
+            {/* Нижний ряд: 4 того же пола (индексы 0–3), пользователь среди них */}
+            <div className="relative flex justify-center gap-3 sm:gap-4 mt-1">
+              {sameIndices.map((idx) => {
+                const p = participantsInRound[idx]
+                if (!p) return null
+                const isYou = p.id === currentUser?.id
+                return (
+                  <div
+                    key={p.id}
+                    className={`flex flex-col items-center gap-1 rounded-2xl border-2 p-2 ${
+                      isYou ? "border-amber-500/80 bg-amber-500/20 shadow-[0_0_16px_rgba(251,191,36,0.2)]" : "border-slate-600/90 bg-slate-800/50"
+                    }`}
+                  >
+                    <div
+                      className={`h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-full border-2 shadow-lg ${
+                        isYou ? "border-amber-500/70 shadow-[0_0_12px_rgba(251,191,36,0.25)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.avatar} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <span className={`text-[10px] font-medium truncate max-w-[4rem] ${isYou ? "text-amber-200" : "text-slate-200"}`}>
+                      {isYou ? "Вы" : p.name}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             {phase === "playing" && selectedIds.length === 1 && guessedWhoChoseMe !== null && (
-              <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border-2 border-amber-400/70 bg-amber-500/15 px-4 py-2">
-                <span className="text-sm font-semibold text-amber-200">Твой выбор:</span>
-                <span className="text-sm font-medium text-amber-200">
+              <div className="mt-4 flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-400/60 bg-gradient-to-r from-amber-500/15 to-amber-500/10 px-5 py-2.5 shadow-[0_0_20px_rgba(251,191,36,0.15)]">
+                <span className="text-sm font-semibold text-amber-200">На кого остановилось:</span>
+                <span className="text-sm font-bold text-amber-100">
                   {participantsInRound[guessedWhoChoseMe].name}
                 </span>
               </div>
             )}
 
             {phase === "reveal" && guessedWhoChoseMe !== null && (
-              <div className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/60 px-4 py-2">
-                <span className="text-sm text-slate-400">Твой выбор:</span>
-                <span className="text-sm font-medium text-slate-200">{participantsInRound[guessedWhoChoseMe].name}</span>
+              <div className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-slate-600 bg-slate-800/70 px-5 py-2.5 shadow-inner">
+                <span className="text-sm text-slate-400">Твоя пара:</span>
+                <span className="text-sm font-semibold text-slate-200">{participantsInRound[guessedWhoChoseMe].name}</span>
               </div>
             )}
 
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2">
+            <div
+              className="mt-4 flex items-center justify-between rounded-2xl border border-slate-600/80 bg-gradient-to-r from-slate-800/80 to-slate-900/80 px-4 py-3"
+              style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)" }}
+            >
               <span className="text-[12px] text-slate-300">
                 {phase === "playing"
-                  ? `Угадай, кто выбрал тебя: ${selectedIds.length === 1 ? "выбрано" : "выбери одного"}`
+                  ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на участника сверху.")
                   : whoChoseMe.length === 0
                     ? "Никто не выбрал тебя. Ещё один шанс!"
                     : !amIInMutualPair
-                      ? "Ты не в паре — выходишь из игры."
+                      ? "Пара не совпала — выходишь из игры."
                       : guessedCorrectly
-                        ? "Верно! Ты в паре и угадал — остаёшься."
-                        : "Ты не угадал пару — вылетаешь из игры."}
+                        ? "Пара совпала! Вы остаётесь в игре."
+                        : "Пара не совпала — вылетаешь из игры."}
               </span>
               <span className="text-[12px] font-semibold text-slate-200">
                 Рейтинг: {totalRoundsWon}
@@ -783,23 +922,27 @@ export function UgadaikaScreen() {
             </div>
           </div>
 
-          {phase === "playing" && (
-            <p className="text-center text-sm text-slate-400">
-              Кто из участников противоположного пола выбрал тебя? Выбери одного.
-            </p>
-          )}
-
           {phase === "reveal" && (
             <div className="ugadaika-result-popup-backdrop" aria-modal="true" role="dialog">
               <div className="ugadaika-result-popup-box flex flex-col items-center gap-4">
                 {whoChoseMe.length === 0 ? (
-                  <div className="w-full rounded-2xl border-2 border-slate-500 bg-slate-800/95 p-6 shadow-2xl">
-                    <div className="flex flex-col items-center gap-3">
-                      <p className="text-sm font-medium text-amber-200/90">Никто не выбрал тебя</p>
-                      <div className="flex flex-wrap justify-center gap-2">
+                  <div
+                    className="w-full max-w-md rounded-3xl border-2 border-amber-500/40 bg-gradient-to-b from-slate-800/98 via-slate-900/98 to-slate-800/98 p-6 sm:p-8 shadow-2xl"
+                    style={{
+                      boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(251, 191, 36, 0.12)",
+                    }}
+                  >
+                    <div className="flex flex-col items-center gap-4">
+                      <p
+                        className="text-base sm:text-lg font-bold text-center text-amber-100 drop-shadow-[0_0_12px_rgba(251,191,36,0.25)]"
+                        style={{ textShadow: "0 0 20px rgba(251, 191, 36, 0.2)" }}
+                      >
+                        Никто не выбрал тебя
+                      </p>
+                      <div className="flex flex-wrap justify-center gap-4">
                         {participantsInRound.filter((p) => p.id !== currentUser?.id && p.gender !== currentUser?.gender).map((p) => (
-                          <div key={p.id} className="flex flex-col items-center gap-0.5">
-                            <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-amber-500/50 bg-slate-700">
+                          <div key={p.id} className="flex flex-col items-center gap-1.5">
+                            <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-amber-500/60 bg-slate-700 ring-2 ring-amber-500/20 shadow-lg shadow-amber-500/10">
                               {p.avatar ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={p.avatar} alt="" className="h-full w-full object-cover" />
@@ -807,34 +950,48 @@ export function UgadaikaScreen() {
                                 <div className="flex h-full w-full items-center justify-center text-slate-400 text-sm">{p.name?.slice(0, 1) ?? "?"}</div>
                               )}
                             </div>
-                            <span className="text-[10px] text-slate-400 truncate max-w-[3rem]">{p.name}</span>
+                            <span className="text-[10px] text-slate-300 truncate max-w-[4rem] font-medium">{p.name}</span>
                           </div>
                         ))}
                       </div>
                     </div>
-                    <p className="text-lg font-semibold text-slate-200 mt-4">Ещё один шанс!</p>
-                    <p className="mt-2 text-slate-400">Выиграно туров в этой игре: {roundsWonThisGame}</p>
-                    <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                    <div className="mt-6 pt-5 border-t border-amber-500/20">
+                      <p className="text-xl font-black text-center text-amber-200 tracking-tight" style={{ textShadow: "0 0 16px rgba(251, 191, 36, 0.3)" }}>
+                        Ещё один шанс!
+                      </p>
+                      <p className="mt-2 text-center text-sm text-slate-400">Выиграно туров в этой игре: <span className="font-semibold text-slate-300">{roundsWonThisGame}</span></p>
+                    </div>
+                    <div className="mt-6 flex flex-col sm:flex-row flex-wrap items-stretch justify-center gap-3">
                       <button
                         type="button"
                         onClick={retryRound}
-                        className="rounded-xl bg-rose-600 px-6 py-3 font-bold text-white hover:bg-rose-500"
+                        className="rounded-2xl px-8 py-3.5 font-bold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        style={{
+                          background: "linear-gradient(180deg, #f43f5e 0%, #be123c 50%, #9f1239 100%)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 20px rgba(244, 63, 94, 0.4)",
+                        }}
                       >
                         Попробовать снова
                       </button>
                       <button
                         type="button"
                         onClick={backToGame}
-                        className="rounded-xl border border-slate-500 px-6 py-3 text-slate-300 hover:bg-slate-700"
+                        className="rounded-2xl border-2 border-slate-500/80 bg-slate-700/80 px-6 py-3 font-semibold text-slate-200 hover:bg-slate-600/80 hover:border-slate-400/60 transition-all"
                       >
                         К столу
                       </button>
                     </div>
                   </div>
                 ) : !amIInMutualPair ? (
-                  <div className="ugadaika-result-lose w-full">
-                    <div className="ugadaika-result-glow rounded-2xl border-2 border-amber-500/50 bg-slate-800/95 p-6 shadow-2xl">
-                      <div className="flex flex-col items-center gap-3">
+                  <div className="ugadaika-result-lose w-full max-w-md">
+                    <div
+                      className="rounded-3xl border-2 border-amber-500/40 p-6 sm:p-8 overflow-hidden"
+                      style={{
+                        background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
+                        boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.12), inset 0 1px 0 rgba(255,255,255,0.04), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(251, 191, 36, 0.08)",
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-4">
                         {guessedWhoChoseMe !== null && actualLikes && (() => {
                           const chosenByMe = participantsInRound[guessedWhoChoseMe]
                           const chosenByThem = actualLikes[guessedWhoChoseMe]
@@ -843,31 +1000,39 @@ export function UgadaikaScreen() {
                             ? (chosenByThem === currentUserIndex ? "тебя" : (participantsInRound[chosenByThem]?.name ?? "?"))
                             : "другого"
                           return (
-                            <p className="text-base font-semibold text-amber-300">
+                            <p className="text-lg font-bold text-center text-amber-100" style={{ textShadow: "0 0 20px rgba(251, 191, 36, 0.2)" }}>
                               Увы — {nameA} выбрал{chosenByMe?.gender === "female" ? "а" : ""} {nameB}
                             </p>
                           )
                         })()}
-                        <div className="flex flex-wrap justify-center gap-3">
+                        <div className="flex flex-wrap justify-center gap-5">
                           {whoChoseMe.length > 0
                             ? whoChoseMe.map((i) => {
                                 const p = participantsInRound[i]
                                 return (
-                                  <div key={p.id} className="flex flex-col items-center gap-0.5">
-                                    <div className="ring-4 ring-red-500/90 rounded-full p-0.5 bg-slate-800 shadow-[0_0_12px_rgba(239,68,68,0.5)]">
-                                      {p.avatar ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={p.avatar} alt="" className="h-16 w-16 rounded-full object-cover" />
-                                      ) : (
-                                        <div className="h-16 w-16 rounded-full bg-slate-600 flex items-center justify-center text-slate-400 text-lg">{p.name?.slice(0, 1) ?? "?"}</div>
-                                      )}
+                                  <div key={p.id} className="flex flex-col items-center gap-2">
+                                    <div
+                                      className="rounded-full p-1 shadow-lg"
+                                      style={{
+                                        background: "linear-gradient(135deg, #f87171 0%, #dc2626 50%, #b91c1c 100%)",
+                                        boxShadow: "0 0 0 3px rgba(248, 113, 113, 0.4), 0 0 24px rgba(239, 68, 68, 0.3)",
+                                      }}
+                                    >
+                                      <div className="rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
+                                        {p.avatar ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={p.avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
+                                        ) : (
+                                          <div className="h-20 w-20 rounded-full flex items-center justify-center text-slate-400 text-lg">{p.name?.slice(0, 1) ?? "?"}</div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <span className="text-xs text-slate-300">{p.name}</span>
+                                    <span className="text-sm font-medium text-slate-200">{p.name}</span>
                                   </div>
                                 )
                               })
                             : participantsInRound.filter((p) => p.id !== currentUser?.id && p.gender !== currentUser?.gender).map((p) => (
-                                <div key={p.id} className="flex flex-col items-center gap-0.5">
+                                <div key={p.id} className="flex flex-col items-center gap-1">
                                   <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-slate-500 bg-slate-700">
                                     {p.avatar ? (
                                       // eslint-disable-next-line @next/next/no-img-element
@@ -880,7 +1045,7 @@ export function UgadaikaScreen() {
                                 </div>
                               ))}
                         </div>
-                        <p className="text-sm font-medium text-slate-300 mt-1">
+                        <p className="text-sm font-medium text-slate-300 text-center">
                           {whoChoseMe.length > 0 ? (
                             <>Тебя выбрал{whoChoseMe.length === 1 ? "а" : "и"}: {whoChoseMe.map((i) => participantsInRound[i].name).join(" и ")}</>
                           ) : (
@@ -888,53 +1053,84 @@ export function UgadaikaScreen() {
                           )}
                         </p>
                       </div>
-                      <p className="text-lg font-semibold text-amber-400 mt-4">Ты не в взаимной паре — выходишь из игры.</p>
-                      <p className="mt-1 text-center text-sm text-slate-400">Образовавшаяся пара остаётся, к ним подключаются другие игроки.</p>
-                      <p className="mt-2 text-slate-400">Выиграно туров в этой игре: {roundsWonThisGame}</p>
-                      {countdownToGameover !== null && countdownToGameover > 0 && (
-                        <p className="mt-3 text-center text-sm font-medium text-amber-200">
-                          Выход с поля через {countdownToGameover} сек
+                      <div className="mt-6 pt-5 border-t border-amber-500/20">
+                        <p className="text-xl font-black text-center text-amber-300 tracking-tight" style={{ textShadow: "0 0 16px rgba(251, 191, 36, 0.25)" }}>
+                          Ты не в взаимной паре — выходишь из игры.
                         </p>
+                        <p className="mt-3 text-center text-sm text-slate-400 leading-relaxed">Образовавшаяся пара остаётся, к ним подключаются другие игроки.</p>
+                        <p className="mt-3 text-center text-slate-400">Выиграно туров в этой игре: <span className="font-semibold text-slate-300">{roundsWonThisGame}</span></p>
+                      </div>
+                      {countdownToGameover !== null && countdownToGameover > 0 && (
+                        <div className="mt-5 flex justify-center">
+                          <span className="rounded-full bg-amber-500/20 border border-amber-500/50 px-5 py-2 text-sm font-bold text-amber-200">
+                            Выход с поля через {countdownToGameover} сек
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
                 ) : guessedCorrectly ? (
-                  <div className="ugadaika-result-win w-full">
-                    <div className="ugadaika-result-glow rounded-2xl border-2 border-emerald-500/50 bg-slate-800/95 p-6 shadow-2xl">
-                      <div className="flex flex-col items-center gap-3">
+                  <div className="ugadaika-result-win w-full max-w-md">
+                    <div
+                      className="rounded-3xl border-2 border-emerald-500/40 p-6 sm:p-8 overflow-hidden"
+                      style={{
+                        background: "linear-gradient(165deg, rgba(6, 78, 59, 0.25) 0%, rgba(15, 23, 42, 0.98) 30%, rgba(30, 41, 59, 0.98) 70%, rgba(6, 78, 59, 0.2) 100%)",
+                        boxShadow: "0 0 0 1px rgba(52, 211, 153, 0.15), inset 0 1px 0 rgba(255,255,255,0.06), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(52, 211, 153, 0.12)",
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-4">
                         {guessedWhoChoseMe !== null && (() => {
                           const shownPartner = participantsInRound[guessedWhoChoseMe]
                           return shownPartner ? (
                             <>
-                              <p className="text-sm font-medium text-emerald-200">Ты в паре с: {shownPartner.name}</p>
-                              <div className="ring-4 ring-emerald-500/90 rounded-full p-0.5 bg-slate-800 shadow-[0_0_12px_rgba(34,197,94,0.5)]">
-                                {shownPartner.avatar ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={shownPartner.avatar} alt="" className="h-16 w-16 rounded-full object-cover" />
-                                ) : (
-                                  <div className="h-16 w-16 rounded-full bg-slate-600 flex items-center justify-center text-slate-400 text-lg">{shownPartner.name?.slice(0, 1) ?? "?"}</div>
-                                )}
+                              <p className="text-base font-bold text-emerald-100" style={{ textShadow: "0 0 16px rgba(52, 211, 153, 0.2)" }}>
+                                Ты в паре с: {shownPartner.name}
+                              </p>
+                              <div
+                                className="rounded-full p-1.5 shadow-lg"
+                                style={{
+                                  background: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
+                                  boxShadow: "0 0 0 3px rgba(52, 211, 153, 0.35), 0 0 28px rgba(34, 197, 94, 0.35)",
+                                }}
+                              >
+                                <div className="rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
+                                  {shownPartner.avatar ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={shownPartner.avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
+                                  ) : (
+                                    <div className="h-20 w-20 rounded-full flex items-center justify-center text-slate-400 text-lg">{shownPartner.name?.slice(0, 1) ?? "?"}</div>
+                                  )}
+                                </div>
                               </div>
                             </>
                           ) : (
-                            <p className="text-sm font-medium text-emerald-200">Ты угадал пару!</p>
+                            <p className="text-base font-bold text-emerald-200">Ты угадал пару!</p>
                           )
                         })()}
-                        {guessedWhoChoseMe === null && <p className="text-sm font-medium text-emerald-200">Ты угадал пару!</p>}
+                        {guessedWhoChoseMe === null && <p className="text-base font-bold text-emerald-200">Ты угадал пару!</p>}
                       </div>
-                      <p className="text-lg font-semibold text-emerald-300 mt-4">Верно! Остаёшься в игре.</p>
-                      <p className="mt-2 text-sm font-medium text-emerald-200/90">+10 сердец</p>
-                      {totalRoundsWon > 0 && totalRoundsWon % 10 === 0 && (
-                        <p className="text-sm font-medium text-rose-200/90">+1 роза за 10 побед!</p>
-                      )}
-                      <p className="mt-1 text-center text-sm text-slate-400">Вторая пара выходит. К вам с партнёром подключаются два новых участника.</p>
-                      <p className="mt-2 text-slate-400">Выиграно туров в этой игре: {roundsWonThisGame + 1}</p>
-                      {countdownToNextRound !== null && countdownToNextRound > 0 && (
-                        <p className="mt-3 text-center text-sm font-medium text-emerald-200">
-                          Следующий раунд через {countdownToNextRound} сек
+                      <div className="mt-6 pt-5 border-t border-emerald-500/20">
+                        <p className="text-xl font-black text-center text-emerald-300 tracking-tight" style={{ textShadow: "0 0 20px rgba(52, 211, 153, 0.3)" }}>
+                          Верно! Остаёшься в игре.
                         </p>
+                        <p className="mt-3 flex items-center justify-center gap-2 text-sm font-semibold text-rose-200">
+                          <Heart className="h-5 w-5 text-rose-400 fill-current shrink-0" />
+                          +10 сердец
+                        </p>
+                        {totalRoundsWon > 0 && totalRoundsWon % 10 === 0 && (
+                          <p className="mt-1 text-sm font-medium text-rose-200/90">+1 роза за 10 побед!</p>
+                        )}
+                        <p className="mt-3 text-center text-sm text-slate-400 leading-relaxed">Вторая пара выходит. К вам с партнёром подключаются два новых участника.</p>
+                        <p className="mt-3 text-center text-slate-400">Выиграно туров в этой игре: <span className="font-semibold text-slate-300">{roundsWonThisGame + 1}</span></p>
+                      </div>
+                      {countdownToNextRound !== null && countdownToNextRound > 0 && (
+                        <div className="mt-5 flex justify-center">
+                          <span className="rounded-full bg-emerald-500/20 border border-emerald-500/50 px-5 py-2 text-sm font-bold text-emerald-200">
+                            Следующий раунд через {countdownToNextRound} сек
+                          </span>
+                        </div>
                       )}
-                      <p className="mt-4 text-center text-sm font-semibold text-emerald-300/90">
+                      <p className="mt-4 text-center text-sm font-semibold text-emerald-200/90">
                         Вы вместе идёте дальше в игру.
                       </p>
                     </div>
@@ -1018,22 +1214,49 @@ export function UgadaikaScreen() {
       )}
 
       {phase === "gameover" && (
-        <div className="flex flex-1 w-full min-h-full flex-col items-center justify-center gap-6 px-6 py-8">
-          <h2 className="text-xl font-bold text-amber-400 text-center">Игра окончена</h2>
-          <p className="text-center text-slate-300">
-            До вылета вы выиграли туров: {roundsWonThisGame}
-          </p>
-          <p className="text-center text-sm text-slate-500">Всего в рейтинге: {totalRoundsWon} туров</p>
-          <button
-            type="button"
-            onClick={startGame}
-            className="rounded-xl bg-rose-600 px-8 py-4 text-lg font-bold text-white disabled:opacity-40 hover:bg-rose-500"
+        <div className="flex flex-1 w-full min-h-full flex-col items-center justify-center px-6 py-8">
+          <div
+            className="w-full max-w-md rounded-3xl border-2 border-amber-500/40 p-8 shadow-2xl"
+            style={{
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)",
+              boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.1), inset 0 1px 0 rgba(255,255,255,0.04), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(251, 191, 36, 0.1)",
+            }}
           >
-            Играть снова
-          </button>
-          <button type="button" onClick={backToGame} className="rounded-xl border border-slate-500 px-6 py-2 text-slate-300 hover:bg-slate-700">
-            К столу
-          </button>
+            <h2
+              className="text-2xl sm:text-3xl font-black text-center text-amber-300 mb-2"
+              style={{ textShadow: "0 0 24px rgba(251, 191, 36, 0.35)" }}
+            >
+              Игра окончена
+            </h2>
+            <div className="mt-6 space-y-2">
+              <p className="text-center text-base font-semibold text-slate-200">
+                До вылета вы выиграли туров: <span className="text-amber-200 font-bold">{roundsWonThisGame}</span>
+              </p>
+              <p className="text-center text-sm text-slate-400">
+                Всего в рейтинге: <span className="text-slate-200 font-semibold">{totalRoundsWon}</span> туров
+              </p>
+            </div>
+            <div className="mt-8 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={startGame}
+                className="w-full rounded-2xl px-8 py-4 text-lg font-bold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40"
+                style={{
+                  background: "linear-gradient(180deg, #f43f5e 0%, #be123c 50%, #9f1239 100%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 20px rgba(244, 63, 94, 0.4)",
+                }}
+              >
+                Играть снова
+              </button>
+              <button
+                type="button"
+                onClick={backToGame}
+                className="w-full rounded-2xl border-2 border-slate-500 bg-slate-700/90 px-6 py-3.5 text-base font-bold text-slate-100 hover:bg-slate-600 hover:border-slate-400 transition-all"
+              >
+                К столу
+              </button>
+            </div>
+          </div>
         </div>
       )}
         </main>
