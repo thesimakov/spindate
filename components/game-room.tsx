@@ -2511,7 +2511,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto pt-2 pb-20 md:pb-[220px] px-1 sm:px-2"
+        className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto pt-2 pb-20 md:pb-[220px] lg:pb-2 px-1 sm:px-2"
         ref={boardRef}
       >
         {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}
@@ -2595,16 +2595,16 @@ export function GameRoom() {
             <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
           </div>
         )}
-        {/* Прямоугольный стол: на мобильном резиновый, заполняет доступное место по ширине и высоте */}
+        {/* Прямоугольный стол: на мобильном резиновый; на планшете ограничена высота */}
         <div
-          className="relative mt-2 flex items-center justify-center rounded-2xl sm:rounded-[32px] border-2 sm:border-[3px] w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] min-h-0 shrink-0"
+          className="relative mt-2 flex items-center justify-center rounded-2xl sm:rounded-[32px] border-2 sm:border-[3px] w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0"
           style={{
             aspectRatio: isMobile ? "1 / 1" : "4 / 3",
             ...(isMobile
               ? {
-                  width: "min(94vw, calc(100vh - 180px))",
-                  height: "min(94vw, calc(100vh - 180px))",
-                  maxHeight: "calc(100vh - 180px)",
+                  width: "min(94vw, calc(100vh - 260px))",
+                  height: "min(94vw, calc(100vh - 260px))",
+                  maxHeight: "calc(100vh - 260px)",
                 }
               : {}),
             borderColor: "#334155",
@@ -2820,8 +2820,8 @@ export function GameRoom() {
           )}
         </div>
 
-        {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) ---- */}
-        <div className="mt-2 mb-1 flex min-h-[80px] w-full flex-col items-center justify-center gap-2 px-4">
+        {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT); на ПК — как было ---- */}
+        <div className="mt-1 md:mt-2 mb-1 flex min-h-[72px] md:min-h-[80px] w-full flex-col items-center justify-center gap-2 px-4 shrink-0">
           {/* Who's turn label */}
           {!isSpinning && !showResult && countdown === null && currentTurnPlayer && (
             <div
