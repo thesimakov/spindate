@@ -1,6 +1,10 @@
-"use client"
+ "use client"
 
-import { DevScreen } from "@/components/dev-screen"
+import dynamic from "next/dynamic"
+
+const DevScreen = dynamic(() => import("@/components/dev-screen").then((m) => m.DevScreen), {
+  ssr: false,
+})
 
 export default function AdminLemnityPage() {
   return (

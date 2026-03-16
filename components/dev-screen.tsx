@@ -55,6 +55,12 @@ export function DevScreen() {
     setAuthError("")
   }
 
+  useEffect(() => {
+    if (authenticated) {
+      refresh()
+    }
+  }, [authenticated])
+
   if (!authenticated) {
     return (
       <div
@@ -110,10 +116,6 @@ export function DevScreen() {
     setBlockedIds(getBlockedUserIds())
     setBannedList(getBannedList())
   }
-
-  useEffect(() => {
-    refresh()
-  }, [])
 
   const now = Date.now()
   const bannedMap = new Map(bannedList.filter((b) => b.until > now).map((b) => [b.userId, b.until]))
