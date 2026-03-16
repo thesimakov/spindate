@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Heart, Sparkles } from "lucide-react"
+import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
@@ -19,7 +19,6 @@ export function RegistrationScreen() {
   const [login, setLogin] = useState("")
   const [password, setPassword] = useState("")
   const [displayName, setDisplayName] = useState("")
-  const [isRegistered, setIsRegistered] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
@@ -143,7 +142,12 @@ export function RegistrationScreen() {
         body: JSON.stringify({ username: login.trim(), password }),
         credentials: "include",
       })
-      const data = res.ok ? await res.json() : null
+      let data: any = null
+      try {
+        data = await res.json()
+      } catch {
+        // ignore JSON parse error
+      }
       if (!res.ok) {
         setError((data?.error as string) || "Неверный логин или пароль")
         return
@@ -196,7 +200,12 @@ export function RegistrationScreen() {
         }),
         credentials: "include",
       })
-      const data = res.ok ? await res.json() : null
+      let data: any = null
+      try {
+        data = await res.json()
+      } catch {
+        // ignore JSON parse error
+      }
       if (res.status === 409) {
         setError("Логин уже занят. Выберите другой логин.")
         return
