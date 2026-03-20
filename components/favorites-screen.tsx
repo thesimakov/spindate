@@ -50,7 +50,7 @@ export function FavoritesScreen() {
                 className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-secondary/50"
               >
                 <div className="h-12 w-12 overflow-hidden rounded-full ring-2 ring-primary/20">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img
                     src={player.avatar}
                     alt={player.name}

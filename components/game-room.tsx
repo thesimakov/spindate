@@ -10,7 +10,6 @@ import {
   X,
   Coins,
   Send,
-  HelpCircle,
   Zap,
   ArrowRight,
   Sparkles,
@@ -31,7 +30,7 @@ import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, gener
 import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
-import { StringLights, Candle, TableDecorations } from "@/components/decorations"
+import { TableDecorations } from "@/components/decorations"
 import { RatingModal } from "@/components/rating-screen"
 import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import {
@@ -78,7 +77,7 @@ function FlyingEmojiContent({ fe }: { fe: FlyingEmoji }) {
   useEffect(() => setImgError(false), [fe.imgSrc])
   if (fe.imgSrc && !imgError) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
+       
       <img
         src={fe.imgSrc}
         alt=""
@@ -127,7 +126,7 @@ function renderActionIcon(action: PairAction): React.ReactNode {
     case "beer":
       return <Beer className="h-4 w-4" />
     case "banya":
-      // eslint-disable-next-line @next/next/no-img-element
+       
       return (
         <img
           src={assetUrl(EMOJI_BANYA)}
@@ -204,9 +203,9 @@ export function GameRoom() {
     targetPlayer,
     targetPlayer2,
     showResult,
-    resultAction,
+    resultAction: _resultAction,
     voiceBalance,
-    bonusBalance,
+    bonusBalance: _bonusBalance,
     currentUser,
     tableId,
     tablesCount,
@@ -219,7 +218,7 @@ export function GameRoom() {
     inventory,
     playerMenuTarget,
     courtshipProfileAllowed,
-    allowChatInvite,
+    allowChatInvite: _allowChatInvite,
     bottleDonorName,
     drunkUntil,
     bottleDonorId,
@@ -378,7 +377,7 @@ export function GameRoom() {
   }, [dispatch, currentUser])
 
   // Daily bonus (client-only, saved in localStorage)
-  const [dailyOpen, setDailyOpen] = useState(false)
+  const [, setDailyOpen] = useState(false)
   const [dailyDay, setDailyDay] = useState(1)
   const [dailyClaimedToday, setDailyClaimedToday] = useState(false)
 
@@ -429,7 +428,7 @@ export function GameRoom() {
     }
   }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession])
 
-  const handleClaimDaily = useCallback(() => {
+  const _handleClaimDaily = useCallback(() => {
     if (dailyClaimedToday) return
     const reward = dailyDay // 1..5 как на макете
     dispatch({ type: "PAY_VOICES", amount: -reward })
@@ -455,8 +454,8 @@ export function GameRoom() {
   }, [dailyClaimedToday, dailyDay, dispatch, currentUser, dailyBonusTodayKey])
 
   // Result UI state (for center overlay)
-  const [resultChosenAction, setResultChosenAction] = useState<string | null>(null)
-  const [resultSwap, setResultSwap] = useState(false)
+  const [, setResultChosenAction] = useState<string | null>(null)
+  const [, setResultSwap] = useState(false)
 
   useEffect(() => {
     if (!showResult) {
@@ -484,10 +483,9 @@ export function GameRoom() {
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
-  const [resultTimer, setResultTimer] = useState<number | null>(null)
+  const [, setResultTimer] = useState<number | null>(null)
   const [turnTimer, setTurnTimer] = useState<number | null>(null)
   const [chatInput, setChatInput] = useState("")
-  const [showShop, setShowShop] = useState(false)
   const resultTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -534,7 +532,7 @@ export function GameRoom() {
   const resolvedTargetPlayer = targetPlayer
   const resolvedTargetPlayer2 = targetPlayer2
 
-  const userPrediction = predictions.find(p => p.playerId === currentUser?.id)
+  const _userPrediction = predictions.find(p => p.playerId === currentUser?.id)
 
   /** Каталог бутылочек: id и пути из lib/assets.ts (BOTTLE_IMAGES), названия и стоимость в UI */
   const bottleSkins = [
@@ -625,7 +623,7 @@ export function GameRoom() {
   )
 
   // Сколько сердечек игрок потратил на платные подарки (по логам и PAIR_ACTIONS)
-  const getGiftSpentForPlayer = useCallback(
+  const _getGiftSpentForPlayer = useCallback(
     (playerId: number) => {
       const giftIds = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "tools", "lipstick"])
       return gameLog.reduce((sum, entry) => {
@@ -664,7 +662,7 @@ export function GameRoom() {
     if (!isSpinning && !showResult && countdown === null && !predictionPhase && currentTurnPlayer && !predictionMade) {
       dispatch({ type: "START_PREDICTION_PHASE" })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [currentTurnIndex, isSpinning, showResult, countdown])
 
   /* ---- 10-second prediction countdown timer ---- */
@@ -698,7 +696,7 @@ export function GameRoom() {
     if (predictionTimer === 0 && predictionPhase && !isSpinning && !showResult && countdown === null) {
       handleSpin()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown])
 
   /* ---- 8-second auto-advance timer when result is showing ---- */
@@ -733,7 +731,7 @@ export function GameRoom() {
     if (!currentTurnPlayer?.isBot || isSpinning || countdown !== null || showResult) return
     const timer = setTimeout(() => handleSpin(), 2500)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult])
 
   /* ---- при возврате из мини-игры: анимация «вернулся к нам», пропуск хода если ход был у вернувшегося ---- */
@@ -833,7 +831,7 @@ export function GameRoom() {
       }
     }, 800)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [countdown])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
@@ -937,7 +935,7 @@ export function GameRoom() {
         )
 
         // --- Оценка прогнозов ---
-        const actualPair = sortPair(target1.id, target2.id)
+        const actualPair = sortPair(target.id, spinner.id)
 
         // Check each prediction
         safePredictions.forEach(pred => {
@@ -1075,7 +1073,7 @@ export function GameRoom() {
         dispatch({ type: "STOP_SPIN", action: "skip" })
       }
     }, 6000)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [players, currentTurnPlayer, dispatch, launchEmoji, playEmotionSound, predictions, bets, pot, currentUser])
 
   const handleSpin = () => {
@@ -1306,7 +1304,7 @@ export function GameRoom() {
   }, [showResult, currentTurnPlayer, targetPlayer, targetPlayer2, roundNumber])
 
   /* ---- prediction submit ---- */
-  const handleSubmitPrediction = () => {
+  const _handleSubmitPrediction = () => {
     if (CASUAL_MODE) return
     if (!predictionTarget || !predictionTarget2 || !currentUser) return
     if (predictionTarget.id === predictionTarget2.id) return
@@ -1395,7 +1393,7 @@ export function GameRoom() {
     }
   }
 
-  const handleMutualInvite = () => {
+  const _handleMutualInvite = () => {
     const tp = resolvedTargetPlayer
     const tp2 = resolvedTargetPlayer2
     if (!currentUser || !tp || !tp2) return
@@ -1673,7 +1671,6 @@ export function GameRoom() {
     [giftsToday, emotionsToday, careToday, spinsToday, predictionsToday],
   )
 
-  const [dailyCollapsed, setDailyCollapsed] = useState(true)
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false)
   const [confettiQuestIndex, setConfettiQuestIndex] = useState<number | null>(null)
 
@@ -2419,7 +2416,7 @@ export function GameRoom() {
                       className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-600/50"
                     >
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-slate-500">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        { }
                         <img src={player.avatar} alt="" className="h-full w-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -2513,7 +2510,7 @@ export function GameRoom() {
                       className={`h-24 w-16 rounded-lg ${selected ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-[rgba(19,10,4,0.97)]" : ""}`}
                       style={disabled && !owned ? { opacity: 0.5 } : undefined}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img
                         key={skin.img}
                         src={skin.img}
@@ -2683,6 +2680,10 @@ export function GameRoom() {
               predictionPhase && !predictionMade && !isSpinning && !showResult &&
               player.id !== currentUser?.id
             const bigGift = getBigGiftForPlayer(player.id)
+            const hasRoseGiven = (rosesGiven ?? []).some((r) => r.toPlayerId === player.id)
+            const giftIcons = hasRoseGiven
+              ? [...getGiftsForPlayer(player.id), "rose" as const]
+              : getGiftsForPlayer(player.id)
             return (
               <div
                 key={player.id}
@@ -2713,10 +2714,7 @@ export function GameRoom() {
                     (predictionTarget?.id === player.id || predictionTarget2?.id === player.id)
                   }
                   kissCount={getKissCountForPlayer(player.id)}
-                  giftIcons={[
-                    ...getGiftsForPlayer(player.id),
-                    ...((rosesGiven ?? []).filter((r) => r.toPlayerId === player.id).length > 0 ? ["rose"] : []),
-                  ]}
+                  giftIcons={giftIcons}
                   bigGiftIcon={bigGift.type ?? undefined}
                   bigGiftHasMany={bigGift.hasMany}
                   frameId={avatarFrames?.[player.id]}
@@ -3190,7 +3188,7 @@ export function GameRoom() {
             }}
           >
             <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src={assetUrl("Frame 1171276192.webp")} alt="Угадай-ка" className="relative w-full h-full max-h-[76px] object-contain" />
           </button>
         </div>
@@ -3657,7 +3655,7 @@ export function GameRoom() {
                     }}
                   >
                     <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img src={p.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
                     </div>
                     <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
@@ -3720,7 +3718,7 @@ export function GameRoom() {
                     }}
                   >
                     <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img src={p.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
                     </div>
                     <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
@@ -4329,7 +4327,7 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
             className="h-4 w-4 shrink-0 overflow-hidden rounded-full"
             style={{ border: `1.5px solid ${accentColor}` }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
           </div>
           <span className="text-[10px] font-bold" style={{ color: accentColor }}>

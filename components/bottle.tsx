@@ -58,7 +58,7 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
             background: "transparent",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img
             key={skin}
             src={imgSrc}

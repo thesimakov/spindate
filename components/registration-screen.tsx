@@ -7,7 +7,7 @@ import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge } from "@/lib/vk-bridge"
 import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
-import type { Gender, Player, Purpose } from "@/lib/game-types"
+import type { Gender, Purpose } from "@/lib/game-types"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()

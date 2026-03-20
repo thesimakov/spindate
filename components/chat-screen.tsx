@@ -119,7 +119,7 @@ export function ChatScreen() {
         </button>
         <div className="flex items-center gap-2">
           <div className="h-9 w-9 overflow-hidden rounded-full ring-2 ring-primary/30">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src={chatWith.avatar} alt={chatWith.name} className="h-full w-full object-cover bg-muted" crossOrigin="anonymous" />
           </div>
           <div>

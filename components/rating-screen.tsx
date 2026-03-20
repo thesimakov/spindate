@@ -97,7 +97,7 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
       <span className="flex items-center gap-2 min-w-0">
         <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-600 bg-slate-700">
           {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
+             
             <img src={avatar} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-xs text-slate-400">?</span>

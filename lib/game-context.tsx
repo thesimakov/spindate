@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react"
-import type { GameState, GameAction, Player, ChatMessage, Gender, InventoryItem, GeneralChatMessage } from "./game-types"
+import type { GameState, GameAction, Player, Gender, InventoryItem } from "./game-types"
 
 // Имена жителей стран СНГ (25+ женских и 25+ мужских)
 const FEMALE_NAMES: string[] = [
@@ -41,7 +41,7 @@ export function randomAvatarFrame(): (typeof AVATAR_FRAME_IDS)[number] {
   return AVATAR_FRAME_IDS[Math.floor(Math.random() * AVATAR_FRAME_IDS.length)]
 }
 
-export function generateBots(count: number, userGender: Gender): Player[] {
+export function generateBots(count: number, _userGender: Gender): Player[] {
   const bots: Player[] = []
   for (let i = 0; i < count; i++) {
     // Жёсткое чередование полов для приблизительно 50/50
@@ -143,7 +143,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "SET_USER":
       return { ...state, currentUser: action.user }
     case "CLEAR_USER":
-      return { ...state, currentUser: undefined, players: [], tableId: undefined }
+      return { ...state, currentUser: null, players: [], tableId: Math.floor(Math.random() * 9999) + 1 }
     case "ADD_DRUNK_TIME": {
       const now = Date.now()
       const current = state.drunkUntil?.[action.playerId] ?? 0

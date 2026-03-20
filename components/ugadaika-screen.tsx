@@ -176,7 +176,7 @@ export function UgadaikaScreen() {
     return a
   }, [getMusicUrl])
 
-  const startMusic = useCallback(async () => {
+  const _startMusic = useCallback(async () => {
     const a = ensureAudio()
     if (!a) return
     try {
@@ -326,6 +326,7 @@ export function UgadaikaScreen() {
   }, [mutualPairs, currentUserIndex, participantsInRound])
 
   const startGame = useCallback(() => {
+    if (!currentUser) return
     const seed = Date.now()
     setGameShuffleSeed(seed)
     const eight = getShuffledParticipants(currentUser, players, seed)
@@ -533,7 +534,7 @@ export function UgadaikaScreen() {
     setPhase("playing")
   }, [participantsInRound, roundNumber, currentUserIndex])
 
-  const handleRevealContinue = () => {
+  const _handleRevealContinue = () => {
     if (guessedCorrectly) {
       startNextRound()
     }
@@ -773,7 +774,7 @@ export function UgadaikaScreen() {
                       }}
                     >
                       {item.player.avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
+                         
                         <img src={item.player.avatar} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <span className="flex h-full w-full items-center justify-center bg-slate-700 text-xs text-slate-400">?</span>
@@ -902,7 +903,7 @@ export function UgadaikaScreen() {
                           isChosen ? "border-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.5)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                         }`}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        { }
                         <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                       </div>
                       <span className={`text-[9px] sm:text-[10px] max-[1161px]:text-[8px] font-medium truncate max-w-[3.5rem] max-[1161px]:max-w-[2.5rem] ${isChosen ? "text-amber-300 font-bold" : "text-slate-200"}`}>
@@ -934,7 +935,7 @@ export function UgadaikaScreen() {
                   <span className="ugadaika-jackpot-dot text-amber-300 bottom-1.5 right-1.5" aria-hidden />
                   <div className="ugadaika-avatar-cell ugadaika-avatar-cell-gold h-16 w-16 sm:h-24 sm:w-24 max-[1161px]:h-12 max-[1161px]:w-12 max-[1161px]:sm:h-16 max-[1161px]:sm:w-16 overflow-hidden rounded-full border-2 border-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.5),0_0_32px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.25)] bg-slate-800 ring-2 ring-amber-400/60">
                     {currentUser?.avatar && (
-                      // eslint-disable-next-line @next/next/no-img-element
+                       
                       <img src={currentUser.avatar} alt="" className="h-full w-full object-cover" />
                     )}
                   </div>
@@ -977,7 +978,7 @@ export function UgadaikaScreen() {
                             style={{ height: REEL_SLOT_HEIGHT }}
                           >
                             <div className="ugadaika-avatar-cell ugadaika-avatar-cell-rose h-16 w-16 sm:h-24 sm:w-24 max-[1161px]:h-12 max-[1161px]:w-12 max-[1161px]:sm:h-16 max-[1161px]:sm:w-16 overflow-hidden rounded-full border-2 border-rose-300 shadow-[0_0_14px_rgba(244,63,94,0.4),0_0_28px_rgba(225,29,72,0.15),inset_0_1px_0_rgba(255,255,255,0.2)] bg-slate-800 ring-2 ring-rose-400/50">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              { }
                               <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                             </div>
                           </div>
@@ -1024,7 +1025,7 @@ export function UgadaikaScreen() {
                           isYou ? "border-amber-500/70 shadow-[0_0_12px_rgba(251,191,36,0.25)]" : "border-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
                         }`}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        { }
                         <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                       </div>
                       <span className={`text-[9px] sm:text-[10px] max-[1161px]:text-[8px] font-medium truncate max-w-[3.5rem] max-[1161px]:max-w-[2.5rem] ${isYou ? "text-amber-200" : "text-slate-200"}`}>
@@ -1109,7 +1110,7 @@ export function UgadaikaScreen() {
                           <div key={p.id} className="flex flex-col items-center gap-1.5">
                             <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-amber-500/60 bg-slate-700 ring-2 ring-amber-500/20 shadow-lg shadow-amber-500/10">
                               {p.avatar ? (
-                                // eslint-disable-next-line @next/next/no-img-element
+                                 
                                 <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                               ) : (
                                 <div className="flex h-full w-full items-center justify-center text-slate-400 text-sm">{p.name?.slice(0, 1) ?? "?"}</div>
@@ -1185,7 +1186,7 @@ export function UgadaikaScreen() {
                                     >
                                       <div className="rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
                                         {p.avatar ? (
-                                          // eslint-disable-next-line @next/next/no-img-element
+                                           
                                           <img src={p.avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
                                         ) : (
                                           <div className="h-20 w-20 rounded-full flex items-center justify-center text-slate-400 text-lg">{p.name?.slice(0, 1) ?? "?"}</div>
@@ -1200,7 +1201,7 @@ export function UgadaikaScreen() {
                                 <div key={p.id} className="flex flex-col items-center gap-1">
                                   <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-slate-500 bg-slate-700">
                                     {p.avatar ? (
-                                      // eslint-disable-next-line @next/next/no-img-element
+                                       
                                       <img src={p.avatar} alt="" className="h-full w-full object-cover" />
                                     ) : (
                                       <div className="flex h-full w-full items-center justify-center text-slate-400 text-sm">{p.name?.slice(0, 1) ?? "?"}</div>
@@ -1260,7 +1261,7 @@ export function UgadaikaScreen() {
                               >
                                 <div className="rounded-full overflow-hidden bg-slate-800 ring-2 ring-slate-700">
                                   {shownPartner.avatar ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
+                                     
                                     <img src={shownPartner.avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
                                   ) : (
                                     <div className="h-20 w-20 rounded-full flex items-center justify-center text-slate-400 text-lg">{shownPartner.name?.slice(0, 1) ?? "?"}</div>
@@ -1325,7 +1326,7 @@ export function UgadaikaScreen() {
                                   <div key={p.id} className="flex flex-col items-center gap-0.5">
                                     <div className="ring-4 ring-red-500/90 rounded-full p-0.5 bg-slate-800 shadow-[0_0_12px_rgba(239,68,68,0.5)]">
                                       {p.avatar ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
+                                         
                                         <img src={p.avatar} alt="" className="h-16 w-16 rounded-full object-cover" />
                                       ) : (
                                         <div className="h-16 w-16 rounded-full bg-slate-600 flex items-center justify-center text-slate-400 text-lg">{p.name?.slice(0, 1) ?? "?"}</div>

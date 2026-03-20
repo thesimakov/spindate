@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 /** Идентификаторы товаров (голоса ВКонтакте). Должны совпадать с item_id при открытии формы оплаты. */
-export const VK_PAYMENT_ITEMS = {
+const VK_PAYMENT_ITEMS = {
   hearts_500: { title: "500 сердец", price: 1, description: "Пополнение сердец для игры" },
   hearts_1000: { title: "1000 сердец", price: 2, description: "Пополнение сердец для игры" },
   vip: { title: "VIP-статус", price: 99, description: "VIP-статус в игре" },

@@ -301,7 +301,7 @@ export function PlayerAvatar({
           >
             {/* Photo container */}
             <div className="h-full w-full overflow-hidden rounded-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img
                 src={player.avatar}
                 alt={player.name}

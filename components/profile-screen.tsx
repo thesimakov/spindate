@@ -7,32 +7,8 @@ import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
 import { assetUrl } from "@/lib/assets"
 
-function purposeLabel(purpose: string) {
-  switch (purpose) {
-    case "relationships":
-      return "Отношения"
-    case "communication":
-      return "Общение"
-    case "love":
-      return "Любовь"
-    default:
-      return "—"
-  }
-}
-
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
-}
-
-function lookingForLabel(userGender: string, lookingFor: string | undefined) {
-  if (!lookingFor) return "—"
-
-  if (userGender === "male" && lookingFor === "male") return "друга"
-  if (userGender === "female" && lookingFor === "female") return "подругу"
-  if (userGender === "male" && lookingFor === "female") return "подругу"
-  if (userGender === "female" && lookingFor === "male") return "друга"
-
-  return lookingFor === "male" ? "мужчину" : "женщину"
 }
 
 const GIFT_IDS = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "tools", "lipstick"])
