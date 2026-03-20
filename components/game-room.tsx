@@ -2402,7 +2402,13 @@ export function GameRoom() {
         )}
 
         {/* ---- BALANCES + КНОПКИ ---- */}
-        <div className="mt-auto flex flex-col gap-1.5">
+        <div className="mt-auto flex flex-col gap-2">
+          {/** Единый стиль для аккуратных кнопок бокового меню */}
+          {(() => {
+            const sideBtnClass = "flex items-center gap-2 rounded-[999px] px-4 py-2.5 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[48px]"
+            const sideBtnTextClass = "text-[15px] font-semibold leading-none"
+            return (
+              <>
           {/* Крутить вне очереди — только на мобильной (на ПК убрано из бокового меню) */}
           {!isMyTurn && !isSpinning && !showResult && countdown === null && (
             <div className="md:hidden">
@@ -2425,7 +2431,7 @@ export function GameRoom() {
 
           {/* Банк сердец */}
           <div
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2.5 min-h-[48px]"
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2433,14 +2439,14 @@ export function GameRoom() {
             }}
           >
             <Heart className="h-4 w-4" style={{ color: "#e8c06a" }} fill="currentColor" />
-            <span className="text-sm font-bold" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-            <span className="text-xs" style={{ color: "#cbd5e1" }}>{"Банк сердец"}</span>
+            <span className="text-[15px] font-bold leading-none" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+            <span className="text-[13px] leading-none" style={{ color: "#cbd5e1" }}>{"Банк сердец"}</span>
           </div>
 
           {/* Магазин */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)",
               border: "1px solid rgba(245, 158, 11, 0.8)",
@@ -2448,27 +2454,13 @@ export function GameRoom() {
             }}
           >
             <Gift className="h-4 w-4" style={{ color: "#1f2937" }} />
-            <span className="text-sm font-semibold" style={{ color: "#1f2937" }}>{"Магазин"}</span>
-          </button>
-
-          {/* Межигровой чат */}
-          <button
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "intergame-chat" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-            }}
-          >
-            <MessageCircle className="h-4 w-4" style={{ color: "#22d3ee" }} />
-            <span className="text-sm font-semibold" style={{ color: "#e0f2fe" }}>{"Межигровой чат"}</span>
+            <span className={sideBtnTextClass} style={{ color: "#1f2937" }}>{"Магазин"}</span>
           </button>
 
           {/* Профиль */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "profile" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2476,13 +2468,13 @@ export function GameRoom() {
             }}
           >
             <User className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
+            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
           </button>
 
           {/* Бутылочка */}
           <button
             onClick={() => setShowBottleCatalog(true)}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2490,7 +2482,7 @@ export function GameRoom() {
             }}
           >
             <span className="text-base">{"🍾"}</span>
-            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>
+            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>
               {"Бутылочка"}
             </span>
             {cooldownLeftMs > 0 && (
@@ -2503,7 +2495,7 @@ export function GameRoom() {
           {/* Сменить стол */}
           <button
             onClick={handleChangeTable}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2511,13 +2503,13 @@ export function GameRoom() {
             }}
           >
             <RotateCw className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
+            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
           </button>
 
           {/* Рейтинг */}
           <button
             onClick={() => setShowRatingModal(true)}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2525,13 +2517,13 @@ export function GameRoom() {
             }}
           >
             <Trophy className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
+            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
           </button>
 
           {/* Избранное */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "favorites" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2539,14 +2531,14 @@ export function GameRoom() {
             }}
           >
             <Star className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
+            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
           </button>
 
           {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто); на планшете — по ширине как остальные кнопки меню */}
           <div className="lg:hidden w-full">
             <button
               onClick={() => setShowChatListModal(true)}
-              className="flex w-full items-center justify-start gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+              className={`${sideBtnClass} w-full justify-start`}
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
                 border: "1px solid rgba(56,189,248,0.28)",
@@ -2554,7 +2546,7 @@ export function GameRoom() {
               }}
             >
               <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-              <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
+              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
             </button>
           </div>
 
@@ -2562,7 +2554,7 @@ export function GameRoom() {
           {currentUser && (
             <button
               onClick={() => setShowDailyTasksModal(true)}
-              className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+              className={sideBtnClass}
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
                 border: "1px solid rgba(56,189,248,0.28)",
@@ -2570,17 +2562,20 @@ export function GameRoom() {
               }}
             >
               <Sparkles className="h-4 w-4" style={{ color: "#e8c06a" }} />
-              <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Ежедневные задачи"}</span>
+              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Ежедневные задачи"}</span>
             </button>
           )}
 
           {/* Количество столов */}
-          <div className="flex items-center gap-2 rounded-[999px] px-4 py-2" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}>
+          <div className="flex items-center gap-2 rounded-[999px] px-4 py-2.5 min-h-[48px]" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}>
             <RotateCw className="h-3 w-3" style={{ color: "#94a3b8" }} />
-            <span className="text-xs" style={{ color: "#94a3b8" }}>
+            <span className="text-[13px] leading-none" style={{ color: "#94a3b8" }}>
               {"Столов в игре: "}{tablesCount ?? "—"}
             </span>
           </div>
+              </>
+            )
+          })()}
         </div>
       </div>
 
