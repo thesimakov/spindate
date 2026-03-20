@@ -10,10 +10,12 @@ import { vkBridge } from "@/lib/vk-bridge"
 
 export function ShopScreen() {
   const { state, dispatch } = useGame()
-  const { currentUser, voiceBalance, players, inventory } = state
+  const { currentUser, voiceBalance, players, inventory, emotionDailyBoost } = state
   const { toast, showToast } = useInlineToast(1700)
   const rosesCount = inventory.filter((i) => i.type === "rose").length
   const [exchangeTab, setExchangeTab] = useState<"voices-to-roses" | "roses-to-voices">("voices-to-roses")
+  const emotionPackCost = 5
+  const emotionPackExtraPerType = 50
 
   const heartOffers = [
     { hearts: 5, votes: 1, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
@@ -60,6 +62,9 @@ export function ShopScreen() {
   const vipUntilTs = currentPlayer?.vipUntilTs
   const isVip = !!currentPlayer?.isVip && (vipUntilTs == null || vipUntilTs > Date.now())
   const vipLeftDays = vipUntilTs ? Math.max(0, Math.ceil((vipUntilTs - Date.now()) / (24 * 60 * 60 * 1000))) : null
+  const todayKey = getTodayKey()
+  const activeEmotionBoost = emotionDailyBoost?.dateKey === todayKey ? (emotionDailyBoost.extraPerType ?? 0) : 0
+  const totalDailyLimitPerType = 50 + activeEmotionBoost
   const vipTrialKey = `spindate_vip_trial_used_${currentUser.id}`
   const [vipTrialUsed, setVipTrialUsed] = useState(false)
 
@@ -132,6 +137,28 @@ export function ShopScreen() {
     } else {
       showToast("Не удалось отправить приглашение", "error")
     }
+  }
+
+  function getTodayKey() {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  }
+
+  const handleBuyEmotionPack = () => {
+    if (voiceBalance < emotionPackCost) {
+      showToast("Недостаточно сердец", "error")
+      return
+    }
+    dispatch({
+      type: "BUY_EMOTION_PACK",
+      cost: emotionPackCost,
+      extraPerType: emotionPackExtraPerType,
+      dateKey: getTodayKey(),
+    })
+    showToast("Пакет эмоций активирован", "success")
   }
 
   return (
@@ -354,6 +381,30 @@ export function ShopScreen() {
               </Button>
             </div>
           </div>
+        </div>
+
+        {/* Пакет эмоций */}
+        <div className={`flex items-center justify-between gap-3 rounded-xl px-4 py-4 ${sectionCardClass}`}>
+          <div className="flex min-w-0 flex-col">
+            <span className="text-sm sm:text-base font-semibold text-slate-100">
+              {"Эмоции: +50 каждого вида"}
+            </span>
+            <span className={subtleTextClass}>
+              {"Добавляет +50 к дневному лимиту 💋 🍺 🍹 за 5 ❤"}
+            </span>
+            <span className="text-xs text-cyan-200/90">
+              {"Текущий лимит на сегодня: "}{totalDailyLimitPerType}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            disabled={voiceBalance < emotionPackCost}
+            className={`${ctaPrimaryClass} h-10 w-auto min-w-[146px] px-4`}
+            style={{ background: "linear-gradient(135deg,#22d3ee,#6366f1)" }}
+            onClick={handleBuyEmotionPack}
+          >
+            {voiceBalance < emotionPackCost ? "Не хватает ❤" : "Купить за 5 ❤"}
+          </Button>
         </div>
 
         {/* Обмен валюты: табы Сердца ↔ Розы */}

@@ -61,6 +61,21 @@ function circlePositions(count: number, radiusX: number, radiusY: number) {
 }
 
 const DAILY_EMOTION_LIMIT = 50
+const EMOTION_PACK_COST = 5
+const EMOTION_PACK_EXTRA_PER_TYPE = 50
+
+function getTodayDateKey(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+function shouldShowActionCostBadge(actionId: string, actionCost: number): boolean {
+  if (actionId === "kiss" || actionId === "beer" || actionId === "cocktail") return false
+  return actionCost > 0
+}
 
 
 /* ------------------------------------------------------------------ */
@@ -235,6 +250,7 @@ export function GameRoom() {
     spinSkips,
     soundsEnabled,
     generalChatMessages = [],
+    emotionDailyBoost,
   } = state
 
   // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки»
@@ -580,6 +596,8 @@ export function GameRoom() {
 
   const getEffectiveActionCost = useCallback(
     (actionId: string, combo: PairGenderCombo | null): number => {
+      // Эти эмоции должны быть бесплатными (без списания банка сердец).
+      if (actionId === "kiss" || actionId === "beer" || actionId === "cocktail") return 0
       const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
       if (!actionDef) return 0
       // Цветы: для М/Ж — 2, для Ж/Ж — 1
@@ -601,18 +619,28 @@ export function GameRoom() {
     [gameLog],
   )
 
+  const effectiveDailyEmotionLimit = useMemo(() => {
+    const todayKey = getTodayDateKey()
+    const extra = emotionDailyBoost?.dateKey === todayKey ? (emotionDailyBoost.extraPerType ?? 0) : 0
+    return DAILY_EMOTION_LIMIT + Math.max(0, extra)
+  }, [emotionDailyBoost])
+
   const limitedEmotionCounters = useMemo(() => {
     const uid = currentUser?.id
     const kissUsed = uid ? getTodayActionCount(uid, "kiss") : 0
     const beerUsed = uid ? getTodayActionCount(uid, "beer") : 0
     const cocktailUsed = uid ? getTodayActionCount(uid, "cocktail") : 0
-    const limit = DAILY_EMOTION_LIMIT
+    const limit = effectiveDailyEmotionLimit
     return [
       { id: "kiss", label: "Поцелуй", emoji: "💋", used: kissUsed, left: Math.max(0, limit - kissUsed), limit },
       { id: "beer", label: "Пиво", emoji: "🍺", used: beerUsed, left: Math.max(0, limit - beerUsed), limit },
       { id: "cocktail", label: "Коктейль", emoji: "🍹", used: cocktailUsed, left: Math.max(0, limit - cocktailUsed), limit },
     ] as const
-  }, [currentUser?.id, getTodayActionCount])
+  }, [currentUser?.id, effectiveDailyEmotionLimit, getTodayActionCount])
+  const isEmotionLimitReached = useMemo(
+    () => limitedEmotionCounters.some((row) => row.left <= 0),
+    [limitedEmotionCounters],
+  )
 
   const getKissCountForPlayer = useCallback(
     (playerId: number) =>
@@ -1135,6 +1163,21 @@ export function GameRoom() {
     dispatch({ type: "START_COUNTDOWN" })
   }
 
+  const handleBuyEmotionPackFromGame = useCallback(() => {
+    if (!currentUser) return
+    if (voiceBalance < EMOTION_PACK_COST) {
+      showToast("Недостаточно сердец для покупки", "error")
+      return
+    }
+    dispatch({
+      type: "BUY_EMOTION_PACK",
+      cost: EMOTION_PACK_COST,
+      extraPerType: EMOTION_PACK_EXTRA_PER_TYPE,
+      dateKey: getTodayDateKey(),
+    })
+    showToast("Лимит эмоций увеличен на сегодня", "success")
+  }, [currentUser, dispatch, showToast, voiceBalance])
+
   /* ---- perform gender-based action ---- */
   const handlePerformAction = (actionId: string) => {
     // Звук сразу по клику, пока контекст жеста пользователя активен (требование браузера)
@@ -1152,7 +1195,7 @@ export function GameRoom() {
     const pairCombo = getPairGenderCombo(tp, tp2)
     const actionCost = getEffectiveActionCost(actionId, pairCombo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = DAILY_EMOTION_LIMIT
+    const dailyLimit = effectiveDailyEmotionLimit
 
     // Стоимость списываем только, если действие делает живой игрок.
     // Боты (isBot) играют «за счёт системы» и не трогают баланс пользователя.
@@ -1242,7 +1285,7 @@ export function GameRoom() {
     const pairCombo = getPairGenderCombo(resolvedTargetPlayer, resolvedTargetPlayer2)
     const actionCost = getEffectiveActionCost(actionId, pairCombo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = DAILY_EMOTION_LIMIT
+    const dailyLimit = effectiveDailyEmotionLimit
 
     // Оплата за ответную эмоцию (та же цена, что и за основное действие)
     const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
@@ -1994,6 +2037,22 @@ export function GameRoom() {
                 </div>
               ))}
             </div>
+            {isEmotionLimitReached && (
+              <button
+                type="button"
+                onClick={handleBuyEmotionPackFromGame}
+                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                disabled={voiceBalance < EMOTION_PACK_COST}
+                style={{
+                  background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+                  color: "#0f172a",
+                  border: "2px solid rgba(103, 232, 249, 0.9)",
+                  boxShadow: "0 2px 0 rgba(30, 64, 175, 0.9), 0 3px 10px rgba(34, 211, 238, 0.28)",
+                }}
+              >
+                {"Лимит закончился — купить +50 за 5 ❤"}
+              </button>
+            )}
             <div className="flex flex-col gap-1.5">
               {availableActions.map(action => {
                 const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
@@ -2014,7 +2073,7 @@ export function GameRoom() {
                   >
                     {renderActionIcon(action)}
                     <span className="flex-1 text-left">{action.label}</span>
-                    {actionCost > 0 && (
+                    {shouldShowActionCostBadge(action.id, actionCost) && (
                       <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
                         {actionCost}
                         <Heart className="h-3.5 w-3.5" fill="currentColor" />
@@ -2055,6 +2114,22 @@ export function GameRoom() {
                 </div>
               ))}
             </div>
+            {isEmotionLimitReached && (
+              <button
+                type="button"
+                onClick={handleBuyEmotionPackFromGame}
+                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                disabled={voiceBalance < EMOTION_PACK_COST}
+                style={{
+                  background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+                  color: "#0f172a",
+                  border: "2px solid rgba(103, 232, 249, 0.9)",
+                  boxShadow: "0 2px 0 rgba(30, 64, 175, 0.9), 0 3px 10px rgba(34, 211, 238, 0.28)",
+                }}
+              >
+                {"Лимит закончился — купить +50 за 5 ❤"}
+              </button>
+            )}
             <div className="flex flex-col gap-1.5">
               {availableActions.map(action => {
                 const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
@@ -2076,7 +2151,7 @@ export function GameRoom() {
                   >
                     {renderActionIcon(action)}
                     <span className="flex-1 text-left">{action.label}</span>
-                    {actionCost > 0 && (
+                    {shouldShowActionCostBadge(action.id, actionCost) && (
                       <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
                         {actionCost}
                         <Heart className="h-3.5 w-3.5" fill="currentColor" />
@@ -3046,6 +3121,22 @@ export function GameRoom() {
                   </div>
                 ))}
               </div>
+              {isEmotionLimitReached && (
+                <button
+                  type="button"
+                  onClick={handleBuyEmotionPackFromGame}
+                  className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                  disabled={voiceBalance < EMOTION_PACK_COST}
+                  style={{
+                    background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+                    color: "#0f172a",
+                    border: "2px solid rgba(103, 232, 249, 0.9)",
+                    boxShadow: "0 2px 0 rgba(30, 64, 175, 0.9), 0 3px 10px rgba(34, 211, 238, 0.28)",
+                  }}
+                >
+                  {"Лимит закончился — купить +50 за 5 ❤"}
+                </button>
+              )}
               {isMyTurn ? (
                 <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto">
                   {availableActions.map(action => {
@@ -3067,7 +3158,7 @@ export function GameRoom() {
                       >
                         {renderActionIcon(action)}
                         <span className="flex-1 text-left truncate">{action.label}</span>
-                        {actionCost > 0 && (
+                        {shouldShowActionCostBadge(action.id, actionCost) && (
                           <span className="flex items-center gap-0.5 text-[13px] opacity-90 shrink-0">
                             {actionCost}
                             <Heart className="h-3 w-3" fill="currentColor" />
@@ -3100,7 +3191,7 @@ export function GameRoom() {
                       >
                         {renderActionIcon(action)}
                         <span className="flex-1 text-left truncate">{action.label}</span>
-                        {actionCost > 0 && (
+                        {shouldShowActionCostBadge(action.id, actionCost) && (
                           <span className="flex items-center gap-0.5 text-[13px] opacity-90 shrink-0">
                             {actionCost}
                             <Heart className="h-3 w-3" fill="currentColor" />

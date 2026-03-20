@@ -127,6 +127,10 @@ const initialState: GameState = {
   showReturnedFromUgadaika: false,
   spinSkips: {},
   currentTurnDidSpin: false,
+  emotionDailyBoost: {
+    dateKey: "",
+    extraPerType: 0,
+  },
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -477,6 +481,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // ignore
       }
       return { ...state, soundsEnabled: action.enabled }
+    }
+    case "BUY_EMOTION_PACK": {
+      if (action.cost < 0 || action.extraPerType <= 0) return state
+      if (state.voiceBalance < action.cost) return state
+      const currentBoost = state.emotionDailyBoost
+      const sameDay = currentBoost?.dateKey === action.dateKey
+      const nextExtra = (sameDay ? currentBoost?.extraPerType ?? 0 : 0) + action.extraPerType
+      return {
+        ...state,
+        voiceBalance: state.voiceBalance - action.cost,
+        emotionDailyBoost: {
+          dateKey: action.dateKey,
+          extraPerType: nextExtra,
+        },
+      }
     }
 
     // ---- Daily quests ----

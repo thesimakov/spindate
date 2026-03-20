@@ -205,6 +205,11 @@ export interface GameState {
   soundsEnabled?: boolean
   /** Общий чат стола (последние сообщения). */
   generalChatMessages?: GeneralChatMessage[]
+  /** Купленные в магазине доп. эмоции на сегодня (добавка к суточному лимиту для лимитируемых эмоций). */
+  emotionDailyBoost?: {
+    dateKey: string
+    extraPerType: number
+  }
 }
 
 export type GameAction =
@@ -276,3 +281,5 @@ export type GameAction =
   | { type: "CLEAR_RETURNED_FROM_UGADAIKA" }
   /** Включить/выключить звуки эмоций (сохраняется в localStorage). */
   | { type: "SET_SOUNDS_ENABLED"; enabled: boolean }
+  /** Магазин: добавить пакет эмоций на сегодня (например, +50 к каждому лимитируемому виду). */
+  | { type: "BUY_EMOTION_PACK"; cost: number; extraPerType: number; dateKey: string }
