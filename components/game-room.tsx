@@ -1950,20 +1950,54 @@ export function GameRoom() {
 
   const LEVEL_REWARDS: LevelReward[] = useMemo(() => {
     const itemCycle: LevelRewardItem[] = ["rose", "flowers", "song", "diamond"]
+    const levelTitles = [
+      "Первые шаги",
+      "Тёплое знакомство",
+      "Приятный собеседник",
+      "Гость вечеринки",
+      "Лёгкий флирт",
+      "Уверенный участник",
+      "Душа компании",
+      "Мастер улыбок",
+      "Звезда чата",
+      "Любимчик стола",
+      "Искра вечера",
+      "Сердечный друг",
+      "Магнит внимания",
+      "Профи эмоций",
+      "Ритм вечеринки",
+      "Сияние стола",
+      "Король харизмы",
+      "Королева харизмы",
+      "Чемпион улыбок",
+      "Огонь общения",
+      "Лидер флирта",
+      "Серебряный уровень",
+      "Золотой уровень",
+      "Платиновый уровень",
+      "Алмазный уровень",
+      "Легенда эмоций",
+      "Легенда чата",
+      "Легенда флирта",
+      "Легенда вечера",
+      "Абсолютная легенда",
+    ] as const
     return Array.from({ length: DAILY_LEVEL_MAX }, (_, idx) => {
       const level = idx + 1
       const hearts = 3 + level * 2
       const itemCount = level >= 24 ? 3 : level >= 12 ? 2 : 1
       const item = itemCycle[idx % itemCycle.length]
-      const title =
-        level <= 10
-          ? "Новичок вечеринок"
-          : level <= 20
-            ? "Звезда общения"
-            : "Легенда стола"
+      const title = levelTitles[idx] ?? `Уровень ${level}`
       return { level, hearts, item, itemCount, title }
     })
   }, [])
+
+  const LEVEL_REWARD_ITEM_META: Record<LevelRewardItem, { label: string; emoji: string }> = {
+    rose: { label: "роза", emoji: "🌹" },
+    flowers: { label: "цветы", emoji: "💐" },
+    song: { label: "песня", emoji: "🎵" },
+    diamond: { label: "бриллиант", emoji: "💎" },
+  }
 
   const getDailyLevelByPoints = useCallback((points: number): number => {
     let spent = 0
@@ -2013,7 +2047,12 @@ export function GameRoom() {
       }
       const parsed = JSON.parse(raw) as { points?: number; rewardedLevels?: number[] }
       setDailyProgressPoints(typeof parsed.points === "number" ? Math.max(0, parsed.points) : 0)
-      setDailyRewardedLevels(Array.isArray(parsed.rewardedLevels) ? parsed.rewardedLevels.filter((x) => Number.isFinite(x)) : [])
+      const sanitizedLevels = Array.isArray(parsed.rewardedLevels)
+        ? [...new Set(parsed.rewardedLevels)]
+            .filter((x) => Number.isFinite(x) && x >= 1 && x <= DAILY_LEVEL_MAX)
+            .sort((a, b) => a - b)
+        : []
+      setDailyRewardedLevels(sanitizedLevels)
     } catch {
       setDailyProgressPoints(0)
       setDailyRewardedLevels([])
@@ -2078,7 +2117,7 @@ export function GameRoom() {
       }
 
       setDailyProgressPoints(nextPoints)
-      const nextRewardedLevels = [...dailyRewardedLevels, ...claimedNow].sort((a, b) => a - b)
+      const nextRewardedLevels = [...new Set([...dailyRewardedLevels, ...claimedNow])].sort((a, b) => a - b)
       setDailyRewardedLevels(nextRewardedLevels)
 
       if (currentUser) {
@@ -2097,7 +2136,9 @@ export function GameRoom() {
         const lastLevel = claimedNow[claimedNow.length - 1]
         const reward = LEVEL_REWARDS.find((r) => r.level === lastLevel)
         if (reward) {
-          showToast(`Уровень ${lastLevel}: +${reward.hearts} ❤ и ${reward.itemCount} ${reward.item}`, "success")
+          const itemMeta = LEVEL_REWARD_ITEM_META[reward.item]
+          const itemLabel = reward.itemCount > 1 ? `${itemMeta.label} x${reward.itemCount}` : itemMeta.label
+          showToast(`Уровень ${lastLevel}: +${reward.hearts} ❤ и ${itemMeta.emoji} ${itemLabel}`, "success")
         }
       }
     },
@@ -2112,6 +2153,7 @@ export function GameRoom() {
       dailyProgressPoints,
       dailyRewardedLevels,
       LEVEL_REWARDS,
+      LEVEL_REWARD_ITEM_META,
       getDailyLevelByPoints,
     ],
   )
@@ -4200,7 +4242,9 @@ export function GameRoom() {
                         }}
                       >
                         <span>Уровень {reward.level} · {reward.title}</span>
-                        <span className="tabular-nums">+{reward.hearts} ❤ · {reward.itemCount} {reward.item}</span>
+                        <span className="tabular-nums">
+                          +{reward.hearts} ❤ · {LEVEL_REWARD_ITEM_META[reward.item].emoji} {LEVEL_REWARD_ITEM_META[reward.item].label} x{reward.itemCount}
+                        </span>
                       </div>
                     )
                   })}
