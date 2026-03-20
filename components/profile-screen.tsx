@@ -14,6 +14,19 @@ function genderLabel(g: string) {
 }
 
 const GIFT_IDS = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "tools", "lipstick"])
+const PROFILE_LEVEL_MAX = 30
+
+function getDailyLevelByPoints(points: number): number {
+  let spent = 0
+  let level = 1
+  while (level < PROFILE_LEVEL_MAX) {
+    const need = 2 + Math.floor((level - 1) / 2)
+    if (points < spent + need) break
+    spent += need
+    level += 1
+  }
+  return level
+}
 
 export function ProfileScreen() {
   const { state, dispatch } = useGame()
@@ -103,6 +116,7 @@ export function ProfileScreen() {
   const [avatarInput, setAvatarInput] = useState(currentUser.avatar ?? "")
   const [showGiveRoseModal, setShowGiveRoseModal] = useState(false)
   const [showFramesModal, setShowFramesModal] = useState(false)
+  const [profileDailyLevel, setProfileDailyLevel] = useState(1)
   /** В модалке рамок: наведение на карточку — крупное превью; иначе показываем текущую рамку */
   const [frameHoverPreviewId, setFrameHoverPreviewId] = useState<string | null>(null)
   /** Анимация «как за столом» после успешной отправки розы */
@@ -123,6 +137,22 @@ export function ProfileScreen() {
   useEffect(() => {
     if (showFramesModal) setFrameHoverPreviewId(null)
   }, [showFramesModal])
+
+  useEffect(() => {
+    if (!currentUser) {
+      setProfileDailyLevel(1)
+      return
+    }
+    try {
+      const key = `botl_daily_level_v1_${currentUser.id}`
+      const raw = localStorage.getItem(key)
+      const parsed = raw ? (JSON.parse(raw) as { points?: number }) : null
+      const points = typeof parsed?.points === "number" ? Math.max(0, parsed.points) : 0
+      setProfileDailyLevel(getDailyLevelByPoints(points))
+    } catch {
+      setProfileDailyLevel(1)
+    }
+  }, [currentUser])
 
   useEffect(() => {
     return () => {
@@ -261,6 +291,17 @@ export function ProfileScreen() {
                   </svg>
                 </div>
               )}
+              <div
+                className="absolute -right-14 top-1/2 z-[27] -translate-y-1/2 rounded-xl px-2 py-1 text-[10px] font-bold"
+                style={{
+                  background: "linear-gradient(135deg, rgba(14,116,144,0.9) 0%, rgba(67,56,202,0.9) 100%)",
+                  color: "#ecfeff",
+                  border: "1px solid rgba(125,211,252,0.7)",
+                  boxShadow: "0 6px 14px rgba(15,23,42,0.45)",
+                }}
+              >
+                Ур. {profileDailyLevel}
+              </div>
             </div>
             <button
               type="button"

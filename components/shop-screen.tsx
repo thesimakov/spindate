@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
-import { useGame } from "@/lib/game-context"
+import { generateLogId, useGame } from "@/lib/game-context"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { vkBridge } from "@/lib/vk-bridge"
 
@@ -107,6 +107,16 @@ export function ShopScreen() {
     if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
     const until = Date.now() + days * 24 * 60 * 60 * 1000
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true, vipUntilTs: until })
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: "system",
+        fromPlayer: currentUser,
+        text: `${currentUser.name} купил(а) VIP на ${days} дн.`,
+        timestamp: Date.now(),
+      },
+    })
     if (isTrial) {
       try {
         localStorage.setItem(vipTrialKey, "1")
@@ -157,6 +167,16 @@ export function ShopScreen() {
       cost: emotionPackCost,
       extraPerType: emotionPackExtraPerType,
       dateKey: getTodayKey(),
+    })
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: "system",
+        fromPlayer: currentUser,
+        text: `${currentUser.name} купил(а) пакет эмоций (+${emotionPackExtraPerType})`,
+        timestamp: Date.now(),
+      },
     })
     showToast("Пакет эмоций активирован", "success")
   }

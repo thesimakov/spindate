@@ -127,13 +127,9 @@ interface SteamPuff {
   delayMs: number
 }
 
-type LevelRewardItem = "rose" | "flowers" | "song" | "diamond"
-
 type LevelReward = {
   level: number
   hearts: number
-  item: LevelRewardItem
-  itemCount: number
   title: string
 }
 
@@ -1192,6 +1188,16 @@ export function GameRoom() {
       extraPerType: EMOTION_PACK_EXTRA_PER_TYPE,
       dateKey: getTodayDateKey(),
     })
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: "system",
+        fromPlayer: currentUser,
+        text: `${currentUser.name} купил(а) пакет эмоций (+${EMOTION_PACK_EXTRA_PER_TYPE})`,
+        timestamp: Date.now(),
+      },
+    })
     showToast("Лимит эмоций увеличен на сегодня", "success")
   }, [currentUser, dispatch, showToast, voiceBalance])
 
@@ -1883,6 +1889,25 @@ export function GameRoom() {
         ).length
       : 0
 
+  const chatMessagesToday =
+    currentUser
+      ? todayEntries.filter(
+          (e) =>
+            e.fromPlayer?.id === currentUser.id &&
+            e.type === "chat",
+        ).length
+      : 0
+
+  const purchasesToday =
+    currentUser
+      ? todayEntries.filter(
+          (e) =>
+            e.fromPlayer?.id === currentUser.id &&
+            e.type === "system" &&
+            e.text.toLowerCase().includes("купил"),
+        ).length
+      : 0
+
   /** Пул шаблонов заданий. По дате выбираются 5 рандомных (детерминированно на месяц). */
   const DAILY_QUEST_POOL = useMemo(
     () => [
@@ -1894,8 +1919,9 @@ export function GameRoom() {
       { type: "care" as const, target: 1, label: "Ухаживать 1 раз" },
       { type: "spins" as const, target: 3, label: "Покрутить бутылку 3 раза" },
       { type: "spins" as const, target: 5, label: "Покрутить бутылку 5 раз" },
-      { type: "predictions" as const, target: 3, label: "Сделать 3 прогноза" },
-      { type: "predictions" as const, target: 5, label: "Сделать 5 прогнозов" },
+      { type: "gifts" as const, target: 4, label: "Отправить 4 подарка" },
+      { type: "purchases" as const, target: 1, label: "Купить 1 товар" },
+      { type: "purchases" as const, target: 2, label: "Купить 2 товара" },
     ],
     [],
   )
@@ -1932,11 +1958,15 @@ export function GameRoom() {
           return spinsToday
         case "predictions":
           return predictionsToday
+        case "chat":
+          return chatMessagesToday
+        case "purchases":
+          return purchasesToday
         default:
           return 0
       }
     },
-    [giftsToday, emotionsToday, careToday, spinsToday, predictionsToday],
+    [giftsToday, emotionsToday, careToday, spinsToday, predictionsToday, chatMessagesToday, purchasesToday],
   )
 
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false)
@@ -1949,7 +1979,6 @@ export function GameRoom() {
   const DAILY_LEVEL_MAX = 30
 
   const LEVEL_REWARDS: LevelReward[] = useMemo(() => {
-    const itemCycle: LevelRewardItem[] = ["rose", "flowers", "song", "diamond"]
     const levelTitles = [
       "Первые шаги",
       "Тёплое знакомство",
@@ -1984,20 +2013,12 @@ export function GameRoom() {
     ] as const
     return Array.from({ length: DAILY_LEVEL_MAX }, (_, idx) => {
       const level = idx + 1
-      const hearts = 3 + level * 2
-      const itemCount = level >= 24 ? 3 : level >= 12 ? 2 : 1
-      const item = itemCycle[idx % itemCycle.length]
+      // Сильная прогрессия наград: с 100 монет и выше по уровню.
+      const hearts = (100 + (level - 1) * 20) * 5
       const title = levelTitles[idx] ?? `Уровень ${level}`
-      return { level, hearts, item, itemCount, title }
+      return { level, hearts, title }
     })
   }, [])
-
-  const LEVEL_REWARD_ITEM_META: Record<LevelRewardItem, { label: string; emoji: string }> = {
-    rose: { label: "роза", emoji: "🌹" },
-    flowers: { label: "цветы", emoji: "💐" },
-    song: { label: "песня", emoji: "🎵" },
-    diamond: { label: "бриллиант", emoji: "💎" },
-  }
 
   const getDailyLevelByPoints = useCallback((points: number): number => {
     let spent = 0
@@ -2102,17 +2123,6 @@ export function GameRoom() {
         if (reward.hearts > 0) {
           dispatch({ type: "PAY_VOICES", amount: -reward.hearts })
         }
-        for (let i = 0; i < reward.itemCount; i++) {
-          dispatch({
-            type: "ADD_INVENTORY_ITEM",
-            item: {
-              type: reward.item,
-              fromPlayerId: 0,
-              fromPlayerName: "Система",
-              timestamp: Date.now() + i,
-            },
-          })
-        }
         claimedNow.push(lvl)
       }
 
@@ -2136,9 +2146,7 @@ export function GameRoom() {
         const lastLevel = claimedNow[claimedNow.length - 1]
         const reward = LEVEL_REWARDS.find((r) => r.level === lastLevel)
         if (reward) {
-          const itemMeta = LEVEL_REWARD_ITEM_META[reward.item]
-          const itemLabel = reward.itemCount > 1 ? `${itemMeta.label} x${reward.itemCount}` : itemMeta.label
-          showToast(`Уровень ${lastLevel}: +${reward.hearts} ❤ и ${itemMeta.emoji} ${itemLabel}`, "success")
+          showToast(`Уровень ${lastLevel}: +${reward.hearts} монет ❤`, "success")
         }
       }
     },
@@ -2153,7 +2161,6 @@ export function GameRoom() {
       dailyProgressPoints,
       dailyRewardedLevels,
       LEVEL_REWARDS,
-      LEVEL_REWARD_ITEM_META,
       getDailyLevelByPoints,
     ],
   )
@@ -2972,6 +2979,16 @@ export function GameRoom() {
                   dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: Date.now() + 30 * 60 * 1000 })
                   if (currentUser) {
                     dispatch({ type: "SET_BOTTLE_DONOR", playerId: currentUser.id, playerName: currentUser.name })
+                    dispatch({
+                      type: "ADD_LOG",
+                      entry: {
+                        id: generateLogId(),
+                        type: "system",
+                        fromPlayer: currentUser,
+                        text: `${currentUser.name} купил(а) бутылочку «${skin.name}»`,
+                        timestamp: Date.now(),
+                      },
+                    })
                   }
                   showToast("Бутылочка куплена", "success")
                 }
@@ -4243,7 +4260,7 @@ export function GameRoom() {
                       >
                         <span>Уровень {reward.level} · {reward.title}</span>
                         <span className="tabular-nums">
-                          +{reward.hearts} ❤ · {LEVEL_REWARD_ITEM_META[reward.item].emoji} {LEVEL_REWARD_ITEM_META[reward.item].label} x{reward.itemCount}
+                          +{reward.hearts} монет ❤
                         </span>
                       </div>
                     )
