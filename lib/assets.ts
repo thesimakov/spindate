@@ -5,8 +5,10 @@
  * В браузере basePath при необходимости берётся из pathname (первый сегмент URL),
  * чтобы картинки грузились даже если переменная не была задана при сборке.
  */
+const IS_PAGES_BUILD =
+  typeof process !== "undefined" && process.env?.BUILD_FOR_PAGES === "true"
 const BUILD_BASE_PATH =
-  typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH
+  IS_PAGES_BUILD && typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH
     ? String(process.env.NEXT_PUBLIC_BASE_PATH).replace(/\/$/, "")
     : ""
 const APP_URL =
@@ -17,7 +19,11 @@ const APP_URL =
 function getBasePath(): string {
   // SSR: используем только переменную сборки
   if (typeof window === "undefined") return BUILD_BASE_PATH
-  // В браузере всегда смотрим по хосту: одна сборка может быть на lemnity.ru (без basePath) и на GitHub Pages (с /spindate)
+  // В браузере сначала используем basePath из сборки.
+  // Это важно для деплоя в подпапку на собственном домене (не github.io).
+  if (BUILD_BASE_PATH) return BUILD_BASE_PATH
+
+  // Фолбэк: на GitHub Pages basePath = первый сегмент URL.
   const host = window.location.hostname
   if (host.includes("github.io") || host.includes("github.com")) {
     const segments = window.location.pathname.split("/").filter(Boolean)

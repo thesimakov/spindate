@@ -60,6 +60,8 @@ function circlePositions(count: number, radiusX: number, radiusY: number) {
   })
 }
 
+const DAILY_EMOTION_LIMIT = 50
+
 
 /* ------------------------------------------------------------------ */
 /*  Flying emoji animation                                            */
@@ -604,7 +606,7 @@ export function GameRoom() {
     const kissUsed = uid ? getTodayActionCount(uid, "kiss") : 0
     const beerUsed = uid ? getTodayActionCount(uid, "beer") : 0
     const cocktailUsed = uid ? getTodayActionCount(uid, "cocktail") : 0
-    const limit = 10
+    const limit = DAILY_EMOTION_LIMIT
     return [
       { id: "kiss", label: "Поцелуй", emoji: "💋", used: kissUsed, left: Math.max(0, limit - kissUsed), limit },
       { id: "beer", label: "Пиво", emoji: "🍺", used: beerUsed, left: Math.max(0, limit - beerUsed), limit },
@@ -1150,7 +1152,7 @@ export function GameRoom() {
     const pairCombo = getPairGenderCombo(tp, tp2)
     const actionCost = getEffectiveActionCost(actionId, pairCombo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = 10
+    const dailyLimit = DAILY_EMOTION_LIMIT
 
     // Стоимость списываем только, если действие делает живой игрок.
     // Боты (isBot) играют «за счёт системы» и не трогают баланс пользователя.
@@ -1240,7 +1242,7 @@ export function GameRoom() {
     const pairCombo = getPairGenderCombo(resolvedTargetPlayer, resolvedTargetPlayer2)
     const actionCost = getEffectiveActionCost(actionId, pairCombo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = 10
+    const dailyLimit = DAILY_EMOTION_LIMIT
 
     // Оплата за ответную эмоцию (та же цена, что и за основное действие)
     const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
