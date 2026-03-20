@@ -13,6 +13,8 @@ export interface Player {
   isBot?: boolean
   online?: boolean
   isVip?: boolean
+  /** VIP активен до этого времени (ms). Если не задано, то как бессрочный флаг. */
+  vipUntilTs?: number
   authProvider?: "vk" | "login"
   /** Город (если указан в профиле) */
   city?: string
@@ -118,16 +120,16 @@ export interface PairAction {
 
 export const PAIR_ACTIONS: PairAction[] = [
   // M+F
-  { id: "kiss",    label: "Поцеловать",         icon: "kiss",     cost: 0,  combo: ["MF"] },
-  { id: "flowers", label: "Подарить цветы",     icon: "flowers",  cost: 5,  combo: ["MF", "FF"] },
-  { id: "diamond", label: "Подарить бриллиант", icon: "diamond",  cost: 20, combo: ["MF"] },
+  { id: "kiss",    label: "Поцеловать",         icon: "kiss",     cost: 1, combo: ["MF"] },
+  { id: "flowers", label: "Подарить цветы",     icon: "flowers",  cost: 1, combo: ["MF", "FF"] },
+  { id: "diamond", label: "Подарить бриллиант", icon: "diamond",  cost: 3, combo: ["MF"] },
   // M+M
-  { id: "beer",    label: "Выпить пива",        icon: "beer",     cost: 0,  combo: ["MM"] },
-  { id: "banya",   label: "Парить вениками",    icon: "banya",    cost: 5,  combo: ["MM"] },
-  { id: "tools",   label: "Подарить инструменты", icon: "tools",  cost: 1,  combo: ["MM"] },
+  { id: "beer",    label: "Выпить пива",        icon: "beer",     cost: 1, combo: ["MM"] },
+  { id: "banya",   label: "Парить вениками",    icon: "banya",    cost: 1, combo: ["MM"] },
+  { id: "tools",   label: "Подарить инструменты", icon: "tools",  cost: 2, combo: ["MM"] },
   // F+F
-  { id: "lipstick", label: "Губная помада",     icon: "lipstick", cost: 5,  combo: ["FF"] },
-  { id: "cocktail", label: "Коктейль",          icon: "cocktail", cost: 0,  combo: ["FF"] },
+  { id: "lipstick", label: "Губная помада",     icon: "lipstick", cost: 1, combo: ["FF"] },
+  { id: "cocktail", label: "Коктейль",          icon: "cocktail", cost: 1, combo: ["FF"] },
   // Universal
   { id: "skip",    label: "Пропустить",         icon: "skip",     cost: 0,  combo: ["MM", "MF", "FF"] },
 ]
@@ -256,7 +258,7 @@ export type GameAction =
   | { type: "EXCHANGE_VOICES_FOR_ROSES"; amount: number }
   /** Снять розы из инвентаря (например, вход в «Угадай-ка»). */
   | { type: "REMOVE_INVENTORY_ROSES"; amount: number }
-  /** Забрать приветственный подарок при первом заходе (500 сердец + 10 роз). */
+  /** Забрать приветственный подарок при первом заходе (150 сердец). */
   | { type: "CLAIM_WELCOME_GIFT" }
   /** Угадай-ка: добавить выигранный тур; pairPartnerId — с кем в паре (для учёта «дружить профилями»). */
   | { type: "UGADAIKA_ADD_ROUND_WON"; pairPartnerId?: number }
@@ -267,7 +269,7 @@ export type GameAction =
   | { type: "SET_COURTSHIP_PROFILE_ALLOWED"; playerId: number; allowed: boolean }
   | { type: "SET_ALLOW_CHAT_INVITE"; playerId: number; allowed: boolean }
   // VIP
-  | { type: "SET_VIP_STATUS"; playerId: number; isVip: boolean }
+  | { type: "SET_VIP_STATUS"; playerId: number; isVip: boolean; vipUntilTs?: number }
   // Bottle skin
   | { type: "SET_BOTTLE_SKIN"; skin: "classic" | "ruby" | "neon" | "frost" | "baby" | "vip" | "milk" }
   /** Сбросить анимацию «вернулся к нам» после показа. */

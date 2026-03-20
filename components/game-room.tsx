@@ -33,6 +33,8 @@ import { PlayerAvatar } from "@/components/player-avatar"
 import { TableDecorations } from "@/components/decorations"
 import { RatingModal } from "@/components/rating-screen"
 import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
+import { InlineToast } from "@/components/ui/inline-toast"
+import { useInlineToast } from "@/hooks/use-inline-toast"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -237,6 +239,8 @@ export function GameRoom() {
   const [tableLoading, setTableLoading] = useState(false)
   const lastTableIdRef = useRef<number | null>(null)
 
+  const { toast, showToast } = useInlineToast(2000)
+
   useEffect(() => {
     // При первом входе просто запоминаем стол
     if (lastTableIdRef.current === null) {
@@ -352,13 +356,21 @@ export function GameRoom() {
     try {
       const raw = localStorage.getItem(WELCOME_GIFT_KEY)
       const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+      // Пользователи по логину получают стартовые 150 сердец сразу при входе.
+      if (currentUser.authProvider === "login" && voiceBalance >= 150) {
+        if (!stored[String(currentUser.id)]) {
+          stored[String(currentUser.id)] = true
+          localStorage.setItem(WELCOME_GIFT_KEY, JSON.stringify(stored))
+        }
+        return
+      }
       if (!stored[String(currentUser.id)]) {
         setShowWelcomeGift(true)
       }
     } catch {
       setShowWelcomeGift(true)
     }
-  }, [currentUser?.id])
+  }, [currentUser?.id, currentUser?.authProvider, voiceBalance])
 
   const handleClaimWelcomeGift = useCallback(() => {
     dispatch({ type: "CLAIM_WELCOME_GIFT" })
@@ -512,7 +524,8 @@ export function GameRoom() {
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id
-  const isVip = !!players.find(p => p.id === currentUser?.id)?.isVip
+  const myPlayer = players.find(p => p.id === currentUser?.id)
+  const isVip = !!myPlayer?.isVip && (myPlayer.vipUntilTs == null || myPlayer.vipUntilTs > Date.now())
   const nowTs = Date.now()
   const isCurrentTurnDrunk =
     !!currentTurnPlayer &&
@@ -562,6 +575,42 @@ export function GameRoom() {
     const s = totalSec % 60
     return `${m}:${String(s).padStart(2, "0")}`
   }
+
+  const getEffectiveActionCost = useCallback(
+    (actionId: string, combo: PairGenderCombo | null): number => {
+      const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
+      if (!actionDef) return 0
+      // Цветы: для М/Ж — 2, для Ж/Ж — 1
+      if (actionId === "flowers" && combo === "MF") return 2
+      return actionDef.cost
+    },
+    [],
+  )
+
+  const getTodayActionCount = useCallback(
+    (playerId: number, actionId: string): number => {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      const start = d.getTime()
+      return gameLog.filter(
+        (e) => e.fromPlayer?.id === playerId && e.type === actionId && e.timestamp >= start,
+      ).length
+    },
+    [gameLog],
+  )
+
+  const limitedEmotionCounters = useMemo(() => {
+    const uid = currentUser?.id
+    const kissUsed = uid ? getTodayActionCount(uid, "kiss") : 0
+    const beerUsed = uid ? getTodayActionCount(uid, "beer") : 0
+    const cocktailUsed = uid ? getTodayActionCount(uid, "cocktail") : 0
+    const limit = 10
+    return [
+      { id: "kiss", label: "Поцелуй", emoji: "💋", used: kissUsed, left: Math.max(0, limit - kissUsed), limit },
+      { id: "beer", label: "Пиво", emoji: "🍺", used: beerUsed, left: Math.max(0, limit - beerUsed), limit },
+      { id: "cocktail", label: "Коктейль", emoji: "🍹", used: cocktailUsed, left: Math.max(0, limit - cocktailUsed), limit },
+    ] as const
+  }, [currentUser?.id, getTodayActionCount])
 
   const getKissCountForPlayer = useCallback(
     (playerId: number) =>
@@ -1098,11 +1147,26 @@ export function GameRoom() {
     const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
     if (!actionDef) return
 
+    const pairCombo = getPairGenderCombo(tp, tp2)
+    const actionCost = getEffectiveActionCost(actionId, pairCombo)
+    const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
+    const dailyLimit = 10
+
     // Стоимость списываем только, если действие делает живой игрок.
     // Боты (isBot) играют «за счёт системы» и не трогают баланс пользователя.
-    if (!currentTurnPlayer.isBot && actionDef.cost > 0) {
-      if (voiceBalance < actionDef.cost) return
-      dispatch({ type: "PAY_VOICES", amount: actionDef.cost })
+    if (!currentTurnPlayer.isBot && hasDailyLimit) {
+      const todayCount = getTodayActionCount(currentTurnPlayer.id, actionId)
+      if (todayCount >= dailyLimit) {
+        showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
+        return
+      }
+    }
+    if (!currentTurnPlayer.isBot && actionCost > 0) {
+      if (voiceBalance < actionCost) {
+        showToast("Недостаточно сердец", "error")
+        return
+      }
+      dispatch({ type: "PAY_VOICES", amount: actionCost })
     }
 
     const spinnerIdx = players.findIndex((p) => p.id === currentTurnPlayer.id)
@@ -1173,11 +1237,26 @@ export function GameRoom() {
     const toIdx = players.findIndex((p) => p.id === to.id)
     if (fromIdx === -1 || toIdx === -1) return
 
+    const pairCombo = getPairGenderCombo(resolvedTargetPlayer, resolvedTargetPlayer2)
+    const actionCost = getEffectiveActionCost(actionId, pairCombo)
+    const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
+    const dailyLimit = 10
+
     // Оплата за ответную эмоцию (та же цена, что и за основное действие)
     const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
-    if (actionDef && actionDef.cost > 0) {
-      if (voiceBalance < actionDef.cost) return
-      dispatch({ type: "PAY_VOICES", amount: actionDef.cost })
+    if (actionDef && hasDailyLimit) {
+      const todayCount = getTodayActionCount(from.id, actionId)
+      if (todayCount >= dailyLimit) {
+        showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
+        return
+      }
+    }
+    if (actionDef && actionCost > 0) {
+      if (voiceBalance < actionCost) {
+        showToast("Недостаточно сердец", "error")
+        return
+      }
+      dispatch({ type: "PAY_VOICES", amount: actionCost })
     }
 
     const emojiMap: Record<string, string> = {
@@ -1368,7 +1447,11 @@ export function GameRoom() {
   /* ---- invite / pay ---- */
   const handleInvite = async () => {
     const tp = resolvedTargetPlayer
-    if (!tp || voiceBalance < 5) return
+    if (!tp) return
+    if (voiceBalance < 5) {
+      showToast("Недостаточно сердец для приглашения", "error")
+      return
+    }
     setPaymentLoading(true)
     try {
       if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
@@ -1388,6 +1471,7 @@ export function GameRoom() {
       })
       setShowPaymentDialog(false)
       dispatch({ type: "OPEN_CHAT", player: tp })
+      showToast("Приглашение отправлено", "success")
     } finally {
       setPaymentLoading(false)
     }
@@ -1519,7 +1603,10 @@ export function GameRoom() {
 
   /* ---- extra spin (pay 50 voices) ---- */
   const handleExtraSpin = () => {
-    if (voiceBalance < 10) return
+    if (voiceBalance < 10) {
+      showToast("Нужно минимум 10 сердец", "error")
+      return
+    }
     dispatch({ type: "PAY_VOICES", amount: 10 })
     dispatch({
       type: "ADD_LOG",
@@ -1534,6 +1621,7 @@ export function GameRoom() {
     if (currentUser) {
       dispatch({ type: "REQUEST_EXTRA_TURN", playerId: currentUser.id })
     }
+    showToast("Внеочередное кручение оплачено", "success")
   }
 
   /* ---- get pair combo for current result ---- */
@@ -1681,10 +1769,16 @@ export function GameRoom() {
       if (!currentUser) return
       const dq = dailyQuests?.dateKey === todayKey ? dailyQuests : undefined
       const claimed = dq?.claimed ?? [false, false, false, false, false]
-      if (claimed[questIndex]) return
+      if (claimed[questIndex]) {
+        showToast("Награда уже получена", "info")
+        return
+      }
       const q = todayQuests[questIndex]
       const progress = getProgressForType(q.type)
-      if (progress < q.target) return
+      if (progress < q.target) {
+        showToast("Задание ещё не выполнено", "info")
+        return
+      }
       dispatch({ type: "CLAIM_DAILY_QUEST", questIndex, dateKey: todayKey })
       dispatch({
         type: "ADD_INVENTORY_ITEM",
@@ -1697,8 +1791,9 @@ export function GameRoom() {
       })
       setConfettiQuestIndex(questIndex)
       setTimeout(() => setConfettiQuestIndex(null), 2200)
+      showToast("Награда: роза в инвентаре", "success")
     },
-    [currentUser, dailyQuests, todayKey, todayQuests, getProgressForType, dispatch],
+    [currentUser, dailyQuests, todayKey, todayQuests, getProgressForType, dispatch, showToast],
   )
 
   /* ---- смена стола ---- */
@@ -1751,13 +1846,15 @@ export function GameRoom() {
 
     dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId: 7000 + Math.floor(Math.random() * 1000) })
     dispatch({ type: "SET_TABLES_COUNT", tablesCount: nextTablesCount })
+    showToast("Стол обновлён — новые игроки", "success")
   }
 
   /* ================================================================ */
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
-    <div className="relative flex h-dvh overflow-hidden game-bg-animated">
+    <div className="cinematic-desktop relative flex h-dvh overflow-hidden game-bg-animated">
+      {toast && <InlineToast toast={toast} />}
       <WelcomeGiftDialog
         open={showWelcomeGift}
         onOpenChange={setShowWelcomeGift}
@@ -1885,10 +1982,21 @@ export function GameRoom() {
             <p className="text-[10px] mb-2" style={{ color: "#94a3b8" }}>
               {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
             </p>
+            <div className="mb-2 grid grid-cols-3 gap-1">
+              {limitedEmotionCounters.map((row) => (
+                <div key={row.id} className="rounded-md px-1.5 py-1 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
+                  <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
+                  <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
+                    {row.used}/{row.limit}
+                  </p>
+                </div>
+              ))}
+            </div>
             <div className="flex flex-col gap-1.5">
               {availableActions.map(action => {
                 const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                const canAfford = action.cost === 0 || voiceBalance >= action.cost
+                const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                const canAfford = actionCost === 0 || voiceBalance >= actionCost
                 return (
                   <button
                     key={action.id}
@@ -1904,9 +2012,9 @@ export function GameRoom() {
                   >
                     {renderActionIcon(action)}
                     <span className="flex-1 text-left">{action.label}</span>
-                    {action.cost > 0 && (
+                    {actionCost > 0 && (
                       <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
-                        {action.cost}
+                        {actionCost}
                         <Heart className="h-3.5 w-3.5" fill="currentColor" />
                       </span>
                     )}
@@ -1935,10 +2043,21 @@ export function GameRoom() {
             <p className="text-[10px] mb-2" style={{ color: "#9ca3af" }}>
               {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
             </p>
+            <div className="mb-2 grid grid-cols-3 gap-1">
+              {limitedEmotionCounters.map((row) => (
+                <div key={row.id} className="rounded-md px-1.5 py-1 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
+                  <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
+                  <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
+                    {row.used}/{row.limit}
+                  </p>
+                </div>
+              ))}
+            </div>
             <div className="flex flex-col gap-1.5">
               {availableActions.map(action => {
                 const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                const canAfford = action.cost === 0 || voiceBalance >= action.cost
+                const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                const canAfford = actionCost === 0 || voiceBalance >= actionCost
                 return (
                   <button
                     key={action.id}
@@ -1955,9 +2074,9 @@ export function GameRoom() {
                   >
                     {renderActionIcon(action)}
                     <span className="flex-1 text-left">{action.label}</span>
-                    {action.cost > 0 && (
+                    {actionCost > 0 && (
                       <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
-                        {action.cost}
+                        {actionCost}
                         <Heart className="h-3.5 w-3.5" fill="currentColor" />
                       </span>
                     )}
@@ -2231,57 +2350,60 @@ export function GameRoom() {
           <div
             className="flex items-center gap-2 rounded-[999px] px-4 py-2"
             style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
             <Heart className="h-4 w-4" style={{ color: "#e8c06a" }} fill="currentColor" />
-            <span className="text-xs font-bold" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-            <span className="text-[10px]" style={{ color: "#94a3b8" }}>{"Банк сердец"}</span>
+            <span className="text-sm font-bold" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+            <span className="text-xs" style={{ color: "#cbd5e1" }}>{"Банк сердец"}</span>
           </div>
 
           {/* Магазин */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
             style={{
-              background: "linear-gradient(135deg, #facc15 0%, #f97316 100%)",
-              border: "1px solid #a15c10",
-              boxShadow: "0 2px 0 #92400e",
+              background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)",
+              border: "1px solid rgba(245, 158, 11, 0.8)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 20px rgba(251,146,60,0.35)",
             }}
           >
             <Gift className="h-4 w-4" style={{ color: "#1f2937" }} />
-            <span className="text-xs font-semibold" style={{ color: "#1f2937" }}>{"Магазин"}</span>
+            <span className="text-sm font-semibold" style={{ color: "#1f2937" }}>{"Магазин"}</span>
           </button>
 
           {/* Профиль */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "profile" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
             style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
             <User className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
+            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
           </button>
 
           {/* Бутылочка */}
           <button
             onClick={() => setShowBottleCatalog(true)}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
             style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
             <span className="text-base">{"🍾"}</span>
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>
+            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>
               {"Бутылочка"}
             </span>
             {cooldownLeftMs > 0 && (
-              <span className="ml-auto text-[10px] font-semibold" style={{ color: "#e8c06a" }}>
+              <span className="ml-auto text-xs font-semibold" style={{ color: "#e8c06a" }}>
                 {formatCooldown(cooldownLeftMs)}
               </span>
             )}
@@ -2290,54 +2412,58 @@ export function GameRoom() {
           {/* Сменить стол */}
           <button
             onClick={handleChangeTable}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
             style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
             <RotateCw className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
+            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
           </button>
 
           {/* Рейтинг */}
           <button
             onClick={() => setShowRatingModal(true)}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
             style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
             <Trophy className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
+            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
           </button>
 
           {/* Избранное */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "favorites" })}
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
             style={{
-              background: "rgba(15, 23, 42, 0.9)",
-              border: "1px solid #334155",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
             <Star className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
+            <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
           </button>
 
           {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто); на планшете — по ширине как остальные кнопки меню */}
           <div className="lg:hidden w-full">
             <button
               onClick={() => setShowChatListModal(true)}
-              className="flex w-full items-center justify-start gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+              className="flex w-full items-center justify-start gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
               style={{
-                background: "rgba(15, 23, 42, 0.9)",
-                border: "1px solid #334155",
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                border: "1px solid rgba(56,189,248,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
               }}
             >
               <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-              <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
+              <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
             </button>
           </div>
 
@@ -2345,21 +2471,22 @@ export function GameRoom() {
           {currentUser && (
             <button
               onClick={() => setShowDailyTasksModal(true)}
-              className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110"
+              className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
               style={{
-                background: "rgba(15, 23, 42, 0.9)",
-                border: "1px solid #334155",
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                border: "1px solid rgba(56,189,248,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
               }}
             >
               <Sparkles className="h-4 w-4" style={{ color: "#e8c06a" }} />
-              <span className="text-xs font-semibold" style={{ color: "#f0e0c8" }}>{"Ежедневные задачи"}</span>
+              <span className="text-sm font-semibold" style={{ color: "#f0e0c8" }}>{"Ежедневные задачи"}</span>
             </button>
           )}
 
           {/* Количество столов */}
-          <div className="flex items-center gap-2 rounded-[999px] px-4 py-2" style={{ background: "rgba(15, 23, 42, 0.8)" }}>
+          <div className="flex items-center gap-2 rounded-[999px] px-4 py-2" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}>
             <RotateCw className="h-3 w-3" style={{ color: "#94a3b8" }} />
-            <span className="text-[10px]" style={{ color: "#94a3b8" }}>
+            <span className="text-xs" style={{ color: "#94a3b8" }}>
               {"Столов в игре: "}{tablesCount ?? "—"}
             </span>
           </div>
@@ -2487,14 +2614,25 @@ export function GameRoom() {
                     dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
                     return
                   }
-                  if (purchaseLocked) return
-                  if (voiceBalance < skin.cost) return
+                  if (vipLocked) {
+                    showToast("Эта бутылочка только для VIP", "info")
+                    return
+                  }
+                  if (cooldownActive && !owned && !isClassic) {
+                    showToast(`Покупки через ${formatCooldown(cooldownLeftMs)}`, "info")
+                    return
+                  }
+                  if (voiceBalance < skin.cost) {
+                    showToast("Недостаточно сердец", "error")
+                    return
+                  }
                   dispatch({ type: "PAY_VOICES", amount: skin.cost })
                   dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
                   dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: Date.now() + 30 * 60 * 1000 })
                   if (currentUser) {
                     dispatch({ type: "SET_BOTTLE_DONOR", playerId: currentUser.id, playerName: currentUser.name })
                   }
+                  showToast("Бутылочка куплена", "success")
                 }
 
                 const disabled = purchaseLocked || (!owned && !isClassic && voiceBalance < skin.cost)
@@ -2646,28 +2784,46 @@ export function GameRoom() {
                   maxHeight: "calc(100vh - 260px)",
                 }
               : {}),
-            borderColor: "rgba(51, 65, 85, 0.95)",
-            background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
+            borderColor: "rgba(56, 189, 248, 0.35)",
+            background:
+              "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",
             boxShadow: isMobileOrTablet
-              ? "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)"
-              : "0 20px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(30,41,59,0.9), inset 0 0 40px rgba(0,0,0,0.7)",
+              ? "0 10px 36px rgba(0,0,0,0.52), 0 0 40px rgba(56,189,248,0.12), inset 0 1px 0 rgba(255,255,255,0.05)"
+              : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1), inset 0 0 0 1px rgba(56,189,248,0.2), inset 0 0 60px rgba(0,0,0,0.65)",
           }}
         >
+          {/* Холодное внешнее свечение по периметру */}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[inherit]"
+            style={{
+              boxShadow: "inset 0 0 0 1px rgba(125, 211, 252, 0.22), 0 0 22px rgba(56,189,248,0.18)",
+            }}
+          />
           {/* Внутренняя теплая золотая рамка */}
           <div
             className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobileOrTablet ? "inset-2 sm:inset-4" : "inset-4"}`}
             style={{
-              border: "3px solid rgba(244, 193, 107, 0.95)",
-              boxShadow: "0 0 22px rgba(244,193,107,0.75), inset 0 0 26px rgba(0,0,0,0.85)",
+              border: "3px solid rgba(250, 204, 21, 0.88)",
+              boxShadow: "0 0 28px rgba(250,204,21,0.45), inset 0 0 34px rgba(0,0,0,0.78)",
             }}
           />
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
             className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobileOrTablet ? "inset-2" : "inset-3"}`}
             style={{
-              boxShadow: "inset 0 0 50px rgba(0,0,0,0.8)",
+              boxShadow: "inset 0 0 56px rgba(0,0,0,0.78)",
               background:
-                "radial-gradient(circle at center, rgba(15,23,42,0.9) 0%, rgba(15,23,42,0.98) 70%, rgba(2,6,23,1) 100%)",
+                "radial-gradient(circle at center, rgba(15,23,42,0.82) 0%, rgba(15,23,42,0.96) 68%, rgba(2,6,23,1) 100%)",
+            }}
+          />
+          {/* Центральный софт-спот под бутылкой */}
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: isMobile ? 130 : 190,
+              height: isMobile ? 130 : 190,
+              background: "radial-gradient(circle, rgba(56,189,248,0.16) 0%, rgba(56,189,248,0.05) 45%, transparent 75%)",
+              filter: "blur(1px)",
             }}
           />
 
@@ -2772,7 +2928,10 @@ export function GameRoom() {
 
           {/* ---- BOTTLE in the centre (на мобильной — крупнее) ---- */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-            <div style={isMobile ? { transform: "scale(1.4)" } : isTablet ? { transform: "scale(0.9)" } : undefined}>
+            <div
+              style={isMobile ? { transform: "scale(1.4)" } : isTablet ? { transform: "scale(0.9)" } : undefined}
+              className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
+            >
               <Bottle
                 angle={bottleAngle}
                 isSpinning={isSpinning}
@@ -2789,15 +2948,15 @@ export function GameRoom() {
                 onClick={handleSpin}
                 className="pointer-events-auto flex items-center justify-center gap-2 rounded-full font-bold transition-all hover:brightness-110 hover:scale-105 active:scale-95 whitespace-nowrap shadow-lg spin-btn-pulse"
                 style={{
-                  minWidth: 72,
-                  minHeight: 72,
-                  padding: "14px 24px",
+                  minWidth: 78,
+                  minHeight: 78,
+                  padding: "14px 26px",
                   fontSize: "18px",
-                  background: "linear-gradient(180deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
+                  background: "linear-gradient(180deg, #22c55e 0%, #16a34a 42%, #15803d 100%)",
                   backgroundColor: "#16a34a",
                   color: "#fff",
                   border: "3px solid #14532d",
-                  boxShadow: "0 4px 0 #14532d, 0 8px 24px rgba(0,0,0,0.5)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 0 #14532d, 0 12px 28px rgba(0,0,0,0.55)",
                   opacity: 1,
                 }}
               >
@@ -2875,11 +3034,22 @@ export function GameRoom() {
               <p className="text-center text-[11px] font-semibold" style={{ color: "#e8c06a" }}>
                 {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
               </p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {limitedEmotionCounters.map((row) => (
+                  <div key={row.id} className="rounded-md px-1.5 py-1 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
+                    <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
+                    <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
+                      {row.used}/{row.limit}
+                    </p>
+                  </div>
+                ))}
+              </div>
               {isMyTurn ? (
                 <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto">
                   {availableActions.map(action => {
                     const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                    const canAfford = action.cost === 0 || voiceBalance >= action.cost
+                    const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                    const canAfford = actionCost === 0 || voiceBalance >= actionCost
                     return (
                       <button
                         key={action.id}
@@ -2895,9 +3065,9 @@ export function GameRoom() {
                       >
                         {renderActionIcon(action)}
                         <span className="flex-1 text-left truncate">{action.label}</span>
-                        {action.cost > 0 && (
+                        {actionCost > 0 && (
                           <span className="flex items-center gap-0.5 text-[13px] opacity-90 shrink-0">
-                            {action.cost}
+                            {actionCost}
                             <Heart className="h-3 w-3" fill="currentColor" />
                           </span>
                         )}
@@ -2910,7 +3080,8 @@ export function GameRoom() {
                 <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto">
                   {availableActions.map(action => {
                     const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                    const canAfford = action.cost === 0 || voiceBalance >= action.cost
+                    const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                    const canAfford = actionCost === 0 || voiceBalance >= actionCost
                     return (
                       <button
                         key={action.id}
@@ -2927,9 +3098,9 @@ export function GameRoom() {
                       >
                         {renderActionIcon(action)}
                         <span className="flex-1 text-left truncate">{action.label}</span>
-                        {action.cost > 0 && (
+                        {actionCost > 0 && (
                           <span className="flex items-center gap-0.5 text-[13px] opacity-90 shrink-0">
-                            {action.cost}
+                            {actionCost}
                             <Heart className="h-3 w-3" fill="currentColor" />
                           </span>
                         )}
@@ -3012,6 +3183,7 @@ export function GameRoom() {
             )}
           </div>
         </div>
+
         </div>
 
         {/* ---- Общий чат под столом (мобильная и планшет); на планшете — по ширине как игровое поле ---- */}
@@ -3122,7 +3294,7 @@ export function GameRoom() {
       </div>
 
       {/* ---- RIGHT PANEL: мини-игра + поклонники + чат — на ПК одно свёртываемое окно ---- */}
-      <div className="relative z-20 hidden md:flex min-h-0 shrink-0 flex-col border-l border-slate-700/60 bg-slate-900/40">
+      <div className="relative z-20 hidden md:flex min-h-0 shrink-0 flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65">
         {rightPanelCollapsed ? (
           <button
             type="button"
@@ -3138,7 +3310,7 @@ export function GameRoom() {
         ) : (
         <div className="flex min-h-0 w-[230px] flex-1 flex-col gap-3 pt-2 pb-3 pr-2 pl-1">
           {/* Заголовок панели с кнопкой свернуть */}
-          <div className="flex items-center justify-between gap-2 mx-2 mb-0.5 px-2 py-1.5 rounded-t-lg" style={{ background: "rgba(15, 23, 42, 0.9)", borderBottom: "1px solid rgba(71, 85, 105, 0.6)" }}>
+          <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 rounded-t-lg px-2 py-1.5" style={{ background: "rgba(15, 23, 42, 0.9)", borderBottom: "1px solid rgba(56, 189, 248, 0.35)" }}>
             <span className="text-xs font-bold truncate" style={{ color: "#e8c06a" }}>Свернуть</span>
             <button
               type="button"
@@ -3288,16 +3460,16 @@ export function GameRoom() {
         <div
           className="mx-2 flex min-h-0 flex-1 flex-col rounded-2xl overflow-hidden"
           style={{
-            borderColor: "transparent",
-            background: "rgba(0,0,0,0.45)",
-            boxShadow: "0 8px 18px rgba(0,0,0,0.8)",
+            border: "1px solid rgba(56, 189, 248, 0.24)",
+            background: "linear-gradient(180deg, rgba(2,6,23,0.7) 0%, rgba(2,6,23,0.5) 100%)",
+            boxShadow: "0 10px 24px rgba(2,6,23,0.6)",
           }}
         >
           <div
             className="flex shrink-0 items-center gap-2 rounded-t-lg px-3 py-2"
             style={{
-              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-              borderBottom: "1px solid rgba(196,148,58,0.9)",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.9) 100%)",
+              borderBottom: "1px solid rgba(56,189,248,0.35)",
             }}
           >
             <MessageCircle className="h-4 w-4" style={{ color: "#e8c06a" }} />
@@ -3850,7 +4022,7 @@ export function GameRoom() {
 
                 {/* Actions */}
                 <div className="flex flex-col gap-2">
-                  {/* Ухаживание — 150 сердец; до 5 игроков в сутки за одним пользователем */}
+                  {/* Ухаживание — приватный чат за 50 сердец; до 5 игроков в сутки за одним пользователем */}
                   {(() => {
                     const todayKey = new Date().toISOString().slice(0, 10)
                     const careEntriesToday = gameLog.filter(
@@ -3862,14 +4034,26 @@ export function GameRoom() {
                     const uniqueCarerIds = new Set(careEntriesToday.map((e) => e.fromPlayer?.id).filter(Boolean))
                     const carersCount = uniqueCarerIds.size
                     const currentUserAlreadyCared = currentUser && uniqueCarerIds.has(currentUser.id)
-                    const canCare = carersCount < 5 && !currentUserAlreadyCared && voiceBalance >= 150
-                    const hasAnyCarers = carersCount >= 1
+                    const canCare = carersCount < 5 && !currentUserAlreadyCared && voiceBalance >= 50
+                    const canOpenVk = !!currentUser && (courtshipProfileAllowed?.[playerMenuTarget.id] !== false) && voiceBalance >= 100
                     return (
                       <div className="mt-2 flex flex-col gap-2">
                         <button
                           onClick={() => {
-                            if (!canCare) return
-                            dispatch({ type: "PAY_VOICES", amount: 150 })
+                            if (!currentUser) return
+                            if (currentUserAlreadyCared) {
+                              showToast("Вы уже ухаживали сегодня", "info")
+                              return
+                            }
+                            if (carersCount >= 5) {
+                              showToast("Лимит ухаживаний за этим игроком на сегодня", "info")
+                              return
+                            }
+                            if (voiceBalance < 50) {
+                              showToast("Нужно 50 сердец", "error")
+                              return
+                            }
+                            dispatch({ type: "PAY_VOICES", amount: 50 })
                             dispatch({
                               type: "ADD_LOG",
                               entry: {
@@ -3881,6 +4065,9 @@ export function GameRoom() {
                                 timestamp: Date.now(),
                               },
                             })
+                            dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
+                            dispatch({ type: "CLOSE_PLAYER_MENU" })
+                            showToast("Приватный чат открыт", "success")
                           }}
                           disabled={!canCare}
                           className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-bold text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
@@ -3893,47 +4080,35 @@ export function GameRoom() {
                         >
                           <Heart className="h-4 w-4" fill="currentColor" />
                           <span className="flex-1 text-center">{"Ухаживание"}</span>
-                          <span className="text-[15px] opacity-90">{"150 ❤"}</span>
+                          <span className="text-[15px] opacity-90">{"50 ❤"}</span>
                         </button>
-                        {hasAnyCarers ? (
-                          courtshipProfileAllowed?.[playerMenuTarget.id] !== false ? (
-                            <a
-                              href={`https://vk.com/id${playerMenuTarget.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[15px] font-bold transition-all hover:brightness-110 active:scale-95"
-                              style={{
-                                background: "linear-gradient(180deg, #2787F5 0%, #1a6bd1 100%)",
-                                color: "#fff",
-                                border: "2px solid #1565c0",
-                                boxShadow: "0 2px 0 #0d47a1",
-                              }}
-                            >
-                              <User className="h-4 w-4" />
-                              {"Профиль ВК"}
-                            </a>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
-                                dispatch({ type: "CLOSE_PLAYER_MENU" })
-                              }}
-                              className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[15px] font-bold transition-all hover:brightness-110 active:scale-95"
-                              style={{
-                                background: "linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%)",
-                                color: "#fff",
-                                border: "2px solid #5b21b6",
-                                boxShadow: "0 2px 0 #4c1d95",
-                              }}
-                            >
-                              <MessageCircle className="h-4 w-4" />
-                              {"Написать личное сообщение"}
-                            </button>
-                          )
+                        {courtshipProfileAllowed?.[playerMenuTarget.id] !== false ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (voiceBalance < 100) {
+                                showToast("Нужно 100 сердец для перехода в VK", "error")
+                                return
+                              }
+                              dispatch({ type: "PAY_VOICES", amount: 100 })
+                              window.open(`https://vk.com/id${playerMenuTarget.id}`, "_blank", "noopener,noreferrer")
+                              showToast("Открыт профиль VK", "success")
+                            }}
+                            disabled={!canOpenVk}
+                            className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[15px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                            style={{
+                              background: "linear-gradient(180deg, #2787F5 0%, #1a6bd1 100%)",
+                              color: "#fff",
+                              border: "2px solid #1565c0",
+                              boxShadow: "0 2px 0 #0d47a1",
+                            }}
+                          >
+                            <User className="h-4 w-4" />
+                            {"Профиль ВК — 100 ❤"}
+                          </button>
                         ) : (
                           <p className="rounded-lg px-3 py-2.5 text-center text-[15px] font-medium" style={{ color: "#94a3b8", background: "rgba(15,23,42,0.6)", border: "1px solid #334155" }}>
-                            {"Увы, никто не ухаживает."}
+                            {"Если хотите пообщаться, но кнопка не работает — активируйте приват."}
                           </p>
                         )}
                       </div>
@@ -3944,8 +4119,13 @@ export function GameRoom() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
-                        if (!currentUser || voiceBalance < 50) return
+                        if (!currentUser) return
+                        if (voiceBalance < 50) {
+                          showToast("Нужно 50 сердец для роз", "error")
+                          return
+                        }
                         dispatch({ type: "GIVE_ROSE", fromPlayerId: currentUser.id, toPlayerId: playerMenuTarget.id })
+                        showToast("Розы подарены", "success")
                       }}
                       disabled={!currentUser || voiceBalance < 50}
                       className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-full px-4 py-2.5 font-bold text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
@@ -4191,14 +4371,21 @@ export function GameRoom() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (selectedFrameForGift == null) return
+                        if (selectedFrameForGift == null) {
+                          showToast("Выберите рамку", "info")
+                          return
+                        }
                         const isPremium = ["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift)
                         const cost = isPremium ? 5 : 0
-                        if (cost > 0 && voiceBalance < cost) return
+                        if (cost > 0 && voiceBalance < cost) {
+                          showToast("Недостаточно сердец для рамки", "error")
+                          return
+                        }
                         if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
                         dispatch({ type: "SET_AVATAR_FRAME", playerId: playerMenuTarget.id, frameId: selectedFrameForGift })
                         setShowFramePicker(false)
                         setSelectedFrameForGift(null)
+                        showToast("Рамка подарена", "success")
                       }}
                       disabled={selectedFrameForGift == null || (["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift ?? "") && voiceBalance < 5)}
                       className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold transition-all disabled:opacity-40"

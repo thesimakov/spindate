@@ -195,14 +195,100 @@
 
 /* Glow pulse for active player */
 @keyframes glowPulse {
-  0%, 100% { box-shadow: 0 0 18px rgba(80, 250, 255, 0.7); }
-  50% { box-shadow: 0 0 32px rgba(80, 250, 255, 1); }
+  0%, 100% {
+    box-shadow:
+      0 0 12px rgba(80, 250, 255, 0.55),
+      0 0 22px rgba(80, 250, 255, 0.32);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 18px rgba(80, 250, 255, 0.78),
+      0 0 34px rgba(80, 250, 255, 0.5);
+    transform: scale(1.015);
+  }
 }
 
 /* Target pulse */
 @keyframes targetPulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(220, 50, 50, 0.4); }
-  50% { box-shadow: 0 0 24px rgba(220, 50, 50, 0.8); }
+  0%, 100% {
+    box-shadow:
+      0 0 10px rgba(244, 114, 182, 0.4),
+      0 0 20px rgba(251, 146, 60, 0.24);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 18px rgba(244, 114, 182, 0.62),
+      0 0 30px rgba(251, 146, 60, 0.36);
+    transform: scale(1.02);
+  }
+}
+
+/* Профиль: после «Подарить розу» — кольцо как у цели за столом */
+.profile-rose-gift-target-ring {
+  border: 3px solid rgba(244, 114, 182, 0.92);
+  box-shadow:
+    0 0 12px rgba(244, 114, 182, 0.65),
+    0 0 24px rgba(251, 146, 60, 0.35);
+  animation: targetPulse 1.5s ease-in-out 2;
+}
+
+/* Летящая роза к аватарке (аналог flyEmoji со стола) */
+@keyframes profileRoseGiftFly {
+  0% {
+    transform: translate(-50%, -50%) translate(88px, 52px) scale(0.35) rotate(-18deg);
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  58% {
+    transform: translate(-50%, -50%) translate(0, 0) scale(1.12) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(0, 4px) scale(0.75);
+    opacity: 0;
+  }
+}
+
+.profile-rose-gift-fly-emoji {
+  animation: profileRoseGiftFly 1.75s ease-out forwards;
+}
+
+/* Взрыв мини-роз вокруг (коротко, как декор рамки «Розы») */
+@keyframes profileRoseBurstPetal {
+  0% {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.15) translateY(-10px);
+    opacity: 0;
+  }
+}
+
+.profile-rose-gift-burst-petal {
+  animation: profileRoseBurstPetal 1.1s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-rose-gift-target-ring {
+    animation: none;
+    opacity: 0.85;
+  }
+  .profile-rose-gift-fly-emoji {
+    animation: none;
+    opacity: 0;
+  }
+  .profile-rose-gift-burst-petal {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* Drunk bottle wobble */
@@ -212,6 +298,22 @@
   50%  { transform: translate3d(3px, -1px, 0) rotate(2deg); }
   75%  { transform: translate3d(-1px, 2px, 0) rotate(-1deg); }
   100% { transform: translate3d(2px, 0, 0) rotate(1.5deg); }
+}
+
+/* Idle-динамика бутылки, когда не крутится */
+@keyframes bottleIdleFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,0.34));
+  }
+  50% {
+    transform: translate3d(0, -2px, 0) scale(1.01);
+    filter: drop-shadow(0 10px 16px rgba(0,0,0,0.42));
+  }
+}
+
+.bottle-idle-float {
+  animation: bottleIdleFloat 3.2s ease-in-out infinite;
 }
 
 /* Arrow swap animation between two players */
@@ -294,6 +396,91 @@
 .frame-preview-anim-gradient { animation: frame-glow-gradient 2s ease-in-out infinite; }
 .frame-preview-anim-neon { animation: frame-glow-neon 1.8s ease-in-out infinite; }
 .frame-preview-anim-snow { animation: frame-glow-snow 2.2s ease-in-out infinite; }
+
+/* Модалка выбора рамки: активная карточка (пульсация обводки) */
+@keyframes frame-pick-card-active-free {
+  0%,
+  100% {
+    box-shadow:
+      0 0 16px rgba(56, 189, 248, 0.28),
+      0 0 0 1px rgba(56, 189, 248, 0.2),
+      0 8px 18px rgba(0, 0, 0, 0.28);
+    border-color: rgba(56, 189, 248, 0.65);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgba(56, 189, 248, 0.55),
+      0 0 52px rgba(56, 189, 248, 0.2),
+      0 8px 22px rgba(0, 0, 0, 0.32);
+    border-color: rgba(103, 232, 249, 0.95);
+  }
+}
+@keyframes frame-pick-card-active-premium {
+  0%,
+  100% {
+    box-shadow:
+      0 0 16px rgba(251, 191, 36, 0.32),
+      0 0 0 1px rgba(245, 158, 11, 0.22),
+      0 8px 18px rgba(0, 0, 0, 0.28);
+    border-color: rgba(251, 191, 36, 0.65);
+  }
+  50% {
+    box-shadow:
+      0 0 34px rgba(251, 191, 36, 0.58),
+      0 0 48px rgba(245, 158, 11, 0.22),
+      0 8px 22px rgba(0, 0, 0, 0.32);
+    border-color: rgba(253, 224, 71, 0.92);
+  }
+}
+@keyframes frame-pick-preview-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: brightness(1.08);
+  }
+}
+
+.frame-pick-card-free--idle {
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(71, 85, 105, 0.55);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+}
+.frame-pick-card-free--active {
+  background: rgba(56, 189, 248, 0.16);
+  border: 2px solid rgba(56, 189, 248, 0.72);
+  animation: frame-pick-card-active-free 2.2s ease-in-out infinite;
+}
+.frame-pick-card-premium--idle {
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(71, 85, 105, 0.55);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+}
+.frame-pick-card-premium--active {
+  background: rgba(251, 191, 36, 0.14);
+  border: 2px solid rgba(251, 191, 36, 0.72);
+  animation: frame-pick-card-active-premium 2.2s ease-in-out infinite;
+}
+.frame-pick-preview--pulse {
+  animation: frame-pick-preview-breathe 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame-pick-card-free--active {
+    animation: none;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.28);
+  }
+  .frame-pick-card-premium--active {
+    animation: none;
+    box-shadow: 0 0 22px rgba(251, 191, 36, 0.35);
+  }
+  .frame-pick-preview--pulse {
+    animation: none;
+  }
+}
 
 /* Пульсация кнопки «Крутить» (только масштаб, без прозрачности) */
 @keyframes spin-btn-pulse {
@@ -665,6 +852,23 @@
   }
 }
 
+/* Hover-polish аватарок: только для pointer=mouse */
+@media (hover: hover) and (pointer: fine) {
+  .game-avatar-shell {
+    transition: transform 0.2s ease, filter 0.2s ease;
+  }
+  .game-avatar-core {
+    transition: transform 0.2s ease, filter 0.2s ease;
+  }
+  .game-avatar-shell[data-current-turn="0"][data-target="0"]:hover {
+    transform: translateY(-1px);
+    filter: drop-shadow(0 6px 14px rgba(56, 189, 248, 0.18));
+  }
+  .game-avatar-shell[data-current-turn="0"][data-target="0"]:hover .game-avatar-core {
+    transform: scale(1.02);
+  }
+}
+
 /* Градиентный фон игры: светлая (по умолчанию) и тёмная тема */
 .game-bg-animated {
   position: relative;
@@ -825,6 +1029,47 @@
     linear-gradient(180deg, #020617 0%, #020617 40%, #020617 100%);
   background-size: 100% 100%;
   background-repeat: no-repeat;
+}
+
+/* Desktop-only cinematic polish: чуть глубже свет/контраст, без мобильной нагрузки */
+@media (min-width: 1024px) {
+  .cinematic-desktop {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .cinematic-desktop::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 50% 38%, rgba(56, 189, 248, 0.1) 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 120%, rgba(2, 6, 23, 0.55) 0%, transparent 65%);
+    mix-blend-mode: screen;
+  }
+
+  .cinematic-desktop::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 42%, rgba(2, 6, 23, 0.42) 100%);
+  }
+
+  .cinematic-desktop .game-avatar-shell[data-current-turn="1"] .game-avatar-core {
+    filter: drop-shadow(0 0 12px rgba(125, 211, 252, 0.5));
+  }
+
+  .cinematic-desktop .game-avatar-shell[data-target="1"] .game-avatar-core {
+    filter: drop-shadow(0 0 12px rgba(251, 113, 133, 0.42));
+  }
+
+  .cinematic-desktop .spin-btn-pulse {
+    filter: saturate(1.08) contrast(1.04);
+  }
 }
 
 /* Фон экрана входа: тёмный и анимированный, на весь экран без полос */

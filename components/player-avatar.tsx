@@ -73,12 +73,16 @@ export function PlayerAvatar({
   const borderSize = size <= 52 ? 3 : 4
   const outerSize = size + borderSize * 2 + 4
   const effectiveCompact = size <= 52
-  const isVip = !!player.isVip
+  const isVip = !!player.isVip && (player.vipUntilTs == null || player.vipUntilTs > Date.now())
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div
+      className="game-avatar-shell flex flex-col items-center gap-1"
+      data-current-turn={isCurrentTurn ? "1" : "0"}
+      data-target={isTarget ? "1" : "0"}
+    >
       <div
-        className="relative"
+        className="game-avatar-core relative"
         style={{ width: outerSize, height: outerSize }}
       >
         {/* zzz — игрок «уснул» / отошёл: сверху, заходят на аватарку на 30% */}
@@ -513,17 +517,19 @@ export function PlayerAvatar({
       <div
         className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
         style={{
-          backgroundColor: "rgba(15, 23, 42, 0.9)",
-          minWidth: effectiveCompact ? 44 : 60,
-          maxWidth: effectiveCompact ? 88 : 84,
-          boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+          background: "linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.92) 100%)",
+          border: "1px solid rgba(56,189,248,0.24)",
+          minWidth: effectiveCompact ? 50 : 64,
+          maxWidth: effectiveCompact ? 96 : 96,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
         }}
       >
         <span
           className="truncate text-center font-semibold leading-tight block w-full"
           style={{
-            fontSize: effectiveCompact ? 9 : 11,
-            color: "#f0e0c8",
+            fontSize: effectiveCompact ? 10 : 12,
+            color: "#f8fafc",
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
           }}
         >
           {player.name}

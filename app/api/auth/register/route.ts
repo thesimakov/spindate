@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
   db.prepare(
     `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
-     VALUES (?, 0, '[]', ?)`,
+     VALUES (?, 150, '[]', ?)`,
   ).run(userId, now)
 
   // session
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       age: ageNum,
       purpose,
     },
-    voiceBalance: 0,
+    voiceBalance: 150,
     inventory: [],
   })
   const isProd = process.env.NODE_ENV === "production"

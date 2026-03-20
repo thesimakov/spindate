@@ -579,17 +579,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, inventory: [...rest, ...rosesLeft] }
     }
     case "CLAIM_WELCOME_GIFT": {
-      const now = Date.now()
-      const welcomeRoses = Array.from({ length: 10 }, (_, i) => ({
-        type: "rose" as const,
-        fromPlayerId: 0,
-        fromPlayerName: "Игра",
-        timestamp: now + i,
-      }))
       return {
         ...state,
-        voiceBalance: state.voiceBalance + 500,
-        inventory: [...state.inventory, ...welcomeRoses],
+        voiceBalance: state.voiceBalance + 150,
       }
     }
     case "UGADAIKA_ADD_ROUND_WON": {
@@ -660,12 +652,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     // ---- VIP status ----
     case "SET_VIP_STATUS": {
+      const now = Date.now()
+      const vipIsActive = action.isVip && (action.vipUntilTs == null || action.vipUntilTs > now)
       const updatedPlayers = state.players.map((p) =>
-        p.id === action.playerId ? { ...p, isVip: action.isVip } : p,
+        p.id === action.playerId
+          ? { ...p, isVip: vipIsActive, vipUntilTs: action.vipUntilTs }
+          : p,
       )
       const updatedUser =
         state.currentUser && state.currentUser.id === action.playerId
-          ? { ...state.currentUser, isVip: action.isVip }
+          ? { ...state.currentUser, isVip: vipIsActive, vipUntilTs: action.vipUntilTs }
           : state.currentUser
       return { ...state, players: updatedPlayers, currentUser: updatedUser }
     }

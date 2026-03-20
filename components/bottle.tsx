@@ -30,7 +30,7 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
 
   return (
     <div
-      className="relative flex items-center justify-center"
+      className={`relative flex items-center justify-center ${!isSpinning && !isDrunk ? "bottle-idle-float" : ""}`}
       style={
         isDrunk
           ? {

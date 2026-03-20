@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Heart, Flower2, Gift } from "lucide-react"
+import { Heart, Gift } from "lucide-react"
 
 export interface WelcomeGiftDialogProps {
   open: boolean
@@ -48,7 +48,7 @@ export function WelcomeGiftDialog({
               его в игре и получай удовольствие от общения с людьми по всему миру.
             </p>
 
-            {/* Карточки призов — как блоки в боковом меню */}
+            {/* Карточка приза — как блоки в боковом меню */}
             <div className="flex gap-4 w-full justify-center">
               <div
                 className="flex flex-col items-center gap-1.5 rounded-2xl px-6 py-4 min-w-[120px] border border-slate-600/80"
@@ -62,24 +62,9 @@ export function WelcomeGiftDialog({
                   stroke="currentColor"
                   strokeWidth={1.5}
                 />
-                <span className="text-2xl font-black text-rose-300 tabular-nums">500</span>
+                <span className="text-2xl font-black text-rose-300 tabular-nums">150</span>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                   сердец
-                </span>
-              </div>
-              <div
-                className="flex flex-col items-center gap-1.5 rounded-2xl px-6 py-4 min-w-[120px] border border-slate-600/80"
-                style={{
-                  background: "rgba(15,23,42,0.9)",
-                }}
-              >
-                <Flower2
-                  className="h-10 w-10 text-rose-400"
-                  strokeWidth={2}
-                />
-                <span className="text-2xl font-black text-rose-300 tabular-nums">10</span>
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  роз
                 </span>
               </div>
             </div>
@@ -94,7 +79,7 @@ export function WelcomeGiftDialog({
                 boxShadow: "0 2px 0 #065f46",
               }}
             >
-              Забрать подарки
+              Забрать подарок
             </Button>
           </div>
         </div>
