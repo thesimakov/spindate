@@ -109,6 +109,20 @@ export function RegistrationScreen() {
         purpose: defaultPurpose,
         authProvider: "vk" as const,
       }
+      try {
+        const res = await fetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
+          method: "GET",
+          credentials: "include",
+        })
+        const data = await res.json().catch(() => null)
+        if (res.ok && data?.ok) {
+          const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+          const inventory = Array.isArray(data.inventory) ? data.inventory : []
+          dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+        }
+      } catch {
+        // если сервер недоступен, продолжаем без восстановления прогресса
+      }
       addToDevRegistry(user)
       buildTableAndEnter(user)
     } catch {

@@ -723,11 +723,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Сохранение сердец и роз на сервере для пользователей по логину
+  // Сохранение сердец и роз на сервере для пользователей по логину и VK
   useEffect(() => {
-    if (state.currentUser?.authProvider !== "login" || typeof window === "undefined") return
+    if (!state.currentUser || typeof window === "undefined") return
+    const isLogin = state.currentUser.authProvider === "login"
+    const isVk = state.currentUser.authProvider === "vk"
+    if (!isLogin && !isVk) return
+
+    const endpoint = isVk
+      ? `/api/user/state?vk_user_id=${encodeURIComponent(String(state.currentUser.id))}`
+      : "/api/user/state"
     const t = setTimeout(() => {
-      fetch("/api/user/state", {
+      fetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -738,7 +745,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }).catch(() => {})
     }, 1500)
     return () => clearTimeout(t)
-  }, [state.currentUser?.authProvider, state.voiceBalance, state.inventory])
+  }, [state.currentUser, state.voiceBalance, state.inventory])
 
   return (
     <GameContext.Provider value={{ state, dispatch }}>

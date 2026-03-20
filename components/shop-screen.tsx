@@ -18,12 +18,12 @@ export function ShopScreen() {
   const emotionPackExtraPerType = 50
 
   const heartOffers = [
-    { hearts: 5, votes: 1, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 50, votes: 3, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 150, votes: 9, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 500, votes: 25, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 1000, votes: 60, priceRub: 50, baseRub: 60 },
-    { hearts: 5000, votes: 300, priceRub: 270, baseRub: 300 },
+    { hearts: 5, votes: 1, itemId: vkBridge.VK_ITEM_IDS.hearts_5, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
+    { hearts: 50, votes: 3, itemId: vkBridge.VK_ITEM_IDS.hearts_50, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
+    { hearts: 150, votes: 9, itemId: vkBridge.VK_ITEM_IDS.hearts_150, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
+    { hearts: 500, votes: 25, itemId: vkBridge.VK_ITEM_IDS.hearts_500, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
+    { hearts: 1000, votes: 60, itemId: vkBridge.VK_ITEM_IDS.hearts_1000, priceRub: 50, baseRub: 60 },
+    { hearts: 5000, votes: 300, itemId: vkBridge.VK_ITEM_IDS.hearts_5000, priceRub: 270, baseRub: 300 },
   ] as const
   const sectionCardClass =
     "rounded-2xl border border-cyan-300/25 bg-slate-900/90 shadow-[0_12px_30px_rgba(15,23,42,0.55)]"
@@ -79,10 +79,12 @@ export function ShopScreen() {
   const handleActivateVip = async ({
     days,
     cost,
+    itemId,
     isTrial,
   }: {
     days: number
     cost: number
+    itemId?: string
     isTrial?: boolean
   }) => {
     if (isVip) {
@@ -98,10 +100,12 @@ export function ShopScreen() {
       return
     }
 
-    const ok = await vkBridge.buyVip()
-    if (!ok) {
-      showToast("Активация VIP отменена", "error")
-      return
+    if (cost > 0) {
+      const ok = await vkBridge.showPaymentWall(cost, itemId)
+      if (!ok) {
+        showToast("Активация VIP отменена", "error")
+        return
+      }
     }
 
     if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
@@ -128,8 +132,8 @@ export function ShopScreen() {
     showToast(`VIP активирован на ${days} дн.`, "success")
   }
 
-  const handleTopUp = async (amount: number) => {
-    const ok = await vkBridge.showPaymentWall(amount)
+  const handleTopUp = async (amount: number, votes: number, itemId: string) => {
+    const ok = await vkBridge.showPaymentWall(votes, itemId)
     if (!ok) {
       showToast("Пополнение отменено", "error")
       return
@@ -315,7 +319,7 @@ export function ShopScreen() {
                     color: "#0b1120",
                     borderRadius: "0 0 1.4rem 1.4rem",
                   }}
-                  onClick={() => handleTopUp(offer.hearts)}
+                  onClick={() => handleTopUp(offer.hearts, offer.votes, offer.itemId)}
                 >
                   {"Купить за "}{offer.votes}{" гол."}
                 </Button>
@@ -369,7 +373,7 @@ export function ShopScreen() {
             <div className="flex flex-col justify-between rounded-2xl border border-slate-600/80 bg-slate-900/95 px-3 py-3 text-xs sm:text-sm">
               <div className="mb-2">
                 <span className="text-sm font-semibold text-slate-100">{"7 дней"}</span>
-                <p className={subtleTextClass}>{"30 ❤"}</p>
+                <p className={subtleTextClass}>{"20 ❤"}</p>
               </div>
               <Button
                 size="lg"
@@ -378,26 +382,26 @@ export function ShopScreen() {
                 style={{
                   background: "linear-gradient(135deg,#38bdf8,#6366f1)",
                 }}
-                onClick={() => handleActivateVip({ days: 7, cost: 30 })}
+                onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
               >
-                {isVip ? "Уже VIP" : voiceBalance < 30 ? "Не хватает" : "Купить"}
+                {isVip ? "Уже VIP" : voiceBalance < 20 ? "Не хватает" : "Купить"}
               </Button>
             </div>
             <div className="flex flex-col justify-between rounded-2xl border border-slate-600/80 bg-slate-900/95 px-3 py-3 text-xs sm:text-sm">
               <div className="mb-2">
                 <span className="text-sm font-semibold text-slate-100">{"30 дней"}</span>
-                <p className={subtleTextClass}>{"100 ❤"}</p>
+                <p className={subtleTextClass}>{"70 ❤"}</p>
               </div>
               <Button
                 size="lg"
-                disabled={!!isVip || voiceBalance < 100}
+                disabled={!!isVip || voiceBalance < 70}
                 className={ctaPrimaryClass}
                 style={{
                   background: "linear-gradient(135deg,#22d3ee,#6366f1)",
                 }}
-                onClick={() => handleActivateVip({ days: 30, cost: 100 })}
+                onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
               >
-                {isVip ? "Уже VIP" : voiceBalance < 100 ? "Не хватает" : "Купить"}
+                {isVip ? "Уже VIP" : voiceBalance < 70 ? "Не хватает" : "Купить"}
               </Button>
             </div>
           </div>

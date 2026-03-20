@@ -14,16 +14,30 @@ function getUserIdFromSession(req: Request): string | null {
   return row?.user_id ?? null
 }
 
+function getVkUserIdFromRequest(req: Request): number | null {
+  const url = new URL(req.url)
+  const raw = url.searchParams.get("vk_user_id")
+  if (!raw) return null
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return null
+  return n
+}
+
 export async function GET(req: Request) {
   const userId = getUserIdFromSession(req)
-  if (!userId) {
+  const vkUserId = userId ? null : getVkUserIdFromRequest(req)
+  if (!userId && !vkUserId) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
 
   const db = getDb()
-  const row = db
-    .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
-    .get(userId) as { voice_balance: number; inventory_json: string } | undefined
+  const row = userId
+    ? (db
+        .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
+        .get(userId) as { voice_balance: number; inventory_json: string } | undefined)
+    : (db
+        .prepare(`SELECT voice_balance, inventory_json FROM vk_user_game_state WHERE vk_user_id = ?`)
+        .get(vkUserId) as { voice_balance: number; inventory_json: string } | undefined)
 
   const voiceBalance = row?.voice_balance ?? 0
   let inventory: unknown[] = []
@@ -40,7 +54,8 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   const userId = getUserIdFromSession(req)
-  if (!userId) {
+  const vkUserId = userId ? null : getVkUserIdFromRequest(req)
+  if (!userId && !vkUserId) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
 
@@ -55,22 +70,37 @@ export async function PUT(req: Request) {
   const now = Date.now()
 
   if (voiceBalance !== undefined || inventory !== undefined) {
-    const existing = db
-      .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
-      .get(userId) as { voice_balance: number; inventory_json: string } | undefined
+    const existing = userId
+      ? (db
+          .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
+          .get(userId) as { voice_balance: number; inventory_json: string } | undefined)
+      : (db
+          .prepare(`SELECT voice_balance, inventory_json FROM vk_user_game_state WHERE vk_user_id = ?`)
+          .get(vkUserId) as { voice_balance: number; inventory_json: string } | undefined)
 
     const nextBalance = voiceBalance !== undefined ? voiceBalance : (existing?.voice_balance ?? 0)
     const nextInventoryJson =
       inventory !== undefined ? JSON.stringify(inventory) : (existing?.inventory_json ?? "[]")
 
-    db.prepare(
-      `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET
-         voice_balance = excluded.voice_balance,
-         inventory_json = excluded.inventory_json,
-         updated_at = excluded.updated_at`,
-    ).run(userId, nextBalance, nextInventoryJson, now)
+    if (userId) {
+      db.prepare(
+        `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           voice_balance = excluded.voice_balance,
+           inventory_json = excluded.inventory_json,
+           updated_at = excluded.updated_at`,
+      ).run(userId, nextBalance, nextInventoryJson, now)
+    } else {
+      db.prepare(
+        `INSERT INTO vk_user_game_state (vk_user_id, voice_balance, inventory_json, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(vk_user_id) DO UPDATE SET
+           voice_balance = excluded.voice_balance,
+           inventory_json = excluded.inventory_json,
+           updated_at = excluded.updated_at`,
+      ).run(vkUserId, nextBalance, nextInventoryJson, now)
+    }
   }
 
   return NextResponse.json({ ok: true })

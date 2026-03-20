@@ -81,9 +81,14 @@ export async function getUserInfo(): Promise<VkUserInfo> {
 
 /** Идентификаторы товаров для VK Pay (должны совпадать с app/api/vk/payments). */
 export const VK_ITEM_IDS = {
+  hearts_5: "hearts_5",
+  hearts_50: "hearts_50",
+  hearts_150: "hearts_150",
   hearts_500: "hearts_500",
   hearts_1000: "hearts_1000",
-  vip: "vip",
+  hearts_5000: "hearts_5000",
+  vip_7d: "vip_7d",
+  vip_30d: "vip_30d",
 } as const
 
 /** Показать форму оплаты VK. amount — сумма (по курсу VK: 1 голос = 1 сердце); itemId — для платёжных уведомлений (get_item, order_status_change). */
@@ -121,17 +126,17 @@ export async function showPaymentWall(amount: number, itemId?: string): Promise<
 
 /** Покупка пака сердец (500). Для уведомлений VK вызывает get_item/order_status_change на сервер. */
 export async function buyHearts500(): Promise<boolean> {
-  return showPaymentWall(1, VK_ITEM_IDS.hearts_500)
+  return showPaymentWall(25, VK_ITEM_IDS.hearts_500)
 }
 
 /** Покупка пака сердец (1000). */
 export async function buyHearts1000(): Promise<boolean> {
-  return showPaymentWall(2, VK_ITEM_IDS.hearts_1000)
+  return showPaymentWall(60, VK_ITEM_IDS.hearts_1000)
 }
 
 /** Покупка VIP (оплата через VK, курс: 1 голос = 1 сердце). */
 export async function buyVip(): Promise<boolean> {
-  return showPaymentWall(99, VK_ITEM_IDS.vip)
+  return showPaymentWall(70, VK_ITEM_IDS.vip_30d)
 }
 
 /** Показать диалог приглашения друзей в приложение. */
