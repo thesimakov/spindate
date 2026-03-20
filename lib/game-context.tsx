@@ -286,7 +286,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             },
             {
               id: generateLogId(),
-              type: resultAction as any,
+              type: "system",
               fromPlayer: spinner,
               toPlayer: target1,
               text: `Выпала пара: ${pairText}`,

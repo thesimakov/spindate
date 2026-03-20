@@ -121,12 +121,12 @@ export interface PairAction {
 export const PAIR_ACTIONS: PairAction[] = [
   // M+F
   { id: "kiss",    label: "Поцеловать",         icon: "kiss",     cost: 1, combo: ["MF"] },
-  { id: "flowers", label: "Подарить цветы",     icon: "flowers",  cost: 1, combo: ["MF", "FF"] },
-  { id: "diamond", label: "Подарить бриллиант", icon: "diamond",  cost: 3, combo: ["MF"] },
+  { id: "flowers", label: "Цветы",              icon: "flowers",  cost: 1, combo: ["MF", "FF"] },
+  { id: "diamond", label: "Бриллианты",         icon: "diamond",  cost: 3, combo: ["MF"] },
   // M+M
   { id: "beer",    label: "Выпить пива",        icon: "beer",     cost: 1, combo: ["MM"] },
-  { id: "banya",   label: "Парить вениками",    icon: "banya",    cost: 1, combo: ["MM"] },
-  { id: "tools",   label: "Подарить инструменты", icon: "tools",  cost: 2, combo: ["MM"] },
+  { id: "banya",   label: "Банька",             icon: "banya",    cost: 1, combo: ["MM"] },
+  { id: "tools",   label: "Инструменты",        icon: "tools",    cost: 2, combo: ["MM"] },
   // F+F
   { id: "lipstick", label: "Губная помада",     icon: "lipstick", cost: 1, combo: ["FF"] },
   { id: "cocktail", label: "Коктейль",          icon: "cocktail", cost: 1, combo: ["FF"] },

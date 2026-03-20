@@ -127,6 +127,16 @@ interface SteamPuff {
   delayMs: number
 }
 
+type LevelRewardItem = "rose" | "flowers" | "song" | "diamond"
+
+type LevelReward = {
+  level: number
+  hearts: number
+  item: LevelRewardItem
+  itemCount: number
+  title: string
+}
+
 /* ------------------------------------------------------------------ */
 /*  Pair actions (single source of truth in lib/game-types.ts)         */
 /* ------------------------------------------------------------------ */
@@ -508,6 +518,9 @@ export function GameRoom() {
   const [generalChatInput, setGeneralChatInput] = useState("")
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
+  const [sidebarTargetPlayer, setSidebarTargetPlayer] = useState<Player | null>(null)
+  const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
+  const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
   const [mobileChatCollapsed, setMobileChatCollapsed] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
@@ -613,7 +626,11 @@ export function GameRoom() {
       d.setHours(0, 0, 0, 0)
       const start = d.getTime()
       return gameLog.filter(
-        (e) => e.fromPlayer?.id === playerId && e.type === actionId && e.timestamp >= start,
+        (e) =>
+          e.fromPlayer?.id === playerId &&
+          e.type === actionId &&
+          e.timestamp >= start &&
+          !e.text.startsWith("Выпала пара:"),
       ).length
     },
     [gameLog],
@@ -1343,6 +1360,75 @@ export function GameRoom() {
     })
   }
 
+  const handleSidebarGiftEmotion = (actionId: string) => {
+    if (!currentUser || currentUser.isBot || !sidebarTargetPlayer) return
+
+    const combo = getPairGenderCombo(currentUser, sidebarTargetPlayer)
+    const actionDef = getActionsForPair(combo).find((a) => a.id === actionId)
+    if (!actionDef || actionId === "skip") return
+
+    const actionCost = getEffectiveActionCost(actionId, combo)
+    const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
+    const dailyLimit = effectiveDailyEmotionLimit
+    if (hasDailyLimit) {
+      const todayCount = getTodayActionCount(currentUser.id, actionId)
+      if (todayCount >= dailyLimit) {
+        showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
+        return
+      }
+    }
+    if (actionCost > 0) {
+      if (voiceBalance < actionCost) {
+        showToast("Недостаточно сердец", "error")
+        return
+      }
+      dispatch({ type: "PAY_VOICES", amount: actionCost })
+    }
+
+    const fromIdx = players.findIndex((p) => p.id === currentUser.id)
+    const toIdx = players.findIndex((p) => p.id === sidebarTargetPlayer.id)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    const emojiMap: Record<string, string> = {
+      kiss: "💋",
+      flowers: "💐",
+      diamond: "💎",
+      beer: "🍺",
+      cocktail: "🍹",
+      tools: "🛠️",
+      lipstick: "💄",
+      chat: "💬",
+      song: "🎵",
+      rose: "🌹",
+      hug: "🤗",
+      selfie: "📸",
+    }
+
+    playEmotionSound(actionId)
+    if (actionId === "banya") {
+      launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
+      launchSteam(toIdx)
+    } else if (emojiMap[actionId]) {
+      launchEmoji(fromIdx, toIdx, emojiMap[actionId])
+    }
+
+    if (actionId === "beer" || actionId === "cocktail") {
+      dispatch({ type: "ADD_DRUNK_TIME", playerId: currentUser.id, ms: 60_000 })
+    }
+
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: actionId as GameLogEntry["type"],
+        fromPlayer: currentUser,
+        toPlayer: sidebarTargetPlayer,
+        text: `${currentUser.name} дарит: ${actionDef.label} ${sidebarTargetPlayer.name}`,
+        timestamp: Date.now(),
+      },
+    })
+  }
+
   /* ---- skip / advance turn ---- */
   const handleSkipTurn = () => {
     if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
@@ -1642,8 +1728,10 @@ export function GameRoom() {
       return
     }
 
-    // Normal click - open player menu
-    dispatch({ type: "OPEN_PLAYER_MENU", player })
+    // Обычный клик по аватарке на столе:
+    // открываем мини-меню под выбранной аватаркой.
+    setSidebarTargetPlayer((prev) => (prev?.id === player.id ? null : player))
+    setSidebarGiftMode(false)
   }
 
   /* ---- extra spin (pay 50 voices) ---- */
@@ -1679,6 +1767,53 @@ export function GameRoom() {
     if (!currentPairCombo) return []
     return getActionsForPair(currentPairCombo)
   }, [currentPairCombo])
+
+  const canRespondInResult = !!(
+    showResult &&
+    resolvedTargetPlayer &&
+    resolvedTargetPlayer2 &&
+    currentUser &&
+    !currentUser.isBot &&
+    (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id)
+  )
+
+  const sidebarActionCombo: PairGenderCombo | null = useMemo(() => {
+    if (sidebarGiftMode && currentUser && sidebarTargetPlayer) {
+      return getPairGenderCombo(currentUser, sidebarTargetPlayer)
+    }
+    // В обычном режиме не раскрываем будущую пару во время вращения:
+    // обновляем набор эмоций только когда результат уже показан.
+    if (showResult) {
+      return currentPairCombo
+    }
+    return null
+  }, [sidebarGiftMode, currentUser, sidebarTargetPlayer, currentPairCombo, showResult])
+
+  useEffect(() => {
+    if (sidebarActionCombo) {
+      setLastSidebarCombo(sidebarActionCombo)
+    }
+  }, [sidebarActionCombo])
+
+  const effectiveSidebarCombo: PairGenderCombo = sidebarActionCombo ?? lastSidebarCombo ?? "MF"
+
+  const sidebarAvailableActions = useMemo(() => {
+    const actions = getActionsForPair(effectiveSidebarCombo)
+    return sidebarGiftMode ? actions.filter((a) => a.id !== "skip") : actions
+  }, [effectiveSidebarCombo, sidebarGiftMode])
+
+  const isSidebarEmotionActionActive =
+    (!!currentUser && !currentUser.isBot && sidebarGiftMode && !!sidebarTargetPlayer) ||
+    (showResult && isMyTurn) ||
+    canRespondInResult
+
+  const sidebarEmotionTitle = sidebarGiftMode ? "Подарить эмоцию" : "Эмоции"
+  const sidebarEmotionSubtitle =
+    sidebarGiftMode && sidebarTargetPlayer
+      ? `Выбрано: ${sidebarTargetPlayer.name}`
+      : "Выбери аватар и нажми «Подарить эмоцию»"
+  const shouldShowSidebarEmotionSubtitle =
+    sidebarGiftMode && !!sidebarTargetPlayer
 
   const todayKey = useMemo(() => {
     const d = new Date()
@@ -1806,8 +1941,84 @@ export function GameRoom() {
 
   const [showDailyTasksModal, setShowDailyTasksModal] = useState(false)
   const [confettiQuestIndex, setConfettiQuestIndex] = useState<number | null>(null)
+  const [dailyProgressPoints, setDailyProgressPoints] = useState(0)
+  const [dailyRewardedLevels, setDailyRewardedLevels] = useState<number[]>([])
 
   const completedQuests = (dailyQuests?.dateKey === todayKey ? (dailyQuests.claimed.filter(Boolean).length) : 0)
+
+  const DAILY_LEVEL_MAX = 30
+
+  const LEVEL_REWARDS: LevelReward[] = useMemo(() => {
+    const itemCycle: LevelRewardItem[] = ["rose", "flowers", "song", "diamond"]
+    return Array.from({ length: DAILY_LEVEL_MAX }, (_, idx) => {
+      const level = idx + 1
+      const hearts = 3 + level * 2
+      const itemCount = level >= 24 ? 3 : level >= 12 ? 2 : 1
+      const item = itemCycle[idx % itemCycle.length]
+      const title =
+        level <= 10
+          ? "Новичок вечеринок"
+          : level <= 20
+            ? "Звезда общения"
+            : "Легенда стола"
+      return { level, hearts, item, itemCount, title }
+    })
+  }, [])
+
+  const getDailyLevelByPoints = useCallback((points: number): number => {
+    let spent = 0
+    let level = 1
+    while (level < DAILY_LEVEL_MAX) {
+      const need = 2 + Math.floor((level - 1) / 2)
+      if (points < spent + need) break
+      spent += need
+      level += 1
+    }
+    return level
+  }, [])
+
+  const getPointsIntoCurrentLevel = useCallback((points: number): { current: number; need: number } => {
+    let spent = 0
+    let level = 1
+    while (level < DAILY_LEVEL_MAX) {
+      const need = 2 + Math.floor((level - 1) / 2)
+      if (points < spent + need) {
+        return { current: Math.max(0, points - spent), need }
+      }
+      spent += need
+      level += 1
+    }
+    return { current: 0, need: 1 }
+  }, [])
+
+  const dailyLevel = useMemo(
+    () => getDailyLevelByPoints(dailyProgressPoints),
+    [dailyProgressPoints, getDailyLevelByPoints],
+  )
+  const dailyLevelProgress = useMemo(
+    () => getPointsIntoCurrentLevel(dailyProgressPoints),
+    [dailyProgressPoints, getPointsIntoCurrentLevel],
+  )
+  const nextDailyLevel = Math.min(DAILY_LEVEL_MAX, dailyLevel + 1)
+
+  useEffect(() => {
+    if (!currentUser) return
+    try {
+      const key = `botl_daily_level_v1_${currentUser.id}`
+      const raw = localStorage.getItem(key)
+      if (!raw) {
+        setDailyProgressPoints(0)
+        setDailyRewardedLevels([])
+        return
+      }
+      const parsed = JSON.parse(raw) as { points?: number; rewardedLevels?: number[] }
+      setDailyProgressPoints(typeof parsed.points === "number" ? Math.max(0, parsed.points) : 0)
+      setDailyRewardedLevels(Array.isArray(parsed.rewardedLevels) ? parsed.rewardedLevels.filter((x) => Number.isFinite(x)) : [])
+    } catch {
+      setDailyProgressPoints(0)
+      setDailyRewardedLevels([])
+    }
+  }, [currentUser])
 
   const handleClaimDailyQuest = useCallback(
     (questIndex: number) => {
@@ -1837,8 +2048,72 @@ export function GameRoom() {
       setConfettiQuestIndex(questIndex)
       setTimeout(() => setConfettiQuestIndex(null), 2200)
       showToast("Награда: роза в инвентаре", "success")
+
+      const prevPoints = dailyProgressPoints
+      const nextPoints = prevPoints + 1
+      const prevLevel = getDailyLevelByPoints(prevPoints)
+      const nextLevel = getDailyLevelByPoints(nextPoints)
+      const alreadyRewarded = new Set(dailyRewardedLevels)
+      const claimedNow: number[] = []
+
+      for (let lvl = prevLevel + 1; lvl <= nextLevel; lvl++) {
+        if (alreadyRewarded.has(lvl)) continue
+        const reward = LEVEL_REWARDS.find((r) => r.level === lvl)
+        if (!reward) continue
+        if (reward.hearts > 0) {
+          dispatch({ type: "PAY_VOICES", amount: -reward.hearts })
+        }
+        for (let i = 0; i < reward.itemCount; i++) {
+          dispatch({
+            type: "ADD_INVENTORY_ITEM",
+            item: {
+              type: reward.item,
+              fromPlayerId: 0,
+              fromPlayerName: "Система",
+              timestamp: Date.now() + i,
+            },
+          })
+        }
+        claimedNow.push(lvl)
+      }
+
+      setDailyProgressPoints(nextPoints)
+      const nextRewardedLevels = [...dailyRewardedLevels, ...claimedNow].sort((a, b) => a - b)
+      setDailyRewardedLevels(nextRewardedLevels)
+
+      if (currentUser) {
+        try {
+          const key = `botl_daily_level_v1_${currentUser.id}`
+          localStorage.setItem(
+            key,
+            JSON.stringify({ points: nextPoints, rewardedLevels: nextRewardedLevels }),
+          )
+        } catch {
+          // ignore
+        }
+      }
+
+      if (claimedNow.length > 0) {
+        const lastLevel = claimedNow[claimedNow.length - 1]
+        const reward = LEVEL_REWARDS.find((r) => r.level === lastLevel)
+        if (reward) {
+          showToast(`Уровень ${lastLevel}: +${reward.hearts} ❤ и ${reward.itemCount} ${reward.item}`, "success")
+        }
+      }
     },
-    [currentUser, dailyQuests, todayKey, todayQuests, getProgressForType, dispatch, showToast],
+    [
+      currentUser,
+      dailyQuests,
+      todayKey,
+      todayQuests,
+      getProgressForType,
+      dispatch,
+      showToast,
+      dailyProgressPoints,
+      dailyRewardedLevels,
+      LEVEL_REWARDS,
+      getDailyLevelByPoints,
+    ],
   )
 
   /* ---- смена стола ---- */
@@ -2008,161 +2283,99 @@ export function GameRoom() {
       </div>
 
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных) ---- */}
-      <div className="relative z-20 hidden md:flex w-[220px] shrink-0 flex-col p-3 pt-10 overflow-y-auto">
-        {/* ---- КНОПКИ ЭМОЦИЙ — чуть ниже верхнего края стола ---- */}
-        {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && isMyTurn && (
-          <div
-            className="mt-8 mb-2 rounded-lg p-2.5"
-            style={{
-              background: "rgba(15, 23, 42, 0.85)",
-              border: "2px solid #475569",
-            }}
-          >
-            <div className="flex items-center gap-1.5 mb-2">
-              <Sparkles className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
-              <span className="text-[11px] font-bold" style={{ color: "#e8c06a" }}>
-                {"Ваши действия"}
-              </span>
-            </div>
-            <p className="text-[10px] mb-2" style={{ color: "#94a3b8" }}>
-              {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
-            </p>
-            <div className="mb-2 grid grid-cols-3 gap-1">
-              {limitedEmotionCounters.map((row) => (
-                <div key={row.id} className="rounded-md px-1.5 py-1 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
-                  <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
-                  <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
-                    {row.used}/{row.limit}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {isEmotionLimitReached && (
-              <button
-                type="button"
-                onClick={handleBuyEmotionPackFromGame}
-                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                disabled={voiceBalance < EMOTION_PACK_COST}
-                style={{
-                  background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
-                  color: "#0f172a",
-                  border: "2px solid rgba(103, 232, 249, 0.9)",
-                  boxShadow: "0 2px 0 rgba(30, 64, 175, 0.9), 0 3px 10px rgba(34, 211, 238, 0.28)",
-                }}
-              >
-                {"Лимит закончился — купить +50 за 5 ❤"}
-              </button>
-            )}
-            <div className="flex flex-col gap-1.5">
-              {availableActions.map(action => {
-                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                return (
-                  <button
-                    key={action.id}
-                    onClick={() => handlePerformAction(action.id)}
-                    disabled={!canAfford}
-                    className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-bold text-[14px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                    style={{
-                      background: style.bg,
-                      color: style.text,
-                      border: `2px solid ${style.border}`,
-                      boxShadow: `0 2px 0 ${style.shadow}, 0 3px 6px rgba(0,0,0,0.3)`,
-                    }}
-                  >
-                    {renderActionIcon(action)}
-                    <span className="flex-1 text-left">{action.label}</span>
-                    {shouldShowActionCostBadge(action.id, actionCost) && (
-                      <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
-                        {actionCost}
-                        <Heart className="h-3.5 w-3.5" fill="currentColor" />
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+      <div className="relative z-20 hidden md:flex w-[190px] shrink-0 flex-col gap-1.5 p-2 pt-20 lg:pt-24 overflow-y-auto max-h-[100dvh]">
+        <div
+          className="rounded-lg p-2"
+          style={{
+            background: "rgba(15, 23, 42, 0.88)",
+            border: "1px solid #475569",
+          }}
+        >
+          <div className="mb-2 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
+            <span className="text-[11px] font-bold" style={{ color: "#e8c06a" }}>
+              {sidebarEmotionTitle}
+            </span>
           </div>
-        )}
+          {shouldShowSidebarEmotionSubtitle && (
+            <p className="mb-2 text-[10px] leading-tight" style={{ color: "#94a3b8" }}>
+              {sidebarEmotionSubtitle}
+            </p>
+          )}
 
-        {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && currentUser && !currentUser.isBot && !isMyTurn &&
-          (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
-          <div
-            className="mt-8 mb-2 rounded-lg p-2.5"
-            style={{
-              background: "rgba(15, 23, 42, 0.95)",
-              border: "2px solid #4b5563",
-            }}
-          >
-            <div className="flex items-center gap-1.5 mb-2">
-              <Sparkles className="h-3.5 w-3.5" style={{ color: "#e5e7eb" }} />
-              <span className="text-[11px] font-bold" style={{ color: "#e5e7eb" }}>
-                {"Ваши тоже действия"}
-              </span>
-            </div>
-            <p className="text-[10px] mb-2" style={{ color: "#9ca3af" }}>
-              {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
-            </p>
-            <div className="mb-2 grid grid-cols-3 gap-1">
-              {limitedEmotionCounters.map((row) => (
-                <div key={row.id} className="rounded-md px-1.5 py-1 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
-                  <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
-                  <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
-                    {row.used}/{row.limit}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {isEmotionLimitReached && (
-              <button
-                type="button"
-                onClick={handleBuyEmotionPackFromGame}
-                className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                disabled={voiceBalance < EMOTION_PACK_COST}
-                style={{
-                  background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
-                  color: "#0f172a",
-                  border: "2px solid rgba(103, 232, 249, 0.9)",
-                  boxShadow: "0 2px 0 rgba(30, 64, 175, 0.9), 0 3px 10px rgba(34, 211, 238, 0.28)",
-                }}
-              >
-                {"Лимит закончился — купить +50 за 5 ❤"}
-              </button>
-            )}
-            <div className="flex flex-col gap-1.5">
-              {availableActions.map(action => {
-                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    disabled={!canAfford}
-                    onClick={() => handleResponseEmotion(action.id)}
-                    className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-semibold text-[14px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                    style={{
-                      background: style.bg,
-                      color: style.text,
-                      border: `1px solid ${style.border}`,
-                      boxShadow: `0 1px 0 ${style.shadow}, 0 2px 4px rgba(0,0,0,0.25)`,
-                    }}
-                  >
-                    {renderActionIcon(action)}
-                    <span className="flex-1 text-left">{action.label}</span>
-                    {shouldShowActionCostBadge(action.id, actionCost) && (
-                      <span className="flex items-center gap-0.5 text-[14px] opacity-90 shrink-0">
-                        {actionCost}
-                        <Heart className="h-3.5 w-3.5" fill="currentColor" />
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+          <div className="mb-2 grid grid-cols-3 gap-1">
+            {limitedEmotionCounters.map((row) => (
+              <div key={row.id} className="rounded-md px-1 py-0.5 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
+                <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
+                <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
+                  {row.used}/{row.limit}
+                </p>
+              </div>
+            ))}
           </div>
-        )}
+
+          {isEmotionLimitReached && (
+            <button
+              type="button"
+              onClick={handleBuyEmotionPackFromGame}
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+              disabled={voiceBalance < EMOTION_PACK_COST}
+              style={{
+                background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+                color: "#0f172a",
+                border: "1px solid rgba(103, 232, 249, 0.9)",
+                boxShadow: "0 1px 0 rgba(30, 64, 175, 0.9), 0 2px 8px rgba(34, 211, 238, 0.28)",
+              }}
+            >
+              {"Лимит закончился — +50 за 5 ❤"}
+            </button>
+          )}
+
+          <div className="flex max-h-[32dvh] flex-col gap-1 overflow-y-auto pr-0.5">
+            {sidebarAvailableActions.map((action) => {
+              const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+              const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
+              const canAfford = actionCost === 0 || voiceBalance >= actionCost
+              const isDisabled = !isSidebarEmotionActionActive || !canAfford
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => {
+                    if (sidebarGiftMode && sidebarTargetPlayer) {
+                      handleSidebarGiftEmotion(action.id)
+                      return
+                    }
+                    if (showResult && isMyTurn) {
+                      handlePerformAction(action.id)
+                      return
+                    }
+                    if (canRespondInResult) {
+                      handleResponseEmotion(action.id)
+                    }
+                  }}
+                  disabled={isDisabled}
+                  className="flex items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-semibold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                  style={{
+                    background: style.bg,
+                    color: style.text,
+                    border: `1px solid ${style.border}`,
+                    boxShadow: `0 1px 0 ${style.shadow}, 0 2px 4px rgba(0,0,0,0.25)`,
+                  }}
+                >
+                  {renderActionIcon(action)}
+                  <span className="flex-1 truncate text-left">{action.label}</span>
+                  {shouldShowActionCostBadge(action.id, actionCost) && (
+                    <span className="flex shrink-0 items-center gap-0.5 text-[11px] opacity-90">
+                      {actionCost}
+                      <Heart className="h-3 w-3" fill="currentColor" />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
 
         {/* ---- PREDICTION SECTION ---- */}
         {!CASUAL_MODE && predictionPhase && !isSpinning && !showResult && (
@@ -2405,8 +2618,8 @@ export function GameRoom() {
         <div className="mt-auto flex flex-col gap-2">
           {/** Единый стиль для аккуратных кнопок бокового меню */}
           {(() => {
-            const sideBtnClass = "flex items-center gap-2 rounded-[999px] px-4 py-2.5 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[48px]"
-            const sideBtnTextClass = "text-[15px] font-semibold leading-none"
+            const sideBtnClass = "flex items-center gap-1.5 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]"
+            const sideBtnTextClass = "text-[13px] font-semibold leading-none"
             return (
               <>
           {/* Крутить вне очереди — только на мобильной (на ПК убрано из бокового меню) */}
@@ -2431,7 +2644,7 @@ export function GameRoom() {
 
           {/* Банк сердец */}
           <div
-            className="flex items-center gap-2 rounded-[999px] px-4 py-2.5 min-h-[48px]"
+            className="flex items-center gap-1.5 rounded-[999px] px-3 py-2 min-h-[40px]"
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -2439,8 +2652,8 @@ export function GameRoom() {
             }}
           >
             <Heart className="h-4 w-4" style={{ color: "#e8c06a" }} fill="currentColor" />
-            <span className="text-[15px] font-bold leading-none" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-            <span className="text-[13px] leading-none" style={{ color: "#cbd5e1" }}>{"Банк сердец"}</span>
+            <span className="text-[13px] font-bold leading-none" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+            <span className="text-[11px] leading-none" style={{ color: "#cbd5e1" }}>{"Банк сердец"}</span>
           </div>
 
           {/* Магазин */}
@@ -2567,9 +2780,9 @@ export function GameRoom() {
           )}
 
           {/* Количество столов */}
-          <div className="flex items-center gap-2 rounded-[999px] px-4 py-2.5 min-h-[48px]" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}>
+          <div className="flex items-center gap-1.5 rounded-[999px] px-3 py-2 min-h-[40px]" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}>
             <RotateCw className="h-3 w-3" style={{ color: "#94a3b8" }} />
-            <span className="text-[13px] leading-none" style={{ color: "#94a3b8" }}>
+            <span className="text-[11px] leading-none" style={{ color: "#94a3b8" }}>
               {"Столов в игре: "}{tablesCount ?? "—"}
             </span>
           </div>
@@ -2918,6 +3131,7 @@ export function GameRoom() {
           {/* ---- PLAYERS around the circle ---- */}
           {players.map((player, i) => {
             const pos = positions[i]
+            const isAvatarMenuOpen = sidebarTargetPlayer?.id === player.id
             const isClickableForPrediction =
               predictionPhase && !predictionMade && !isSpinning && !showResult &&
               player.id !== currentUser?.id
@@ -2963,6 +3177,65 @@ export function GameRoom() {
                   inGame={playerInUgadaika != null && player.id === playerInUgadaika}
                   showAsleep={(spinSkips?.[player.id] ?? 0) >= 3}
                 />
+                {isAvatarMenuOpen && (
+                  <div
+                    className="absolute left-1/2 top-full z-40 mt-1.5 w-[128px] -translate-x-1/2 rounded-lg border p-1.5 shadow-2xl"
+                    style={{
+                      background: "linear-gradient(165deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 20, 40, 0.98) 100%)",
+                      borderColor: "rgba(100,116,139,0.9)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Закрыть мини-меню"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSidebarTargetPlayer(null)
+                        setSidebarGiftMode(false)
+                      }}
+                      className="absolute -top-2 right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-all hover:brightness-110 hover:scale-105"
+                      style={{
+                        background: "linear-gradient(180deg, #ef4444 0%, #b91c1c 100%)",
+                        color: "#ffffff",
+                        border: "1px solid rgba(254, 202, 202, 0.9)",
+                        boxShadow: "0 4px 12px rgba(127, 29, 29, 0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSidebarGiftMode(true)
+                      }}
+                      className="mb-1 w-full rounded-md px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-110"
+                      style={{
+                        background: sidebarGiftMode ? "rgba(34,211,238,0.25)" : "rgba(30,41,59,0.7)",
+                        color: sidebarGiftMode ? "#67e8f9" : "#e2e8f0",
+                        border: "1px solid rgba(100,116,139,0.9)",
+                      }}
+                    >
+                      Подарить эмоцию
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        dispatch({ type: "OPEN_PLAYER_MENU", player })
+                      }}
+                      className="w-full rounded-md px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-110"
+                      style={{
+                        background: "rgba(30,41,59,0.7)",
+                        color: "#e2e8f0",
+                        border: "1px solid rgba(100,116,139,0.9)",
+                      }}
+                    >
+                      Подробнее
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -3768,17 +4041,8 @@ export function GameRoom() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { dispatch({ type: "SET_SCREEN", screen: "intergame-chat" }); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
-                  style={{ color: "#67e8f9" }}
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  Межигровой чат
-                </button>
-                <button
-                  type="button"
                   onClick={() => { setShowDailyTasksModal(true); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  className="flex items-center justify-start gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
                   <Sparkles className="h-4 w-4" />
@@ -3829,6 +4093,9 @@ export function GameRoom() {
                 <span className="text-xs font-bold tabular-nums" style={{ color: completedQuests >= 5 ? "#86efac" : "#fcd34d" }}>
                   {completedQuests}/5
                 </span>
+                <span className="rounded-md px-2 py-1 text-[10px] font-bold" style={{ color: "#7dd3fc", background: "rgba(2,132,199,0.15)", border: "1px solid rgba(56,189,248,0.35)" }}>
+                  Lvl {dailyLevel}/30
+                </span>
                 <button
                   type="button"
                   onClick={() => setShowDailyTasksModal(false)}
@@ -3837,6 +4104,26 @@ export function GameRoom() {
                 >
                   <X className="h-5 w-5" />
                 </button>
+              </div>
+            </div>
+            <div className="px-4 py-2 border-b" style={{ borderColor: "rgba(71, 85, 105, 0.35)" }}>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold" style={{ color: "#bae6fd" }}>
+                  Уровень ежедневных задач: {dailyLevel}/30
+                </span>
+                <span className="text-[11px]" style={{ color: "#94a3b8" }}>
+                  До {nextDailyLevel}: {dailyLevel >= DAILY_LEVEL_MAX ? "макс" : `${dailyLevelProgress.current}/${dailyLevelProgress.need}`}
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full overflow-hidden" style={{ background: "rgba(15, 23, 42, 0.85)", border: "1px solid rgba(71, 85, 105, 0.5)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${dailyLevel >= DAILY_LEVEL_MAX ? 100 : (dailyLevelProgress.current / Math.max(1, dailyLevelProgress.need)) * 100}%`,
+                    background: "linear-gradient(90deg, #38bdf8 0%, #22c55e 100%)",
+                    boxShadow: "0 0 8px rgba(56, 189, 248, 0.45)",
+                  }}
+                />
               </div>
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-2">
@@ -3895,6 +4182,30 @@ export function GameRoom() {
                     </div>
                   )
                 })}
+              <div className="mt-2 rounded-xl border p-3" style={{ borderColor: "rgba(56,189,248,0.3)", background: "rgba(2, 6, 23, 0.45)" }}>
+                <p className="mb-2 text-[12px] font-semibold" style={{ color: "#bae6fd" }}>
+                  Бонусы уровней (1-30)
+                </p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {LEVEL_REWARDS.map((reward) => {
+                    const reached = dailyLevel >= reward.level
+                    return (
+                      <div
+                        key={reward.level}
+                        className="flex items-center justify-between rounded-lg px-2 py-1.5 text-[11px]"
+                        style={{
+                          background: reached ? "rgba(34,197,94,0.12)" : "rgba(15,23,42,0.7)",
+                          border: reached ? "1px solid rgba(34,197,94,0.35)" : "1px solid rgba(71,85,105,0.45)",
+                          color: reached ? "#bbf7d0" : "#cbd5e1",
+                        }}
+                      >
+                        <span>Уровень {reward.level} · {reward.title}</span>
+                        <span className="tabular-nums">+{reward.hearts} ❤ · {reward.itemCount} {reward.item}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
