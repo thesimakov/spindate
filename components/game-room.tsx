@@ -2451,6 +2451,20 @@ export function GameRoom() {
             <span className="text-sm font-semibold" style={{ color: "#1f2937" }}>{"Магазин"}</span>
           </button>
 
+          {/* Межигровой чат */}
+          <button
+            onClick={() => dispatch({ type: "SET_SCREEN", screen: "intergame-chat" })}
+            className="flex items-center gap-2 rounded-[999px] px-4 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px]"
+            style={{
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+            }}
+          >
+            <MessageCircle className="h-4 w-4" style={{ color: "#22d3ee" }} />
+            <span className="text-sm font-semibold" style={{ color: "#e0f2fe" }}>{"Межигровой чат"}</span>
+          </button>
+
           {/* Профиль */}
           <button
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "profile" })}
@@ -3756,6 +3770,15 @@ export function GameRoom() {
                 >
                   <MessageCircle className="h-4 w-4" />
                   Сообщения
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { dispatch({ type: "SET_SCREEN", screen: "intergame-chat" }); setShowMobileMoreMenu(false) }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  style={{ color: "#67e8f9" }}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Межигровой чат
                 </button>
                 <button
                   type="button"

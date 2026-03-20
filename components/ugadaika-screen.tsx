@@ -241,6 +241,7 @@ export function UgadaikaScreen() {
   /** Кто кого выбрал: каждый участник независимо выбрал одного противоположного пола */
   const [actualLikes, setActualLikes] = useState<Record<number, number> | null>(null)
   const [roundsWonThisGame, setRoundsWonThisGame] = useState(0)
+  const [showTenWinsRoseHint, setShowTenWinsRoseHint] = useState(false)
   /** Побед подряд (для награды «5 подряд — роза») */
   const [consecutiveWins, setConsecutiveWins] = useState(0)
   /** Показать окно «5 побед подряд — роза в подарок» */
@@ -332,6 +333,7 @@ export function UgadaikaScreen() {
     const eight = getShuffledParticipants(currentUser, players, seed)
     setRoundNumber(1)
     setRoundsWonThisGame(0)
+    setShowTenWinsRoseHint(false)
     setConsecutiveWins(0)
     setShowFiveWinsPopup(false)
     lastCreditedWinRoundRef.current = null
@@ -381,6 +383,7 @@ export function UgadaikaScreen() {
     setGameParticipants(nextEight)
     setRoundNumber((r) => r + 1)
     setSelectedIds([])
+    setShowTenWinsRoseHint(false)
     setReelTranslateY(0)
     setTimer(ROUND_SECONDS)
     setActualLikes(nextLikes)
@@ -439,12 +442,17 @@ export function UgadaikaScreen() {
 
   const guessedCorrectly =
     guessedWhoChoseMe !== null && whoChoseMe.length > 0 && whoChoseMe.includes(guessedWhoChoseMe)
+  const isRevealNoChoice = phase === "reveal" && whoChoseMe.length === 0
+  const isRevealWin = phase === "reveal" && whoChoseMe.length > 0 && amIInMutualPair && guessedCorrectly
+  const isRevealLose = phase === "reveal" && whoChoseMe.length > 0 && !isRevealWin
 
   useEffect(() => {
     if (phase !== "reveal" || !guessedCorrectly) return
     if (lastCreditedWinRoundRef.current === roundNumber) return
     lastCreditedWinRoundRef.current = roundNumber
     setRoundsWonThisGame((w) => w + 1)
+    const nextTotalWins = (ugadaikaRoundsWon ?? 0) + 1
+    setShowTenWinsRoseHint(nextTotalWins % 10 === 0)
     const nextConsecutive = consecutiveWins + 1
     setConsecutiveWins(nextConsecutive >= 5 ? 0 : nextConsecutive)
     if (nextConsecutive >= 5) {
@@ -460,7 +468,7 @@ export function UgadaikaScreen() {
       setShowFiveWinsPopup(true)
     }
     dispatch({ type: "UGADAIKA_ADD_ROUND_WON", pairPartnerId: myPairPartner?.id })
-  }, [phase, guessedCorrectly, roundNumber, consecutiveWins, dispatch, myPairPartner?.id])
+  }, [phase, guessedCorrectly, roundNumber, consecutiveWins, dispatch, myPairPartner?.id, ugadaikaRoundsWon])
 
   useEffect(() => {
     if (phase !== "reveal" || whoChoseMe.length > 0) return
@@ -477,7 +485,7 @@ export function UgadaikaScreen() {
     })
   }, [phase, whoChoseMe.length, roundNumber, dispatch])
 
-  const amIInMutualPairForCountdown = phase === "reveal" && whoChoseMe.length > 0 && amIInMutualPair && guessedCorrectly
+  const amIInMutualPairForCountdown = isRevealWin
   useEffect(() => {
     if (amIInMutualPairForCountdown && countdownToNextRound === null) {
       setCountdownToNextRound(5)
@@ -499,7 +507,7 @@ export function UgadaikaScreen() {
     }
   }, [countdownToNextRound, startNextRound])
 
-  const isLoseReveal = phase === "reveal" && whoChoseMe.length > 0 && (!amIInMutualPair || !guessedCorrectly)
+  const isLoseReveal = isRevealLose
   useEffect(() => {
     if (isLoseReveal) setConsecutiveWins(0)
   }, [isLoseReveal])
@@ -529,6 +537,7 @@ export function UgadaikaScreen() {
     const seed = Date.now() + roundNumber + Math.floor(Math.random() * 1e6)
     setActualLikes(getRandomChoicesOppositeSex(participantsInRound, seed, currentUserIndex >= 0 ? currentUserIndex : undefined) ?? {})
     setSelectedIds([])
+    setShowTenWinsRoseHint(false)
     setReelTranslateY(0)
     setTimer(ROUND_SECONDS)
     setPhase("playing")
@@ -842,12 +851,12 @@ export function UgadaikaScreen() {
       {(phase === "playing" || phase === "reveal") && (
         <div className="flex min-w-0 flex-col items-center justify-start gap-3 sm:gap-4 overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 pb-6 sm:pb-8 max-[1161px]:px-3 max-[1161px]:py-4 max-[1161px]:gap-3 lg:flex-1 lg:min-h-0 lg:justify-center lg:gap-4 lg:py-6">
           <div className="flex shrink-0 items-center justify-between w-full max-w-2xl max-[1161px]:max-w-xl">
-            <div className="rounded-xl border border-amber-500/30 bg-slate-800/90 px-4 py-2 shadow-[0_0_20px_rgba(251,191,36,0.08)]">
+            <div className="ugadaika-round-pill rounded-xl border border-amber-500/30 bg-slate-800/90 px-4 py-2 shadow-[0_0_20px_rgba(251,191,36,0.08)]">
               <span className="text-sm font-semibold text-amber-200/90">Раунд </span>
               <span className="text-lg font-black text-amber-300">{roundNumber}</span>
             </div>
             <div
-              className="flex items-center gap-2 rounded-xl border-2 border-amber-400/40 bg-gradient-to-b from-slate-800 to-slate-900 px-5 py-2.5 shadow-[0_0_24px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]"
+              className="ugadaika-timer-pill flex items-center gap-2 rounded-xl border-2 border-amber-400/40 bg-gradient-to-b from-slate-800 to-slate-900 px-5 py-2.5 shadow-[0_0_24px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]"
               style={{ boxShadow: "0 0 0 1px rgba(251,191,36,0.15), 0 0 24px rgba(251,191,36,0.12), inset 0 1px 0 rgba(255,255,255,0.06)" }}
             >
               <span className="text-2xl font-mono font-black tabular-nums text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.3)]">{timer}</span>
@@ -871,7 +880,7 @@ export function UgadaikaScreen() {
             {/* Раскладка: на мобильной — сверху претенденты, центр барабан, снизу игроки; на десктопе — слева претенденты, центр барабан, справа игроки; на ПК резиново по высоте */}
             <div className="relative flex w-full min-w-0 shrink-0 flex-col items-stretch justify-center gap-3 sm:gap-4 max-[1161px]:gap-2 max-[1161px]:my-0.5 my-1 sm:my-2 min-h-0 lg:flex-row">
               {/* Претенденты: на мобильной — сверху, в ряд; на десктопе — слева, колонка */}
-              <div className="flex flex-col items-center gap-1.5 sm:gap-2 shrink-0 order-1 lg:flex-col lg:order-none">
+              <div className="ugadaika-side-column flex flex-col items-center gap-1.5 sm:gap-2 shrink-0 order-1 lg:flex-col lg:order-none">
                 <span className="text-xs font-bold text-amber-200/95 w-full lg:w-auto text-center">
                   {currentUser?.gender === "female" ? "Претенденты" : "Претендентки"}
                 </span>
@@ -888,7 +897,7 @@ export function UgadaikaScreen() {
                       type="button"
                       onClick={() => handleAvatarClick(idx)}
                       disabled={!canClick}
-                      className={`flex flex-col items-center gap-0.5 rounded-2xl border-2 p-1.5 sm:p-2 transition-all duration-300 text-left ${
+                      className={`ugadaika-side-card flex flex-col items-center gap-0.5 rounded-2xl border-2 p-1.5 sm:p-2 transition-all duration-300 text-left ${
                         isChosen
                           ? "border-amber-400 bg-amber-500/25 ring-2 ring-amber-400 shadow-[0_0_24px_rgba(251,191,36,0.35)] scale-105"
                           : ""
@@ -1006,7 +1015,7 @@ export function UgadaikaScreen() {
             </div>
 
               {/* Игроки: на мобильной — снизу, в ряд; на десктопе — справа, колонка */}
-              <div className="flex flex-col items-center gap-1.5 sm:gap-2 shrink-0 order-3 lg:flex-col lg:order-none">
+              <div className="ugadaika-side-column flex flex-col items-center gap-1.5 sm:gap-2 shrink-0 order-3 lg:flex-col lg:order-none">
                 <span className="text-xs font-bold text-amber-200/95 w-full lg:w-auto text-center">Игроки</span>
                 <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 lg:flex-col max-w-full overflow-x-auto overflow-y-hidden">
                 {sameIndices.map((idx) => {
@@ -1016,7 +1025,7 @@ export function UgadaikaScreen() {
                   return (
                     <div
                       key={p.id}
-                      className={`flex flex-col items-center gap-0.5 rounded-2xl border-2 p-1.5 sm:p-2 ${
+                      className={`ugadaika-side-card flex flex-col items-center gap-0.5 rounded-2xl border-2 p-1.5 sm:p-2 ${
                         isYou ? "border-amber-500/80 bg-amber-500/20 shadow-[0_0_16px_rgba(251,191,36,0.2)]" : "border-slate-600/90 bg-slate-800/50"
                       }`}
                     >
@@ -1040,11 +1049,11 @@ export function UgadaikaScreen() {
 
             {phase === "playing" && selectedIds.length === 0 && (
               <p
-                className="shrink-0 text-center text-sm font-medium my-3 px-3 py-2 rounded-xl bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto"
+                className="ugadaika-hint-card shrink-0 text-center text-sm font-medium my-3 px-3 py-2 rounded-xl bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto"
                 style={{ textShadow: "0 0 12px rgba(251,191,36,0.15), 0 1px 2px rgba(0,0,0,0.3)" }}
               >
                 <span className="inline lg:hidden">Нажми на претендента выше — выбери пару</span>
-                <span className="hidden lg:inline">Нажми на участника слева — выбери пару</span>
+                <span className="hidden lg:inline">Нажми на претендента слева — выбери пару</span>
               </p>
             )}
 
@@ -1068,18 +1077,18 @@ export function UgadaikaScreen() {
             )}
 
             <div
-              className="shrink-0 mt-4 flex items-center justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-slate-800/90 via-slate-800/85 to-slate-900/90 px-4 py-3"
+              className="ugadaika-status-card shrink-0 mt-4 flex items-center justify-between rounded-2xl border border-amber-500/20 bg-gradient-to-r from-slate-800/90 via-slate-800/85 to-slate-900/90 px-4 py-3"
               style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 0 20px rgba(251,191,36,0.06), 0 4px 12px rgba(0,0,0,0.2)" }}
             >
               <span className="text-[12px] text-slate-200 font-medium">
                 {phase === "playing"
                   ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на претендента выше.")
-                  : whoChoseMe.length === 0
+                  : isRevealNoChoice
                     ? "Не расстраивайся — это игра! Вот тебе 1 роза 🌹"
-                    : !amIInMutualPair
-                      ? "Пара не совпала — выходишь из игры."
-                      : guessedCorrectly
-                        ? "Пара совпала! Вы остаётесь в игре."
+                    : isRevealWin
+                      ? "Пара совпала! Вы остаётесь в игре."
+                      : isRevealLose
+                        ? "Пара не совпала — выходишь из игры."
                         : "Пара не совпала — вылетаешь из игры."}
               </span>
               <span className="text-[12px] font-bold text-amber-200/90">
@@ -1091,9 +1100,9 @@ export function UgadaikaScreen() {
           {phase === "reveal" && (
             <div className="ugadaika-result-popup-backdrop" aria-modal="true" role="dialog">
               <div className="ugadaika-result-popup-box flex flex-col items-center gap-4">
-                {whoChoseMe.length === 0 ? (
+                {isRevealNoChoice ? (
                   <div
-                    className="w-full max-w-md rounded-3xl border-2 border-amber-500/40 bg-gradient-to-b from-slate-800/98 via-slate-900/98 to-slate-800/98 p-6 sm:p-8 shadow-2xl"
+                    className="ugadaika-reveal-card ugadaika-reveal-card--gold w-full max-w-md rounded-3xl border-2 border-amber-500/40 bg-gradient-to-b from-slate-800/98 via-slate-900/98 to-slate-800/98 p-6 sm:p-8 shadow-2xl"
                     style={{
                       boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(251, 191, 36, 0.12)",
                     }}
@@ -1148,10 +1157,10 @@ export function UgadaikaScreen() {
                       </button>
                     </div>
                   </div>
-                ) : !amIInMutualPair ? (
+                ) : isRevealLose ? (
                   <div className="ugadaika-result-lose w-full max-w-md">
                     <div
-                      className="rounded-3xl border-2 border-amber-500/40 p-6 sm:p-8 overflow-hidden"
+                      className="ugadaika-reveal-card ugadaika-reveal-card--rose rounded-3xl border-2 border-amber-500/40 p-6 sm:p-8 overflow-hidden"
                       style={{
                         background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
                         boxShadow: "0 0 0 1px rgba(251, 191, 36, 0.12), inset 0 1px 0 rgba(255,255,255,0.04), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(251, 191, 36, 0.08)",
@@ -1235,10 +1244,10 @@ export function UgadaikaScreen() {
                       )}
                     </div>
                   </div>
-                ) : guessedCorrectly ? (
+                ) : isRevealWin ? (
                   <div className="ugadaika-result-win w-full max-w-md">
                     <div
-                      className="rounded-3xl border-2 border-emerald-500/40 p-6 sm:p-8 overflow-hidden"
+                      className="ugadaika-reveal-card ugadaika-reveal-card--emerald rounded-3xl border-2 border-emerald-500/40 p-6 sm:p-8 overflow-hidden"
                       style={{
                         background: "linear-gradient(165deg, rgba(6, 78, 59, 0.25) 0%, rgba(15, 23, 42, 0.98) 30%, rgba(30, 41, 59, 0.98) 70%, rgba(6, 78, 59, 0.2) 100%)",
                         boxShadow: "0 0 0 1px rgba(52, 211, 153, 0.15), inset 0 1px 0 rgba(255,255,255,0.06), 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px -10px rgba(52, 211, 153, 0.12)",
@@ -1283,11 +1292,11 @@ export function UgadaikaScreen() {
                           <Heart className="h-5 w-5 text-rose-400 fill-current shrink-0" />
                           +10 сердец
                         </p>
-                        {totalRoundsWon > 0 && totalRoundsWon % 10 === 0 && (
+                        {showTenWinsRoseHint && (
                           <p className="mt-1 text-sm font-medium text-rose-200/90">+1 роза за 10 побед!</p>
                         )}
                         <p className="mt-3 text-center text-sm text-slate-400 leading-relaxed">Вторая пара выходит. К вам с партнёром подключаются два новых участника.</p>
-                        <p className="mt-3 text-center text-slate-400">Выиграно туров в этой игре: <span className="font-semibold text-slate-300">{roundsWonThisGame + 1}</span></p>
+                        <p className="mt-3 text-center text-slate-400">Выиграно туров в этой игре: <span className="font-semibold text-slate-300">{roundsWonThisGame}</span></p>
                       </div>
                       {countdownToNextRound !== null && countdownToNextRound > 0 && (
                         <div className="mt-5 flex justify-center">
@@ -1301,61 +1310,7 @@ export function UgadaikaScreen() {
                       </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="ugadaika-result-lose w-full">
-                    <div className="ugadaika-result-glow rounded-2xl border-2 border-amber-500/50 bg-slate-800/95 p-6 shadow-2xl">
-                      <div className="flex flex-col items-center gap-3">
-                        {guessedWhoChoseMe !== null && actualLikes && (() => {
-                          const chosenByMe = participantsInRound[guessedWhoChoseMe]
-                          const chosenByThem = actualLikes[guessedWhoChoseMe]
-                          const nameA = chosenByMe?.name ?? "?"
-                          const nameB = chosenByThem !== undefined && participantsInRound[chosenByThem]
-                            ? (chosenByThem === currentUserIndex ? "тебя" : (participantsInRound[chosenByThem]?.name ?? "?"))
-                            : "другого"
-                          return (
-                            <p className="text-base font-semibold text-amber-300">
-                              Увы — {nameA} выбрал{chosenByMe?.gender === "female" ? "а" : ""} {nameB}
-                            </p>
-                          )
-                        })()}
-                        <div className="flex flex-wrap justify-center gap-3">
-                          {whoChoseMe.length > 0
-                            ? whoChoseMe.map((i) => {
-                                const p = participantsInRound[i]
-                                return (
-                                  <div key={p.id} className="flex flex-col items-center gap-0.5">
-                                    <div className="ring-4 ring-red-500/90 rounded-full p-0.5 bg-slate-800 shadow-[0_0_12px_rgba(239,68,68,0.5)]">
-                                      {p.avatar ? (
-                                         
-                                        <img src={p.avatar} alt="" className="h-16 w-16 rounded-full object-cover" />
-                                      ) : (
-                                        <div className="h-16 w-16 rounded-full bg-slate-600 flex items-center justify-center text-slate-400 text-lg">{p.name?.slice(0, 1) ?? "?"}</div>
-                                      )}
-                                    </div>
-                                    <span className="text-xs text-slate-300">{p.name}</span>
-                                  </div>
-                                )
-                              })
-                            : null}
-                        </div>
-                        <p className="text-sm font-medium text-slate-300 mt-1">
-                          {whoChoseMe.length > 0 ? (
-                            <>Тебя выбрал{whoChoseMe.length === 1 ? "а" : "и"}: {whoChoseMe.map((i) => participantsInRound[i].name).join(" и ")}</>
-                          ) : (
-                            "Тебя никто не выбрал — не расстраивайся, это игра!"
-                          )}
-                        </p>
-                      </div>
-                      <p className="text-lg font-semibold text-amber-400 mt-4">Ты не угадал, кто выбрал тебя — вылетаешь из игры.</p>
-                      <p className="mt-2 text-slate-400">Выиграно туров в этой игре: {roundsWonThisGame}</p>
-                      {countdownToGameover !== null && countdownToGameover > 0 && (
-                        <p className="mt-3 text-center text-sm font-medium text-amber-200">
-                          Выход с поля через {countdownToGameover} сек
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           )}

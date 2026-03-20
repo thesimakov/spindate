@@ -135,7 +135,7 @@ export const PAIR_ACTIONS: PairAction[] = [
 ]
 
 export interface GameState {
-  screen: "registration" | "payment" | "game" | "chat" | "favorites" | "shop" | "profile" | "ugadaika"
+  screen: "registration" | "payment" | "game" | "chat" | "favorites" | "shop" | "profile" | "ugadaika" | "intergame-chat"
   currentUser: Player | null
   players: Player[]
   currentTurnIndex: number
@@ -205,6 +205,8 @@ export interface GameState {
   soundsEnabled?: boolean
   /** Общий чат стола (последние сообщения). */
   generalChatMessages?: GeneralChatMessage[]
+  /** Межигровой (глобальный) чат приложения. */
+  intergameChatMessages?: GeneralChatMessage[]
   /** Купленные в магазине доп. эмоции на сегодня (добавка к суточному лимиту для лимитируемых эмоций). */
   emotionDailyBoost?: {
     dateKey: string
@@ -232,6 +234,7 @@ export type GameAction =
   | { type: "OPEN_CHAT"; player: Player }
   | { type: "SEND_MESSAGE"; toId: number; message: ChatMessage }
   | { type: "SEND_GENERAL_CHAT"; message: GeneralChatMessage }
+  | { type: "SEND_INTERGAME_CHAT"; message: GeneralChatMessage }
   | { type: "PAY_VOICES"; amount: number }
   | { type: "ADD_VOICES"; amount: number }
   | { type: "RESTORE_GAME_STATE"; voiceBalance: number; inventory: InventoryItem[] }

@@ -127,6 +127,7 @@ const initialState: GameState = {
   showReturnedFromUgadaika: false,
   spinSkips: {},
   currentTurnDidSpin: false,
+  intergameChatMessages: [],
   emotionDailyBoost: {
     dateKey: "",
     extraPerType: 0,
@@ -442,6 +443,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const list = [...(state.generalChatMessages ?? []), action.message]
       const kept = list.slice(-50)
       return { ...state, generalChatMessages: kept }
+    }
+    case "SEND_INTERGAME_CHAT": {
+      const list = [...(state.intergameChatMessages ?? []), action.message]
+      const kept = list.slice(-200)
+      return { ...state, intergameChatMessages: kept }
     }
     case "PAY_VOICES":
       return { ...state, voiceBalance: Math.max(0, state.voiceBalance - action.amount) }

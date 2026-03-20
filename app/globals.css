@@ -568,6 +568,102 @@
   pointer-events: none;
   background: radial-gradient(ellipse 100% 50% at 50% 0%, rgba(251, 191, 36, 0.03) 0%, transparent 50%);
 }
+.ugadaika-game-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 60% at 20% 0%, rgba(56, 189, 248, 0.08), transparent 55%),
+    radial-gradient(ellipse 80% 60% at 80% 100%, rgba(244, 114, 182, 0.08), transparent 60%);
+  mix-blend-mode: screen;
+}
+
+/* Плашки раунда/таймера в одной стилистике */
+.ugadaika-round-pill,
+.ugadaika-timer-pill {
+  backdrop-filter: blur(6px);
+}
+.ugadaika-round-pill {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(251, 191, 36, 0.15),
+    0 0 18px rgba(251, 191, 36, 0.12);
+}
+.ugadaika-timer-pill {
+  animation: ugadaika-timer-pulse 2s ease-in-out infinite;
+}
+@keyframes ugadaika-timer-pulse {
+  0%, 100% { transform: translateY(0); box-shadow: 0 0 0 1px rgba(251,191,36,0.15), 0 0 24px rgba(251,191,36,0.12), inset 0 1px 0 rgba(255,255,255,0.06); }
+  50% { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(251,191,36,0.22), 0 0 30px rgba(251,191,36,0.2), inset 0 1px 0 rgba(255,255,255,0.08); }
+}
+
+/* Боковые карточки участников */
+.ugadaika-side-column {
+  backdrop-filter: blur(2px);
+}
+.ugadaika-side-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 6px 14px rgba(2, 6, 23, 0.35);
+}
+.ugadaika-side-card:hover {
+  transform: translateY(-1px);
+}
+
+/* Подсказка и статус под полем */
+.ugadaika-hint-card,
+.ugadaika-status-card {
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 20px rgba(2, 6, 23, 0.28);
+}
+
+/* Единый каркас для reveal-карточек */
+.ugadaika-reveal-card {
+  position: relative;
+  backdrop-filter: blur(10px);
+}
+.ugadaika-reveal-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.ugadaika-reveal-card--gold::after {
+  background: radial-gradient(ellipse 80% 35% at 50% 0%, rgba(251, 191, 36, 0.1), transparent 70%);
+}
+.ugadaika-reveal-card--rose::after {
+  background: radial-gradient(ellipse 80% 35% at 50% 0%, rgba(251, 113, 133, 0.1), transparent 70%);
+}
+.ugadaika-reveal-card--emerald::after {
+  background: radial-gradient(ellipse 80% 35% at 50% 0%, rgba(52, 211, 153, 0.1), transparent 70%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ugadaika-timer-pill {
+    animation: none;
+  }
+  .ugadaika-side-card:hover {
+    transform: none;
+  }
+  .ugadaika-game-field {
+    animation: none !important;
+  }
+}
+
+@keyframes ugadaika-desktop-parallax {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -3px, 0); }
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .ugadaika-game-field {
+    animation: ugadaika-desktop-parallax 8s ease-in-out infinite;
+  }
+}
 
 /* Окно джекпота — общая глубина и затемнение */
 .ugadaika-slot-window {
@@ -617,6 +713,17 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+.ugadaika-slot-casing::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: calc(1rem + 8px);
+  pointer-events: none;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow:
+    0 0 28px rgba(56, 189, 248, 0.16),
+    0 0 46px rgba(251, 191, 36, 0.14);
 }
 @keyframes ugadaika-casing-pulse {
   0%, 100% { box-shadow: inset 0 2px 0 rgba(253,224,71,0.4), inset 0 -2px 0 rgba(0,0,0,0.5), 0 0 0 3px rgba(245,158,11,0.75), 0 0 32px rgba(251,191,36,0.3), 0 6px 24px rgba(0,0,0,0.5); }

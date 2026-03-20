@@ -12,6 +12,7 @@ import { FavoritesScreen } from "@/components/favorites-screen"
 import { ShopScreen } from "@/components/shop-screen"
 import { ProfileScreen } from "@/components/profile-screen"
 import { UgadaikaScreen } from "@/components/ugadaika-screen"
+import { IntergameChatScreen } from "@/components/intergame-chat-screen"
 
 /** Задержка после готовности стола, чтобы интерфейс успел стабилизироваться */
 const NORMALIZE_DELAY_MS = 500
@@ -117,6 +118,8 @@ export function GameApp() {
       return <ProfileScreen />
     case "ugadaika":
       return <UgadaikaScreen />
+    case "intergame-chat":
+      return <IntergameChatScreen />
     default:
       return <RegistrationScreen />
   }
