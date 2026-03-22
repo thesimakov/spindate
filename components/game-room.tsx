@@ -40,6 +40,7 @@ import {
   PAIR_ACTIONS,
   type PairAction,
   type Player,
+  type GameAction,
   type GameLogEntry,
   type PairGenderCombo,
   type InventoryItem,
@@ -210,9 +211,24 @@ const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow:
   skip:      { bg: "linear-gradient(180deg, #7f8c8d 0%, #636e72 100%)", border: "#535c5e", shadow: "#3d4648", text: "#f9fafb" },
 }
 
+function isTableSyncedAction(action: GameAction): boolean {
+  switch (action.type) {
+    case "START_COUNTDOWN":
+    case "TICK_COUNTDOWN":
+    case "START_SPIN":
+    case "STOP_SPIN":
+    case "NEXT_TURN":
+    case "ADD_LOG":
+    case "SEND_GENERAL_CHAT":
+      return true
+    default:
+      return false
+  }
+}
+
 
 export function GameRoom() {
-  const { state, dispatch } = useGame()
+  const { state, dispatch: rawDispatch } = useGame()
   useTheme()
   const isMobile = useIsMobile()
   const isTablet = useIsTablet()
@@ -259,6 +275,48 @@ export function GameRoom() {
     generalChatMessages = [],
     emotionDailyBoost,
   } = state
+
+  const remoteActionRef = useRef(false)
+  const lastEventsSeqRef = useRef(0)
+  const syncMetaRef = useRef<{ tableId: number; userId: number | null }>({
+    tableId,
+    userId: currentUser?.id ?? null,
+  })
+
+  useEffect(() => {
+    syncMetaRef.current = { tableId, userId: currentUser?.id ?? null }
+  }, [tableId, currentUser?.id])
+
+  useEffect(() => {
+    lastEventsSeqRef.current = 0
+  }, [tableId])
+
+  const pushTableAction = useCallback(async (action: GameAction) => {
+    const current = syncMetaRef.current
+    if (!current.userId || !current.tableId) return
+    try {
+      await fetch("/api/table/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "push",
+          tableId: current.tableId,
+          senderId: current.userId,
+          action,
+        }),
+      })
+    } catch {
+      // ignore network hiccups; state will converge on next events
+    }
+  }, [])
+
+  const dispatch = useCallback((action: GameAction) => {
+    rawDispatch(action)
+    if (remoteActionRef.current) return
+    if (!isTableSyncedAction(action)) return
+    void pushTableAction(action)
+  }, [rawDispatch, pushTableAction])
 
   // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки»
   const [tableLoading, setTableLoading] = useState(false)
@@ -359,6 +417,61 @@ export function GameRoom() {
       clearInterval(interval)
     }
   }, [currentUser, tableId, syncLiveTable])
+
+  // Серверная синхронизация игровых действий за столом (очередь, спин, общий чат, лог).
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+
+    const pollEvents = async () => {
+      try {
+        const res = await fetch("/api/table/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            mode: "pull",
+            tableId,
+            sinceSeq: lastEventsSeqRef.current,
+          }),
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || cancelled) return
+
+        const events = Array.isArray(data.events) ? data.events : []
+        if (typeof data.currentSeq === "number") {
+          lastEventsSeqRef.current = Math.max(lastEventsSeqRef.current, data.currentSeq)
+        }
+
+        for (const e of events) {
+          if (cancelled) return
+          const senderId = typeof e?.senderId === "number" ? e.senderId : 0
+          const seq = typeof e?.seq === "number" ? e.seq : 0
+          const action = e?.action as GameAction | undefined
+          if (seq > 0) lastEventsSeqRef.current = Math.max(lastEventsSeqRef.current, seq)
+          if (!action || !isTableSyncedAction(action)) continue
+          if (senderId === currentUser.id) continue
+          remoteActionRef.current = true
+          try {
+            rawDispatch(action)
+          } finally {
+            remoteActionRef.current = false
+          }
+        }
+      } catch {
+        // ignore temporary network failures
+      }
+    }
+
+    void pollEvents()
+    const interval = setInterval(() => {
+      void pollEvents()
+    }, 1200)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [currentUser, tableId, rawDispatch])
 
   // Освобождаем место за столом при выходе из комнаты/приложения.
   useEffect(() => {
