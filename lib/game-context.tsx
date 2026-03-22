@@ -1,77 +1,18 @@
 "use client"
 
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react"
-import type { GameState, GameAction, Player, Gender, InventoryItem } from "./game-types"
-
-// Имена жителей стран СНГ (25+ женских и 25+ мужских)
-const FEMALE_NAMES: string[] = [
-  // Беларусь
-  "Алина", "Вероника", "Ксения", "Светлана", "Дарья",
-  // Киргизия
-  "Айгуль", "Асел", "Нурия", "Мадина", "Гульнара",
-  // Таджикистан
-  "Мехринисо", "Зульфия", "Фотима", "Шахноза", "Нилуфар",
-  // Узбекистан
-  "Дильноза", "Севара", "Нодира", "Шахзода", "Лола",
-  // Россия
-  "Екатерина", "Анна", "Мария", "Ольга", "Виктория",
-]
-
-const MALE_NAMES: string[] = [
-  // Беларусь
-  "Андрей", "Денис", "Илья", "Максим", "Владислав",
-  // Киргизия
-  "Айбек", "Нурсултан", "Эркин", "Бахтияр", "Темир",
-  // Таджикистан
-  "Фаррух", "Далер", "Бехруз", "Шерзод", "Хуршед",
-  // Узбекистан
-  "Жахонгир", "Сардор", "Азиз", "Рустам", "Тимур",
-  // Россия
-  "Алексей", "Сергей", "Дмитрий", "Роман", "Иван",
-]
-
-const CITIES = ["Москва", "Санкт-Петербург", "Минск", "Алматы", "Ташкент", "Бишкек", "Новосибирск", "Екатеринбург", "Казань", "Нижний Новгород"]
-const INTERESTS = ["Путешествия, музыка", "Книги, кино", "Спорт, природа", "Фотография, искусство", "Кулинария, вино", "Танцы, театр", "Наука, технологии", "Йога, медитация"]
-const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
+import type { GameState, GameAction, Player, InventoryItem } from "./game-types"
+import { generateBots as generateBotsImpl, AVATAR_FRAME_IDS, randomAvatarFrame as randomAvatarFrameImpl } from "@/lib/bots"
+import { generateLogId as generateLogIdImpl, generateMessageId as generateMessageIdImpl } from "@/lib/ids"
+import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
-export const AVATAR_FRAME_IDS = ["none", "gold", "silver", "hearts", "roses", "gradient", "neon", "snow", "rabbit", "fairy", "fox", "mag", "malif", "mir", "vesna"] as const
-
-export function randomAvatarFrame(): (typeof AVATAR_FRAME_IDS)[number] {
-  return AVATAR_FRAME_IDS[Math.floor(Math.random() * AVATAR_FRAME_IDS.length)]
-}
-
-export function generateBots(count: number, _userGender: Gender): Player[] {
-  const bots: Player[] = []
-  for (let i = 0; i < count; i++) {
-    // Жёсткое чередование полов для приблизительно 50/50
-    const isFemale = i % 2 === 0
-    const nameList = isFemale ? FEMALE_NAMES : MALE_NAMES
-
-    // Используем реальные портреты (randomuser.me)
-    const avatarIndex = (100 + i) % 100
-    const avatarUrl = isFemale
-      ? `https://randomuser.me/api/portraits/women/${avatarIndex}.jpg`
-      : `https://randomuser.me/api/portraits/men/${avatarIndex}.jpg`
-
-    bots.push({
-      id: 1000 + i,
-      name: nameList[i % nameList.length],
-      avatar: avatarUrl,
-      gender: isFemale ? "female" : "male",
-      age: 25 + Math.floor(Math.random() * 20),
-      purpose: (["relationships", "communication", "love"] as const)[Math.floor(Math.random() * 3)],
-      lookingFor: Math.random() < 0.75 ? (isFemale ? "male" : "female") : (isFemale ? "female" : "male"),
-      isBot: true,
-      online: Math.random() > 0.3,
-      isVip: Math.random() < 0.2,
-      city: CITIES[i % CITIES.length],
-      interests: INTERESTS[i % INTERESTS.length],
-      zodiac: ZODIAC_SIGNS[i % ZODIAC_SIGNS.length],
-    })
-  }
-  return bots
-}
+export { AVATAR_FRAME_IDS }
+export const randomAvatarFrame = randomAvatarFrameImpl
+export const generateBots = generateBotsImpl
+export const generateMessageId = generateMessageIdImpl
+export const generateLogId = generateLogIdImpl
+export const getPairGenderCombo = getPairGenderComboImpl
 
 const initialState: GameState = {
   screen: "registration",
@@ -699,6 +640,33 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ownedBottleSkins: Array.from(new Set([...(state.ownedBottleSkins ?? ["classic"]), action.skin])),
       }
 
+    case "SYNC_TABLE_AUTHORITY": {
+      const p = action.payload
+      return {
+        ...state,
+        players: p.players,
+        currentTurnIndex: p.currentTurnIndex,
+        isSpinning: p.isSpinning,
+        countdown: p.countdown,
+        bottleAngle: p.bottleAngle,
+        targetPlayer: p.targetPlayer,
+        targetPlayer2: p.targetPlayer2,
+        showResult: p.showResult,
+        resultAction: p.resultAction,
+        roundNumber: p.roundNumber,
+        predictionPhase: p.predictionPhase,
+        currentTurnDidSpin: p.currentTurnDidSpin,
+        extraTurnPlayerId: p.extraTurnPlayerId,
+        playerInUgadaika: p.playerInUgadaika ?? null,
+        spinSkips: { ...p.spinSkips },
+        gameLog: [...p.gameLog],
+        generalChatMessages: [...(p.generalChatMessages ?? [])],
+        predictions: [],
+        bets: [],
+        pot: 0,
+      }
+    }
+
     default:
       return state
   }
@@ -774,14 +742,6 @@ export function getBotResponse(): string {
   return responses[Math.floor(Math.random() * responses.length)]
 }
 
-export function generateMessageId(): string {
-  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-}
-
-export function generateLogId(): string {
-  return `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-}
-
 /** Helper to sort a pair of IDs for consistent comparison */
 export function sortPair(a: number, b: number): [number, number] {
   return a < b ? [a, b] : [b, a]
@@ -790,11 +750,4 @@ export function sortPair(a: number, b: number): [number, number] {
 /** Check if two pairs are the same */
 export function pairsMatch(p1: [number, number], p2: [number, number]): boolean {
   return p1[0] === p2[0] && p1[1] === p2[1]
-}
-
-/** Determine pair gender combo */
-export function getPairGenderCombo(p1: Player, p2: Player): "MM" | "MF" | "FF" {
-  if (p1.gender === "male" && p2.gender === "male") return "MM"
-  if (p1.gender === "female" && p2.gender === "female") return "FF"
-  return "MF"
 }

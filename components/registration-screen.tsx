@@ -82,6 +82,20 @@ export function RegistrationScreen() {
 
     dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId })
     dispatch({ type: "SET_TABLES_COUNT", tablesCount })
+    try {
+      const st = await fetch("/api/table/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ tableId, sinceRevision: 0 }),
+      })
+      const stData = await st.json().catch(() => null)
+      if (st.ok && stData?.snapshot) {
+        dispatch({ type: "SYNC_TABLE_AUTHORITY", payload: stData.snapshot })
+      }
+    } catch {
+      // сервер недоступен — остаёмся на локальном столе
+    }
     dispatch({ type: "SET_SCREEN", screen: "game" })
   }
 

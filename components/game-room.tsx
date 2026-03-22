@@ -44,6 +44,7 @@ import {
   type GameLogEntry,
   type PairGenderCombo,
   type InventoryItem,
+  type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
 import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
@@ -277,7 +278,7 @@ export function GameRoom() {
   } = state
 
   const remoteActionRef = useRef(false)
-  const lastEventsSeqRef = useRef(0)
+  const lastAuthorityRevisionRef = useRef(0)
   const syncMetaRef = useRef<{ tableId: number; userId: number | null }>({
     tableId,
     userId: currentUser?.id ?? null,
@@ -288,7 +289,7 @@ export function GameRoom() {
   }, [tableId, currentUser?.id])
 
   useEffect(() => {
-    lastEventsSeqRef.current = 0
+    lastAuthorityRevisionRef.current = 0
   }, [tableId])
 
   const pushTableAction = useCallback(async (action: GameAction) => {
@@ -317,6 +318,42 @@ export function GameRoom() {
     if (!isTableSyncedAction(action)) return
     void pushTableAction(action)
   }, [rawDispatch, pushTableAction])
+
+  const applyAuthoritySnapshot = useCallback(
+    (payload: TableAuthorityPayload) => {
+      lastAuthorityRevisionRef.current = payload.revision
+      remoteActionRef.current = true
+      try {
+        rawDispatch({ type: "SYNC_TABLE_AUTHORITY", payload })
+      } finally {
+        remoteActionRef.current = false
+      }
+    },
+    [rawDispatch],
+  )
+
+  const fetchTableAuthority = useCallback(
+    async (tid: number) => {
+      const since = lastAuthorityRevisionRef.current
+      try {
+        const res = await fetch("/api/table/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ tableId: tid, sinceRevision: since }),
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || !data.snapshot) return
+        const snap = data.snapshot as TableAuthorityPayload
+        if (snap.revision > since) {
+          applyAuthoritySnapshot(snap)
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [applyAuthoritySnapshot],
+  )
 
   // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки»
   const [tableLoading, setTableLoading] = useState(false)
@@ -373,12 +410,14 @@ export function GameRoom() {
         if (typeof data.tablesCount === "number") {
           dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
         }
+        lastAuthorityRevisionRef.current = 0
+        await fetchTableAuthority(nextTableId)
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
         return null
       }
     },
-    [currentUser, tableId, maxTableSize, composePlayersFromLive, dispatch],
+    [currentUser, tableId, maxTableSize, composePlayersFromLive, dispatch, fetchTableAuthority],
   )
 
   useEffect(() => {
@@ -418,60 +457,25 @@ export function GameRoom() {
     }
   }, [currentUser, tableId, syncLiveTable])
 
-  // Серверная синхронизация игровых действий за столом (очередь, спин, общий чат, лог).
+  // Авторитетное состояние стола с сервера (фаза раунда, спин, очередь, лог, общий чат).
   useEffect(() => {
     if (!currentUser) return
     let cancelled = false
 
-    const pollEvents = async () => {
-      try {
-        const res = await fetch("/api/table/events", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            mode: "pull",
-            tableId,
-            sinceSeq: lastEventsSeqRef.current,
-          }),
-        })
-        const data = await res.json().catch(() => null)
-        if (!res.ok || !data?.ok || cancelled) return
-
-        const events = Array.isArray(data.events) ? data.events : []
-        if (typeof data.currentSeq === "number") {
-          lastEventsSeqRef.current = Math.max(lastEventsSeqRef.current, data.currentSeq)
-        }
-
-        for (const e of events) {
-          if (cancelled) return
-          const senderId = typeof e?.senderId === "number" ? e.senderId : 0
-          const seq = typeof e?.seq === "number" ? e.seq : 0
-          const action = e?.action as GameAction | undefined
-          if (seq > 0) lastEventsSeqRef.current = Math.max(lastEventsSeqRef.current, seq)
-          if (!action || !isTableSyncedAction(action)) continue
-          if (senderId === currentUser.id) continue
-          remoteActionRef.current = true
-          try {
-            rawDispatch(action)
-          } finally {
-            remoteActionRef.current = false
-          }
-        }
-      } catch {
-        // ignore temporary network failures
-      }
+    const poll = async () => {
+      if (cancelled) return
+      await fetchTableAuthority(tableId)
     }
 
-    void pollEvents()
+    void poll()
     const interval = setInterval(() => {
-      void pollEvents()
+      void poll()
     }, 1200)
     return () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [currentUser, tableId, rawDispatch])
+  }, [currentUser, tableId, fetchTableAuthority])
 
   // Освобождаем место за столом при выходе из комнаты/приложения.
   useEffect(() => {

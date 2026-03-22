@@ -71,6 +71,29 @@ export interface GameLogEntry {
   timestamp: number
 }
 
+/** Авторитетное состояние стола с сервера (синхронизация между живыми игроками) */
+export interface TableAuthorityPayload {
+  revision: number
+  players: Player[]
+  currentTurnIndex: number
+  isSpinning: boolean
+  countdown: number | null
+  bottleAngle: number
+  targetPlayer: Player | null
+  targetPlayer2: Player | null
+  showResult: boolean
+  resultAction: string | null
+  roundNumber: number
+  predictionPhase: boolean
+  currentTurnDidSpin: boolean
+  extraTurnPlayerId?: number
+  /** Совпадает с GameState.playerInUgadaika — влияет на NEXT_TURN на клиенте */
+  playerInUgadaika?: number | null
+  spinSkips: Record<number, number>
+  gameLog: GameLogEntry[]
+  generalChatMessages: GeneralChatMessage[]
+}
+
 /* ---- Prediction system ---- */
 export interface Prediction {
   playerId: number        // who made the prediction
@@ -286,3 +309,5 @@ export type GameAction =
   | { type: "SET_SOUNDS_ENABLED"; enabled: boolean }
   /** Магазин: добавить пакет эмоций на сегодня (например, +50 к каждому лимитируемому виду). */
   | { type: "BUY_EMOTION_PACK"; cost: number; extraPerType: number; dateKey: string }
+  /** Подтянуть состояние стола с сервера (не отправляется на сервер) */
+  | { type: "SYNC_TABLE_AUTHORITY"; payload: TableAuthorityPayload }

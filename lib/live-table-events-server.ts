@@ -1,4 +1,5 @@
 import type { GameAction } from "@/lib/game-types"
+import { applyAuthorityEvent, ensureTableAuthority } from "@/lib/table-authority-server"
 
 type TableEvent = {
   seq: number
@@ -73,6 +74,8 @@ export function pushTableEvent(args: { tableId: number; senderId: number; action
     bucket.events = bucket.events.slice(-MAX_EVENTS_PER_TABLE)
   }
   store.set(tableId, bucket)
+  ensureTableAuthority(tableId)
+  applyAuthorityEvent(tableId, args.action)
   return { ok: true as const, seq: bucket.seq }
 }
 

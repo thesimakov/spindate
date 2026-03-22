@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { Player } from "@/lib/game-types"
 import { joinOrSyncLiveTable, leaveLiveTable } from "@/lib/live-tables-server"
+import { ensureTableAuthority } from "@/lib/table-authority-server"
 
 type Mode = "join" | "sync" | "leave"
 
@@ -71,6 +72,8 @@ export async function POST(req: Request) {
     requestedTableId: mode === "sync" ? requestedTableId : undefined,
     forceNew: mode === "join" ? forceNew : false,
   })
+
+  ensureTableAuthority(result.tableId)
 
   return NextResponse.json({
     ok: true,

@@ -166,3 +166,15 @@ export function leaveLiveTable(userId: number) {
   state.playersById.delete(userId)
   removeFromTable(state, userId, presence.tableId)
 }
+
+/** Живые игроки и размер стола (для авторитетного состояния игры) */
+export function getTableInfo(tableId: number): { livePlayers: LivePlayer[]; maxTableSize: number } | null {
+  const state = getState()
+  cleanupStale(state, Date.now())
+  const set = state.tableUsers.get(tableId)
+  if (!set || set.size === 0) return null
+  const firstUid = [...set.values()][0]
+  const pres = state.playersById.get(firstUid)
+  const maxTableSize = pres?.maxTableSize ?? 10
+  return { livePlayers: tableLivePlayers(state, tableId), maxTableSize }
+}
