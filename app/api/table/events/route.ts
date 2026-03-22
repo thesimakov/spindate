@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     if (!Number.isInteger(senderId) || senderId <= 0 || !action) {
       return NextResponse.json({ ok: false, error: "Некорректные данные события" }, { status: 400 })
     }
-    const result = pushTableEvent({ tableId, senderId, action })
+    const result = await pushTableEvent({ tableId, senderId, action })
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: "Событие отклонено" }, { status: 400 })
     }
@@ -38,6 +38,6 @@ export async function POST(req: Request) {
   }
 
   const sinceSeq = parseIntSafe(body?.sinceSeq, 0)
-  const result = pullTableEvents({ tableId, sinceSeq })
+  const result = await pullTableEvents({ tableId, sinceSeq })
   return NextResponse.json(result)
 }

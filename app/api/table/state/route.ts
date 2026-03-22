@@ -10,8 +10,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Некорректный tableId" }, { status: 400 })
   }
 
-  ensureTableAuthority(tableId)
-  const snapshot = getTableAuthoritySnapshot(tableId)
+  await ensureTableAuthority(tableId)
+  const snapshot = await getTableAuthoritySnapshot(tableId)
   if (!snapshot) {
     return NextResponse.json({ ok: false, error: "Стол не найден" }, { status: 404 })
   }

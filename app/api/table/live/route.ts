@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   if (mode === "leave") {
     const userId = Number(body?.userId)
     if (Number.isInteger(userId) && userId > 0) {
-      leaveLiveTable(userId)
+      await leaveLiveTable(userId)
     }
     return NextResponse.json({ ok: true })
   }
@@ -66,14 +66,14 @@ export async function POST(req: Request) {
   const requestedTableId = Number.isInteger(requestedTableIdRaw) ? requestedTableIdRaw : null
   const forceNew = body?.forceNew === true
 
-  const result = joinOrSyncLiveTable({
+  const result = await joinOrSyncLiveTable({
     player,
     maxTableSize,
     requestedTableId: mode === "sync" ? requestedTableId : undefined,
     forceNew: mode === "join" ? forceNew : false,
   })
 
-  ensureTableAuthority(result.tableId)
+  await ensureTableAuthority(result.tableId)
 
   return NextResponse.json({
     ok: true,

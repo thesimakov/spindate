@@ -5,16 +5,22 @@ import { getTableInfo } from "@/lib/live-tables-server"
 import { buildInitialAuthoritySnapshot } from "@/lib/table-authority-init"
 import { mergeLivePlayersIntoAuthority } from "@/lib/table-authority-merge"
 import { applyTableAuthorityAction } from "@/lib/table-authority-apply"
+import { getRedis } from "@/lib/redis"
+import { readModifyWriteKey } from "@/lib/redis-rmw"
 
 declare global {
-  var __spindateTableAuthorityStore: Map<number, TableAuthorityPayload> | undefined
+  var __spindateTableAuthorityMemory: Map<number, TableAuthorityPayload> | undefined
 }
 
-function getStore(): Map<number, TableAuthorityPayload> {
-  if (!globalThis.__spindateTableAuthorityStore) {
-    globalThis.__spindateTableAuthorityStore = new Map<number, TableAuthorityPayload>()
+function getMemoryStore(): Map<number, TableAuthorityPayload> {
+  if (!globalThis.__spindateTableAuthorityMemory) {
+    globalThis.__spindateTableAuthorityMemory = new Map<number, TableAuthorityPayload>()
   }
-  return globalThis.__spindateTableAuthorityStore
+  return globalThis.__spindateTableAuthorityMemory
+}
+
+function authorityRedisKey(tableId: number): string {
+  return `spindate:v1:authority:${tableId}`
 }
 
 function playerIdsKey(players: Player[]): string {
@@ -25,20 +31,14 @@ function targetsForTable(maxTableSize: number): { males: number; females: number
   return maxTableSize <= 6 ? { males: 3, females: 3 } : { males: 5, females: 5 }
 }
 
-/**
- * Инициализация/обновление авторитетного состояния при изменении живых игроков.
- */
-export function ensureTableAuthority(tableId: number): TableAuthorityPayload | null {
-  const tid = Math.floor(tableId)
-  if (!Number.isInteger(tid) || tid <= 0) return null
-  const info = getTableInfo(tid)
-  if (!info || info.livePlayers.length === 0) return null
-
+function computeEnsureAuthority(
+  prev: TableAuthorityPayload | null,
+  info: { livePlayers: Player[]; maxTableSize: number },
+  tid: number,
+): TableAuthorityPayload | null {
   const anchor: Player = { ...info.livePlayers[0], isBot: false }
   const { males, females } = targetsForTable(info.maxTableSize)
   const bots = generateBots(220, anchor.gender)
-  const store = getStore()
-  const prev = store.get(tid)
 
   const composed = composeTablePlayers({
     currentUser: anchor,
@@ -53,40 +53,91 @@ export function ensureTableAuthority(tableId: number): TableAuthorityPayload | n
   if (!prev) {
     const shuffled = [...composed].sort(() => Math.random() - 0.5)
     const init = buildInitialAuthoritySnapshot(shuffled, tid)
-    const next: TableAuthorityPayload = { ...init, revision: 1 }
-    store.set(tid, next)
-    return next
+    return { ...init, revision: 1 }
   }
 
   const mergedCore = mergeLivePlayersIntoAuthority(prev, composed, anchor)
   const idsChanged = playerIdsKey(mergedCore.players) !== playerIdsKey(prev.players)
-  const next: TableAuthorityPayload = {
+  return {
     ...mergedCore,
     revision: idsChanged ? prev.revision + 1 : prev.revision,
   }
-  store.set(tid, next)
+}
+
+/**
+ * Инициализация/обновление авторитетного состояния при изменении живых игроков.
+ */
+export async function ensureTableAuthority(tableId: number): Promise<TableAuthorityPayload | null> {
+  const tid = Math.floor(tableId)
+  if (!Number.isInteger(tid) || tid <= 0) return null
+  const info = await getTableInfo(tid)
+  if (!info || info.livePlayers.length === 0) return null
+
+  const redis = getRedis()
+  const key = authorityRedisKey(tid)
+
+  if (redis) {
+    let out: TableAuthorityPayload | null = null
+    await readModifyWriteKey(redis, key, (raw) => {
+      const prev = raw ? (JSON.parse(raw) as TableAuthorityPayload) : null
+      const next = computeEnsureAuthority(prev, info, tid)
+      out = next
+      return next ? JSON.stringify(next) : null
+    })
+    return out
+  }
+
+  const store = getMemoryStore()
+  const prev = store.get(tid) ?? null
+  const next = computeEnsureAuthority(prev, info, tid)
+  if (next) store.set(tid, next)
   return next
 }
 
-export function getTableAuthoritySnapshot(tableId: number): TableAuthorityPayload | null {
-  const store = getStore()
-  return store.get(Math.floor(tableId)) ?? null
+export async function getTableAuthoritySnapshot(tableId: number): Promise<TableAuthorityPayload | null> {
+  const tid = Math.floor(tableId)
+  const redis = getRedis()
+  if (redis) {
+    const raw = await redis.get(authorityRedisKey(tid))
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as TableAuthorityPayload
+    } catch {
+      return null
+    }
+  }
+  return getMemoryStore().get(tid) ?? null
 }
 
 /**
  * Применить игровое событие (после записи в ленту событий) и увеличить revision.
  */
-export function applyAuthorityEvent(tableId: number, action: GameAction): TableAuthorityPayload | null {
+export async function applyAuthorityEvent(tableId: number, action: GameAction): Promise<TableAuthorityPayload | null> {
   const tid = Math.floor(tableId)
-  let snap = getTableAuthoritySnapshot(tid)
-  if (!snap) {
-    ensureTableAuthority(tid)
-    snap = getTableAuthoritySnapshot(tid)
+  await ensureTableAuthority(tid)
+
+  const redis = getRedis()
+  const key = authorityRedisKey(tid)
+
+  if (redis) {
+    let out: TableAuthorityPayload | null = null
+    await readModifyWriteKey(redis, key, (raw) => {
+      if (!raw) return raw
+      const snap = JSON.parse(raw) as TableAuthorityPayload
+      const applied = applyTableAuthorityAction(snap, action)
+      if (!applied) return raw
+      out = { ...applied, revision: snap.revision + 1 }
+      return JSON.stringify(out)
+    })
+    return out
   }
+
+  const store = getMemoryStore()
+  const snap = store.get(tid)
   if (!snap) return null
   const applied = applyTableAuthorityAction(snap, action)
   if (!applied) return null
   const next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
-  getStore().set(tid, next)
+  store.set(tid, next)
   return next
 }

@@ -20,6 +20,7 @@ npm start
 
 ## Развёртывание на сервере
 
+- **Несколько инстансов (Redis):** [docs/REDIS_MULTI_INSTANCE.md](./docs/REDIS_MULTI_INSTANCE.md) — задайте `REDIS_URL`, иначе состояние столов только в памяти одного процесса.
 - **Краткий чеклист:** [SERVER_DEPLOY.md](./SERVER_DEPLOY.md)
 - **С нуля (новый VPS):** [docs/DEPLOY_FROM_SCRATCH.md](./docs/DEPLOY_FROM_SCRATCH.md)
 - **Перепривязка домена:** [docs/DOMAIN_NEW_SERVER.md](./docs/DOMAIN_NEW_SERVER.md)
