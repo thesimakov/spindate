@@ -100,5 +100,11 @@ export function composeTablePlayers({
     finalMap.delete(prev.id)
   }
   ordered.push(...finalMap.values())
-  return ordered.slice(0, maxTableSize)
+  const merged = ordered.slice(0, maxTableSize)
+
+  // Живые игроки всегда впереди, боты только добор — при подключении нового человека
+  // лишние боты отваливаются (neededBots уменьшается), а не «толкают» живых.
+  const humans = merged.filter((p) => !p.isBot)
+  const bots = merged.filter((p) => p.isBot)
+  return [...humans, ...bots].slice(0, maxTableSize)
 }

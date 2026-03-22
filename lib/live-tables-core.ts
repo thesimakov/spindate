@@ -85,21 +85,29 @@ function selectTargetTable(
     if (set && set.size < maxTableSize && isCompatibleTable(currentTableId)) return currentTableId
   }
 
-  let bestTableId: number | null = null
-  let bestSize = -1
+  if (forceNew) {
+    return pickNextTableId(state)
+  }
 
+  /** Подбираем стол с максимумом живых игроков (плотнее сажаем людей), при равенстве — меньший tableId. */
+  const candidates: Array<{ tableId: number; size: number }> = []
   for (const [tableId, userSet] of state.tableUsers.entries()) {
     if (!isCompatibleTable(tableId)) continue
     const size = userSet.size
     if (size >= maxTableSize) continue
-    if (size > bestSize) {
-      bestSize = size
-      bestTableId = tableId
-    }
+    candidates.push({ tableId, size })
   }
 
-  if (!forceNew && bestTableId != null) return bestTableId
-  return pickNextTableId(state)
+  if (candidates.length === 0) {
+    return pickNextTableId(state)
+  }
+
+  candidates.sort((a, b) => {
+    if (b.size !== a.size) return b.size - a.size
+    return a.tableId - b.tableId
+  })
+
+  return candidates[0].tableId
 }
 
 function tableLivePlayers(state: LiveTablesState, tableId: number): LivePlayer[] {
