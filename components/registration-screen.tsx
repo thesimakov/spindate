@@ -8,6 +8,7 @@ import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge } from "@/lib/vk-bridge"
 import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
 import type { Gender, Purpose } from "@/lib/game-types"
+import { composeTablePlayers } from "@/lib/table-composition"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
@@ -25,13 +26,14 @@ export function RegistrationScreen() {
   const [loginModalMode, setLoginModalMode] = useState<"login" | "register">("login")
   const defaultPurpose: Purpose = "communication"
 
-  const buildTableAndEnter = (user: {
+  const buildTableAndEnter = async (user: {
     id: number
     name: string
     avatar: string
     gender: Gender
     age: number
     purpose: Purpose
+    authProvider?: "vk" | "login"
   }) => {
     dispatch({ type: "SET_USER", user })
 
@@ -40,38 +42,45 @@ export function RegistrationScreen() {
     const targetMales = isMobileOrTablet ? 3 : 5
     const targetFemales = isMobileOrTablet ? 3 : 5
 
-    const liveCount = 1
-    const neededBots = Math.max(0, maxTableSize - liveCount)
-
-    const allBots = generateBots(170, user.gender)
-
-    const userIsMale = user.gender === "male"
-    let needMalesFromBots = targetMales - (userIsMale ? 1 : 0)
-    let needFemalesFromBots = targetFemales - (!userIsMale ? 1 : 0)
-    if (needMalesFromBots < 0) needMalesFromBots = 0
-    if (needFemalesFromBots < 0) needFemalesFromBots = 0
-
-    const maleBots = allBots.filter((b) => b.gender === "male")
-    const femaleBots = allBots.filter((b) => b.gender === "female")
-
-    const selectedMales = maleBots.slice(0, needMalesFromBots)
-    const selectedFemales = femaleBots.slice(0, needFemalesFromBots)
-
-    let selectedBots = [...selectedMales, ...selectedFemales]
-    // если по какой-то причине не хватило полов, добираем случайных оставшихся
-    if (selectedBots.length < neededBots) {
-      const remaining = neededBots - selectedBots.length
-      const extraPool = allBots.filter((b) => !selectedBots.includes(b))
-      selectedBots = selectedBots.concat(extraPool.slice(0, remaining))
+    let tableId = 7000 + Math.floor(Math.random() * 1000)
+    let livePlayers: typeof user[] = [user]
+    let tablesCount = 1
+    try {
+      const res = await fetch("/api/table/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "join",
+          user,
+          maxTableSize,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok && Array.isArray(data.livePlayers)) {
+        tableId = typeof data.tableId === "number" ? data.tableId : tableId
+        livePlayers = data.livePlayers
+        tablesCount = typeof data.tablesCount === "number" ? data.tablesCount : tablesCount
+      }
+    } catch {
+      // если сервер недоступен, оставляем локальный стол
     }
 
-    const finalPlayersAtTableBase = [user, ...selectedBots].slice(0, maxTableSize)
+    const allBots = generateBots(220, user.gender)
+    const finalPlayersAtTableBase = composeTablePlayers({
+      currentUser: { ...user, isBot: false },
+      livePlayers: livePlayers.map((p) => ({ ...p, isBot: false })),
+      existingPlayers: [],
+      maxTableSize,
+      targetMales,
+      targetFemales,
+      botPool: allBots,
+    })
     // Перемешиваем порядок за столом, чтобы мужчины/женщины
     // не сидели всегда по разным сторонам.
     const finalPlayersAtTable = [...finalPlayersAtTableBase].sort(() => Math.random() - 0.5)
-    const tablesCount = 80 + Math.floor(Math.random() * 40)
 
-    dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId: 7000 + Math.floor(Math.random() * 1000) })
+    dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId })
     dispatch({ type: "SET_TABLES_COUNT", tablesCount })
     dispatch({ type: "SET_SCREEN", screen: "game" })
   }
@@ -124,7 +133,7 @@ export function RegistrationScreen() {
         // если сервер недоступен, продолжаем без восстановления прогресса
       }
       addToDevRegistry(user)
-      buildTableAndEnter(user)
+      await buildTableAndEnter(user)
     } catch {
       setError("Ошибка авторизации. Попробуйте снова.")
     } finally {
@@ -181,7 +190,7 @@ export function RegistrationScreen() {
         const inventory = Array.isArray(data.inventory) ? data.inventory : []
         dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
         addToDevRegistry(user, login.trim())
-        buildTableAndEnter(user)
+        await buildTableAndEnter(user)
         setShowLoginModal(false)
       }
     } catch {
@@ -243,7 +252,7 @@ export function RegistrationScreen() {
         const inventory = Array.isArray(data.inventory) ? data.inventory : []
         dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
         addToDevRegistry(user, login.trim())
-        buildTableAndEnter(user)
+        await buildTableAndEnter(user)
         setShowLoginModal(false)
       }
     } catch {

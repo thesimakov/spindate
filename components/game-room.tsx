@@ -35,6 +35,7 @@ import { RatingModal } from "@/components/rating-screen"
 import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
+import { composeTablePlayers } from "@/lib/table-composition"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -264,6 +265,63 @@ export function GameRoom() {
   const lastTableIdRef = useRef<number | null>(null)
 
   const { toast, showToast } = useInlineToast(2000)
+  const maxTableSize = isMobileOrTablet ? 6 : 10
+  const targetMales = isMobileOrTablet ? 3 : 5
+  const targetFemales = isMobileOrTablet ? 3 : 5
+
+  const composePlayersFromLive = useCallback(
+    (livePlayers: Player[]) => {
+      if (!currentUser) return players
+      const bots = generateBots(220, currentUser.gender)
+      return composeTablePlayers({
+        currentUser: { ...currentUser, isBot: false },
+        livePlayers: livePlayers.map((p) => ({ ...p, isBot: false })),
+        existingPlayers: players,
+        maxTableSize,
+        targetMales,
+        targetFemales,
+        botPool: bots,
+      })
+    },
+    [currentUser, players, maxTableSize, targetMales, targetFemales],
+  )
+
+  const syncLiveTable = useCallback(
+    async (mode: "join" | "sync", forceNew = false) => {
+      if (!currentUser) return null
+      try {
+        const res = await fetch("/api/table/live", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            mode,
+            forceNew,
+            user: currentUser,
+            tableId,
+            maxTableSize,
+          }),
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || !Array.isArray(data.livePlayers)) return null
+        const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
+        const nextPlayers = composePlayersFromLive(livePlayers)
+        const nextTableId = typeof data.tableId === "number" ? data.tableId : tableId
+        if (mode === "join" || nextTableId !== tableId) {
+          dispatch({ type: "SET_TABLE", players: nextPlayers, tableId: nextTableId })
+        } else {
+          dispatch({ type: "SET_PLAYERS", players: nextPlayers })
+        }
+        if (typeof data.tablesCount === "number") {
+          dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
+        }
+        return { tableId: nextTableId, liveCount: livePlayers.length }
+      } catch {
+        return null
+      }
+    },
+    [currentUser, tableId, maxTableSize, composePlayersFromLive, dispatch],
+  )
 
   useEffect(() => {
     // При первом входе просто запоминаем стол
@@ -279,6 +337,51 @@ export function GameRoom() {
       return () => clearTimeout(t)
     }
   }, [tableId])
+
+  // Синхронизация живых игроков за столом: если кто-то подключился,
+  // добавляем его в список и убираем лишнего бота.
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+
+    const tick = async () => {
+      const result = await syncLiveTable("sync")
+      if (!result || cancelled) return
+    }
+
+    void tick()
+    const interval = setInterval(() => {
+      void tick()
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [currentUser, tableId, syncLiveTable])
+
+  // Освобождаем место за столом при выходе из комнаты/приложения.
+  useEffect(() => {
+    if (!currentUser) return
+    const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
+    const leave = () => {
+      void fetch("/api/table/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        keepalive: true,
+        body: payload,
+      }).catch(() => {})
+    }
+
+    const onBeforeUnload = () => leave()
+    window.addEventListener("beforeunload", onBeforeUnload)
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      leave()
+    }
+  }, [currentUser])
 
   // Рандомный бот периодически меняет себе рамку
   useEffect(() => {
@@ -2166,56 +2269,29 @@ export function GameRoom() {
   )
 
   /* ---- смена стола ---- */
-  const handleChangeTable = () => {
+  const handleChangeTable = async () => {
     if (!currentUser) return
 
-    // На ПК — 10 участников, на мобильной — 6
-    const maxTableSize = isMobileOrTablet ? 6 : 10
-    const targetMales = isMobileOrTablet ? 3 : 5
-    const targetFemales = isMobileOrTablet ? 3 : 5
-
-    const liveCount = Math.max(1, players.filter((p) => !p.isBot).length)
-    const neededBots = Math.max(0, maxTableSize - liveCount)
-
-    // Берём свежий список ботов и убираем тех, кто уже сидит за текущим столом,
-    // чтобы при смене стола лица менялись.
-    const currentBotIds = new Set(players.filter((p) => p.isBot).map((p) => p.id))
-    const allBotsRaw = generateBots(170, currentUser.gender)
-    const allBots = allBotsRaw.filter((b) => !currentBotIds.has(b.id))
-
-    const liveMales = players.filter((p) => !p.isBot && p.gender === "male").length
-    const liveFemales = players.filter((p) => !p.isBot && p.gender === "female").length
-
-    let needMalesFromBots = Math.max(0, targetMales - liveMales)
-    let needFemalesFromBots = Math.max(0, targetFemales - liveFemales)
-
-    // Лёгкое перемешивание, чтобы комбинации были разнообразнее
-    const shuffle = <T,>(arr: T[]): T[] => [...arr].sort(() => Math.random() - 0.5)
-
-    const maleBots = shuffle(allBots.filter((b) => b.gender === "male"))
-    const femaleBots = shuffle(allBots.filter((b) => b.gender === "female"))
-
-    const selectedMales = maleBots.slice(0, needMalesFromBots)
-    const selectedFemales = femaleBots.slice(0, needFemalesFromBots)
-
-    let selectedBots: Player[] = [...selectedMales, ...selectedFemales]
-    if (selectedBots.length < neededBots) {
-      const remaining = neededBots - selectedBots.length
-      const alreadyIds = new Set(selectedBots.map((b) => b.id))
-      const extraPool = shuffle(allBots.filter((b) => !alreadyIds.has(b.id)))
-      selectedBots = selectedBots.concat(extraPool.slice(0, remaining))
+    const changed = await syncLiveTable("join", true)
+    if (changed) {
+      showToast("Стол обновлён — живые игроки подключаются автоматически", "success")
+      return
     }
 
-    const finalPlayersAtTableBase = [currentUser, ...selectedBots].slice(0, maxTableSize)
-    // Перемешиваем порядок посадки за новым столом,
-    // чтобы парни и девушки не сидели «стенками» слева/справа.
-    const finalPlayersAtTable = [...finalPlayersAtTableBase].sort(() => Math.random() - 0.5)
-
-    const nextTablesCount = tablesCount ?? 100
-
-    dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId: 7000 + Math.floor(Math.random() * 1000) })
-    dispatch({ type: "SET_TABLES_COUNT", tablesCount: nextTablesCount })
-    showToast("Стол обновлён — новые игроки", "success")
+    // Фолбэк на локальный режим, если API временно недоступно.
+    const localBots = generateBots(220, currentUser.gender)
+    const localPlayers = composeTablePlayers({
+      currentUser: { ...currentUser, isBot: false },
+      livePlayers: [{ ...currentUser, isBot: false }],
+      existingPlayers: players,
+      maxTableSize,
+      targetMales,
+      targetFemales,
+      botPool: localBots,
+    }).sort(() => Math.random() - 0.5)
+    dispatch({ type: "SET_TABLE", players: localPlayers, tableId: 7000 + Math.floor(Math.random() * 1000) })
+    dispatch({ type: "SET_TABLES_COUNT", tablesCount: tablesCount ?? 1 })
+    showToast("Сервер недоступен — включён локальный стол", "info")
   }
 
   /* ================================================================ */
