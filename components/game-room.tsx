@@ -279,6 +279,8 @@ export function GameRoom() {
   } = state
 
   const remoteActionRef = useRef(false)
+  const playersRef = useRef(players)
+  useEffect(() => { playersRef.current = players }, [players])
   const lastAuthorityRevisionRef = useRef(0)
   const syncMetaRef = useRef<{ tableId: number; userId: number | null }>({
     tableId,
@@ -367,19 +369,19 @@ export function GameRoom() {
 
   const composePlayersFromLive = useCallback(
     (livePlayers: Player[]) => {
-      if (!currentUser) return players
+      if (!currentUser) return playersRef.current
       const bots = generateBots(220, currentUser.gender)
       return composeTablePlayers({
         currentUser: { ...currentUser, isBot: false },
         livePlayers: livePlayers.map((p) => ({ ...p, isBot: false })),
-        existingPlayers: players,
+        existingPlayers: playersRef.current,
         maxTableSize,
         targetMales,
         targetFemales,
         botPool: bots,
       })
     },
-    [currentUser, players, maxTableSize, targetMales, targetFemales],
+    [currentUser, maxTableSize, targetMales, targetFemales],
   )
 
   const syncLiveTable = useCallback(
@@ -405,13 +407,13 @@ export function GameRoom() {
         const nextTableId = typeof data.tableId === "number" ? data.tableId : tableId
         if (mode === "join" || nextTableId !== tableId) {
           dispatch({ type: "SET_TABLE", players: nextPlayers, tableId: nextTableId })
+          lastAuthorityRevisionRef.current = 0
         } else {
           dispatch({ type: "SET_PLAYERS", players: nextPlayers })
         }
         if (typeof data.tablesCount === "number") {
           dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
         }
-        lastAuthorityRevisionRef.current = 0
         await fetchTableAuthority(nextTableId)
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
@@ -438,13 +440,14 @@ export function GameRoom() {
 
   // Синхронизация живых игроков за столом: если кто-то подключился,
   // добавляем его в список и убираем лишнего бота.
+  // При возврате фокуса синхронизируемся немедленно (setInterval ненадёжен в фоновых вкладках).
   useEffect(() => {
     if (!currentUser) return
     let cancelled = false
 
     const tick = async () => {
-      const result = await syncLiveTable("sync")
-      if (!result || cancelled) return
+      if (cancelled) return
+      await syncLiveTable("sync")
     }
 
     void tick()
@@ -452,9 +455,18 @@ export function GameRoom() {
       void tick()
     }, 5000)
 
+    const onFocus = () => { void tick() }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void tick()
+    }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+
     return () => {
       cancelled = true
       clearInterval(interval)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [currentUser, tableId, syncLiveTable])
 
@@ -483,13 +495,16 @@ export function GameRoom() {
     if (!currentUser) return
     const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
     const leave = () => {
-      void fetch("/api/table/live", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        keepalive: true,
-        body: payload,
-      }).catch(() => {})
+      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
+      } else {
+        void fetch("/api/table/live", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: payload,
+        }).catch(() => {})
+      }
     }
 
     const onBeforeUnload = () => leave()
@@ -535,7 +550,7 @@ export function GameRoom() {
     a.volume = musicVolume / 100
     audioRef.current = a
     return a
-  }, [])
+  }, [musicVolume])
 
   useEffect(() => {
     const a = audioRef.current
@@ -968,6 +983,14 @@ export function GameRoom() {
     if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
   }, [roundNumber])
 
+  const handleSpin = useCallback(() => {
+    if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
+    if (!CASUAL_MODE) {
+      dispatch({ type: "END_PREDICTION_PHASE" })
+    }
+    dispatch({ type: "START_COUNTDOWN" })
+  }, [dispatch])
+
   /* ---- auto-scroll log ---- */
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -1014,7 +1037,7 @@ export function GameRoom() {
       handleSpin()
     }
    
-  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown])
+  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin])
 
   /* ---- 8-second auto-advance timer when result is showing ---- */
   useEffect(() => {
@@ -1049,7 +1072,7 @@ export function GameRoom() {
     const timer = setTimeout(() => handleSpin(), 2500)
     return () => clearTimeout(timer)
      
-  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult])
+  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin])
 
   /* ---- при возврате из мини-игры: анимация «вернулся к нам», пропуск хода если ход был у вернувшегося ---- */
   useEffect(() => {
@@ -1136,6 +1159,32 @@ export function GameRoom() {
     return () => clearTimeout(timeout)
   }, [currentTurnPlayer, currentUser?.id, isSpinning, showResult, countdown, dispatch])
 
+  /* ---- auto-skip for OTHER live players who went AFK or disconnected ---- */
+  useEffect(() => {
+    if (!currentTurnPlayer || currentTurnPlayer.isBot) return
+    if (!currentUser || currentUser.id === currentTurnPlayer.id) return
+    if (isSpinning || showResult || countdown !== null) return
+
+    const timeout = setTimeout(() => {
+      const liveIds = playersRef.current.filter(p => !p.isBot).map(p => p.id).sort((a, b) => a - b)
+      if (!currentUser || liveIds[0] !== currentUser.id) return
+
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentTurnPlayer,
+          text: `${currentTurnPlayer.name} пропускает ход`,
+          timestamp: Date.now(),
+        },
+      })
+      dispatch({ type: "NEXT_TURN" })
+    }, 18000)
+
+    return () => clearTimeout(timeout)
+  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch])
+
   /* ---- countdown tick ---- */
   useEffect(() => {
     if (countdown === null || countdown <= 0) return
@@ -1144,12 +1193,12 @@ export function GameRoom() {
         dispatch({ type: "TICK_COUNTDOWN" })
       } else {
         dispatch({ type: "TICK_COUNTDOWN" })
-        startSpin()
+        startSpinRef.current()
       }
     }, 800)
     return () => clearTimeout(timer)
      
-  }, [countdown])
+  }, [countdown, dispatch])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
   const playEmotionSound = useCallback((actionId: string) => {
@@ -1393,13 +1442,8 @@ export function GameRoom() {
      
   }, [players, currentTurnPlayer, dispatch, launchEmoji, playEmotionSound, predictions, bets, pot, currentUser])
 
-  const handleSpin = () => {
-    if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
-    if (!CASUAL_MODE) {
-      dispatch({ type: "END_PREDICTION_PHASE" })
-    }
-    dispatch({ type: "START_COUNTDOWN" })
-  }
+  const startSpinRef = useRef(startSpin)
+  useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
 
   const handleBuyEmotionPackFromGame = useCallback(() => {
     if (!currentUser) return

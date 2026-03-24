@@ -155,14 +155,16 @@ export function RegistrationScreen() {
     }
   }
 
-  /** Преобразует строковый id пользователя (UUID) в число для Player.id */
+  /** Преобразует строковый id пользователя (UUID) в число для Player.id.
+   *  Гарантирует отсутствие конфликта с ID ботов (1000-1999). */
   const userIdToNumber = (id: string): number => {
     let h = 0
     for (let i = 0; i < id.length; i++) {
       h = (h << 5) - h + id.charCodeAt(i)
       h = h | 0
     }
-    return Math.abs(h) || 1
+    const n = Math.abs(h) || 1
+    return n < 10000 ? n + 10000 : n
   }
 
   const handleLogin = async () => {

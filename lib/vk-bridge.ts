@@ -71,7 +71,7 @@ export async function getUserInfo(): Promise<VkUserInfo> {
     }
   }
   return {
-    id: Math.floor(Math.random() * 100000) + 1,
+    id: 500000 + Math.floor(Math.random() * 500000),
     first_name: "Пользователь",
     last_name: "VK",
     photo_200: "https://api.dicebear.com/9.x/adventurer/svg?seed=Player",
