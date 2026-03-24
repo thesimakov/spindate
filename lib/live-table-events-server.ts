@@ -60,6 +60,8 @@ function isActionAllowed(action: GameAction): boolean {
     case "NEXT_TURN":
     case "ADD_LOG":
     case "SEND_GENERAL_CHAT":
+    case "SET_AVATAR_FRAME":
+    case "ADD_DRUNK_TIME":
       return true
     default:
       return false
