@@ -100,6 +100,27 @@ export function applyTableAuthorityAction(
         extraTurnPlayerId: undefined,
       }
     }
+    case "SET_AVATAR_FRAME": {
+      const frames = { ...(snapshot.avatarFrames ?? {}) }
+      if (action.frameId === "none") {
+        delete frames[action.playerId]
+      } else {
+        frames[action.playerId] = action.frameId
+      }
+      return { ...snapshot, avatarFrames: frames }
+    }
+    case "ADD_DRUNK_TIME": {
+      const now = Date.now()
+      const current = (snapshot.drunkUntil ?? {})[action.playerId] ?? 0
+      const base = Math.max(now, current)
+      return {
+        ...snapshot,
+        drunkUntil: {
+          ...(snapshot.drunkUntil ?? {}),
+          [action.playerId]: base + action.ms,
+        },
+      }
+    }
     default:
       return null
   }

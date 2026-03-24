@@ -95,6 +95,8 @@ export function buildInitialAuthoritySnapshot(players: Player[], tableId: number
     playerInUgadaika: null,
     generalChatMessages: [],
     gameLog: gameLog.slice(-50),
+    avatarFrames: {},
+    drunkUntil: {},
   }
   return snapshot
 }

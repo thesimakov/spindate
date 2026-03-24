@@ -642,6 +642,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "SYNC_TABLE_AUTHORITY": {
       const p = action.payload
+      // Мержим рамки: серверные + локальные (для ботов, которым клиент назначает рамки)
+      const mergedFrames = { ...(state.avatarFrames ?? {}), ...(p.avatarFrames ?? {}) }
       return {
         ...state,
         players: p.players,
@@ -661,6 +663,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         spinSkips: { ...p.spinSkips },
         gameLog: [...p.gameLog],
         generalChatMessages: [...(p.generalChatMessages ?? [])],
+        avatarFrames: mergedFrames,
+        drunkUntil: { ...(state.drunkUntil ?? {}), ...(p.drunkUntil ?? {}) },
         predictions: [],
         bets: [],
         pot: 0,

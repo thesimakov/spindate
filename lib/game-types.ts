@@ -92,6 +92,8 @@ export interface TableAuthorityPayload {
   spinSkips: Record<number, number>
   gameLog: GameLogEntry[]
   generalChatMessages: GeneralChatMessage[]
+  avatarFrames?: Record<number, string>
+  drunkUntil?: Record<number, number>
 }
 
 /* ---- Prediction system ---- */
