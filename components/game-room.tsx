@@ -359,8 +359,8 @@ export function GameRoom() {
     [applyAuthoritySnapshot],
   )
 
-  // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки»
-  const [tableLoading, setTableLoading] = useState(false)
+  // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки» при расстановке игроков
+  const [tableLoading, setTableLoading] = useState(true)
   const lastTableIdRef = useRef<number | null>(null)
 
   const { toast, showToast } = useInlineToast(2000)
@@ -426,18 +426,14 @@ export function GameRoom() {
   )
 
   useEffect(() => {
-    // При первом входе просто запоминаем стол
     if (lastTableIdRef.current === null) {
       lastTableIdRef.current = tableId
-      return
-    }
-    // При смене tableId включаем короткий лоадер
-    if (lastTableIdRef.current !== tableId) {
+    } else if (lastTableIdRef.current !== tableId) {
       lastTableIdRef.current = tableId
       setTableLoading(true)
-      const t = setTimeout(() => setTableLoading(false), 1200)
-      return () => clearTimeout(t)
     }
+    const t = setTimeout(() => setTableLoading(false), 1200)
+    return () => clearTimeout(t)
   }, [tableId])
 
   // Синхронизация живых игроков за столом: если кто-то подключился,
@@ -802,10 +798,12 @@ export function GameRoom() {
     typeof drunkUntil[currentTurnPlayer.id] === "number" &&
     drunkUntil[currentTurnPlayer.id] > nowTs
 
-  // Игровой круг: радиус для мобильной и планшета (как мобильная), для ПК — больше.
-  const radius = isMobile ? 26 : isTablet ? 27 : 28
+  // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
+  // чтобы аватарки с рамками не накладывались друг на друга.
+  const manyPlayersOnMobile = isMobileOrTablet && players.length > 6
+  const radius = manyPlayersOnMobile ? 32 : isMobile ? 26 : isTablet ? 27 : 28
   const radiusX = radius
-  const radiusY = isMobile ? 28 : Math.round(radius * (6 / 5)) // на ПК/планшете стол 6:5 — Y для визуально округлого круга
+  const radiusY = manyPlayersOnMobile ? 34 : isMobile ? 28 : Math.round(radius * (6 / 5))
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -3510,7 +3508,7 @@ export function GameRoom() {
             return (
               <div
                 key={player.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-10"
+                className={`absolute -translate-x-1/2 -translate-y-1/2 ${isAvatarMenuOpen ? "z-50" : "z-10"}`}
                 style={{
                   left: `${pos.x}%`,
                   top: `${pos.y}%`,
@@ -3524,8 +3522,8 @@ export function GameRoom() {
               >
                 <PlayerAvatar
                   player={player}
-                  compact={isMobile}
-                  size={isTablet ? 76 : undefined}
+                  compact={isMobile || manyPlayersOnMobile}
+                  size={manyPlayersOnMobile ? 42 : isTablet ? 76 : undefined}
                   // Во время результата подсвечиваем только пару, а не крутящего
                   isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
                   isTarget={

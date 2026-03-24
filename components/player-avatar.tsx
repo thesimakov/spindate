@@ -120,7 +120,7 @@ export function PlayerAvatar({
           <div
             className="pointer-events-none absolute"
             style={{
-              inset: -16,
+              inset: size <= 44 ? -8 : -16,
               zIndex: 0,
             }}
             aria-hidden
@@ -174,7 +174,7 @@ export function PlayerAvatar({
           <div
             className="pointer-events-none absolute"
             style={{
-              inset: -28,
+              inset: size <= 44 ? -12 : -28,
               zIndex: 0,
             }}
             aria-hidden
@@ -228,7 +228,7 @@ export function PlayerAvatar({
           <div
             className="pointer-events-none absolute"
             style={{
-              inset: -28,
+              inset: size <= 44 ? -12 : -28,
               zIndex: 0,
             }}
             aria-hidden
@@ -320,7 +320,7 @@ export function PlayerAvatar({
         {svgFrameSrc && (useFrameOnRim || isCurrentTurn || isTarget) && (
           <div
             className="pointer-events-none absolute z-[1] flex items-center justify-center"
-            style={{ inset: effectiveCompact ? -28 : -40 }}
+            style={{ inset: size <= 44 ? -14 : effectiveCompact ? -22 : -40 }}
             aria-hidden
           >
             <img

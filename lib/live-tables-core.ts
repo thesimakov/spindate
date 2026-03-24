@@ -136,21 +136,31 @@ export function joinOrSyncLiveTableOnState(
 
   const userId = args.player.id
   const existing = state.playersById.get(userId)
+  const previousTableId = existing?.tableId ?? null
+
   if (existing) {
     removeFromTable(state, userId, existing.tableId)
   }
 
-  const targetTableId = selectTargetTable(
-    state,
-    Math.max(1, args.maxTableSize),
-    args.requestedTableId ?? null,
-    !!args.forceNew,
-  )
+  // При sync (requestedTableId задан) сохраняем стол, даже если игрок
+  // был на нём последним — иначе стол удаляется и создаётся новый,
+  // что сбрасывает клиентское состояние игры.
+  const maxTS = Math.max(1, args.maxTableSize)
+  const reqTable = args.requestedTableId ?? null
+  const stayOnSameTable =
+    !args.forceNew &&
+    reqTable != null &&
+    reqTable === previousTableId &&
+    !state.tableUsers.has(reqTable)
+
+  const targetTableId = stayOnSameTable
+    ? reqTable!
+    : selectTargetTable(state, maxTS, reqTable, !!args.forceNew)
 
   const nextPresence: Presence = {
     player: args.player,
     tableId: targetTableId,
-    maxTableSize: Math.max(1, args.maxTableSize),
+    maxTableSize: maxTS,
     updatedAt: now,
   }
   state.playersById.set(userId, nextPresence)
