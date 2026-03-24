@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge } from "@/lib/vk-bridge"
-import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
+import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
 import type { Gender, Purpose } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
 
@@ -15,6 +15,7 @@ export function RegistrationScreen() {
   const isMobile = useIsMobile()
   const isTablet = useIsTablet()
   const isMobileOrTablet = isMobile || isTablet
+  const isDesktopUser = useIsDesktopUser()
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
@@ -37,10 +38,10 @@ export function RegistrationScreen() {
   }) => {
     dispatch({ type: "SET_USER", user })
 
-    // На ПК — 10 участников, на мобильной и планшете — 6
-    const maxTableSize = isMobileOrTablet ? 6 : 10
-    const targetMales = isMobileOrTablet ? 3 : 5
-    const targetFemales = isMobileOrTablet ? 3 : 5
+    const desktopGame = isDesktopUser || !isMobileOrTablet
+    const maxTableSize = desktopGame ? 10 : 6
+    const targetMales = desktopGame ? 5 : 3
+    const targetFemales = desktopGame ? 5 : 3
 
     let tableId = 7000 + Math.floor(Math.random() * 1000)
     let livePlayers: typeof user[] = [user]

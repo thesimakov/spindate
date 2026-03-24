@@ -48,7 +48,7 @@ import {
   type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
-import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
+import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -235,6 +235,7 @@ export function GameRoom() {
   const isMobile = useIsMobile()
   const isTablet = useIsTablet()
   const isMobileOrTablet = isMobile || isTablet
+  const isDesktopUser = useIsDesktopUser()
   const {
     players,
     currentTurnIndex,
@@ -363,9 +364,10 @@ export function GameRoom() {
   const lastTableIdRef = useRef<number | null>(null)
 
   const { toast, showToast } = useInlineToast(2000)
-  const maxTableSize = isMobileOrTablet ? 6 : 10
-  const targetMales = isMobileOrTablet ? 3 : 5
-  const targetFemales = isMobileOrTablet ? 3 : 5
+  const desktopGame = isDesktopUser || !isMobileOrTablet
+  const maxTableSize = desktopGame ? 10 : 6
+  const targetMales = desktopGame ? 5 : 3
+  const targetFemales = desktopGame ? 5 : 3
 
   const composePlayersFromLive = useCallback(
     (livePlayers: Player[]) => {

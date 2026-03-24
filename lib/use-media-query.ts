@@ -2,31 +2,6 @@
 
 import { useState, useEffect } from "react"
 
-/**
- * Определяет платформу VK по URL-параметру `vk_platform`.
- * Возвращает true, если пользователь заходит через десктопный VK.
- * В iframe VK на ПК ширина окна ~600px, но это не мобильное устройство.
- */
-function isVkDesktop(): boolean {
-  if (typeof window === "undefined") return false
-  try {
-    const params = new URLSearchParams(window.location.search)
-    const platform = params.get("vk_platform")
-    return platform === "desktop_web"
-  } catch {
-    return false
-  }
-}
-
-/**
- * Дополнительная проверка: если нет vk_platform, смотрим на User-Agent.
- * Iframe VK на ПК имеет десктопный UA, мобильный VK — мобильный UA.
- */
-function isMobileUserAgent(): boolean {
-  if (typeof navigator === "undefined") return false
-  return /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-}
-
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false)
 
@@ -41,31 +16,45 @@ export function useMediaQuery(query: string): boolean {
   return matches
 }
 
+/** Визуально мобильный layout (по ширине viewport) */
 export function useIsMobile(): boolean {
-  const mqMobile = useMediaQuery("(max-width: 767px)")
-  const [vkDesktop, setVkDesktop] = useState(false)
-
-  useEffect(() => {
-    if (isVkDesktop() || (!isMobileUserAgent() && window.self !== window.top)) {
-      setVkDesktop(true)
-    }
-  }, [])
-
-  if (vkDesktop) return false
-  return mqMobile
+  return useMediaQuery("(max-width: 767px)")
 }
 
-/** Планшет: от 768px до 1023px (md, но не lg) */
+/** Визуально планшетный layout: 768–1023px */
 export function useIsTablet(): boolean {
-  const mqTablet = useMediaQuery("(min-width: 768px) and (max-width: 1023px)")
-  const [vkDesktop, setVkDesktop] = useState(false)
+  return useMediaQuery("(min-width: 768px) and (max-width: 1023px)")
+}
+
+/**
+ * Пользователь на ПК (десктоп), даже если viewport узкий (VK iframe ~550px).
+ * Определяет по vk_platform URL-параметру или по User-Agent в iframe.
+ * Используется для ИГРОВОЙ логики (10 игроков вместо 6), не для визуальной верстки.
+ */
+export function useIsDesktopUser(): boolean {
+  const [isDesktop, setIsDesktop] = useState(false)
 
   useEffect(() => {
-    if (isVkDesktop() || (!isMobileUserAgent() && window.self !== window.top)) {
-      setVkDesktop(true)
+    let desktop = false
+
+    const params = new URLSearchParams(window.location.search)
+    const vkPlatform = params.get("vk_platform")
+    if (vkPlatform === "desktop_web") {
+      desktop = true
     }
+
+    if (!desktop && window.self !== window.top) {
+      const isMobileUA = /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      if (!isMobileUA) desktop = true
+    }
+
+    if (!desktop && window.self === window.top) {
+      const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+      if (!isMobileUA && window.innerWidth >= 1024) desktop = true
+    }
+
+    setIsDesktop(desktop)
   }, [])
 
-  if (vkDesktop) return false
-  return mqTablet
+  return isDesktop
 }
