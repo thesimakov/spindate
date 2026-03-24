@@ -54,9 +54,14 @@ jobs:
           echo "Creating directory on server..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
           echo "Syncing files..."
-          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
-            .next/ \
-            public/ \
+          rsync -avz --delete \
+            --exclude 'node_modules' \
+            --exclude 'data' \
+            --exclude '.env*' \
+            --exclude '.git' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            .next \
+            public \
             package.json \
             package-lock.json \
             next.config.mjs \
