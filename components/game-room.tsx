@@ -1263,9 +1263,20 @@ export function GameRoom() {
 
   /* ---- replay remote emotions as flying emojis ---- */
   const processedLogIdsRef = useRef<Set<string>>(new Set())
+  const remoteEmotionInitRef = useRef(false)
+  const remoteEmotionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     if (!currentUser || players.length === 0) return
+
+    const seen = processedLogIdsRef.current
+
+    // First run: seed the set with all existing entries so we don't replay history
+    if (!remoteEmotionInitRef.current) {
+      remoteEmotionInitRef.current = true
+      for (const entry of gameLog) seen.add(entry.id)
+      return
+    }
 
     const EMOTION_EMOJI_MAP: Record<string, string> = {
       kiss: "\uD83D\uDC8B",
@@ -1284,7 +1295,9 @@ export function GameRoom() {
     }
     const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya"])
 
-    const seen = processedLogIdsRef.current
+    type QueuedEmotion = { fromIdx: number; toIdx: number; type: string; emoji?: string; imgSrc?: string }
+    const queue: QueuedEmotion[] = []
+
     for (const entry of gameLog) {
       if (seen.has(entry.id)) continue
       seen.add(entry.id)
@@ -1298,15 +1311,26 @@ export function GameRoom() {
       if (fromIdx === -1 || toIdx === -1) continue
 
       if (entry.type === "banya") {
-        launchEmoji(fromIdx, toIdx, "\uD83E\uDDF9", assetUrl(EMOJI_BANYA))
-        launchSteam(toIdx)
+        queue.push({ fromIdx, toIdx, type: entry.type, emoji: "\uD83E\uDDF9", imgSrc: assetUrl(EMOJI_BANYA) })
       } else if (EMOTION_EMOJI_MAP[entry.type]) {
-        launchEmoji(fromIdx, toIdx, EMOTION_EMOJI_MAP[entry.type])
+        queue.push({ fromIdx, toIdx, type: entry.type, emoji: EMOTION_EMOJI_MAP[entry.type] })
       }
-      playEmotionSound(entry.type)
     }
 
-    // Prevent unbounded growth: keep only recent IDs
+    // Stagger animations so multiple emotions don't overlap into one blob
+    const STAGGER_MS = 350
+    for (const prev of remoteEmotionTimersRef.current) clearTimeout(prev)
+    remoteEmotionTimersRef.current = []
+
+    queue.forEach((item, i) => {
+      const t = setTimeout(() => {
+        launchEmoji(item.fromIdx, item.toIdx, item.emoji, item.imgSrc)
+        if (item.type === "banya") launchSteam(item.toIdx)
+        playEmotionSound(item.type)
+      }, i * STAGGER_MS)
+      remoteEmotionTimersRef.current.push(t)
+    })
+
     if (seen.size > 500) {
       const ids = Array.from(seen)
       const toRemove = ids.slice(0, ids.length - 200)
