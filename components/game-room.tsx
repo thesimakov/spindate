@@ -1261,6 +1261,59 @@ export function GameRoom() {
     }, 1700)
   }, [positions])
 
+  /* ---- replay remote emotions as flying emojis ---- */
+  const processedLogIdsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!currentUser || players.length === 0) return
+
+    const EMOTION_EMOJI_MAP: Record<string, string> = {
+      kiss: "\uD83D\uDC8B",
+      flowers: "\uD83C\uDF37",
+      diamond: "\uD83D\uDC8E",
+      beer: "\uD83C\uDF7A",
+      cocktail: "\uD83C\uDF79",
+      gift_voice: "\uD83E\uDE99",
+      tools: "\uD83D\uDEE0",
+      lipstick: "\uD83D\uDC84",
+      chat: "\uD83D\uDCAC",
+      hug: "\uD83E\uDD17",
+      selfie: "\uD83D\uDCF8",
+      song: "\uD83C\uDFB5",
+      rose: "\uD83C\uDF39",
+    }
+    const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya"])
+
+    const seen = processedLogIdsRef.current
+    for (const entry of gameLog) {
+      if (seen.has(entry.id)) continue
+      seen.add(entry.id)
+
+      if (!EMOTION_TYPES.has(entry.type)) continue
+      if (entry.fromPlayer?.id === currentUser.id) continue
+      if (!entry.fromPlayer || !entry.toPlayer) continue
+
+      const fromIdx = players.findIndex((p) => p.id === entry.fromPlayer!.id)
+      const toIdx = players.findIndex((p) => p.id === entry.toPlayer!.id)
+      if (fromIdx === -1 || toIdx === -1) continue
+
+      if (entry.type === "banya") {
+        launchEmoji(fromIdx, toIdx, "\uD83E\uDDF9", assetUrl(EMOJI_BANYA))
+        launchSteam(toIdx)
+      } else if (EMOTION_EMOJI_MAP[entry.type]) {
+        launchEmoji(fromIdx, toIdx, EMOTION_EMOJI_MAP[entry.type])
+      }
+      playEmotionSound(entry.type)
+    }
+
+    // Prevent unbounded growth: keep only recent IDs
+    if (seen.size > 500) {
+      const ids = Array.from(seen)
+      const toRemove = ids.slice(0, ids.length - 200)
+      for (const id of toRemove) seen.delete(id)
+    }
+  }, [gameLog, currentUser, players, launchEmoji, launchSteam, playEmotionSound])
+
   /* ---- start the actual spin ---- */
   const startSpin = useCallback(() => {
     const spinner = currentTurnPlayer
@@ -5026,91 +5079,84 @@ export function GameRoom() {
         const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
         const zodiacDisplay = playerMenuTarget.zodiac ?? ZODIAC_SIGNS[playerMenuTarget.id % 12]
         return (
-        <div className="player-menu-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4 overflow-y-auto overflow-x-hidden">
+        <div className="player-menu-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 overflow-y-auto overflow-x-hidden">
           <div
-            className="player-menu-modal player-menu-modal-glow relative w-full max-w-4xl max-h-[90dvh] rounded-2xl p-4 sm:p-5 pt-12 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden"
+            className="player-menu-modal player-menu-modal-glow relative w-full max-w-4xl max-h-[92dvh] sm:max-h-[90dvh] rounded-t-2xl sm:rounded-2xl p-3 sm:p-5 pt-10 sm:pt-12 pb-[max(0.75rem,env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden"
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.25)",
-              fontSize: "15px",
+              fontSize: "14px",
             }}
           >
-            <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
+            <div className="pointer-events-none absolute inset-0 rounded-t-2xl sm:rounded-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
             <button
               type="button"
               onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-              className="absolute right-2 top-2 sm:right-3 sm:top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100"
+              className="absolute right-2 top-2 sm:right-3 sm:top-3 z-10 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100"
               aria-label="Закрыть"
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="relative flex flex-col gap-4 sm:gap-5 sm:flex-row min-w-0">
-              {/* Левый блок: фото, имя, пол/возраст, город, интересы, знак зодиака */}
-              <div className="player-menu-left flex w-full sm:w-[180px] sm:shrink-0 flex-col items-center sm:items-start gap-3">
-                <div className="flex flex-col items-center gap-2">
+            <div className="relative flex flex-col gap-3 sm:gap-5 sm:flex-row min-w-0">
+              {/* Левый блок: фото + инфо — горизонтально на мобильных, вертикально на sm+ */}
+              <div className="player-menu-left flex w-full sm:w-[180px] sm:shrink-0 flex-row sm:flex-col items-center sm:items-start gap-3">
+                <div className="flex flex-col items-center gap-1.5 sm:gap-2 shrink-0">
                   <PlayerAvatar
                     player={playerMenuTarget}
                     frameId={avatarFrames?.[playerMenuTarget.id] || "none"}
                     compact
+                    size={isMobile ? 48 : undefined}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowRosesReceivedPopover((v) => !v)}
-                    className="flex items-center justify-center gap-1 rounded-lg border border-slate-600 bg-slate-800/80 px-2.5 py-1 text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-700/80"
-                    aria-label="Подаренные розы"
-                  >
-                    <span>🌹</span>
-                    <span>Подарено роз: {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}</span>
-                  </button>
-                  {showRosesReceivedPopover && (
-                    <div
-                      className="rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-white"
-                      style={{ background: "rgba(30,41,59,0.98)", border: "1px solid #475569" }}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowRosesReceivedPopover((v) => !v)}
+                      className="flex items-center justify-center gap-1 rounded-lg border border-slate-600 bg-slate-800/80 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-700/80"
+                      aria-label="Подаренные розы"
                     >
-                      Подарено роз: {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowFramePicker(true)}
-                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[12px] font-medium text-amber-200/95 transition-all duration-200 hover:scale-105 hover:bg-amber-500/20 hover:border-amber-500/50"
-                  >
-                    Рамка
-                  </button>
+                      <span>🌹</span>
+                      <span>{(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFramePicker(true)}
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-[12px] font-medium text-amber-200/95 transition-all duration-200 hover:scale-105 hover:bg-amber-500/20 hover:border-amber-500/50"
+                    >
+                      Рамка
+                    </button>
+                  </div>
                 </div>
-                <div className="w-full text-center sm:text-left text-[15px]">
-                  <h3 className="font-bold text-slate-100">{playerMenuTarget.name}</h3>
+                <div className="flex-1 min-w-0 text-left sm:text-left text-[13px] sm:text-[15px]">
+                  <h3 className="font-bold text-slate-100 truncate">{playerMenuTarget.name}</h3>
                   <p className="text-slate-400 mt-0.5">
                     {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
+                    {playerMenuTarget.city && <span className="ml-2">📍 {playerMenuTarget.city}</span>}
                   </p>
-                  {playerMenuTarget.city && (
-                    <p className="text-slate-400 mt-1">📍 {playerMenuTarget.city}</p>
-                  )}
                   {playerMenuTarget.interests && (
-                    <p className="text-slate-400 mt-1 line-clamp-2">🎯 {playerMenuTarget.interests}</p>
+                    <p className="text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-2">🎯 {playerMenuTarget.interests}</p>
                   )}
-                  <p className="text-amber-200/90 mt-1">✨ {zodiacDisplay}</p>
+                  <p className="text-amber-200/90 mt-0.5">✨ {zodiacDisplay}</p>
                 </div>
               </div>
 
               {/* Центральный блок: цитата дня + кнопки действий */}
-              <div className="player-menu-actions flex min-w-0 w-full sm:max-w-sm flex-1 flex-col gap-3">
+              <div className="player-menu-actions flex min-w-0 w-full sm:max-w-sm flex-1 flex-col gap-2 sm:gap-3">
                 {/* Цитата дня */}
                 <div
-                  className="player-menu-quote rounded-xl px-3 py-2.5 text-[15px]"
+                  className="player-menu-quote rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 text-[12px] sm:text-[14px]"
                   style={{
                     background: "linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.7) 100%)",
                     border: "1px solid rgba(251, 191, 36, 0.2)",
                     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.2)",
                   }}
                 >
-                  <p className="font-semibold text-amber-400/95 uppercase tracking-wide mb-1">Цитата дня</p>
-                  <p className="text-slate-300 italic">&quot;{quoteOfDay.text}&quot;</p>
-                  <p className="text-slate-500 mt-1">— {quoteOfDay.author}</p>
+                  <p className="font-semibold text-amber-400/95 uppercase tracking-wide text-[11px] sm:text-[13px] mb-0.5 sm:mb-1">Цитата дня</p>
+                  <p className="text-slate-300 italic line-clamp-2 sm:line-clamp-none">&quot;{quoteOfDay.text}&quot;</p>
+                  <p className="text-slate-500 mt-0.5 sm:mt-1 text-[11px] sm:text-[13px]">— {quoteOfDay.author}</p>
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5 sm:gap-2">
                   {/* Ухаживание — приватный чат за 50 сердец; до 5 игроков в сутки за одним пользователем */}
                   {(() => {
                     const todayKey = new Date().toISOString().slice(0, 10)
@@ -5126,7 +5172,7 @@ export function GameRoom() {
                     const canCare = carersCount < 5 && !currentUserAlreadyCared && voiceBalance >= 50
                     const canOpenVk = !!currentUser && (courtshipProfileAllowed?.[playerMenuTarget.id] !== false) && voiceBalance >= 100
                     return (
-                      <div className="mt-2 flex flex-col gap-2">
+                      <div className="mt-1 sm:mt-2 flex flex-col gap-1.5 sm:gap-2">
                         <button
                           onClick={() => {
                             if (!currentUser) return
@@ -5159,7 +5205,7 @@ export function GameRoom() {
                             showToast("Приватный чат открыт", "success")
                           }}
                           disabled={!canCare}
-                          className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-bold text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                          className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 sm:px-3 sm:py-2.5 font-bold text-[13px] sm:text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                           style={{
                             background: "linear-gradient(180deg, #ec4899 0%, #be185d 100%)",
                             color: "#fff",
@@ -5167,9 +5213,9 @@ export function GameRoom() {
                             boxShadow: "0 2px 0 #831843",
                           }}
                         >
-                          <Heart className="h-4 w-4" fill="currentColor" />
+                          <Heart className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" />
                           <span className="flex-1 text-center">{"Ухаживание"}</span>
-                          <span className="text-[15px] opacity-90">{"50 ❤"}</span>
+                          <span className="text-[13px] sm:text-[15px] opacity-90">{"50 ❤"}</span>
                         </button>
                         {courtshipProfileAllowed?.[playerMenuTarget.id] !== false ? (
                           <button
@@ -5184,7 +5230,7 @@ export function GameRoom() {
                               showToast("Открыт профиль VK", "success")
                             }}
                             disabled={!canOpenVk}
-                            className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[15px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                            className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 sm:px-3 sm:py-2.5 text-[13px] sm:text-[15px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                             style={{
                               background: "linear-gradient(180deg, #2787F5 0%, #1a6bd1 100%)",
                               color: "#fff",
@@ -5192,7 +5238,7 @@ export function GameRoom() {
                               boxShadow: "0 2px 0 #0d47a1",
                             }}
                           >
-                            <User className="h-4 w-4" />
+                            <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             {"Профиль ВК — 100 ❤"}
                           </button>
                         ) : (
@@ -5217,7 +5263,7 @@ export function GameRoom() {
                         showToast("Розы подарены", "success")
                       }}
                       disabled={!currentUser || voiceBalance < 50}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-full px-4 py-2.5 font-bold text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3 rounded-full px-3 py-2 sm:px-4 sm:py-2.5 font-bold text-[13px] sm:text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                       style={{
                         background: "linear-gradient(180deg, #e11d48 0%, #be123c 100%)",
                         color: "#fff",
@@ -5253,7 +5299,7 @@ export function GameRoom() {
                       dispatch({ type: "ADD_FAVORITE", player: playerMenuTarget })
                       dispatch({ type: "CLOSE_PLAYER_MENU" })
                     }}
-                    className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 font-bold text-[15px] transition-all hover:brightness-110 active:scale-95"
+                    className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 sm:px-3 sm:py-2.5 font-bold text-[13px] sm:text-[15px] transition-all hover:brightness-110 active:scale-95"
                     style={{
                       background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
                       color: "#0f172a",
@@ -5261,7 +5307,7 @@ export function GameRoom() {
                       boxShadow: "0 2px 0 #475569",
                     }}
                   >
-                    <Star className="h-4 w-4" />
+                    <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span className="flex-1 text-center">{"В избранное"}</span>
                   </button>
 
@@ -5291,18 +5337,18 @@ export function GameRoom() {
 
               {/* Правая колонка: каталог подарков */}
               {currentUser && (
-                <div className="player-menu-catalog mt-2 sm:mt-4 flex w-full sm:w-[340px] min-w-0 min-h-0 shrink-0 flex-col self-stretch sm:mt-0">
-                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-3 transition-colors"
+                <div className="player-menu-catalog mt-1 sm:mt-0 flex w-full sm:w-[280px] md:w-[340px] min-w-0 min-h-0 shrink-0 flex-col self-stretch">
+                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-2.5 sm:p-3 transition-colors"
                     style={{ background: "rgba(15,23,42,0.95)", boxShadow: "inset 0 1px 0 rgba(251,191,36,0.05), 0 4px 16px rgba(0,0,0,0.2)" }}
                   >
-                  <div className="mb-2 shrink-0 text-[15px]">
+                  <div className="mb-1.5 sm:mb-2 shrink-0 text-[13px] sm:text-[15px]">
                     <span className="font-bold text-slate-200">{"Каталог подарков"}</span>
-                    <span className="block text-slate-400">
-                      {`Для: ${playerMenuTarget.name}. Цены до 10 сердец.`}
+                    <span className="block text-slate-400 text-[12px] sm:text-[14px]">
+                      {`Для: ${playerMenuTarget.name}. Цены до 10 ❤.`}
                     </span>
                   </div>
 
-                  <div className="player-menu-gifts-scroll grid grid-cols-3 content-start gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[220px] sm:max-h-[270px] min-h-0">
+                  <div className="player-menu-gifts-scroll grid grid-cols-3 content-start gap-1.5 sm:gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[180px] sm:max-h-[270px] min-h-0">
                     {[
                       { id: "toy_bear" as InventoryItem["type"], name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
                       { id: "plush_heart" as InventoryItem["type"], name: "Подушка-сердце", emoji: "❤️", cost: 8 },
@@ -5348,25 +5394,25 @@ export function GameRoom() {
                           key={gift.id}
                           type="button"
                           onClick={handleClick}
-                          className="player-menu-gift-item group flex flex-col items-center gap-1 shrink-0 rounded-xl p-1.5 transition-colors hover:bg-slate-700/40"
+                          className="player-menu-gift-item group flex flex-col items-center gap-0.5 sm:gap-1 shrink-0 rounded-xl p-1 sm:p-1.5 transition-colors hover:bg-slate-700/40"
                           disabled={disabled}
                         >
                           <div
-                            className={`flex h-16 w-16 items-center justify-center rounded-xl ${
+                            className={`flex h-11 w-11 sm:h-16 sm:w-16 items-center justify-center rounded-xl ${
                               disabled ? "opacity-40" : "opacity-100"
                             }`}
                             style={!disabled ? { background: "rgba(51,65,85,0.4)", border: "1px solid rgba(71,85,105,0.5)" } : undefined}
                           >
-                            <span className="text-3xl leading-none">{gift.emoji}</span>
+                            <span className="text-xl sm:text-3xl leading-none">{gift.emoji}</span>
                           </div>
-                          <span className="text-center text-[15px] font-semibold text-slate-200 line-clamp-2">{gift.name}</span>
-                          <div className="flex items-center gap-1 text-[15px]">
+                          <span className="text-center text-[11px] sm:text-[14px] font-semibold text-slate-200 line-clamp-2 leading-tight">{gift.name}</span>
+                          <div className="flex items-center gap-0.5 text-[11px] sm:text-[14px]">
                             {alreadyGifted ? (
-                              <span className="font-semibold text-slate-500">{"Подарено"}</span>
+                              <span className="font-semibold text-slate-500">{"✓"}</span>
                             ) : (
                               <>
                                 <span className="text-rose-400">{"❤"}</span>
-                                <span className="text-[15px] font-semibold text-slate-200">{gift.cost}</span>
+                                <span className="font-semibold text-slate-200">{gift.cost}</span>
                               </>
                             )}
                           </div>
