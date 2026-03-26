@@ -69,6 +69,10 @@ function DialogContent({
       >
         {/* Дефолтный скрытый заголовок для доступности, если разработчик не передал DialogTitle */}
         <DialogPrimitive.Title className="sr-only">Диалог</DialogPrimitive.Title>
+        {/* Дефолтное скрытое описание, чтобы Radix не ругался на отсутствие Description/aria-describedby */}
+        <DialogPrimitive.Description className="sr-only">
+          Содержимое диалога.
+        </DialogPrimitive.Description>
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
