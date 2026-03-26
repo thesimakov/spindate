@@ -61,6 +61,18 @@ export const BOTTLE_IMAGES = {
   baby: "/assets/b_baby.webp",
   vip: "/assets/b_vip_v2.webp",
   milk: "/assets/b_milk_v2.webp",
+  frame_69: "/assets/Frame 69.webp",
+  frame_70: "/assets/Frame 70.webp",
+  frame_71: "/assets/Frame 71.webp",
+  frame_72: "/assets/Frame 72.webp",
+  frame_73: "/assets/Frame 73.webp",
+  frame_74: "/assets/Frame 74.webp",
+  frame_75: "/assets/Frame 75.webp",
+  frame_76: "/assets/Frame 76.webp",
+  frame_77: "/assets/Frame 77.webp",
+  frame_78: "/assets/Frame 78.webp",
+  frame_79: "/assets/Frame 79.webp",
+  frame_80: "/assets/Frame 80.webp",
 } as const
 
 /** Картинка эмоции «баня» (веник) */

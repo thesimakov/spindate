@@ -152,31 +152,33 @@
   }
 }
 
-/* Flying emoji animation from player to player */
+/* Flying emoji: траектория в % от стола (как у аватарок), центр эмодзи = центр точки; финал поверх аватарки */
 @keyframes flyEmoji {
   0% {
-    transform: translate(0, 0) scale(1);
+    left: var(--fly-from-left);
+    top: var(--fly-from-top);
+    transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
   50% {
-    transform: translate(
-        calc(var(--fly-to-x) * 0.5),
-        calc(var(--fly-to-y) * 0.5 - 40px)
-      )
-      scale(1.5);
+    left: var(--fly-mid-left);
+    top: var(--fly-mid-top);
+    transform: translate(-50%, -50%) scale(1.42);
     opacity: 1;
   }
   100% {
-    transform: translate(var(--fly-to-x), var(--fly-to-y)) scale(0.8);
-    opacity: 0;
+    left: var(--fly-to-left);
+    top: var(--fly-to-top);
+    transform: translate(-50%, -50%) scale(1.06);
+    opacity: 1;
   }
 }
 
 /* Steam puff (banya) */
 @keyframes steamRise {
-  0% { transform: translateY(0) scale(0.9); opacity: 0; }
+  0% { transform: translate(-50%, -50%) translateY(0) scale(0.9); opacity: 0; }
   10% { opacity: 0.9; }
-  100% { transform: translateY(-70px) scale(1.2); opacity: 0; }
+  100% { transform: translate(-50%, -50%) translateY(-56px) scale(1.2); opacity: 0; }
 }
 
 /* String lights shimmer */
@@ -349,14 +351,19 @@
   animation: app-loader-shimmer 1.5s ease-in-out infinite;
 }
 
-/* Big gift fade-in animation (when несколько подарков) */
-@keyframes giftFade {
+/* Карусель подарков у аватарки: плавное появление смены слота */
+@keyframes giftRotateSlotIn {
   0% {
     opacity: 0;
+    transform: scale(0.82);
   }
   100% {
     opacity: 1;
+    transform: scale(1);
   }
+}
+.avatar-gift-slot-in {
+  animation: giftRotateSlotIn 0.52s ease-out both;
 }
 
 /* Анимации рамок аватарки (превью в каталоге и на профиле) */
@@ -1015,6 +1022,32 @@
   backdrop-filter: blur(10px);
   animation: playerMenuBackdropIn 0.25s ease-out;
 }
+/* Каталог подарков: без затемнения фона; панель выезжает справа */
+.gift-catalog-backdrop {
+  pointer-events: none;
+}
+.gift-catalog-panel {
+  pointer-events: auto;
+  box-shadow: -16px 0 48px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(251, 191, 36, 0.22),
+    -6px 0 56px -14px rgba(251, 191, 36, 0.12);
+}
+.gift-catalog-panel.gift-catalog-drawer {
+  animation: giftCatalogDrawerIn 0.52s cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+@keyframes giftCatalogDrawerIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @keyframes playerMenuBackdropIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1022,6 +1055,10 @@
 .player-menu-modal {
   animation: playerMenuModalIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.55), 0 0 60px -20px rgba(251, 191, 36, 0.12);
+}
+.player-menu-modal.player-menu-modal-drawer {
+  animation: playerMenuDrawerIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  box-shadow: -12px 0 40px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(251, 191, 36, 0.2), -4px 0 48px -12px rgba(251, 191, 36, 0.14);
 }
 @keyframes playerMenuModalIn {
   from {
@@ -1031,6 +1068,16 @@
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+  }
+}
+@keyframes playerMenuDrawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 .player-menu-modal-glow {

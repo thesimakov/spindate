@@ -6,7 +6,26 @@ import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 interface BottleProps {
   angle: number
   isSpinning: boolean
-  skin?: "classic" | "ruby" | "neon" | "frost" | "baby" | "vip" | "milk"
+  skin?:
+    | "classic"
+    | "ruby"
+    | "neon"
+    | "frost"
+    | "baby"
+    | "vip"
+    | "milk"
+    | "frame_69"
+    | "frame_70"
+    | "frame_71"
+    | "frame_72"
+    | "frame_73"
+    | "frame_74"
+    | "frame_75"
+    | "frame_76"
+    | "frame_77"
+    | "frame_78"
+    | "frame_79"
+    | "frame_80"
   isDrunk?: boolean
 }
 
@@ -21,6 +40,18 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
     baby: assetUrl(BOTTLE_IMAGES.baby),
     vip: assetUrl(BOTTLE_IMAGES.vip),
     milk: assetUrl(BOTTLE_IMAGES.milk),
+    frame_69: assetUrl(BOTTLE_IMAGES.frame_69),
+    frame_70: assetUrl(BOTTLE_IMAGES.frame_70),
+    frame_71: assetUrl(BOTTLE_IMAGES.frame_71),
+    frame_72: assetUrl(BOTTLE_IMAGES.frame_72),
+    frame_73: assetUrl(BOTTLE_IMAGES.frame_73),
+    frame_74: assetUrl(BOTTLE_IMAGES.frame_74),
+    frame_75: assetUrl(BOTTLE_IMAGES.frame_75),
+    frame_76: assetUrl(BOTTLE_IMAGES.frame_76),
+    frame_77: assetUrl(BOTTLE_IMAGES.frame_77),
+    frame_78: assetUrl(BOTTLE_IMAGES.frame_78),
+    frame_79: assetUrl(BOTTLE_IMAGES.frame_79),
+    frame_80: assetUrl(BOTTLE_IMAGES.frame_80),
   }
 
   const imgSrc = skinToImg[skin]

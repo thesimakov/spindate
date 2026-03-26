@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Sparkles, Volume2, VolumeX } from "lucide-react"
+import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useGame } from "@/lib/game-context"
@@ -189,126 +189,218 @@ export function ProfileScreen() {
           <span className="text-xs sm:text-sm text-slate-400">ID: {currentUser.id}</span>
         </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col items-center gap-2 flex-shrink-0">
-            <div className="relative h-16 w-16 overflow-visible">
-              {roseGiftFx && (
-                <>
-                  {/* Кольцо как у «цели» за столом (targetPulse) */}
-                  <div
-                    className="profile-rose-gift-target-ring pointer-events-none absolute inset-[-5px] z-[14] rounded-full"
-                    aria-hidden
-                  />
-                  {/* Летящая роза — как flyEmoji со стола */}
-                  <span
-                    className="profile-rose-gift-fly-emoji pointer-events-none absolute left-1/2 top-1/2 z-[24] text-[2.35rem] drop-shadow-[0_4px_12px_rgba(0,0,0,0.55)]"
-                    aria-hidden
-                  >
-                    {"\uD83C\uDF39"}
-                  </span>
-                  {/* Короткий «фейерверк» роз вокруг (как рамка «Розы» на столе) */}
-                  <div
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-[13] -translate-x-1/2 -translate-y-1/2"
-                    style={{ width: 0, height: 0 }}
-                    aria-hidden
-                  >
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-                      const angleDeg = i * 45
-                      const roseSize = 8
-                      const radius = 28
-                      return (
-                        <div
-                          key={i}
-                          className="absolute left-0 top-0 inline-flex items-center justify-center"
-                          style={{
-                            width: roseSize * 2,
-                            height: roseSize * 2,
-                            marginLeft: -roseSize,
-                            marginTop: -roseSize,
-                            transform: `rotate(${angleDeg}deg) translateY(-${radius}px)`,
-                          }}
-                        >
-                          <span
-                            className="profile-rose-gift-burst-petal inline-block text-sm leading-none"
-                            style={{ animationDelay: `${i * 0.07}s` }}
-                          >
-                            {"\uD83C\uDF39"}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
-              <div
-                className={`relative z-[10] h-full w-full overflow-hidden rounded-full transition-all duration-200 ${
-                  (() => {
-                    const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                    return f?.animationClass ?? ""
-                  })()
-                }`}
-                style={
-                  currentFrameId !== "none"
-                    ? (() => {
-                        const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                        return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
-                      })()
-                    : { border: "2px solid #475569" }
-                }
-              >
-                <img src={currentUser.avatar} alt={currentUser.name} className="h-full w-full rounded-full object-cover" />
-              </div>
-              {(() => {
-                const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                return f?.svgPath ? (
-                  <img
-                    src={assetUrl(f.svgPath)}
-                    alt=""
-                    className="pointer-events-none absolute inset-0 z-[11] h-full w-full object-contain"
-                    aria-hidden
-                  />
-                ) : null
-              })()}
-              {isVip && (
-                <div
-                  className="absolute z-[26] flex items-center justify-center rounded-full"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    background: "linear-gradient(135deg,#facc15,#f97316)",
-                    color: "#111827",
-                    border: "2px solid #a15c10",
-                    top: 4,
-                    right: 4,
-                    boxShadow: "0 0 10px rgba(250,204,21,0.9)",
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M4 18h16l-1.5-7.5-3.5 3-3-6.5-3 6.5-3.5-3L4 18z"
-                      fill="#111827"
+        {/* Карточка профиля: аватар + имя + фото (login) */}
+        <div className={`${sectionCardClass} space-y-4`}>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Ваш профиль</p>
+          <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+            <div className="mx-auto flex shrink-0 items-center gap-3 sm:mx-0">
+              <div className="relative h-[5.5rem] w-[5.5rem] overflow-visible sm:h-24 sm:w-24">
+                {roseGiftFx && (
+                  <>
+                    <div
+                      className="profile-rose-gift-target-ring pointer-events-none absolute inset-[-6px] z-[14] rounded-full"
+                      aria-hidden
                     />
-                  </svg>
+                    <span
+                      className="profile-rose-gift-fly-emoji pointer-events-none absolute left-1/2 top-1/2 z-[24] text-[2.75rem] drop-shadow-[0_4px_12px_rgba(0,0,0,0.55)] sm:text-[3rem]"
+                      aria-hidden
+                    >
+                      {"\uD83C\uDF39"}
+                    </span>
+                    <div
+                      className="pointer-events-none absolute left-1/2 top-1/2 z-[13] -translate-x-1/2 -translate-y-1/2"
+                      style={{ width: 0, height: 0 }}
+                      aria-hidden
+                    >
+                      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+                        const angleDeg = i * 45
+                        const roseSize = 8
+                        const radius = 34
+                        return (
+                          <div
+                            key={i}
+                            className="absolute left-0 top-0 inline-flex items-center justify-center"
+                            style={{
+                              width: roseSize * 2,
+                              height: roseSize * 2,
+                              marginLeft: -roseSize,
+                              marginTop: -roseSize,
+                              transform: `rotate(${angleDeg}deg) translateY(-${radius}px)`,
+                            }}
+                          >
+                            <span
+                              className="profile-rose-gift-burst-petal inline-block text-sm leading-none"
+                              style={{ animationDelay: `${i * 0.07}s` }}
+                            >
+                              {"\uD83C\uDF39"}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+                <div
+                  className={`relative z-[10] h-full w-full overflow-hidden rounded-full transition-all duration-200 ${
+                    (() => {
+                      const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                      return f?.animationClass ?? ""
+                    })()
+                  }`}
+                  style={
+                    currentFrameId !== "none"
+                      ? (() => {
+                          const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                          return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
+                        })()
+                      : { border: "2px solid #475569" }
+                  }
+                >
+                  <img src={currentUser.avatar} alt="" className="h-full w-full rounded-full object-cover" />
                 </div>
-              )}
-              <div
-                className="absolute -right-14 top-1/2 z-[27] -translate-y-1/2 rounded-xl px-2 py-1 text-[10px] font-bold"
-                style={{
-                  background: "linear-gradient(135deg, rgba(14,116,144,0.9) 0%, rgba(67,56,202,0.9) 100%)",
-                  color: "#ecfeff",
-                  border: "1px solid rgba(125,211,252,0.7)",
-                  boxShadow: "0 6px 14px rgba(15,23,42,0.45)",
-                }}
-              >
-                Ур. {profileDailyLevel}
+                {(() => {
+                  const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
+                  return f?.svgPath ? (
+                    <img
+                      src={assetUrl(f.svgPath)}
+                      alt=""
+                      className="pointer-events-none absolute inset-0 z-[11] h-full w-full object-contain"
+                      aria-hidden
+                    />
+                  ) : null
+                })()}
+                {isVip && (
+                  <div
+                    className="absolute z-[26] flex items-center justify-center rounded-full"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      background: "linear-gradient(135deg,#facc15,#f97316)",
+                      color: "#111827",
+                      border: "2px solid #a15c10",
+                      top: -2,
+                      right: -2,
+                      boxShadow: "0 0 10px rgba(250,204,21,0.9)",
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 18h16l-1.5-7.5-3.5 3-3-6.5-3 6.5-3.5-3L4 18z" fill="#111827" />
+                    </svg>
+                  </div>
+                )}
+                <div
+                  className="absolute z-[25] flex items-center justify-center rounded-full"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    background: "linear-gradient(135deg, rgba(14,116,144,0.95) 0%, rgba(67,56,202,0.95) 100%)",
+                    border: "1px solid rgba(125,211,252,0.65)",
+                    boxShadow: "0 4px 14px rgba(14,116,144,0.25), inset 0 1px 0 rgba(255,255,255,0.12)",
+                    right: -6,
+                    bottom: -6,
+                  }}
+                  aria-label={`Уровень: ${profileDailyLevel}`}
+                >
+                  <span className="text-[11px] font-black tabular-nums leading-none text-white">{profileDailyLevel}</span>
+                </div>
               </div>
             </div>
+
+            <div className="min-w-0 w-full flex-1 space-y-3">
+              <div>
+                <label htmlFor="profile-name" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Имя в игре
+                </label>
+                <div className="mt-1.5 flex min-w-0 flex-row items-stretch gap-2">
+                  <input
+                    id="profile-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    maxLength={16}
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-600/80 bg-slate-950/80 px-3.5 text-sm font-semibold text-slate-50 outline-none ring-0 transition-colors focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-500/20"
+                    placeholder="Как вас видят за столом"
+                    autoComplete="nickname"
+                  />
+                  <Button
+                    onClick={handleSaveName}
+                    disabled={!canSaveName}
+                    className="h-11 shrink-0 rounded-xl px-4 text-sm font-bold disabled:!opacity-100 sm:min-w-[8.5rem]"
+                    style={
+                      canSaveName
+                        ? {
+                            background: "linear-gradient(135deg,#38bdf8,#a78bfa)",
+                            color: "#0b1220",
+                            border: "1px solid rgba(56,189,248,0.45)",
+                            boxShadow: "0 0 0 1px rgba(255,255,255,0.08) inset",
+                          }
+                        : {
+                            background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
+                            color: "#e2e8f0",
+                            border: "1px solid rgba(148,163,184,0.55)",
+                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                          }
+                    }
+                  >
+                    Сохранить имя
+                  </Button>
+                </div>
+              </div>
+              <p className="text-sm text-slate-400">
+                {currentUser.age} лет <span className="text-slate-600">·</span> {genderLabel(currentUser.gender)}
+              </p>
+
+              {currentUser.authProvider === "login" && (
+                <div className="space-y-2 border-t border-slate-700/50 pt-3">
+                  <label htmlFor="profile-avatar-url" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Фото (URL)
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      id="profile-avatar-url"
+                      type="text"
+                      value={avatarInput}
+                      onChange={(e) => setAvatarInput(e.target.value)}
+                      placeholder="https://…"
+                      className="h-10 min-h-0 w-full flex-1 rounded-xl border border-slate-600/80 bg-slate-950/80 px-3 text-sm text-slate-50 outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-500/20"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!canChangeAvatar) return
+                        dispatch({ type: "UPDATE_USER_AVATAR", playerId: currentUser.id, avatar: avatarInput.trim() })
+                        showToast("Фото обновлено", "success")
+                      }}
+                      disabled={!canChangeAvatar}
+                      className="h-10 shrink-0 rounded-xl px-4 text-sm font-bold disabled:opacity-45"
+                      style={{
+                        background: canChangeAvatar ? "linear-gradient(135deg,#38bdf8,#a78bfa)" : "rgba(51,65,85,0.6)",
+                        color: "#0b1220",
+                        border: "1px solid rgba(148,163,184,0.35)",
+                      }}
+                    >
+                      Обновить фото
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    Аватар по ссылке; позже загрузка на сервер.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Быстрые настройки */}
+        <div className={`${sectionCardClass} space-y-2`}>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Настройки</p>
+          <div className="grid gap-2 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => setShowFramesModal(true)}
-              className={`w-full px-3 py-2 ${secondaryBtnClass}`}
+              className={`flex items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
             >
-              Рамки
+              <Sparkles className="h-4 w-4 text-amber-400/90" aria-hidden />
+              Рамки аватара
             </button>
             <button
               type="button"
@@ -317,84 +409,20 @@ export function ProfileScreen() {
                 dispatch({ type: "SET_SOUNDS_ENABLED", enabled: nextEnabled })
                 showToast(nextEnabled ? "Звуки включены" : "Звуки отключены", "success")
               }}
-              className={`mt-2 flex w-full items-center justify-center gap-2 px-3 py-2 ${secondaryBtnClass}`}
+              className={`flex items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
             >
               {soundsEnabled === false ? (
                 <>
-                  <VolumeX className="h-4 w-4" />
+                  <VolumeX className="h-4 w-4 text-slate-300" />
                   Включить звуки
                 </>
               ) : (
                 <>
-                  <Volume2 className="h-4 w-4" />
+                  <Volume2 className="h-4 w-4 text-slate-300" />
                   Отключить звуки
                 </>
               )}
             </button>
-          </div>
-
-          <div className="flex flex-col">
-            <div className="text-sm font-semibold text-slate-400">{"Имя"}</div>
-            <div className="mt-1 flex items-center gap-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={16}
-                className="h-9 w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 text-sm font-semibold text-slate-50 outline-none"
-                placeholder="Введите имя"
-              />
-              <Button
-                size="sm"
-                onClick={handleSaveName}
-                disabled={!canSaveName}
-                className="h-9 rounded-xl px-3 text-sm font-semibold disabled:opacity-50"
-                style={{
-                  background: "linear-gradient(135deg,#38bdf8,#a78bfa)",
-                  color: "#0b1220",
-                  border: "1px solid rgba(148,163,184,0.35)",
-                }}
-              >
-                {"Сохранить"}
-              </Button>
-            </div>
-            <div className="text-sm text-slate-300">
-              {currentUser.age} {"лет"} {"•"} {genderLabel(currentUser.gender)}
-            </div>
-
-            {currentUser.authProvider === "login" && (
-              <div className="mt-3 space-y-1.5">
-                <div className="text-sm font-semibold text-slate-400">{"Фото профиля"}</div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={avatarInput}
-                    onChange={(e) => setAvatarInput(e.target.value)}
-                    placeholder="Вставьте URL картинки"
-                    className="h-8 flex-1 rounded-xl border border-slate-700 bg-slate-950/70 px-3 text-sm text-slate-50 outline-none"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (!canChangeAvatar) return
-                      dispatch({ type: "UPDATE_USER_AVATAR", playerId: currentUser.id, avatar: avatarInput.trim() })
-                      showToast("Фото обновлено", "success")
-                    }}
-                    disabled={!canChangeAvatar}
-                    className="h-8 rounded-xl px-3 text-sm font-semibold disabled:opacity-50"
-                    style={{
-                      background: "linear-gradient(135deg,#38bdf8,#a78bfa)",
-                      color: "#0b1220",
-                      border: "1px solid rgba(148,163,184,0.35)",
-                    }}
-                  >
-                    {"Обновить"}
-                  </Button>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-400">
-                  {"Временно аватарка берётся по URL. Позже это будет сохраняться на нашем сервере."}
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
@@ -449,26 +477,64 @@ export function ProfileScreen() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          <div className={sectionCardClass}>
-            <div className="text-xs sm:text-sm font-semibold text-slate-400">{"Сердца"}</div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-base" style={{ color: "#f97316" }}>{"❤"}</span>
-              <span className={valueTextClass}>{voiceBalance}</span>
+        <div className={`${sectionCardClass} overflow-hidden p-0`}>
+          <p className="border-b border-cyan-400/10 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Баланс
+          </p>
+          <div className="grid grid-cols-3 divide-x divide-slate-600/40">
+            <div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-center sm:py-5">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-2xl sm:h-12 sm:w-12"
+                style={{
+                  background: "rgba(249, 115, 22, 0.12)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                }}
+              >
+                <Heart className="h-5 w-5 text-orange-400 sm:h-6 sm:w-6" fill="currentColor" strokeWidth={0} aria-hidden />
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+                Сердца
+              </span>
+              <span className="text-[1.35rem] font-black tabular-nums leading-none text-white tracking-tight sm:text-2xl">
+                {voiceBalance}
+              </span>
+              <span className="text-[9px] leading-tight text-slate-600">основная валюта</span>
             </div>
-          </div>
-          <div className={sectionCardClass}>
-            <div className="text-xs sm:text-sm font-semibold text-slate-400">{"Бонусы"}</div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-base" style={{ color: "#2ecc71" }}>{"🏆"}</span>
-              <span className={valueTextClass}>{bonusBalance}</span>
+            <div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-center sm:py-5">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-2xl sm:h-12 sm:w-12"
+                style={{
+                  background: "rgba(52, 211, 153, 0.1)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                }}
+              >
+                <Trophy className="h-5 w-5 text-emerald-400 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden />
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+                Бонусы
+              </span>
+              <span className="text-[1.35rem] font-black tabular-nums leading-none text-white tracking-tight sm:text-2xl">
+                {bonusBalance}
+              </span>
+              <span className="text-[9px] leading-tight text-slate-600">награды</span>
             </div>
-          </div>
-          <div className={sectionCardClass}>
-            <div className="text-xs sm:text-sm font-semibold text-slate-400">{"Розы"}</div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-base">{"🌹"}</span>
-              <span className={valueTextClass}>{rosesBalance}</span>
+            <div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-center sm:py-5">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-2xl sm:h-12 sm:w-12"
+                style={{
+                  background: "rgba(244, 63, 94, 0.1)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                }}
+              >
+                <Flower2 className="h-5 w-5 text-rose-400 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden />
+              </div>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+                Розы
+              </span>
+              <span className="text-[1.35rem] font-black tabular-nums leading-none text-white tracking-tight sm:text-2xl">
+                {rosesBalance}
+              </span>
+              <span className="text-[9px] leading-tight text-slate-600">в инвентаре</span>
             </div>
           </div>
         </div>

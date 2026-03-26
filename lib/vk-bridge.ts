@@ -1,5 +1,7 @@
 "use client"
 
+import { payVotesForPack } from "@/lib/heart-shop-pricing"
+
 /**
  * Обёртка над VK Bridge для мини-приложения ВКонтакте.
  * В iframe/клиенте VK использует реальный bridge; вне VK — заглушки для разработки.
@@ -126,12 +128,12 @@ export async function showPaymentWall(amount: number, itemId?: string): Promise<
 
 /** Покупка пака сердец (500). Для уведомлений VK вызывает get_item/order_status_change на сервер. */
 export async function buyHearts500(): Promise<boolean> {
-  return showPaymentWall(25, VK_ITEM_IDS.hearts_500)
+  return showPaymentWall(payVotesForPack(500), VK_ITEM_IDS.hearts_500)
 }
 
 /** Покупка пака сердец (1000). */
 export async function buyHearts1000(): Promise<boolean> {
-  return showPaymentWall(60, VK_ITEM_IDS.hearts_1000)
+  return showPaymentWall(payVotesForPack(1000), VK_ITEM_IDS.hearts_1000)
 }
 
 /** Покупка VIP (оплата через VK, курс: 1 голос = 1 сердце). */

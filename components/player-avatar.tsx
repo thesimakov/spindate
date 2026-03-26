@@ -1,7 +1,40 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import type { Player } from "@/lib/game-types"
 import { assetUrl, FRAME_SVG } from "@/lib/assets"
+
+type AvatarBigGiftType =
+  | "toy_bear"
+  | "toy_car"
+  | "toy_ball"
+  | "souvenir_magnet"
+  | "souvenir_keychain"
+  | "plush_heart"
+  | "chocolate_box"
+
+const EMPTY_BIG_GIFT_SEQ: AvatarBigGiftType[] = []
+
+function bigGiftEmoji(type: AvatarBigGiftType): string {
+  switch (type) {
+    case "toy_bear":
+      return "🧸"
+    case "plush_heart":
+      return "❤️"
+    case "toy_car":
+      return "🚗"
+    case "toy_ball":
+      return "⚽️"
+    case "souvenir_magnet":
+      return "🧲"
+    case "souvenir_keychain":
+      return "🔑"
+    case "chocolate_box":
+      return "🍫"
+    default:
+      return "🎁"
+  }
+}
 
 const FRAME_STYLES: Record<string, { border: string; boxShadow: string }> = {
   none: { border: "2px solid #475569", boxShadow: "none" },
@@ -31,15 +64,8 @@ interface PlayerAvatarProps {
   compact?: boolean
   kissCount?: number
   giftIcons?: Array<"rose" | "flowers" | "song" | "diamond" | "kiss">
-  bigGiftIcon?:
-    | "toy_bear"
-    | "toy_car"
-    | "toy_ball"
-    | "souvenir_magnet"
-    | "souvenir_keychain"
-    | "plush_heart"
-    | "chocolate_box"
-  bigGiftHasMany?: boolean
+  /** Все «большие» подарки из инвентаря по порядку; при >1 — по кругу с плавной сменой */
+  bigGiftSequence?: AvatarBigGiftType[]
   /** Рамка на аватарке (подаренная) — отображается на столе */
   frameId?: string
   /** Игрок сейчас в мини-игре «Угадай-ка» — показывать статус «в игре» */
@@ -58,8 +84,7 @@ export function PlayerAvatar({
   compact = false,
   kissCount,
   giftIcons,
-  bigGiftIcon,
-  bigGiftHasMany,
+  bigGiftSequence,
   frameId,
   inGame = false,
   showAsleep = false,
@@ -74,6 +99,34 @@ export function PlayerAvatar({
   const outerSize = size + borderSize * 2 + 4
   const effectiveCompact = size <= 52
   const isVip = !!player.isVip && (player.vipUntilTs == null || player.vipUntilTs > Date.now())
+
+  const filteredSmallGifts = (giftIcons ?? []).filter(
+    (icon) => icon !== "flowers" && icon !== "diamond" && icon !== "song",
+  ) as Array<"rose" | "kiss">
+  const smallGiftsKey = filteredSmallGifts.join(",")
+  const [smallGiftIdx, setSmallGiftIdx] = useState(0)
+  useEffect(() => {
+    setSmallGiftIdx(0)
+  }, [smallGiftsKey])
+  useEffect(() => {
+    if (filteredSmallGifts.length <= 1) return
+    const n = filteredSmallGifts.length
+    const t = setInterval(() => setSmallGiftIdx((i) => (i + 1) % n), 2400)
+    return () => clearInterval(t)
+  }, [smallGiftsKey, filteredSmallGifts.length])
+
+  const bigSeq = bigGiftSequence ?? EMPTY_BIG_GIFT_SEQ
+  const bigGiftsKey = bigSeq.join(",")
+  const [bigGiftIdx, setBigGiftIdx] = useState(0)
+  useEffect(() => {
+    setBigGiftIdx(0)
+  }, [bigGiftsKey])
+  useEffect(() => {
+    if (bigSeq.length <= 1) return
+    const n = bigSeq.length
+    const t = setInterval(() => setBigGiftIdx((i) => (i + 1) % n), 2900)
+    return () => clearInterval(t)
+  }, [bigGiftsKey, bigSeq.length])
 
   return (
     <div
@@ -404,59 +457,48 @@ export function PlayerAvatar({
           </div>
         )}
 
-        {/* Gift icons (снизу слева): только поцелуи и розы, без цветов, бриллиантов и песни */}
-        {giftIcons && (() => {
-          const filtered = giftIcons.filter((icon) => icon !== "flowers" && icon !== "diamond" && icon !== "song")
-          return filtered.length > 0 && !isTarget && (
-            <div
-              className="absolute z-[10] flex items-center"
+        {/* Gift icons (снизу слева): розы/поцелуи; при нескольких — по кругу с плавной сменой */}
+        {filteredSmallGifts.length > 0 && !isTarget && (
+          <div
+            className="absolute z-[10] flex min-h-[1.25em] min-w-[1.25em] items-center justify-center"
+            style={{
+              bottom: -4,
+              left: -6,
+            }}
+          >
+            <span
+              key={`${smallGiftIdx}-${filteredSmallGifts[smallGiftIdx]}`}
+              className={`drop-shadow-lg ${filteredSmallGifts.length > 1 ? "avatar-gift-slot-in" : ""}`}
+              aria-hidden="true"
               style={{
-                bottom: -4,
-                left: -6,
+                fontSize: effectiveCompact ? "20px" : "24px",
+                lineHeight: 1,
               }}
             >
-              {filtered.map((icon, index) => (
-                <span
-                  key={`${icon}_${index}`}
-                  className="drop-shadow-lg"
-                  aria-hidden="true"
-                  style={{
-                    fontSize: effectiveCompact ? "20px" : "24px",
-                    marginLeft: index === 0 ? 0 : -8,
-                  }}
-                >
-                  {icon === "rose" && "🌹"}
-                  {icon === "kiss" && "💋"}
-                </span>
-              ))}
-            </div>
-          )
-        })()}
+              {filteredSmallGifts[smallGiftIdx] === "rose" && "🌹"}
+              {filteredSmallGifts[smallGiftIdx] === "kiss" && "💋"}
+            </span>
+          </div>
+        )}
 
         {/* Big gift overlay (нижняя правая часть, ~70x70 поверх аватарки, без фона и рамки) */}
-        {bigGiftIcon && !isTarget && !effectiveCompact && (
+        {bigSeq.length > 0 && !isTarget && !effectiveCompact && (
           <div
-            className="absolute z-[10] flex items-center justify-center"
+            className="absolute z-[10] flex items-center justify-center overflow-visible"
             style={{
               width: 70,
               height: 70,
               right: -20,
               bottom: -20,
-              animation: bigGiftHasMany ? "giftFade 5s ease-in-out" : undefined,
             }}
           >
             <span
-              className="drop-shadow-lg"
+              key={`${bigGiftIdx}-${bigSeq[bigGiftIdx]}`}
+              className={`flex items-center justify-center drop-shadow-lg ${bigSeq.length > 1 ? "avatar-gift-slot-in" : ""}`}
               aria-hidden="true"
-              style={{ fontSize: "40px" }}
+              style={{ fontSize: "40px", lineHeight: 1 }}
             >
-              {bigGiftIcon === "toy_bear" && "🧸"}
-              {bigGiftIcon === "plush_heart" && "❤️"}
-              {bigGiftIcon === "toy_car" && "🚗"}
-              {bigGiftIcon === "toy_ball" && "⚽️"}
-              {bigGiftIcon === "souvenir_magnet" && "🧲"}
-              {bigGiftIcon === "souvenir_keychain" && "🔑"}
-              {bigGiftIcon === "chocolate_box" && "🍫"}
+              {bigGiftEmoji(bigSeq[bigGiftIdx])}
             </span>
           </div>
         )}

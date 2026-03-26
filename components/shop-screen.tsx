@@ -1,11 +1,22 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Users } from "lucide-react"
+import {
+  ArrowRightLeft,
+  CalendarDays,
+  Crown,
+  Flower2,
+  Gem,
+  Heart,
+  Sparkles,
+  Users,
+  type LucideIcon,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { generateLogId, useGame } from "@/lib/game-context"
 import { useInlineToast } from "@/hooks/use-inline-toast"
+import { listVotesForPack, payVotesForPack } from "@/lib/heart-shop-pricing"
 import { vkBridge } from "@/lib/vk-bridge"
 
 export function ShopScreen() {
@@ -17,14 +28,20 @@ export function ShopScreen() {
   const emotionPackCost = 5
   const emotionPackExtraPerType = 50
 
-  const heartOffers = [
-    { hearts: 5, votes: 1, itemId: vkBridge.VK_ITEM_IDS.hearts_5, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 50, votes: 3, itemId: vkBridge.VK_ITEM_IDS.hearts_50, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 150, votes: 9, itemId: vkBridge.VK_ITEM_IDS.hearts_150, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 500, votes: 25, itemId: vkBridge.VK_ITEM_IDS.hearts_500, priceRub: undefined as number | undefined, baseRub: undefined as number | undefined },
-    { hearts: 1000, votes: 60, itemId: vkBridge.VK_ITEM_IDS.hearts_1000, priceRub: 50, baseRub: 60 },
-    { hearts: 5000, votes: 300, itemId: vkBridge.VK_ITEM_IDS.hearts_5000, priceRub: 270, baseRub: 300 },
-  ] as const
+  const heartOffers = (
+    [
+      { hearts: 5, itemId: vkBridge.VK_ITEM_IDS.hearts_5 },
+      { hearts: 50, itemId: vkBridge.VK_ITEM_IDS.hearts_50 },
+      { hearts: 150, itemId: vkBridge.VK_ITEM_IDS.hearts_150 },
+      { hearts: 500, itemId: vkBridge.VK_ITEM_IDS.hearts_500 },
+      { hearts: 1000, itemId: vkBridge.VK_ITEM_IDS.hearts_1000 },
+      { hearts: 5000, itemId: vkBridge.VK_ITEM_IDS.hearts_5000 },
+    ] as const
+  ).map((o) => {
+    const listVotes = listVotesForPack(o.hearts)
+    const votes = payVotesForPack(o.hearts)
+    return { ...o, votes, listVotes }
+  })
   const sectionCardClass =
     "rounded-2xl border border-cyan-300/25 bg-slate-900/90 shadow-[0_12px_30px_rgba(15,23,42,0.55)]"
   const subtleTextClass = "text-xs sm:text-sm text-slate-300"
@@ -32,6 +49,9 @@ export function ShopScreen() {
     "h-10 w-full rounded-xl border border-cyan-200/70 text-sm font-semibold text-slate-950 shadow-[0_8px_20px_rgba(56,189,248,0.5)] disabled:opacity-60"
   const ctaSecondaryClass =
     "h-10 rounded-xl border border-cyan-300/55 bg-slate-900 text-sm font-semibold text-slate-100 hover:bg-slate-800 hover:border-cyan-200/80"
+
+  /** Обводка как у Material Symbols Outlined (~24dp, weight 400) */
+  const mdIconStroke = 2
 
   const shopParticles = useMemo(() => {
     const count = 16
@@ -217,50 +237,52 @@ export function ShopScreen() {
         <div className={`mb-3 flex items-center justify-between px-4 py-3 ${sectionCardClass}`}>
           <span className="text-sm sm:text-base font-semibold text-slate-100">{"Баланс сердец"}</span>
           <div className="flex items-center gap-2">
-            <span className="text-base sm:text-lg text-rose-400">{"❤"}</span>
+            <Heart className="h-5 w-5 shrink-0 text-rose-400 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} fill="none" aria-hidden />
             <span className="text-base sm:text-lg font-bold text-slate-100">{voiceBalance}</span>
           </div>
         </div>
         {/* Пополнение сердечек (оплата через VK по пакетам) */}
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {heartOffers.map((offer) => {
-            const hasDiscount =
-              typeof offer.priceRub === "number" &&
-              typeof offer.baseRub === "number" &&
-              offer.baseRub > offer.priceRub
-            const discountPercent = hasDiscount
-              ? Math.round((1 - offer.priceRub! / offer.baseRub!) * 100)
-              : 0
+            const hasDiscount = offer.listVotes > offer.votes
+            const discountPercent = hasDiscount ? Math.round((1 - offer.votes / offer.listVotes) * 100) : 0
             const isPopular = offer.hearts === 500
             const isBest = offer.hearts === 5000
-            const votesLabel = `${offer.votes} ${offer.votes === 1 ? "голос" : "голосов"}`
-            const iconConfig =
+            const iconConfig: {
+              bg: string
+              ring: string
+              fg: string
+              Icon: LucideIcon
+              filled?: boolean
+            } =
               offer.hearts >= 5000
                 ? {
                     bg: "bg-gradient-to-br from-amber-200 via-yellow-300 to-amber-400",
                     ring: "ring-amber-300/80",
-                    fg: "text-amber-700",
-                    symbol: "👑",
+                    fg: "text-amber-800",
+                    Icon: Crown,
                   }
                 : offer.hearts >= 1000
                   ? {
                       bg: "bg-gradient-to-br from-sky-200 via-indigo-300 to-sky-400",
                       ring: "ring-sky-200/80",
-                      fg: "text-sky-800",
-                      symbol: "💎",
+                      fg: "text-sky-900",
+                      Icon: Gem,
                     }
                   : offer.hearts >= 150
                     ? {
                         bg: "bg-gradient-to-br from-rose-200 via-pink-300 to-rose-400",
                         ring: "ring-rose-200/80",
                         fg: "text-rose-800",
-                        symbol: "💖",
+                        Icon: Heart,
+                        filled: true,
                       }
                     : {
                         bg: "bg-gradient-to-br from-slate-100 via-slate-200 to-slate-300",
                         ring: "ring-slate-200/80",
-                        fg: "text-sky-600",
-                        symbol: "❤",
+                        fg: "text-sky-700",
+                        Icon: Heart,
+                        filled: false,
                       }
             return (
               <div
@@ -292,23 +314,23 @@ export function ShopScreen() {
                     </span>
                   )}
                   <div className={`mb-2 flex h-14 w-14 items-center justify-center rounded-full ring-4 sm:mb-3 sm:h-16 sm:w-16 ${iconConfig.ring} ${iconConfig.bg} shadow-[0_0_22px_rgba(148,163,184,0.6)]`}>
-                    <span className={`text-2xl drop-shadow sm:text-3xl ${iconConfig.fg}`}>{iconConfig.symbol}</span>
+                    <iconConfig.Icon
+                      className={`h-[26px] w-[26px] sm:h-8 sm:w-8 ${iconConfig.fg}`}
+                      strokeWidth={iconConfig.filled ? 0 : mdIconStroke}
+                      fill={iconConfig.filled ? "currentColor" : "none"}
+                      aria-hidden
+                    />
                   </div>
                   <div className="text-center leading-tight">
-                    <div className="text-xl font-bold text-rose-300 sm:text-2xl">
-                      {offer.hearts} {" ❤"}
+                    <div className="flex items-center justify-center gap-1 text-xl font-bold text-rose-300 sm:text-2xl">
+                      <span>{offer.hearts}</span>
+                      <Heart
+                        className="h-[1.1em] w-[1.1em] shrink-0 text-rose-400/95"
+                        strokeWidth={mdIconStroke}
+                        fill="none"
+                        aria-hidden
+                      />
                     </div>
-                    <div className="mt-1 text-sm text-slate-200">
-                      {votesLabel}
-                    </div>
-                    {typeof offer.priceRub === "number" && (
-                      <div className={subtleTextClass}>
-                        {offer.priceRub} {"₽"}
-                        {typeof offer.baseRub === "number" && offer.baseRub > offer.priceRub && (
-                          <span className="ml-1 line-through opacity-70">{offer.baseRub}{" ₽"}</span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
                 <Button
@@ -329,79 +351,133 @@ export function ShopScreen() {
         </div>
 
         {/* VIP-статус + покупка */}
-        <div className={`flex flex-col gap-4 px-4 py-4 ${sectionCardClass}`}>
-          <div className="flex items-center gap-4">
-            <div
-              className="flex items-center justify-center rounded-full"
-              style={{
-                width: 32,
-                height: 32,
-                background: "radial-gradient(circle at 30% 0%,#facc15,#f97316 70%,#b45309)",
-                boxShadow: "0 0 14px rgba(245,158,11,0.9)",
-              }}
-            >
-              <span className="text-[13px] font-extrabold text-slate-900">VIP</span>
+        <div className={`flex flex-col gap-5 px-4 py-5 ${sectionCardClass}`}>
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-600 shadow-[0_0_22px_rgba(251,191,36,0.45)] ring-2 ring-amber-300/50">
+              <Crown className="h-5 w-5 text-amber-950" strokeWidth={mdIconStroke} aria-hidden />
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm sm:text-base font-semibold text-slate-100">{"VIP-статус"}</span>
-              <span className={subtleTextClass}>
-                {"Золотая рамка и значок на аватаре, приоритетное место за столом."}
+            <div className="min-w-0 flex flex-col gap-1">
+              <span className="text-base font-bold tracking-tight text-slate-50 sm:text-lg">VIP-статус</span>
+              <span className="text-sm leading-relaxed text-slate-400">
+                Золотая рамка и значок на аватаре, приоритетное место за столом.
               </span>
               {isVip && vipLeftDays != null && (
-                <span className="text-xs text-amber-300/90">{"Активен ещё: "}{vipLeftDays}{" дн."}</span>
+                <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-amber-500/12 px-2.5 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/35">
+                  Активен ещё {vipLeftDays} дн.
+                </span>
               )}
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="flex flex-col justify-between rounded-2xl border border-amber-400/70 bg-slate-900/95 px-3 py-3 text-xs sm:text-sm">
-              <div className="mb-2">
-                <span className="text-sm font-semibold text-amber-300">{"3 дня"}</span>
-                <p className={subtleTextClass}>{"Пробный период бесплатно"}</p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-stretch">
+            {/* Пробный */}
+            <div className="flex min-h-[168px] flex-col overflow-hidden rounded-2xl border border-amber-400/45 bg-gradient-to-b from-amber-500/[0.12] via-slate-950/85 to-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="flex flex-1 flex-col px-4 pt-4 pb-2">
+                <div className="mb-2 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-400" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-400/95">Проба</span>
+                </div>
+                <p className="text-xl font-black tracking-tight text-amber-100">3 дня</p>
+                <p className="mt-2 text-sm leading-snug text-slate-400">Полный доступ бесплатно — один раз на аккаунт.</p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || vipTrialUsed}
-                className={ctaPrimaryClass}
-                style={{
-                  background: "linear-gradient(135deg,#22d3ee,#6366f1)",
-                }}
+                className={`${ctaPrimaryClass} mt-auto h-12 shrink-0 rounded-none rounded-b-2xl border-x-0 border-b-0 border-t border-amber-400/25 disabled:!opacity-100`}
+                style={
+                  !!isVip || vipTrialUsed
+                    ? {
+                        background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
+                        color: "#e2e8f0",
+                        borderColor: "rgba(148,163,184,0.35)",
+                      }
+                    : { background: "linear-gradient(135deg,#22d3ee,#6366f1)", color: "#0b1220" }
+                }
                 onClick={() => handleActivateVip({ days: 3, cost: 0, isTrial: true })}
               >
-                {isVip ? "Уже VIP" : vipTrialUsed ? "Проба использована" : "Попробовать"}
+                {isVip ? "Уже VIP" : vipTrialUsed ? "Проба использована" : "Попробовать бесплатно"}
               </Button>
             </div>
-            <div className="flex flex-col justify-between rounded-2xl border border-slate-600/80 bg-slate-900/95 px-3 py-3 text-xs sm:text-sm">
-              <div className="mb-2">
-                <span className="text-sm font-semibold text-slate-100">{"7 дней"}</span>
-                <p className={subtleTextClass}>{"20 ❤"}</p>
+
+            {/* 7 дней */}
+            <div className="flex min-h-[168px] flex-col overflow-hidden rounded-2xl border border-slate-600/75 bg-slate-950/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="flex flex-1 flex-col px-4 pt-4 pb-2">
+                <div className="mb-2 flex items-center gap-2 text-slate-500">
+                  <CalendarDays className="h-4 w-4" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Тариф</span>
+                </div>
+                <p className="text-xl font-black tracking-tight text-slate-50">7 дней</p>
+                <p className="mt-2 text-sm leading-snug text-slate-500">Списание с баланса сердечек в приложении.</p>
               </div>
               <Button
                 size="lg"
-                disabled={!!isVip || voiceBalance < 30}
-                className={ctaPrimaryClass}
-                style={{
-                  background: "linear-gradient(135deg,#38bdf8,#6366f1)",
-                }}
+                disabled={!!isVip || voiceBalance < 20}
+                className={`${ctaPrimaryClass} mt-auto h-12 shrink-0 rounded-none rounded-b-2xl border-x-0 border-b-0 border-t border-slate-600/60 disabled:!opacity-100`}
+                style={
+                  !!isVip || voiceBalance < 20
+                    ? {
+                        background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
+                        color: "#e2e8f0",
+                        borderColor: "rgba(148,163,184,0.35)",
+                      }
+                    : { background: "linear-gradient(135deg,#38bdf8,#6366f1)", color: "#0b1220" }
+                }
                 onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
               >
-                {isVip ? "Уже VIP" : voiceBalance < 20 ? "Не хватает" : "Купить"}
+                {isVip ? (
+                  "Уже VIP"
+                ) : voiceBalance < 20 ? (
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    Не хватает 20
+                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    Купить за 20
+                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                  </span>
+                )}
               </Button>
             </div>
-            <div className="flex flex-col justify-between rounded-2xl border border-slate-600/80 bg-slate-900/95 px-3 py-3 text-xs sm:text-sm">
-              <div className="mb-2">
-                <span className="text-sm font-semibold text-slate-100">{"30 дней"}</span>
-                <p className={subtleTextClass}>{"70 ❤"}</p>
+
+            {/* 30 дней */}
+            <div className="flex min-h-[168px] flex-col overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-b from-cyan-500/[0.07] via-slate-950/90 to-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="flex flex-1 flex-col px-4 pt-4 pb-2">
+                <div className="mb-2 flex items-center gap-2 text-cyan-400/80">
+                  <CalendarDays className="h-4 w-4" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Выгодно</span>
+                </div>
+                <p className="text-xl font-black tracking-tight text-slate-50">30 дней</p>
+                <p className="mt-2 text-sm leading-snug text-slate-500">Максимум преимуществ на месяц вперёд.</p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || voiceBalance < 70}
-                className={ctaPrimaryClass}
-                style={{
-                  background: "linear-gradient(135deg,#22d3ee,#6366f1)",
-                }}
+                className={`${ctaPrimaryClass} mt-auto h-12 shrink-0 rounded-none rounded-b-2xl border-x-0 border-b-0 border-t border-cyan-500/25 disabled:!opacity-100`}
+                style={
+                  !!isVip || voiceBalance < 70
+                    ? {
+                        background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
+                        color: "#e2e8f0",
+                        borderColor: "rgba(148,163,184,0.35)",
+                      }
+                    : { background: "linear-gradient(135deg,#22d3ee,#6366f1)", color: "#0b1220" }
+                }
                 onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
               >
-                {isVip ? "Уже VIP" : voiceBalance < 70 ? "Не хватает" : "Купить"}
+                {isVip ? (
+                  "Уже VIP"
+                ) : voiceBalance < 70 ? (
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    Не хватает 70
+                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    Купить за 70
+                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                  </span>
+                )}
               </Button>
             </div>
           </div>
@@ -431,117 +507,205 @@ export function ShopScreen() {
           </Button>
         </div>
 
-        {/* Обмен валюты: табы Сердца ↔ Розы */}
-        <div className={`px-3 py-3 ${sectionCardClass}`}>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-100">{"Конвертация"}</h2>
-          </div>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="inline-flex rounded-full bg-slate-800/90 p-1">
-              <button
-                type="button"
-                onClick={() => setExchangeTab("voices-to-roses")}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${
-                  exchangeTab === "voices-to-roses"
-                    ? "bg-cyan-400 text-slate-900"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {"Сердца → Розы"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setExchangeTab("roses-to-voices")}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${
-                  exchangeTab === "roses-to-voices"
-                    ? "bg-cyan-400 text-slate-900"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {"Розы → Сердца"}
-              </button>
+        {/* Обмен валюты: Сердца ↔ Розы */}
+        <div className={`overflow-hidden p-0 ${sectionCardClass}`}>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cyan-400/10 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/15 ring-1 ring-cyan-400/25">
+                <ArrowRightLeft className="h-5 w-5 text-cyan-300" strokeWidth={mdIconStroke} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Обмен</p>
+                <h2 className="text-base font-bold tracking-tight text-slate-50">Конвертация</h2>
+              </div>
             </div>
-            <div className="flex items-center gap-3 text-xs sm:text-sm text-slate-300">
-              <span>{"5 ❤ = 1 🌹"}</span>
-              <span>{"1 🌹 = 5 ❤"}</span>
+            <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-slate-900/90 px-2.5 py-1 text-[11px] font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] sm:px-3 sm:py-1.5 sm:text-xs">
+                <span className="tabular-nums text-cyan-200">5</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/30 sm:h-6 sm:w-6">
+                  <Heart className="h-3 w-3 text-cyan-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                </span>
+                <span className="text-slate-500">=</span>
+                <span className="tabular-nums text-fuchsia-100">1</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-fuchsia-500/20 ring-1 ring-fuchsia-400/35 sm:h-6 sm:w-6">
+                  <Flower2 className="h-3 w-3 text-fuchsia-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} aria-hidden />
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/55 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:px-3 sm:py-1.5 sm:text-xs">
+                <span className="tabular-nums">1</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-fuchsia-500/20 ring-1 ring-fuchsia-400/30 sm:h-6 sm:w-6">
+                  <Flower2 className="h-3 w-3 text-fuchsia-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} aria-hidden />
+                </span>
+                <span className="text-slate-500">=</span>
+                <span className="tabular-nums text-slate-200">5</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/25 sm:h-6 sm:w-6">
+                  <Heart className="h-3 w-3 text-cyan-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                </span>
+              </span>
             </div>
           </div>
 
-          {exchangeTab === "voices-to-roses" ? (
-            <div>
-              <p className={`mb-2 ${subtleTextClass}`}>
-                {"Баланс: "}
-                <span className="font-semibold text-slate-200">{voiceBalance}</span>
-                {" ❤"}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${ctaSecondaryClass} h-9 rounded-full px-4 py-0.5`}
-                  disabled={voiceBalance < 5}
-                  onClick={() => dispatch({ type: "EXCHANGE_VOICES_FOR_ROSES", amount: 1 })}
+          <div className="space-y-4 px-4 py-4">
+            <div className="flex w-full">
+              <div className="flex w-full rounded-2xl bg-slate-950/95 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-slate-600/60">
+                <button
+                  type="button"
+                  onClick={() => setExchangeTab("voices-to-roses")}
+                  className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[0.65rem] px-3 py-2 text-sm font-bold transition-all sm:px-5 ${
+                    exchangeTab === "voices-to-roses"
+                      ? "bg-gradient-to-r from-cyan-300 via-cyan-400 to-sky-400 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_24px_rgba(34,211,238,0.28)]"
+                      : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                  }`}
                 >
-                  {"1 🌹 — 5 ❤"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${ctaSecondaryClass} h-9 rounded-full px-4 py-0.5`}
-                  disabled={voiceBalance < 25}
-                  onClick={() => dispatch({ type: "EXCHANGE_VOICES_FOR_ROSES", amount: 5 })}
+                  <Heart
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-cyan-400/90"}`}
+                    strokeWidth={mdIconStroke}
+                    fill="none"
+                    aria-hidden
+                  />
+                  <span className="truncate">Сердца → Розы</span>
+                  <Flower2
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-fuchsia-400"}`}
+                    strokeWidth={mdIconStroke}
+                    aria-hidden
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExchangeTab("roses-to-voices")}
+                  className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[0.65rem] px-3 py-2 text-sm font-bold transition-all sm:px-5 ${
+                    exchangeTab === "roses-to-voices"
+                      ? "bg-gradient-to-r from-cyan-300 via-cyan-400 to-sky-400 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_24px_rgba(34,211,238,0.28)]"
+                      : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                  }`}
                 >
-                  {"5 🌹 — 25 ❤"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${ctaSecondaryClass} h-9 rounded-full px-4 py-0.5`}
-                  disabled={voiceBalance < 50}
-                  onClick={() => dispatch({ type: "EXCHANGE_VOICES_FOR_ROSES", amount: 10 })}
-                >
-                  {"10 🌹 — 50 ❤"}
-                </Button>
+                  <Flower2
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-slate-900" : "text-fuchsia-400"}`}
+                    strokeWidth={mdIconStroke}
+                    aria-hidden
+                  />
+                  <span className="truncate">Розы → Сердца</span>
+                  <Heart
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-slate-900" : "text-cyan-400/90"}`}
+                    strokeWidth={mdIconStroke}
+                    fill="none"
+                    aria-hidden
+                  />
+                </button>
               </div>
             </div>
-          ) : (
-            <div>
-              <p className={`mb-2 ${subtleTextClass}`}>
-                {"У вас: "}
-                <span className="font-semibold text-slate-200">{rosesCount}</span>
-                {" 🌹"}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${ctaSecondaryClass} h-9 rounded-full px-4 py-0.5`}
-                  disabled={rosesCount < 1}
-                  onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 1 })}
-                >
-                  {"Обменять 1 → 5 ❤"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${ctaSecondaryClass} h-9 rounded-full px-4 py-0.5`}
-                  disabled={rosesCount < 5}
-                  onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 5 })}
-                >
-                  {"Обменять 5 → 25 ❤"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={`${ctaSecondaryClass} h-9 rounded-full px-4 py-0.5`}
-                  disabled={rosesCount < 1}
-                  onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: rosesCount })}
-                >
-                  {"Все → "}{rosesCount * 5}{" ❤"}
-                </Button>
+
+            {exchangeTab === "voices-to-roses" ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-600/45 bg-slate-950/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Баланс</span>
+                  <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-100">
+                    <span className="tabular-nums text-lg">{voiceBalance}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/15 ring-1 ring-cyan-400/30">
+                      <Heart className="h-4 w-4 text-cyan-200" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  {(
+                    [
+                      { roses: 1, cost: 5 },
+                      { roses: 5, cost: 25 },
+                      { roses: 10, cost: 50 },
+                    ] as const
+                  ).map(({ roses, cost }) => (
+                    <Button
+                      key={roses}
+                      type="button"
+                      variant="outline"
+                      disabled={voiceBalance < cost}
+                      className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-cyan-400/35 bg-slate-950/55 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-cyan-300/50 hover:bg-slate-800/45 hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:bg-slate-950/40 disabled:text-slate-500"
+                      onClick={() => dispatch({ type: "EXCHANGE_VOICES_FOR_ROSES", amount: roses })}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/[0.22] ring-1 ring-fuchsia-400/40 shadow-[0_0_16px_rgba(232,121,249,0.12)]">
+                          <Flower2 className="h-5 w-5 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
+                        </span>
+                        <span className="text-lg font-black tabular-nums tracking-tight text-fuchsia-100">+{roses}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
+                        <span className="tabular-nums text-slate-200">{cost}</span>
+                        <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                      </span>
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-600/45 bg-slate-950/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Роз в инвентаре</span>
+                  <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-100">
+                    <span className="tabular-nums text-lg">{rosesCount}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fuchsia-500/20 ring-1 ring-fuchsia-400/35">
+                      <Flower2 className="h-4 w-4 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={rosesCount < 1}
+                    className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-cyan-400/35 bg-slate-950/55 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-cyan-300/50 hover:bg-slate-800/45 hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:bg-slate-950/40 disabled:text-slate-500"
+                    onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 1 })}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/[0.22] ring-1 ring-fuchsia-400/40">
+                        <Flower2 className="h-5 w-5 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
+                      </span>
+                      <span className="text-sm font-black text-fuchsia-100">1 роза</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
+                      <span className="tabular-nums text-cyan-200">+5</span>
+                      <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={rosesCount < 5}
+                    className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-cyan-400/35 bg-slate-950/55 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-cyan-300/50 hover:bg-slate-800/45 hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:bg-slate-950/40 disabled:text-slate-500"
+                    onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 5 })}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/[0.22] ring-1 ring-fuchsia-400/40">
+                        <Flower2 className="h-5 w-5 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
+                      </span>
+                      <span className="text-sm font-black text-fuchsia-100">5 роз</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
+                      <span className="tabular-nums text-cyan-200">+25</span>
+                      <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={rosesCount < 1}
+                    className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-violet-400/40 bg-gradient-to-b from-violet-500/[0.14] via-slate-950/60 to-slate-950/80 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-violet-300/55 hover:from-violet-500/[0.2] hover:shadow-[0_0_26px_rgba(167,139,250,0.15)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:from-transparent disabled:to-slate-950/40 disabled:text-slate-500"
+                    onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: rosesCount })}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/25 ring-1 ring-violet-400/45">
+                        <Flower2 className="h-5 w-5 text-violet-100" strokeWidth={mdIconStroke} aria-hidden />
+                      </span>
+                      <span className="text-sm font-black text-violet-100">Все розы</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
+                      <span className="tabular-nums text-cyan-200">+{rosesCount * 5}</span>
+                      <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Добавить друзей */}

@@ -96,6 +96,27 @@ export interface TableAuthorityPayload {
   drunkUntil?: Record<number, number>
 }
 
+export type BottleSkin =
+  | "classic"
+  | "ruby"
+  | "neon"
+  | "frost"
+  | "baby"
+  | "vip"
+  | "milk"
+  | "frame_69"
+  | "frame_70"
+  | "frame_71"
+  | "frame_72"
+  | "frame_73"
+  | "frame_74"
+  | "frame_75"
+  | "frame_76"
+  | "frame_77"
+  | "frame_78"
+  | "frame_79"
+  | "frame_80"
+
 /* ---- Prediction system ---- */
 export interface Prediction {
   playerId: number        // who made the prediction
@@ -167,7 +188,7 @@ export interface GameState {
   isSpinning: boolean
   countdown: number | null
   bottleAngle: number
-  bottleSkin?: "classic" | "ruby" | "neon" | "frost" | "baby" | "vip" | "milk"
+  bottleSkin?: BottleSkin
   targetPlayer: Player | null
   targetPlayer2: Player | null  // second target (bottle bottom)
   showResult: boolean
@@ -195,7 +216,7 @@ export interface GameState {
   allowChatInvite?: Record<number, boolean>
   // Meta
   tablesCount?: number
-  ownedBottleSkins?: ("classic" | "ruby" | "neon" | "frost" | "baby" | "vip" | "milk")[]
+  ownedBottleSkins?: BottleSkin[]
   extraTurnPlayerId?: number
   bottleCooldownUntil?: number
   bottleDonorId?: number
@@ -304,7 +325,7 @@ export type GameAction =
   // VIP
   | { type: "SET_VIP_STATUS"; playerId: number; isVip: boolean; vipUntilTs?: number }
   // Bottle skin
-  | { type: "SET_BOTTLE_SKIN"; skin: "classic" | "ruby" | "neon" | "frost" | "baby" | "vip" | "milk" }
+  | { type: "SET_BOTTLE_SKIN"; skin: BottleSkin }
   /** Сбросить анимацию «вернулся к нам» после показа. */
   | { type: "CLEAR_RETURNED_FROM_UGADAIKA" }
   /** Включить/выключить звуки эмоций (сохраняется в localStorage). */

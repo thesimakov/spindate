@@ -5,15 +5,16 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { payVotesForPack } from "@/lib/heart-shop-pricing"
 
 /** Идентификаторы товаров (голоса ВКонтакте). Должны совпадать с item_id при открытии формы оплаты. */
 const VK_PAYMENT_ITEMS = {
-  hearts_5: { title: "5 сердец", price: 1, description: "Пополнение сердец для игры" },
-  hearts_50: { title: "50 сердец", price: 3, description: "Пополнение сердец для игры" },
-  hearts_150: { title: "150 сердец", price: 9, description: "Пополнение сердец для игры" },
-  hearts_500: { title: "500 сердец", price: 25, description: "Пополнение сердец для игры" },
-  hearts_1000: { title: "1000 сердец", price: 60, description: "Пополнение сердец для игры" },
-  hearts_5000: { title: "5000 сердец", price: 300, description: "Пополнение сердец для игры" },
+  hearts_5: { title: "5 сердец", price: payVotesForPack(5), description: "Пополнение сердец для игры" },
+  hearts_50: { title: "50 сердец", price: payVotesForPack(50), description: "Пополнение сердец для игры" },
+  hearts_150: { title: "150 сердец", price: payVotesForPack(150), description: "Пополнение сердец для игры" },
+  hearts_500: { title: "500 сердец", price: payVotesForPack(500), description: "Пополнение сердец для игры" },
+  hearts_1000: { title: "1000 сердец", price: payVotesForPack(1000), description: "Пополнение сердец для игры" },
+  hearts_5000: { title: "5000 сердец", price: payVotesForPack(5000), description: "Пополнение сердец для игры" },
   vip_7d: { title: "VIP 7 дней", price: 20, description: "VIP-подписка на 7 дней" },
   vip_30d: { title: "VIP 30 дней", price: 70, description: "VIP-подписка на 30 дней" },
 } as const

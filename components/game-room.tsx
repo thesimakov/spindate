@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
@@ -37,6 +38,7 @@ import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { composeTablePlayers } from "@/lib/table-composition"
+import { getDailyLoveQuote } from "@/lib/love-quotes"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -81,6 +83,36 @@ function shouldShowActionCostBadge(actionId: string, actionCost: number): boolea
   return actionCost > 0
 }
 
+/** Каталог подарков у аватара: бесплатные (0 ❤) и премиум */
+type GiftCatalogDef = {
+  id: InventoryItem["type"]
+  name: string
+  emoji: string
+  cost: number
+}
+
+/** Бесплатные — добавляйте записи; новые `id` согласуйте с `InventoryItem` в game-types */
+const GIFT_CATALOG_FREE: GiftCatalogDef[] = []
+
+/** Лоадер стола: шаги прогресса (мс от старта) */
+const TABLE_LOADER_DURATION_MS = 2400
+const TABLE_LOADER_PROGRESS_STEPS: readonly { pct: number; at: number }[] = [
+  { pct: 10, at: 200 },
+  { pct: 25, at: 500 },
+  { pct: 50, at: 1000 },
+  { pct: 70, at: 1550 },
+  { pct: 100, at: 2100 },
+]
+
+const GIFT_CATALOG_PREMIUM: GiftCatalogDef[] = [
+  { id: "toy_bear", name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
+  { id: "plush_heart", name: "Подушка-сердце", emoji: "❤️", cost: 8 },
+  { id: "toy_car", name: "Игрушечная машинка", emoji: "🚗", cost: 7 },
+  { id: "toy_ball", name: "Футбольный мяч", emoji: "⚽️", cost: 6 },
+  { id: "souvenir_magnet", name: "Магнитик на холодильник", emoji: "🧲", cost: 3 },
+  { id: "souvenir_keychain", name: "Брелок-сувенир", emoji: "🔑", cost: 5 },
+  { id: "chocolate_box", name: "Коробка конфет", emoji: "🍫", cost: 4 },
+]
 
 /* ------------------------------------------------------------------ */
 /*  Flying emoji animation                                            */
@@ -126,10 +158,23 @@ function FlyingEmojiContent({ fe }: { fe: FlyingEmoji }) {
 
 interface SteamPuff {
   id: string
-  x: number
-  y: number
+  targetIdx: number
   delayMs: number
+  /** −1…1 — умножается на радиус аватарки при отрисовке (пар по всей фотке) */
+  spreadX: number
+  spreadY: number
 }
+
+/** Запотевание аватарки после бани: до 1 мин с момента последнего пара, сила растёт с объёмом пара */
+interface AvatarSteamFog {
+  until: number
+  /** 0…1 накопленная «влажность» (чем больше пуфов / чаще баня — тем выше) */
+  level: number
+}
+
+const BANYA_STEAM_PUFF_COUNT = 10
+/** Вклад одного «облачка» в запотевание (суммарно с одной бани ≈ 0.55) */
+const BANYA_STEAM_LEVEL_PER_PUFF = 0.055
 
 type LevelReward = {
   level: number
@@ -363,7 +408,9 @@ export function GameRoom() {
 
   // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки» при расстановке игроков
   const [tableLoading, setTableLoading] = useState(true)
+  const [tableLoaderProgress, setTableLoaderProgress] = useState(0)
   const lastTableIdRef = useRef<number | null>(null)
+  const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
 
   const { toast, showToast } = useInlineToast(2000)
   const desktopGame = isDesktopUser || !isMobileOrTablet
@@ -434,8 +481,18 @@ export function GameRoom() {
       lastTableIdRef.current = tableId
       setTableLoading(true)
     }
-    const t = setTimeout(() => setTableLoading(false), 1200)
-    return () => clearTimeout(t)
+    setTableLoaderProgress(0)
+    const stepTimers = TABLE_LOADER_PROGRESS_STEPS.map(({ pct, at }) =>
+      setTimeout(() => setTableLoaderProgress(pct), at),
+    )
+    const done = setTimeout(() => {
+      setTableLoading(false)
+      setTableLoaderProgress(0)
+    }, TABLE_LOADER_DURATION_MS)
+    return () => {
+      stepTimers.forEach(clearTimeout)
+      clearTimeout(done)
+    }
   }, [tableId])
 
   // Синхронизация живых игроков за столом: если кто-то подключился,
@@ -469,6 +526,15 @@ export function GameRoom() {
       document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [currentUser, tableId, syncLiveTable])
+
+  // Повторная подтяжка списка живых игроков в середине лоадера — меньше расхождения между клиентами.
+  useEffect(() => {
+    if (!tableLoading || !currentUser) return
+    const t = setTimeout(() => {
+      void syncLiveTable("sync")
+    }, 1200)
+    return () => clearTimeout(t)
+  }, [tableLoading, currentUser, syncLiveTable])
 
   // Авторитетное состояние стола с сервера (фаза раунда, спин, очередь, лог, общий чат).
   useEffect(() => {
@@ -571,13 +637,17 @@ export function GameRoom() {
       stopMusic()
       return
     }
+    if (tableLoading) {
+      audioRef.current?.pause()
+      return
+    }
 
-    startMusic()
+    void startMusic()
 
     const onVisibility = () => {
       if (document.hidden) {
         audioRef.current?.pause()
-      } else if (musicEnabled) {
+      } else if (musicEnabled && !tableLoading) {
         void startMusic()
       }
     }
@@ -589,7 +659,7 @@ export function GameRoom() {
       window.removeEventListener("blur", onVisibility)
       window.removeEventListener("focus", onVisibility)
     }
-  }, [musicEnabled, startMusic, stopMusic])
+  }, [musicEnabled, startMusic, stopMusic, tableLoading])
 
   useEffect(() => {
     return () => {
@@ -603,6 +673,8 @@ export function GameRoom() {
       setShowRosesReceivedPopover(false)
       setShowFramePicker(false)
       setSelectedFrameForGift(null)
+    } else {
+      setGiftCatalogDrawerPlayer(null)
     }
   }, [playerMenuTarget])
 
@@ -756,12 +828,16 @@ export function GameRoom() {
   const [mobileSideDrawerOpen, setMobileSideDrawerOpen] = useState(false)
   const [sidebarTargetPlayer, setSidebarTargetPlayer] = useState<Player | null>(null)
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
+  const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
   const [mobileChatCollapsed, setMobileChatCollapsed] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
+  const [avatarSteamFog, setAvatarSteamFog] = useState<Record<string, AvatarSteamFog>>({})
+  /** Тик для перерисовки запотевания и снятия истёкших слоёв */
+  const [steamFogTick, setSteamFogTick] = useState(0)
   const [, setResultTimer] = useState<number | null>(null)
   const [turnTimer, setTurnTimer] = useState<number | null>(null)
   const [chatInput, setChatInput] = useState("")
@@ -825,6 +901,18 @@ export function GameRoom() {
     { id: "baby" as const, name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby), cost: 5 },
     { id: "vip" as const, name: "VIP-бутылка", img: assetUrl(BOTTLE_IMAGES.vip), cost: 5 },
     { id: "milk" as const, name: "Молочная", img: assetUrl(BOTTLE_IMAGES.milk), cost: 5 },
+    { id: "frame_69" as const, name: "Бутылочка 69", img: assetUrl(BOTTLE_IMAGES.frame_69), cost: 5 },
+    { id: "frame_70" as const, name: "Бутылочка 70", img: assetUrl(BOTTLE_IMAGES.frame_70), cost: 5 },
+    { id: "frame_71" as const, name: "Бутылочка 71", img: assetUrl(BOTTLE_IMAGES.frame_71), cost: 5 },
+    { id: "frame_72" as const, name: "Бутылочка 72", img: assetUrl(BOTTLE_IMAGES.frame_72), cost: 5 },
+    { id: "frame_73" as const, name: "Бутылочка 73", img: assetUrl(BOTTLE_IMAGES.frame_73), cost: 5 },
+    { id: "frame_74" as const, name: "Бутылочка 74", img: assetUrl(BOTTLE_IMAGES.frame_74), cost: 5 },
+    { id: "frame_75" as const, name: "Бутылочка 75", img: assetUrl(BOTTLE_IMAGES.frame_75), cost: 5 },
+    { id: "frame_76" as const, name: "Бутылочка 76", img: assetUrl(BOTTLE_IMAGES.frame_76), cost: 5 },
+    { id: "frame_77" as const, name: "Бутылочка 77", img: assetUrl(BOTTLE_IMAGES.frame_77), cost: 5 },
+    { id: "frame_78" as const, name: "Бутылочка 78", img: assetUrl(BOTTLE_IMAGES.frame_78), cost: 5 },
+    { id: "frame_79" as const, name: "Бутылочка 79", img: assetUrl(BOTTLE_IMAGES.frame_79), cost: 5 },
+    { id: "frame_80" as const, name: "Бутылочка 80", img: assetUrl(BOTTLE_IMAGES.frame_80), cost: 5 },
   ]
 
   const cooldownLeftMs = useMemo(() => {
@@ -932,8 +1020,8 @@ export function GameRoom() {
     | "plush_heart"
     | "chocolate_box"
 
-  const getBigGiftForPlayer = useCallback(
-    (playerId: number): { type: BigGiftType | null; hasMany: boolean } => {
+  const getBigGiftSequenceForPlayer = useCallback(
+    (playerId: number): BigGiftType[] => {
       const bigTypes: BigGiftType[] = [
         "toy_bear",
         "toy_car",
@@ -943,15 +1031,13 @@ export function GameRoom() {
         "plush_heart",
         "chocolate_box",
       ]
-      const items = inventory.filter(
-        (item) =>
-          item.toPlayerId === playerId && bigTypes.includes(item.type as BigGiftType),
-      )
-      if (items.length === 0) return { type: null, hasMany: false }
-      const latest = items.reduce((acc, item) =>
-        item.timestamp > acc.timestamp ? item : acc,
-      )
-      return { type: latest.type as BigGiftType, hasMany: items.length > 1 }
+      return inventory
+        .filter(
+          (item) =>
+            item.toPlayerId === playerId && bigTypes.includes(item.type as BigGiftType),
+        )
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map((item) => item.type as BigGiftType)
     },
     [inventory],
   )
@@ -1204,7 +1290,7 @@ export function GameRoom() {
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
   const playEmotionSound = useCallback((actionId: string) => {
-    if (state.soundsEnabled === false) return
+    if (state.soundsEnabled === false || tableLoading) return
     const path = EMOTION_SOUNDS[actionId]
     if (!path || typeof window === "undefined") return
     try {
@@ -1215,7 +1301,7 @@ export function GameRoom() {
     } catch {
       // ignore
     }
-  }, [state.soundsEnabled])
+  }, [state.soundsEnabled, tableLoading])
 
   /* ---- launch flying emoji ---- */
   const launchEmoji = useCallback(
@@ -1237,29 +1323,64 @@ export function GameRoom() {
       setFlyingEmojis((prev) => [...prev, newEmoji])
       setTimeout(() => {
         setFlyingEmojis((prev) => prev.filter((e) => e.id !== id))
-      }, 1000)
+      }, 1900)
     },
     [positions]
   )
 
-  const launchSteam = useCallback((targetIdx: number) => {
-    const toPos = positions[targetIdx]
-    if (!toPos) return
-    const baseX = toPos.x
-    const baseY = toPos.y
+  const launchSteam = useCallback(
+    (targetIdx: number) => {
+      if (!positions[targetIdx]) return
+      const pid = players[targetIdx]?.id
 
-    const puffs: SteamPuff[] = Array.from({ length: 5 }).map((_, i) => ({
-      id: `steam_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${i}`,
-      x: baseX + (Math.random() * 6 - 3),
-      y: baseY + (Math.random() * 4 - 2),
-      delayMs: i * 140,
-    }))
+      if (pid) {
+        setAvatarSteamFog((prev) => {
+          const now = Date.now()
+          const cur = prev[pid]
+          const base = cur && cur.until > now ? cur.level : 0
+          const gain = BANYA_STEAM_PUFF_COUNT * BANYA_STEAM_LEVEL_PER_PUFF
+          return { ...prev, [pid]: { until: now + 60_000, level: Math.min(1, base + gain) } }
+        })
+      }
 
-    setSteamPuffs((prev) => [...prev, ...puffs])
-    setTimeout(() => {
-      setSteamPuffs((prev) => prev.filter((p) => !puffs.some((x) => x.id === p.id)))
-    }, 1700)
-  }, [positions])
+      const puffs: SteamPuff[] = Array.from({ length: BANYA_STEAM_PUFF_COUNT }).map((_, i) => {
+        const angle = Math.random() * Math.PI * 2
+        const r = Math.sqrt(Math.random())
+        return {
+          id: `steam_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${i}`,
+          targetIdx,
+          delayMs: i * 95,
+          spreadX: Math.cos(angle) * r,
+          spreadY: Math.sin(angle) * r,
+        }
+      })
+
+      setSteamPuffs((prev) => [...prev, ...puffs])
+      setTimeout(() => {
+        setSteamPuffs((prev) => prev.filter((p) => !puffs.some((x) => x.id === p.id)))
+      }, 2400)
+    },
+    [positions, players],
+  )
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setSteamFogTick((t) => t + 1)
+      setAvatarSteamFog((prev) => {
+        const now = Date.now()
+        let changed = false
+        const next = { ...prev }
+        for (const key of Object.keys(next)) {
+          if (next[key].until <= now) {
+            delete next[key]
+            changed = true
+          }
+        }
+        return changed ? next : prev
+      })
+    }, 400)
+    return () => window.clearInterval(id)
+  }, [])
 
   /* ---- replay remote emotions as flying emojis ---- */
   const processedLogIdsRef = useRef<Set<string>>(new Set())
@@ -2086,6 +2207,7 @@ export function GameRoom() {
     // открываем мини-меню под выбранной аватаркой.
     setSidebarTargetPlayer((prev) => (prev?.id === player.id ? null : player))
     setSidebarGiftMode(false)
+    setGiftCatalogDrawerPlayer(null)
   }
 
   /* ---- extra spin (pay 50 voices) ---- */
@@ -2551,6 +2673,63 @@ export function GameRoom() {
         userName={currentUser?.name ?? ""}
         onClaim={handleClaimWelcomeGift}
       />
+
+      {/* Лоадер стола: весь экран с blur, без звуков (музыка/эмоции отключены в эффектах выше) */}
+      {tableLoading && (
+        <div
+          className="fixed inset-0 z-[45] flex flex-col overflow-y-auto bg-slate-950/50 px-4 py-8 backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/35"
+          role="progressbar"
+          aria-valuenow={tableLoaderProgress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-busy="true"
+          aria-label="Загрузка стола"
+        >
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+            <div
+              className="player-menu-quote w-full max-w-md rounded-2xl px-4 py-5 text-left sm:px-6 sm:py-6"
+              style={{
+                background: "linear-gradient(135deg, rgba(51,65,85,0.55) 0%, rgba(30,41,59,0.65) 100%)",
+                border: "1px solid rgba(251, 191, 36, 0.22)",
+                borderLeftWidth: "4px",
+                borderLeftColor: "rgba(251, 191, 36, 0.55)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              }}
+            >
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-amber-400 sm:text-xs">
+                Цитата дня
+              </p>
+              <p className="text-base italic leading-relaxed text-slate-100 sm:text-lg sm:leading-relaxed">
+                &quot;{tableLoaderQuote.text}&quot;
+              </p>
+              <p className="mt-3 text-sm text-slate-400 sm:text-base">— {tableLoaderQuote.author}</p>
+            </div>
+          </div>
+          <div className="mx-auto mt-4 w-full max-w-md shrink-0 pb-2 sm:mt-6 sm:pb-4">
+            <div className="mb-1.5 flex justify-between px-0.5 font-mono text-[9px] font-semibold tabular-nums text-slate-500 sm:text-[10px]">
+              {[10, 25, 50, 70, 100].map((n) => (
+                <span
+                  key={n}
+                  className={
+                    tableLoaderProgress >= n ? "text-amber-400/90" : "text-slate-600"
+                  }
+                >
+                  {n}%
+                </span>
+              ))}
+            </div>
+            <div className="relative h-2.5 overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-slate-600/50 sm:h-3">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-500 ease-out"
+                style={{ width: `${tableLoaderProgress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-center text-[11px] font-semibold tabular-nums text-slate-400 sm:text-xs">
+              Подбираем стол… {tableLoaderProgress}%
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
       <div
@@ -3047,10 +3226,10 @@ export function GameRoom() {
             </div>
           )}
 
-          {/* Банк сердец */}
+          {/* Ваш банк (сердца) */}
           <div
             className={
-              "flex items-center gap-1.5 rounded-[999px] px-3 py-2 min-h-[40px]" +
+              "flex w-full min-w-0 items-center gap-1.5 rounded-[999px] px-2 py-2 min-h-[40px] sm:px-3" +
               (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2 max-lg:gap-1" : "")
             }
             style={{
@@ -3059,14 +3238,39 @@ export function GameRoom() {
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
-            <Heart className="h-4 w-4" style={{ color: "#e8c06a" }} fill="currentColor" />
-            <span className="text-[13px] font-bold leading-none" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-            <span
-              className={"text-[11px] leading-none " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
-              style={{ color: "#cbd5e1" }}
+            <div
+              className={
+                "flex min-w-0 flex-1 items-center gap-1.5" +
+                (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")
+              }
             >
-              {"Банк сердец"}
-            </span>
+              <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
+              <span className="text-[13px] font-bold leading-none shrink-0" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+              <span
+                className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
+                style={{ color: "#cbd5e1" }}
+              >
+                {"Ваш банк"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
+              className={
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95" +
+                (!leftSideMenuExpanded ? " max-lg:flex" : "")
+              }
+              style={{
+                border: "1px solid rgba(56,189,248,0.5)",
+                color: "#7dd3fc",
+                background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+              }}
+              title="Пополнить банк"
+              aria-label="Открыть магазин сердец"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+            </button>
           </div>
 
           {/* Магазин */}
@@ -3303,47 +3507,74 @@ export function GameRoom() {
       {showBottleCatalog && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.7)" }}
+          style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}
           onClick={() => setShowBottleCatalog(false)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border border-amber-900/70 p-5"
-            style={{ background: "rgba(19,10,4,0.97)" }}
+            className="w-full max-w-3xl max-h-[85vh] overflow-y-auto overscroll-contain rounded-2xl border p-0 shadow-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(19,10,4,0.98) 0%, rgba(8,6,4,0.98) 100%)",
+              borderColor: "rgba(251, 191, 36, 0.22)",
+              boxShadow: "0 30px 70px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-amber-100">{"Каталог бутылочек"}</span>
-                <span className="text-amber-200/80" style={{ fontSize: "14px" }}>
-                  {cooldownLeftMs > 0
-                    ? `Покупки заблокированы: ${formatCooldown(cooldownLeftMs)}`
-                    : "Выберите бутылочку для стола"}
-                </span>
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b px-5 py-4 backdrop-blur-md"
+              style={{ borderColor: "rgba(148, 163, 184, 0.14)", background: "rgba(8, 6, 4, 0.72)" }}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-extrabold tracking-wide text-amber-100 sm:text-sm">Каталог бутылочек</span>
+                  {cooldownLeftMs > 0 && (
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-amber-200/90"
+                      style={{ background: "rgba(251, 191, 36, 0.12)", border: "1px solid rgba(251, 191, 36, 0.25)" }}
+                    >
+                      Блок: {formatCooldown(cooldownLeftMs)}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 truncate text-[12px] font-semibold text-amber-200/75 sm:text-[13px]">
+                  Выберите бутылочку для стола
+                </p>
               </div>
               <button
-                className="h-7 px-3 text-[11px] rounded-lg"
-                style={{ border: "1px solid #334155", color: "#f0e0c8", background: "transparent" }}
+                type="button"
+                className="shrink-0 rounded-xl px-3 py-2 text-[12px] font-bold transition hover:brightness-110 active:scale-[0.99]"
+                style={{ border: "1px solid rgba(148,163,184,0.35)", color: "#f0e0c8", background: "rgba(15,23,42,0.12)" }}
                 onClick={() => setShowBottleCatalog(false)}
               >
-                {"Закрыть"}
+                Закрыть
               </button>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-6">
-              {bottleSkins.map((skin) => {
-                const owned = (ownedBottleSkins ?? ["classic"]).includes(skin.id)
+            {(() => {
+              const ownedSet = new Set(ownedBottleSkins ?? ["classic"])
+              const isClassicId = (id: typeof bottleSkins[number]["id"]) => id === "classic"
+              const isVipId = (id: typeof bottleSkins[number]["id"]) => id === "vip"
+              const isLockedVip = (id: typeof bottleSkins[number]["id"]) => isVipId(id) && !isVip
+
+              const entries = bottleSkins.map((skin) => {
+                const owned = ownedSet.has(skin.id)
                 const selected = bottleSkin === skin.id
-                const isClassic = skin.id === "classic"
                 const cooldownActive = cooldownLeftMs > 0
-                const vipLocked = skin.id === "vip" && !isVip
-                const purchaseLocked = (cooldownActive && !owned && !isClassic) || vipLocked
+                const vipLocked = isLockedVip(skin.id)
+                const purchaseLocked = (cooldownActive && !owned && !isClassicId(skin.id)) || vipLocked
+                const notEnough = !owned && !isClassicId(skin.id) && voiceBalance < skin.cost
+                const disabled = purchaseLocked || notEnough
+
+                const status = owned
+                  ? (selected ? "Выбрано" : "Куплено")
+                  : isClassicId(skin.id)
+                    ? "Бесплатно"
+                    : vipLocked
+                      ? "Только VIP"
+                      : cooldownActive
+                        ? `Через ${formatCooldown(cooldownLeftMs)}`
+                        : `${skin.cost} ❤`
 
                 const handleClick = () => {
-                  if (owned) {
-                    dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
-                    return
-                  }
-                  if (isClassic) {
+                  if (owned || isClassicId(skin.id)) {
                     dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
                     return
                   }
@@ -3351,7 +3582,7 @@ export function GameRoom() {
                     showToast("Эта бутылочка только для VIP", "info")
                     return
                   }
-                  if (cooldownActive && !owned && !isClassic) {
+                  if (cooldownActive) {
                     showToast(`Покупки через ${formatCooldown(cooldownLeftMs)}`, "info")
                     return
                   }
@@ -3378,49 +3609,92 @@ export function GameRoom() {
                   showToast("Бутылочка куплена", "success")
                 }
 
-                const disabled = purchaseLocked || (!owned && !isClassic && voiceBalance < skin.cost)
+                return { skin, owned, selected, vipLocked, disabled, notEnough, purchaseLocked, status, handleClick }
+              })
 
-                return (
-                  <button
-                    key={skin.id}
-                    onClick={handleClick}
-                    className="group flex flex-col items-center gap-2"
-                    disabled={disabled}
-                  >
-                    <div
-                      className={`h-24 w-16 rounded-lg ${selected ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-[rgba(19,10,4,0.97)]" : ""}`}
-                      style={disabled && !owned ? { opacity: 0.5 } : undefined}
-                    >
-                      { }
-                      <img
-                        key={skin.img}
-                        src={skin.img}
-                        alt={skin.name}
-                        className="h-full w-full object-contain"
-                        loading="eager"
-                      />
-                    </div>
-                    <span className="text-sm font-semibold text-amber-100">{skin.name}</span>
-                    <div className="flex items-center gap-1 text-sm">
-                      {owned ? (
-                        <span className="font-semibold text-emerald-300">
-                          {selected ? "Выбрано" : "Куплено"}
-                        </span>
-                      ) : isClassic ? (
-                        <span className="font-semibold text-emerald-300">{"Бесплатно"}</span>
-                      ) : vipLocked ? (
-                        <span className="font-semibold text-amber-300/80">{"Только VIP"}</span>
-                      ) : (
-                        <>
-                          <span className="text-sm" style={{ color: "#f97316" }}>{"❤"}</span>
-                          <span className="font-semibold text-amber-100">{skin.cost}</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+              const sortKey = (e: typeof entries[number]) => {
+                if (e.selected) return 0
+                if (isClassicId(e.skin.id)) return 1
+                if (e.owned) return 2
+                if (isVipId(e.skin.id)) return 4
+                return 3
+              }
+              entries.sort((a, b) => sortKey(a) - sortKey(b) || a.skin.name.localeCompare(b.skin.name, "ru"))
+
+              const free = entries.filter((e) => isClassicId(e.skin.id))
+              const vip = entries.filter((e) => isVipId(e.skin.id))
+              const rest = entries.filter((e) => !isClassicId(e.skin.id) && !isVipId(e.skin.id))
+
+              const Section = ({ title, items }: { title: string; items: typeof entries }) => (
+                <div className="px-5 pb-5 pt-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">{title}</span>
+                    <div className="h-px flex-1" style={{ background: "rgba(148,163,184,0.18)" }} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {items.map((e) => {
+                      const ring = e.selected ? "ring-2 ring-amber-400" : "ring-1 ring-slate-700/40"
+                      const dim = e.disabled && !e.owned && e.skin.id !== "classic" ? "opacity-55" : ""
+                      const badgeTone = e.selected
+                        ? { background: "rgba(34,197,94,0.16)", border: "1px solid rgba(34,197,94,0.28)", color: "#86efac" }
+                        : e.owned
+                          ? { background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.22)", color: "#bae6fd" }
+                          : e.vipLocked
+                            ? { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.22)", color: "#fde68a" }
+                            : e.purchaseLocked
+                              ? { background: "rgba(148,163,184,0.10)", border: "1px solid rgba(148,163,184,0.18)", color: "#cbd5e1" }
+                              : e.notEnough
+                                ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
+                                : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
+
+                      return (
+                        <button
+                          key={e.skin.id}
+                          type="button"
+                          onClick={e.handleClick}
+                          disabled={e.disabled}
+                          className={`group relative flex min-w-0 flex-col items-center justify-between rounded-2xl px-3 py-3 text-left transition hover:brightness-110 active:scale-[0.99] ${ring} ${dim}`}
+                          style={{
+                            background: "linear-gradient(180deg, rgba(30,41,59,0.30) 0%, rgba(15,23,42,0.18) 100%)",
+                          }}
+                        >
+                          <div className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-xl"
+                            style={{ background: "radial-gradient(circle at 50% 35%, rgba(251,191,36,0.10) 0%, transparent 60%)" }}
+                          >
+                            <img
+                              src={e.skin.img}
+                              alt={e.skin.name}
+                              className="h-full w-full object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)]"
+                              loading="eager"
+                              draggable={false}
+                            />
+                          </div>
+
+                          <div className="mt-2 w-full min-w-0">
+                            <p className="truncate text-center text-[12px] font-extrabold text-amber-100 sm:text-[13px]">
+                              {e.skin.name}
+                            </p>
+                            <div className="mt-1 flex items-center justify-center">
+                              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={badgeTone}>
+                                {e.status}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+
+              return (
+                <div>
+                  <Section title="Бесплатно" items={free} />
+                  <Section title="Доступно" items={rest} />
+                  <Section title="VIP" items={vip} />
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -3430,18 +3704,6 @@ export function GameRoom() {
         className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pb-20 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${isMobileOrTablet && mobileChatCollapsed ? "pt-10" : "pt-1"}`}
         ref={boardRef}
       >
-        {/* Лоадер при входе/смене стола, скрывает резкие перестановки игроков */}
-        {tableLoading && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center rounded-[32px] bg-black/70">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-              <span className="text-xs font-semibold" style={{ color: "#e5e7eb" }}>
-                {"Подбираем игроков за стол..."}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Анимация «вернулся к нам» после выхода из мини-игры Угадай-ка */}
         {showReturnedFromUgadaika && currentUser && (
           <div
@@ -3579,11 +3841,15 @@ export function GameRoom() {
             const isClickableForPrediction =
               predictionPhase && !predictionMade && !isSpinning && !showResult &&
               player.id !== currentUser?.id
-            const bigGift = getBigGiftForPlayer(player.id)
+            const bigGiftSequence = getBigGiftSequenceForPlayer(player.id)
             const hasRoseGiven = (rosesGiven ?? []).some((r) => r.toPlayerId === player.id)
             const giftIcons = hasRoseGiven
               ? [...getGiftsForPlayer(player.id), "rose" as const]
               : getGiftsForPlayer(player.id)
+            const steamAvatarSize =
+              manyPlayersOnMobile ? 42 : isTablet ? 76 : isMobile || manyPlayersOnMobile ? 52 : 70
+            const steamBorder = steamAvatarSize <= 52 ? 3 : 4
+            const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
             return (
               <div
                 key={player.id}
@@ -3599,85 +3865,180 @@ export function GameRoom() {
                 }}
                 onClick={() => handlePlayerClick(player)}
               >
-                <PlayerAvatar
-                  player={player}
-                  compact={isMobile || manyPlayersOnMobile}
-                  size={manyPlayersOnMobile ? 42 : isTablet ? 76 : undefined}
-                  // Во время результата подсвечиваем только пару, а не крутящего
-                  isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
-                  isTarget={
-                    showResult &&
-                    (targetPlayer?.id === player.id || targetPlayer2?.id === player.id)
-                  }
-                  isPredictionTarget={
-                    predictionPhase && !isSpinning && !showResult &&
-                    (predictionTarget?.id === player.id || predictionTarget2?.id === player.id)
-                  }
-                  kissCount={getKissCountForPlayer(player.id)}
-                  giftIcons={giftIcons}
-                  bigGiftIcon={bigGift.type ?? undefined}
-                  bigGiftHasMany={bigGift.hasMany}
-                  frameId={avatarFrames?.[player.id]}
-                  inGame={playerInUgadaika != null && player.id === playerInUgadaika}
-                  showAsleep={(spinSkips?.[player.id] ?? 0) >= 3}
-                />
+                <div className="relative inline-flex flex-col items-center">
+                  <PlayerAvatar
+                    player={player}
+                    compact={isMobile || manyPlayersOnMobile}
+                    size={manyPlayersOnMobile ? 42 : isTablet ? 76 : undefined}
+                    // Во время результата подсвечиваем только пару, а не крутящего
+                    isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
+                    isTarget={
+                      showResult &&
+                      (targetPlayer?.id === player.id || targetPlayer2?.id === player.id)
+                    }
+                    isPredictionTarget={
+                      predictionPhase && !isSpinning && !showResult &&
+                      (predictionTarget?.id === player.id || predictionTarget2?.id === player.id)
+                    }
+                    kissCount={getKissCountForPlayer(player.id)}
+                    giftIcons={giftIcons}
+                    bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
+                    frameId={avatarFrames?.[player.id]}
+                    inGame={playerInUgadaika != null && player.id === playerInUgadaika}
+                    showAsleep={(spinSkips?.[player.id] ?? 0) >= 3}
+                  />
+                  {(() => {
+                    void steamFogTick
+                    const fog = avatarSteamFog[player.id]
+                    const nowFog = Date.now()
+                    if (!fog || fog.until <= nowFog) return null
+                    const timeLeft01 = Math.max(0, Math.min(1, (fog.until - nowFog) / 60_000))
+                    const wet = fog.level
+                    const blurPx = 1.2 + wet * (5 + 9 * timeLeft01)
+                    const gloss = 0.1 + wet * (0.22 + 0.2 * timeLeft01)
+                    const frost = 0.12 + wet * (0.28 + 0.25 * timeLeft01)
+                    return (
+                      <div
+                        className="pointer-events-none absolute z-[32] overflow-hidden rounded-full"
+                        style={{
+                          width: steamOuterPx,
+                          height: steamOuterPx,
+                          left: "50%",
+                          top: 0,
+                          transform: "translateX(-50%)",
+                          WebkitBackdropFilter: `blur(${blurPx}px) saturate(${1.05 + wet * 0.12})`,
+                          backdropFilter: `blur(${blurPx}px) saturate(${1.05 + wet * 0.12})`,
+                          background: `linear-gradient(200deg, rgba(255,255,255,${gloss}) 0%, rgba(186,230,253,${frost * 0.55}) 38%, rgba(148,163,184,${frost * 0.45}) 100%)`,
+                          opacity: Math.min(0.98, wet * (0.35 + 0.55 * timeLeft01)),
+                          boxShadow: `inset 0 0 ${14 + wet * 28}px rgba(255,255,255,${0.12 + wet * 0.2 * timeLeft01})`,
+                          mixBlendMode: "soft-light",
+                        }}
+                        aria-hidden
+                      />
+                    )
+                  })()}
+                  {steamPuffs
+                    .filter((p) => p.targetIdx === i)
+                    .map((p) => {
+                      const spreadR = steamOuterPx * 0.42
+                      const leftPx = p.spreadX * spreadR
+                      const topPx = steamOuterPx / 2 + p.spreadY * spreadR
+                      return (
+                        <div
+                          key={p.id}
+                          className="pointer-events-none absolute z-[35]"
+                          style={{
+                            left: `calc(50% + ${leftPx}px)`,
+                            top: topPx,
+                            opacity: 0,
+                            animation: `steamRise 1.4s ease-out forwards`,
+                            animationDelay: `${p.delayMs}ms`,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: steamOuterPx <= 56 ? "22px" : steamOuterPx <= 70 ? "26px" : "30px",
+                              color: "rgba(226, 232, 240, 0.9)",
+                              textShadow: "0 0 12px rgba(226,232,240,0.55)",
+                              filter: "blur(0.2px)",
+                            }}
+                          >
+                            {"💨"}
+                          </span>
+                        </div>
+                      )
+                    })}
+                </div>
                 {isAvatarMenuOpen && (
                   <div
-                    className="absolute left-1/2 top-full z-40 mt-1.5 w-[128px] -translate-x-1/2 rounded-lg border p-1.5 shadow-2xl"
-                    style={{
-                      background: "linear-gradient(165deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 20, 40, 0.98) 100%)",
-                      borderColor: "rgba(100,116,139,0.9)",
-                    }}
+                    className="absolute left-1/2 top-full z-40 mt-2 w-[min(92vw,184px)] -translate-x-1/2"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      type="button"
-                      aria-label="Закрыть мини-меню"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSidebarTargetPlayer(null)
-                        setSidebarGiftMode(false)
-                      }}
-                      className="absolute -top-2 right-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] transition-all hover:brightness-110 hover:scale-105"
+                    <div
+                      className="relative rounded-2xl border p-2 pt-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.65),0_0_0_1px_rgba(56,189,248,0.12),0_0_28px_rgba(251,191,36,0.08)]"
                       style={{
-                        background: "linear-gradient(180deg, #ef4444 0%, #b91c1c 100%)",
-                        color: "#ffffff",
-                        border: "1px solid rgba(254, 202, 202, 0.9)",
-                        boxShadow: "0 4px 12px rgba(127, 29, 29, 0.65), inset 0 1px 0 rgba(255,255,255,0.35)",
+                        background: "linear-gradient(165deg, rgba(22, 32, 52, 0.98) 0%, rgba(8, 15, 32, 0.99) 100%)",
+                        borderColor: "rgba(251, 191, 36, 0.28)",
+                        boxShadow:
+                          "0 12px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(56,189,248,0.1), inset 0 1px 0 rgba(255,255,255,0.06)",
                       }}
                     >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSidebarGiftMode(true)
-                      }}
-                      className="mb-1 w-full rounded-md px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-110"
-                      style={{
-                        background: sidebarGiftMode ? "rgba(34,211,238,0.25)" : "rgba(30,41,59,0.7)",
-                        color: sidebarGiftMode ? "#67e8f9" : "#e2e8f0",
-                        border: "1px solid rgba(100,116,139,0.9)",
-                      }}
-                    >
-                      Подарить эмоцию
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        dispatch({ type: "OPEN_PLAYER_MENU", player })
-                      }}
-                      className="w-full rounded-md px-2 py-1.5 text-[10px] font-semibold transition-all hover:brightness-110"
-                      style={{
-                        background: "rgba(30,41,59,0.7)",
-                        color: "#e2e8f0",
-                        border: "1px solid rgba(100,116,139,0.9)",
-                      }}
-                    >
-                      Подробнее
-                    </button>
+                      <button
+                        type="button"
+                        aria-label="Закрыть мини-меню"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSidebarTargetPlayer(null)
+                          setSidebarGiftMode(false)
+                        }}
+                        className="absolute -right-1 -top-2 flex h-6 w-6 items-center justify-center rounded-full text-[10px] ring-2 ring-slate-900/80 transition-all hover:brightness-110 hover:scale-105"
+                        style={{
+                          background: "linear-gradient(180deg, #ef4444 0%, #b91c1c 100%)",
+                          color: "#ffffff",
+                          border: "1px solid rgba(254, 202, 202, 0.95)",
+                          boxShadow: "0 4px 14px rgba(127, 29, 29, 0.7), inset 0 1px 0 rgba(255,255,255,0.35)",
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                      </button>
+                      <div className="flex flex-col gap-1.5 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSidebarGiftMode(true)
+                          }}
+                          className={`flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:brightness-110 active:scale-[0.98] ${
+                            sidebarGiftMode
+                              ? "border-cyan-400/45 bg-slate-950/90 ring-1 ring-cyan-400/25"
+                              : "border-slate-500/30 bg-slate-950/70 hover:border-slate-400/35 hover:bg-slate-900/85"
+                          }`}
+                        >
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 shadow-[0_0_12px_rgba(34,211,238,0.12)]">
+                            <Sparkles className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+                          </span>
+                          <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-white antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-xs">
+                            Подарить эмоцию
+                          </span>
+                        </button>
+                        {currentUser && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSidebarGiftMode(false)
+                              setSidebarTargetPlayer(null)
+                              setGiftCatalogDrawerPlayer(player)
+                            }}
+                            className="flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border border-slate-500/30 bg-slate-950/70 px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-slate-400/35 hover:bg-slate-900/85 hover:brightness-110 active:scale-[0.98]"
+                          >
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-400/25 bg-rose-500/10 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.1)]">
+                              <Gift className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+                            </span>
+                            <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-white antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-xs">
+                              Подарить подарок
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSidebarTargetPlayer(null)
+                            setSidebarGiftMode(false)
+                            dispatch({ type: "OPEN_PLAYER_MENU", player })
+                          }}
+                          className="flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border border-amber-400/35 bg-slate-950/70 px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-amber-400/15 transition-all hover:border-amber-400/50 hover:bg-slate-900/85 hover:ring-amber-400/25 active:scale-[0.98]"
+                        >
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-400/40 bg-gradient-to-b from-amber-400/25 to-amber-600/15 text-amber-100 shadow-[0_0_14px_rgba(251,191,36,0.2)]">
+                            <User className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+                          </span>
+                          <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-amber-50 antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.7),0_0_12px_rgba(251,191,36,0.15)] sm:text-xs">
+                            Профиль
+                          </span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -3685,49 +4046,30 @@ export function GameRoom() {
           })}
 
           {/* ---- FLYING EMOJIS ---- */}
-          {flyingEmojis.map((fe) => (
+          {flyingEmojis.map((fe) => {
+            const midX = (fe.fromX + fe.toX) / 2
+            const midY = (fe.fromY + fe.toY) / 2 - 5
+            return (
             <div
               key={fe.id}
-              className="pointer-events-none absolute z-40"
+              className="pointer-events-none absolute z-[90]"
               style={{
                 left: `${fe.fromX}%`,
                 top: `${fe.fromY}%`,
                 animation: "flyEmoji 1.8s ease-in-out forwards",
                 // @ts-expect-error CSS custom properties
-                "--fly-to-x": `${fe.toX - fe.fromX}vw`,
-                "--fly-to-y": `${fe.toY - fe.fromY}vh`,
+                "--fly-from-left": `${fe.fromX}%`,
+                "--fly-from-top": `${fe.fromY}%`,
+                "--fly-mid-left": `${midX}%`,
+                "--fly-mid-top": `${midY}%`,
+                "--fly-to-left": `${fe.toX}%`,
+                "--fly-to-top": `${fe.toY}%`,
               }}
             >
               <FlyingEmojiContent fe={fe} />
             </div>
-          ))}
-
-          {/* ---- STEAM (banya) ---- */}
-          {steamPuffs.map((p) => (
-            <div
-              key={p.id}
-              className="pointer-events-none absolute z-40"
-              style={{
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                transform: "translate(-50%, -50%)",
-                opacity: 0,
-                animation: `steamRise 1.4s ease-out forwards`,
-                animationDelay: `${p.delayMs}ms`,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "28px",
-                  color: "rgba(226, 232, 240, 0.9)",
-                  textShadow: "0 0 12px rgba(226,232,240,0.55)",
-                  filter: "blur(0.2px)",
-                }}
-              >
-                {"💨"}
-              </span>
-            </div>
-          ))}
+            )
+          })}
 
           {/* ---- BOTTLE in the centre (на мобильной — крупнее) ---- */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
@@ -4446,17 +4788,37 @@ export function GameRoom() {
             </div>
             <div className="flex flex-col gap-2 px-3 pb-8">
               <div
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5"
+                className="flex w-full min-w-0 items-center gap-2 rounded-[999px] px-3 py-2.5"
                 style={{
                   background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
                   border: "1px solid rgba(56,189,248,0.28)",
                 }}
               >
-                <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
-                <span className="text-[14px] font-bold" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-                <span className="text-[12px]" style={{ color: "#cbd5e1" }}>
-                  Банк сердец
-                </span>
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
+                  <span className="text-[14px] font-bold shrink-0" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+                  <span className="min-w-0 truncate text-[12px]" style={{ color: "#cbd5e1" }}>
+                    Ваш банк
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dispatch({ type: "SET_SCREEN", screen: "shop" })
+                    setMobileSideDrawerOpen(false)
+                  }}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
+                  style={{
+                    border: "1px solid rgba(56,189,248,0.5)",
+                    color: "#7dd3fc",
+                    background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                  }}
+                  title="Пополнить банк"
+                  aria-label="Открыть магазин сердец"
+                >
+                  <Plus className="h-[18px] w-[18px]" strokeWidth={2.75} aria-hidden />
+                </button>
               </div>
 
               <button
@@ -5083,105 +5445,126 @@ export function GameRoom() {
 
       {/* ---- PLAYER INTERACTION MENU ---- */}
       {playerMenuTarget && (() => {
-        const LOVE_QUOTES = [
-          { text: "Любовь — единственная разумная и удовлетворительная цель жизни.", author: "Оскар Уайльд" },
-          { text: "Любить — значит видеть человека таким, каким его задумал Бог.", author: "Ф. М. Достоевский" },
-          { text: "Мы влюбляемся не в человека, а в наше представление о нём.", author: "Лев Толстой" },
-          { text: "Любовь живёт не тем, что получает, а тем, что отдаёт.", author: "Антуан де Сент-Экзюпери" },
-          { text: "Сердце имеет причины, которых разум не знает.", author: "Блез Паскаль" },
-          { text: "Любовь — это когда счастье другого человека важнее твоего собственного.", author: "Х. Джексон Браун" },
-          { text: "В любви нет ни дня, ни ночи — только сердце.", author: "Уильям Шекспир" },
-          { text: "Любовь — это желание счастья другому.", author: "Лев Толстой" },
-          { text: "Настоящая любовь приходит тихо, без стука и фанфар.", author: "Эрих Мария Ремарк" },
-          { text: "Любовь — это когда хочешь переживать с кем-то все четыре времени года.", author: "Рэй Брэдбери" },
-          { text: "Любить — значит смотреть не друг на друга, а в одну сторону.", author: "Антуан де Сент-Экзюпери" },
-          { text: "Всякая любовь — счастье, даже неразделённая.", author: "И. А. Бунин" },
-        ]
-        const dateKey = new Date().toISOString().slice(0, 10)
-        const quoteIndex = (playerMenuTarget.id + dateKey.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % LOVE_QUOTES.length
-        const quoteOfDay = LOVE_QUOTES[quoteIndex]
         const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
         const zodiacDisplay = playerMenuTarget.zodiac ?? ZODIAC_SIGNS[playerMenuTarget.id % 12]
         return (
-        <div className="player-menu-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 overflow-y-auto overflow-x-hidden">
+        <div
+          className="player-menu-backdrop fixed inset-0 z-50 flex items-stretch justify-end overflow-hidden bg-black/60 p-0"
+          onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
+          role="presentation"
+        >
           <div
-            className="player-menu-modal player-menu-modal-glow relative w-full max-w-4xl max-h-[92dvh] sm:max-h-[90dvh] rounded-t-2xl sm:rounded-2xl p-3 sm:p-5 pt-10 sm:pt-12 pb-[max(0.75rem,env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden"
+            className="player-menu-modal player-menu-modal-drawer relative flex h-[100dvh] max-h-[100dvh] w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.25)",
+              borderRightWidth: 0,
               fontSize: "14px",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="pointer-events-none absolute inset-0 rounded-t-2xl sm:rounded-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-              className="absolute right-2 top-2 sm:right-3 sm:top-3 z-10 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100"
-              aria-label="Закрыть"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="relative flex flex-col gap-3 sm:gap-5 sm:flex-row min-w-0">
-              {/* Левый блок: фото + инфо — горизонтально на мобильных, вертикально на sm+ */}
-              <div className="player-menu-left flex w-full sm:w-[180px] sm:shrink-0 flex-row sm:flex-col items-center sm:items-start gap-3">
-                <div className="flex flex-col items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="pointer-events-none absolute inset-0 rounded-l-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
+            {/* Шапка: закрытие всегда на месте при прокрутке контента */}
+            <div className="relative z-20 flex shrink-0 justify-end border-b border-slate-600/20 bg-slate-900/75 px-3 py-2 backdrop-blur-md sm:px-4 sm:py-2.5">
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100 sm:h-10 sm:w-10"
+                aria-label="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-5 sm:pt-3">
+            <div className="relative flex min-w-0 flex-col gap-5">
+              {/* Профиль и действия — одна вертикальная колонка (боковая панель справа) */}
+              <div
+                className="player-menu-left w-full shrink-0 overflow-hidden rounded-2xl border border-slate-500/35 bg-gradient-to-b from-slate-900/95 to-slate-950/98 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.04)]"
+              >
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-[52px] h-36 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-80"
+                    style={{
+                      background: "radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(56, 189, 248, 0.05) 50%, transparent 72%)",
+                    }}
+                    aria-hidden
+                  />
                   <PlayerAvatar
                     player={playerMenuTarget}
                     frameId={avatarFrames?.[playerMenuTarget.id] || "none"}
-                    compact
-                    size={isMobile ? 48 : undefined}
+                    size={isMobile ? 100 : 128}
                   />
-                  <div className="flex items-center gap-1.5">
+                  <h2 className="relative z-[1] mt-3 max-w-full px-1 text-center text-[1.35rem] font-extrabold leading-tight tracking-tight text-white sm:text-2xl">
+                    {playerMenuTarget.name}
+                  </h2>
+                  <div className="relative z-[1] mt-3 grid w-full min-w-0 grid-cols-[1fr_auto] items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setShowRosesReceivedPopover((v) => !v)}
-                      className="flex items-center justify-center gap-1 rounded-lg border border-slate-600 bg-slate-800/80 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-[12px] font-medium text-slate-200 transition-colors hover:bg-slate-700/80"
-                      aria-label="Подаренные розы"
+                      className="group flex h-11 min-w-0 flex-row flex-nowrap items-center justify-center gap-2 rounded-xl border border-sky-400/40 bg-[#0a1424] px-2.5 shadow-md ring-1 ring-amber-400/20 transition-all hover:border-sky-300/55 hover:ring-amber-300/35 sm:h-12 sm:gap-2.5 sm:px-4"
+                      aria-label="Сколько роз получил игрок"
                     >
-                      <span>🌹</span>
-                      <span>{(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}</span>
+                      <span className="shrink-0 text-base leading-none sm:text-lg" aria-hidden>
+                        🌹
+                      </span>
+                      <span className="shrink-0 text-base font-black tabular-nums text-white sm:text-lg">
+                        {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
+                      </span>
+                      <span className="min-w-0 truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400 group-hover:text-sky-200/90 sm:text-[10px]">
+                        получено
+                      </span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowFramePicker(true)}
-                      className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-[12px] font-medium text-amber-200/95 transition-all duration-200 hover:scale-105 hover:bg-amber-500/20 hover:border-amber-500/50"
+                      className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/45 bg-gradient-to-b from-amber-500/18 to-amber-800/15 px-3.5 text-[11px] font-bold text-amber-100 shadow-sm transition-all hover:brightness-110 active:scale-[0.98] sm:h-12 sm:px-4 sm:text-xs"
                     >
                       Рамка
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 min-w-0 text-left sm:text-left text-[13px] sm:text-[15px]">
-                  <h3 className="font-bold text-slate-100 truncate">{playerMenuTarget.name}</h3>
-                  <p className="text-slate-400 mt-0.5">
-                    {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
-                    {playerMenuTarget.city && <span className="ml-2">📍 {playerMenuTarget.city}</span>}
-                  </p>
-                  {playerMenuTarget.interests && (
-                    <p className="text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-2">🎯 {playerMenuTarget.interests}</p>
-                  )}
-                  <p className="text-amber-200/90 mt-0.5">✨ {zodiacDisplay}</p>
+                <div className="mt-4 border-t border-slate-600/35 pt-3">
+                  <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Анкета</p>
+                  <ul className="space-y-2.5 text-left text-sm text-slate-300 sm:text-[15px]">
+                    <li className="flex items-baseline gap-2.5 border-b border-slate-700/40 pb-2.5">
+                      <span className="w-6 shrink-0 text-center text-base opacity-90" aria-hidden>
+                        👤
+                      </span>
+                      <span className="min-w-0 font-semibold text-slate-100">
+                        {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
+                      </span>
+                    </li>
+                    {playerMenuTarget.city && (
+                      <li className="flex items-start gap-2.5 border-b border-slate-700/40 pb-2.5">
+                        <span className="mt-0.5 w-6 shrink-0 text-center text-base" aria-hidden>
+                          📍
+                        </span>
+                        <span className="min-w-0 leading-snug">{playerMenuTarget.city}</span>
+                      </li>
+                    )}
+                    {playerMenuTarget.interests && (
+                      <li className="flex items-start gap-2.5 border-b border-slate-700/40 pb-2.5">
+                        <span className="mt-0.5 w-6 shrink-0 text-center text-base" aria-hidden>
+                          🎯
+                        </span>
+                        <span className="min-w-0 leading-snug">{playerMenuTarget.interests}</span>
+                      </li>
+                    )}
+                    <li className="flex items-center gap-2.5 pt-0.5 text-amber-200/95">
+                      <span className="w-6 shrink-0 text-center text-base" aria-hidden>
+                        ✨
+                      </span>
+                      <span className="font-medium">{zodiacDisplay}</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
 
-              {/* Центральный блок: цитата дня + кнопки действий */}
-              <div className="player-menu-actions flex min-w-0 w-full sm:max-w-sm flex-1 flex-col gap-2 sm:gap-3">
-                {/* Цитата дня */}
-                <div
-                  className="player-menu-quote rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 text-[12px] sm:text-[14px]"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.7) 100%)",
-                    border: "1px solid rgba(251, 191, 36, 0.2)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 12px rgba(0,0,0,0.2)",
-                  }}
-                >
-                  <p className="font-semibold text-amber-400/95 uppercase tracking-wide text-[11px] sm:text-[13px] mb-0.5 sm:mb-1">Цитата дня</p>
-                  <p className="text-slate-300 italic line-clamp-2 sm:line-clamp-none">&quot;{quoteOfDay.text}&quot;</p>
-                  <p className="text-slate-500 mt-0.5 sm:mt-1 text-[11px] sm:text-[13px]">— {quoteOfDay.author}</p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-col gap-1.5 sm:gap-2">
-                  {/* Ухаживание — приватный чат за 50 сердец; до 5 игроков в сутки за одним пользователем */}
+              {/* Действия */}
+              <div className="player-menu-actions flex min-h-0 min-w-0 w-full flex-1 flex-col gap-5">
+                <div>
+                  <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Действия</p>
+                  {/* Избранное и ухаживание — верхний ряд; розы и «от вас» — ниже; ВК + магазин */}
                   {(() => {
                     const todayKey = new Date().toISOString().slice(0, 10)
                     const careEntriesToday = gameLog.filter(
@@ -5194,146 +5577,216 @@ export function GameRoom() {
                     const carersCount = uniqueCarerIds.size
                     const currentUserAlreadyCared = currentUser && uniqueCarerIds.has(currentUser.id)
                     const canCare = carersCount < 5 && !currentUserAlreadyCared && voiceBalance >= 50
-                    const canOpenVk = !!currentUser && (courtshipProfileAllowed?.[playerMenuTarget.id] !== false) && voiceBalance >= 100
+                    const canOpenVk = !!currentUser && (courtshipProfileAllowed?.[playerMenuTarget.id] !== false) && voiceBalance >= 200
+                    const myRosesToThem = (rosesGiven ?? []).filter(
+                      (r) => r.fromPlayerId === currentUser?.id && r.toPlayerId === playerMenuTarget.id,
+                    ).length
+                    const careHandler = () => {
+                      if (!currentUser) return
+                      if (currentUserAlreadyCared) {
+                        showToast("Вы уже ухаживали сегодня", "info")
+                        return
+                      }
+                      if (carersCount >= 5) {
+                        showToast("Лимит ухаживаний за этим игроком на сегодня", "info")
+                        return
+                      }
+                      if (voiceBalance < 50) {
+                        showToast("Нужно 50 сердец", "error")
+                        return
+                      }
+                      dispatch({ type: "PAY_VOICES", amount: 50 })
+                      dispatch({
+                        type: "ADD_LOG",
+                        entry: {
+                          id: generateLogId(),
+                          type: "care",
+                          fromPlayer: currentUser!,
+                          toPlayer: playerMenuTarget,
+                          text: `${currentUser!.name} ухаживает за ${playerMenuTarget.name}`,
+                          timestamp: Date.now(),
+                        },
+                      })
+                      dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
+                      dispatch({ type: "CLOSE_PLAYER_MENU" })
+                      showToast("Приватный чат открыт", "success")
+                    }
+                    const roseHandler = () => {
+                      if (!currentUser) return
+                      if (voiceBalance < 50) {
+                        showToast("Нужно 50 сердец для роз", "error")
+                        return
+                      }
+                      dispatch({ type: "GIVE_ROSE", fromPlayerId: currentUser.id, toPlayerId: playerMenuTarget.id })
+                      showToast("Розы подарены", "success")
+                    }
+                    const baseTile =
+                      "flex min-h-[5.75rem] min-w-0 flex-col items-center justify-between gap-1 rounded-xl py-2 text-center font-bold transition-all hover:brightness-110 active:scale-[0.98] sm:min-h-[6.25rem] sm:gap-1.5 sm:py-2.5"
+                    const baseTileNarrow =
+                      "px-1.5 sm:px-2"
+                    const baseTileWide =
+                      "px-2 sm:px-2.5"
+                    const titleCls =
+                      "px-0.5 text-center text-xs font-extrabold leading-snug tracking-tight sm:text-sm"
+                    const priceCellLight =
+                      "flex w-full items-center justify-center gap-1 rounded-lg border border-white/35 bg-black/25 px-1.5 py-1.5 text-[11px] font-bold tabular-nums shadow-inner sm:py-2 sm:text-xs"
+                    const priceCellGold =
+                      "flex w-full items-center justify-center rounded-lg border border-slate-900/20 bg-slate-900/10 px-1.5 py-1.5 text-[11px] font-bold text-slate-900 shadow-inner sm:py-2 sm:text-xs"
+                    const buyHeartsBtnCls =
+                      "flex min-h-[3rem] w-full min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-center text-[12px] font-extrabold leading-tight transition-all hover:brightness-110 active:scale-[0.99] sm:min-h-[3.25rem] sm:text-[13px]"
                     return (
-                      <div className="mt-1 sm:mt-2 flex flex-col gap-1.5 sm:gap-2">
-                        <button
-                          onClick={() => {
-                            if (!currentUser) return
-                            if (currentUserAlreadyCared) {
-                              showToast("Вы уже ухаживали сегодня", "info")
-                              return
-                            }
-                            if (carersCount >= 5) {
-                              showToast("Лимит ухаживаний за этим игроком на сегодня", "info")
-                              return
-                            }
-                            if (voiceBalance < 50) {
-                              showToast("Нужно 50 сердец", "error")
-                              return
-                            }
-                            dispatch({ type: "PAY_VOICES", amount: 50 })
-                            dispatch({
-                              type: "ADD_LOG",
-                              entry: {
-                                id: generateLogId(),
-                                type: "care",
-                                fromPlayer: currentUser!,
-                                toPlayer: playerMenuTarget,
-                                text: `${currentUser!.name} ухаживает за ${playerMenuTarget.name}`,
-                                timestamp: Date.now(),
-                              },
-                            })
-                            dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
-                            dispatch({ type: "CLOSE_PLAYER_MENU" })
-                            showToast("Приватный чат открыт", "success")
-                          }}
-                          disabled={!canCare}
-                          className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 sm:px-3 sm:py-2.5 font-bold text-[13px] sm:text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                          style={{
-                            background: "linear-gradient(180deg, #ec4899 0%, #be185d 100%)",
-                            color: "#fff",
-                            border: "2px solid #9d174d",
-                            boxShadow: "0 2px 0 #831843",
-                          }}
-                        >
-                          <Heart className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" />
-                          <span className="flex-1 text-center">{"Ухаживание"}</span>
-                          <span className="text-[13px] sm:text-[15px] opacity-90">{"50 ❤"}</span>
-                        </button>
-                        {courtshipProfileAllowed?.[playerMenuTarget.id] !== false ? (
+                      <div className="flex flex-col gap-2 sm:gap-2.5">
+                        <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:gap-2">
                           <button
                             type="button"
                             onClick={() => {
-                              if (voiceBalance < 100) {
-                                showToast("Нужно 100 сердец для перехода в VK", "error")
-                                return
-                              }
-                              dispatch({ type: "PAY_VOICES", amount: 100 })
-                              window.open(`https://vk.com/id${playerMenuTarget.id}`, "_blank", "noopener,noreferrer")
-                              showToast("Открыт профиль VK", "success")
+                              dispatch({ type: "ADD_FAVORITE", player: playerMenuTarget })
+                              dispatch({ type: "CLOSE_PLAYER_MENU" })
                             }}
-                            disabled={!canOpenVk}
-                            className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 sm:px-3 sm:py-2.5 text-[13px] sm:text-[15px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                            className={`${baseTile} ${baseTileNarrow} min-w-0`}
                             style={{
-                              background: "linear-gradient(180deg, #2787F5 0%, #1a6bd1 100%)",
-                              color: "#fff",
-                              border: "2px solid #1565c0",
-                              boxShadow: "0 2px 0 #0d47a1",
+                              background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
+                              color: "#0f172a",
+                              border: "2px solid #94a3b8",
+                              boxShadow: "0 2px 0 #475569",
                             }}
                           >
-                            <User className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            {"Профиль ВК — 100 ❤"}
+                            <Star className="h-5 w-5 shrink-0 text-slate-900 sm:h-6 sm:w-6" />
+                            <span className={`${titleCls} text-slate-900`}>В избранное</span>
+                            <div className={priceCellGold}>бесплатно</div>
                           </button>
+                          <button
+                            type="button"
+                            onClick={careHandler}
+                            disabled={!canCare}
+                            className={`${baseTile} ${baseTileNarrow} min-w-0 disabled:opacity-40`}
+                            style={{
+                              background: "linear-gradient(180deg, #ec4899 0%, #be185d 100%)",
+                              color: "#fff",
+                              border: "2px solid #9d174d",
+                              boxShadow: "0 2px 0 #831843",
+                            }}
+                          >
+                            <Heart className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" fill="currentColor" />
+                            <span className={`${titleCls} text-white`}>Ухаживать</span>
+                            <div className={priceCellLight}>
+                              <span>50</span>
+                              <Heart className="h-3.5 w-3.5 opacity-95" fill="currentColor" />
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={roseHandler}
+                            disabled={!currentUser || voiceBalance < 50}
+                            className={`min-w-0 ${baseTile} ${baseTileWide} disabled:opacity-40`}
+                            style={{
+                              background: "linear-gradient(180deg, #e11d48 0%, #be123c 100%)",
+                              color: "#fff",
+                              border: "2px solid #9f1239",
+                              boxShadow: "0 2px 0 #881337",
+                            }}
+                          >
+                            <span className="text-xl leading-none sm:text-2xl" aria-hidden>
+                              🌹
+                            </span>
+                            <span className={`${titleCls} text-white`}>Подарить розы</span>
+                            <div className={priceCellLight}>
+                              <span>50</span>
+                              <Heart className="h-3.5 w-3.5 opacity-95" fill="currentColor" />
+                            </div>
+                          </button>
+                          {currentUser && (
+                            <div
+                              className={`min-w-0 ${baseTile} ${baseTileWide}`}
+                              style={{
+                                background: "linear-gradient(180deg, #e11d48 0%, #be123c 100%)",
+                                color: "#fff",
+                                border: "2px solid #9f1239",
+                                boxShadow: "0 2px 0 #881337",
+                              }}
+                              title="Сколько роз вы подарили этому игроку"
+                            >
+                              <span className="text-xl leading-none sm:text-2xl" aria-hidden>
+                                🌹
+                              </span>
+                              <span className={`${titleCls} text-white`}>От вас</span>
+                              <div className={priceCellLight}>
+                                <span className="tabular-nums">{myRosesToThem}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {courtshipProfileAllowed?.[playerMenuTarget.id] !== false ? (
+                          <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (voiceBalance < 200) {
+                                  showToast("Нужно 200 сердец для перехода в VK", "error")
+                                  return
+                                }
+                                dispatch({ type: "PAY_VOICES", amount: 200 })
+                                window.open(`https://vk.com/id${playerMenuTarget.id}`, "_blank", "noopener,noreferrer")
+                                showToast("Открыт профиль VK", "success")
+                              }}
+                              disabled={!canOpenVk}
+                              className="flex min-h-[3rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[12px] font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40 sm:min-h-[3.25rem] sm:text-[13px]"
+                              style={{
+                                background: "linear-gradient(180deg, #2787F5 0%, #1a6bd1 100%)",
+                                color: "#fff",
+                                border: "2px solid #1565c0",
+                                boxShadow: "0 2px 0 #0d47a1",
+                              }}
+                            >
+                              <User className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
+                              <span className="text-center leading-snug">Профиль ВК — 200 ❤</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dispatch({ type: "SET_SCREEN", screen: "shop" })
+                                dispatch({ type: "CLOSE_PLAYER_MENU" })
+                              }}
+                              className={`${buyHeartsBtnCls} text-amber-950`}
+                              style={{
+                                background: "linear-gradient(180deg, #fde68a 0%, #f59e0b 100%)",
+                                border: "2px solid #d97706",
+                                boxShadow: "0 2px 0 #b45309",
+                              }}
+                            >
+                              <Heart className="h-4 w-4 shrink-0" fill="currentColor" />
+                              Купить сердца
+                            </button>
+                          </div>
                         ) : (
-                          <p className="rounded-lg px-3 py-2.5 text-center text-[15px] font-medium" style={{ color: "#94a3b8", background: "rgba(15,23,42,0.6)", border: "1px solid #334155" }}>
-                            {"Если хотите пообщаться, но кнопка не работает — активируйте приват."}
-                          </p>
+                          <div className="flex flex-col gap-2">
+                            <p
+                              className="rounded-xl px-3 py-2.5 text-center text-[13px] font-medium sm:text-[15px]"
+                              style={{ color: "#94a3b8", background: "rgba(15,23,42,0.6)", border: "1px solid #334155" }}
+                            >
+                              {"Если хотите пообщаться, но кнопка не работает — активируйте приват."}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dispatch({ type: "SET_SCREEN", screen: "shop" })
+                                dispatch({ type: "CLOSE_PLAYER_MENU" })
+                              }}
+                              className={`${buyHeartsBtnCls} w-full text-amber-950`}
+                              style={{
+                                background: "linear-gradient(180deg, #fde68a 0%, #f59e0b 100%)",
+                                border: "2px solid #d97706",
+                                boxShadow: "0 2px 0 #b45309",
+                              }}
+                            >
+                              <Heart className="h-4 w-4 shrink-0" fill="currentColor" />
+                              Купить сердца
+                            </button>
+                          </div>
                         )}
                       </div>
                     )
                   })()}
-
-                  {/* Подарить розы: кнопка-таблетка слева, счётчик подаренных — отдельный блок справа */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        if (!currentUser) return
-                        if (voiceBalance < 50) {
-                          showToast("Нужно 50 сердец для роз", "error")
-                          return
-                        }
-                        dispatch({ type: "GIVE_ROSE", fromPlayerId: currentUser.id, toPlayerId: playerMenuTarget.id })
-                        showToast("Розы подарены", "success")
-                      }}
-                      disabled={!currentUser || voiceBalance < 50}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3 rounded-full px-3 py-2 sm:px-4 sm:py-2.5 font-bold text-[13px] sm:text-[15px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                      style={{
-                        background: "linear-gradient(180deg, #e11d48 0%, #be123c 100%)",
-                        color: "#fff",
-                        border: "2px solid #9f1239",
-                        boxShadow: "0 2px 0 #881337",
-                      }}
-                    >
-                      <span className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-lg">🌹</span>
-                        <span className="truncate">{"Подарить розы"}</span>
-                      </span>
-                      <span className="flex items-center gap-1 shrink-0 opacity-90">
-                        50
-                        <Heart className="h-4 w-4" fill="currentColor" />
-                      </span>
-                    </button>
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl font-bold text-white"
-                      style={{
-                        background: "linear-gradient(180deg, #e11d48 0%, #be123c 100%)",
-                        border: "2px solid #9f1239",
-                      }}
-                    >
-                      {(rosesGiven ?? []).filter(
-                        (r) => r.fromPlayerId === currentUser?.id && r.toPlayerId === playerMenuTarget.id,
-                      ).length}
-                    </div>
-                  </div>
-
-                  {/* Add to favorites (free) */}
-                  <button
-                    onClick={() => {
-                      dispatch({ type: "ADD_FAVORITE", player: playerMenuTarget })
-                      dispatch({ type: "CLOSE_PLAYER_MENU" })
-                    }}
-                    className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 sm:px-3 sm:py-2.5 font-bold text-[13px] sm:text-[15px] transition-all hover:brightness-110 active:scale-95"
-                    style={{
-                      background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
-                      color: "#0f172a",
-                      border: "2px solid #94a3b8",
-                      boxShadow: "0 2px 0 #475569",
-                    }}
-                  >
-                    <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    <span className="flex-1 text-center">{"В избранное"}</span>
-                  </button>
 
                   {/* Угадай-ка: пара совпала 5 раз — возможность дружить профилями */}
                   {currentUser && (() => {
@@ -5342,7 +5795,7 @@ export function GameRoom() {
                     if (!canFriendProfiles) return null
                     return (
                       <div
-                        className="rounded-lg border border-emerald-500/50 px-3 py-2.5 text-center text-[13px]"
+                        className="mt-2 rounded-lg border border-emerald-500/50 px-3 py-2.5 text-center text-[13px]"
                         style={{ background: "rgba(34, 197, 94, 0.12)" }}
                       >
                         <p className="font-semibold text-emerald-200">Дружить профилями</p>
@@ -5357,96 +5810,9 @@ export function GameRoom() {
                     )
                   })()}
                 </div>
+
               </div>
-
-              {/* Правая колонка: каталог подарков */}
-              {currentUser && (
-                <div className="player-menu-catalog mt-1 sm:mt-0 flex w-full sm:w-[280px] md:w-[340px] min-w-0 min-h-0 shrink-0 flex-col self-stretch">
-                  <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-2.5 sm:p-3 transition-colors"
-                    style={{ background: "rgba(15,23,42,0.95)", boxShadow: "inset 0 1px 0 rgba(251,191,36,0.05), 0 4px 16px rgba(0,0,0,0.2)" }}
-                  >
-                  <div className="mb-1.5 sm:mb-2 shrink-0 text-[13px] sm:text-[15px]">
-                    <span className="font-bold text-slate-200">{"Каталог подарков"}</span>
-                    <span className="block text-slate-400 text-[12px] sm:text-[14px]">
-                      {`Для: ${playerMenuTarget.name}. Цены до 10 ❤.`}
-                    </span>
-                  </div>
-
-                  <div className="player-menu-gifts-scroll grid grid-cols-3 content-start gap-1.5 sm:gap-2 overflow-y-auto overflow-x-hidden py-1 max-h-[180px] sm:max-h-[270px] min-h-0">
-                    {[
-                      { id: "toy_bear" as InventoryItem["type"], name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
-                      { id: "plush_heart" as InventoryItem["type"], name: "Подушка-сердце", emoji: "❤️", cost: 8 },
-                      { id: "toy_car" as InventoryItem["type"], name: "Игрушечная машинка", emoji: "🚗", cost: 7 },
-                      { id: "toy_ball" as InventoryItem["type"], name: "Футбольный мяч", emoji: "⚽️", cost: 6 },
-                      { id: "souvenir_magnet" as InventoryItem["type"], name: "Магнитик на холодильник", emoji: "🧲", cost: 3 },
-                      { id: "souvenir_keychain" as InventoryItem["type"], name: "Брелок-сувенир", emoji: "🔑", cost: 5 },
-                      { id: "chocolate_box" as InventoryItem["type"], name: "Коробка конфет", emoji: "🍫", cost: 4 },
-                    ].map((gift) => {
-                      const alreadyGifted = inventory.some(
-                        (item) => item.toPlayerId === playerMenuTarget.id && item.type === gift.id,
-                      )
-                      const disabled = alreadyGifted || voiceBalance < gift.cost
-
-                      const handleClick = () => {
-                        if (disabled) return
-                        dispatch({ type: "PAY_VOICES", amount: gift.cost })
-                        dispatch({
-                          type: "ADD_INVENTORY_ITEM",
-                          item: {
-                            type: gift.id,
-                            fromPlayerId: currentUser.id,
-                            fromPlayerName: currentUser.name,
-                            timestamp: Date.now(),
-                            toPlayerId: playerMenuTarget.id,
-                          },
-                        })
-                        dispatch({
-                          type: "ADD_LOG",
-                          entry: {
-                            id: generateLogId(),
-                            type: "system",
-                            fromPlayer: currentUser,
-                            toPlayer: playerMenuTarget,
-                            text: `${currentUser.name} дарит подарок «${gift.name}» игроку ${playerMenuTarget.name}`,
-                            timestamp: Date.now(),
-                          } as GameLogEntry,
-                        })
-                      }
-
-                      return (
-                        <button
-                          key={gift.id}
-                          type="button"
-                          onClick={handleClick}
-                          className="player-menu-gift-item group flex flex-col items-center gap-0.5 sm:gap-1 shrink-0 rounded-xl p-1 sm:p-1.5 transition-colors hover:bg-slate-700/40"
-                          disabled={disabled}
-                        >
-                          <div
-                            className={`flex h-11 w-11 sm:h-16 sm:w-16 items-center justify-center rounded-xl ${
-                              disabled ? "opacity-40" : "opacity-100"
-                            }`}
-                            style={!disabled ? { background: "rgba(51,65,85,0.4)", border: "1px solid rgba(71,85,105,0.5)" } : undefined}
-                          >
-                            <span className="text-xl sm:text-3xl leading-none">{gift.emoji}</span>
-                          </div>
-                          <span className="text-center text-[11px] sm:text-[14px] font-semibold text-slate-200 line-clamp-2 leading-tight">{gift.name}</span>
-                          <div className="flex items-center gap-0.5 text-[11px] sm:text-[14px]">
-                            {alreadyGifted ? (
-                              <span className="font-semibold text-slate-500">{"✓"}</span>
-                            ) : (
-                              <>
-                                <span className="text-rose-400">{"❤"}</span>
-                                <span className="font-semibold text-slate-200">{gift.cost}</span>
-                              </>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  </div>
-                </div>
-              )}
+            </div>
             </div>
 
             {/* Окно выбора рамки для подарка — поверх модалки игрока */}
@@ -5572,6 +5938,165 @@ export function GameRoom() {
         </div>
         );
       })()}
+
+      {/* Каталог подарков — правая панель как у профиля (из мини-меню аватара) */}
+      {giftCatalogDrawerPlayer && currentUser && (
+        <div
+          className="gift-catalog-backdrop fixed inset-0 z-[55] flex items-stretch justify-end overflow-visible bg-transparent p-0"
+          role="presentation"
+        >
+          <div
+            className="gift-catalog-panel gift-catalog-drawer relative flex h-[100dvh] max-h-[100dvh] w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
+            style={{
+              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
+              border: "2px solid rgba(251, 191, 36, 0.25)",
+              borderRightWidth: 0,
+              fontSize: "14px",
+            }}
+          >
+            <div className="pointer-events-none absolute inset-0 rounded-l-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
+            <div className="relative z-20 flex shrink-0 justify-end border-b border-slate-600/25 bg-slate-900/95 px-3 py-2 sm:px-4 sm:py-2.5">
+              <button
+                type="button"
+                onClick={() => setGiftCatalogDrawerPlayer(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100 sm:h-10 sm:w-10"
+                aria-label="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-5 sm:pt-4">
+              <div className="player-menu-catalog flex min-h-0 w-full flex-1 flex-col gap-3">
+                <div className="shrink-0 px-0.5">
+                  <h2 className="text-[17px] font-extrabold leading-snug tracking-tight text-slate-50 sm:text-xl">
+                    {`Подарки для ${giftCatalogDrawerPlayer.name}`}
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-400">до 10 ❤</p>
+                </div>
+                <div
+                  className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-3 sm:p-4"
+                  style={{
+                    background: "rgba(15,23,42,0.95)",
+                    boxShadow: "inset 0 1px 0 rgba(251,191,36,0.05), 0 4px 16px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  <div className="player-menu-gifts-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden py-1 max-h-[min(62dvh,520px)] sm:max-h-[min(68dvh,560px)]">
+                    {(
+                      [
+                        {
+                          key: "free",
+                          title: "Бесплатные",
+                          gifts: GIFT_CATALOG_FREE,
+                          emptyHint: "Скоро добавим подарки",
+                          titleClass: "text-sky-400/95",
+                        },
+                        {
+                          key: "premium",
+                          title: "Премиум",
+                          gifts: GIFT_CATALOG_PREMIUM,
+                          titleClass: "text-amber-400/95",
+                        },
+                      ] as const
+                    ).map((section) => (
+                      <div key={section.key}>
+                        <h3
+                          className={`mb-1.5 text-[10px] font-bold uppercase tracking-wider sm:text-[11px] ${section.titleClass}`}
+                        >
+                          {section.title}
+                        </h3>
+                        {section.gifts.length === 0 ? (
+                          <p className="rounded-lg border border-dashed border-slate-600/50 bg-slate-900/40 px-2 py-2 text-center text-[10px] leading-snug text-slate-500">
+                            {"emptyHint" in section ? section.emptyHint : "—"}
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-3 content-start gap-1 sm:gap-1.5">
+                            {section.gifts.map((gift) => {
+                              const toId = giftCatalogDrawerPlayer.id
+                              const alreadyGifted = inventory.some(
+                                (item) => item.toPlayerId === toId && item.type === gift.id,
+                              )
+                              const needPay = gift.cost > 0
+                              const disabled =
+                                alreadyGifted || (needPay && voiceBalance < gift.cost)
+                              const handleGiftClick = () => {
+                                if (disabled) return
+                                if (needPay) dispatch({ type: "PAY_VOICES", amount: gift.cost })
+                                dispatch({
+                                  type: "ADD_INVENTORY_ITEM",
+                                  item: {
+                                    type: gift.id,
+                                    fromPlayerId: currentUser.id,
+                                    fromPlayerName: currentUser.name,
+                                    timestamp: Date.now(),
+                                    toPlayerId: toId,
+                                  },
+                                })
+                                dispatch({
+                                  type: "ADD_LOG",
+                                  entry: {
+                                    id: generateLogId(),
+                                    type: "system",
+                                    fromPlayer: currentUser,
+                                    toPlayer: giftCatalogDrawerPlayer,
+                                    text: `${currentUser.name} дарит подарок «${gift.name}» игроку ${giftCatalogDrawerPlayer.name}`,
+                                    timestamp: Date.now(),
+                                  } as GameLogEntry,
+                                })
+                              }
+                              return (
+                                <button
+                                  key={`${section.key}-${gift.id}`}
+                                  type="button"
+                                  onClick={handleGiftClick}
+                                  aria-label={gift.name}
+                                  className="player-menu-gift-item group flex flex-col items-center justify-center gap-1 rounded-lg p-1 transition-colors hover:bg-slate-700/35 disabled:opacity-40 sm:gap-1.5 sm:p-1.5"
+                                  disabled={disabled}
+                                >
+                                  <div
+                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 ${
+                                      disabled ? "opacity-40" : "opacity-100"
+                                    }`}
+                                    style={
+                                      !disabled
+                                        ? {
+                                            background: "rgba(51,65,85,0.4)",
+                                            border: "1px solid rgba(71,85,105,0.5)",
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    <span className="text-lg leading-none sm:text-xl">{gift.emoji}</span>
+                                  </div>
+                                  {alreadyGifted ? (
+                                    <span className="rounded-full border border-slate-500/50 bg-slate-800/80 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 sm:text-[10px]">
+                                      ✓
+                                    </span>
+                                  ) : gift.cost === 0 ? (
+                                    <span className="inline-flex min-w-[2.25rem] items-center justify-center rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-extrabold text-sky-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:min-w-[2.5rem] sm:text-[10px]">
+                                      0 ❤
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex min-w-[2.25rem] items-center justify-center gap-0.5 rounded-full border border-emerald-400/45 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-extrabold tabular-nums text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:min-w-[2.5rem] sm:text-[10px]">
+                                      <span className="text-[10px] leading-none text-rose-400 sm:text-[11px]" aria-hidden>
+                                        ❤
+                                      </span>
+                                      {gift.cost}
+                                    </span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---- PAYMENT DIALOG ---- */}
       {showPaymentDialog && (
