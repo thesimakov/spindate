@@ -12,6 +12,8 @@ export function applyTableAuthorityAction(
   action: GameAction,
 ): TableAuthorityPayload | null {
   switch (action.type) {
+    case "REQUEST_EXTRA_TURN":
+      return { ...snapshot, extraTurnPlayerId: action.playerId }
     case "ADD_LOG":
       return {
         ...snapshot,

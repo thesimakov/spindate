@@ -58,6 +58,7 @@ function isActionAllowed(action: GameAction): boolean {
     case "START_SPIN":
     case "STOP_SPIN":
     case "NEXT_TURN":
+    case "REQUEST_EXTRA_TURN":
     case "ADD_LOG":
     case "SEND_GENERAL_CHAT":
     case "SET_AVATAR_FRAME":
