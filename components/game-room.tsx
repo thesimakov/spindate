@@ -1184,53 +1184,76 @@ export function GameRoom() {
     return () => clearTimeout(t)
   }, [showReturnedFromUgadaika, currentTurnPlayer?.id, currentUser?.id, dispatch])
 
-  /* ---- turn timer (визуальный счётчик 15с для живого игрока) ---- */
+  /* ---- turn timer + auto-skip (15s) for current live user ----
+     Важно: список игроков регулярно пересинхронизируется (новые object references),
+     поэтому привязываемся к "ключу хода" (tableId/round/index/playerId), а не к объекту Player.
+  ---- */
+  const turnGuardRef = useRef<{
+    key: string | null
+    deadlineTs: number
+    skipTimeout: ReturnType<typeof setTimeout> | null
+  }>({ key: null, deadlineTs: 0, skipTimeout: null })
+
   useEffect(() => {
-    if (turnTimerRef.current) {
-      clearInterval(turnTimerRef.current)
-      turnTimerRef.current = null
-    }
-    setTurnTimer(null)
+    const isEligible =
+      !!currentTurnPlayer &&
+      !currentTurnPlayer.isBot &&
+      currentUser?.id === currentTurnPlayer.id &&
+      !isSpinning &&
+      !showResult &&
+      countdown === null
 
-    if (!currentTurnPlayer || currentTurnPlayer.isBot) return
-    if (currentUser?.id !== currentTurnPlayer.id) return
-    if (isSpinning || showResult || countdown !== null) return
+    const key =
+      isEligible && currentTurnPlayer
+        ? `${tableId}:${roundNumber}:${currentTurnIndex}:${currentTurnPlayer.id}`
+        : null
 
-    setTurnTimer(15)
-    turnTimerRef.current = setInterval(() => {
-      setTurnTimer(prev => {
-        if (prev === null) return prev
-        if (prev <= 1) {
-          if (turnTimerRef.current) {
-            clearInterval(turnTimerRef.current)
-            turnTimerRef.current = null
-          }
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => {
+    // Cleanup timers if we are not eligible anymore or turn changed
+    const prevKey = turnGuardRef.current.key
+    if (!key || (prevKey && key !== prevKey)) {
       if (turnTimerRef.current) {
         clearInterval(turnTimerRef.current)
         turnTimerRef.current = null
       }
+      if (turnGuardRef.current.skipTimeout) {
+        clearTimeout(turnGuardRef.current.skipTimeout)
+        turnGuardRef.current.skipTimeout = null
+      }
+      turnGuardRef.current.key = key
+      turnGuardRef.current.deadlineTs = 0
+      setTurnTimer(null)
     }
-  }, [currentTurnPlayer, currentUser?.id, isSpinning, showResult, countdown])
 
-  /* ---- auto-skip turn for inactive user (15s) ---- */
-  useEffect(() => {
-    // Только если ход у живого пользователя, нет спина и результата
-    if (!currentTurnPlayer || currentTurnPlayer.isBot) return
-    if (currentUser?.id !== currentTurnPlayer.id) return
-    if (isSpinning || showResult || countdown !== null) return
+    if (!key) return
 
-    const timeout = setTimeout(() => {
-      // Если к моменту срабатывания условия уже изменились — ничего не делаем
-      if (isSpinning || showResult || countdown !== null) return
+    // If we're still on the same turn key, don't restart the countdown at "15"
+    if (turnGuardRef.current.key === key && turnGuardRef.current.deadlineTs > 0) return
+
+    const TURN_MS = 15_000
+    const deadlineTs = Date.now() + TURN_MS
+    turnGuardRef.current.key = key
+    turnGuardRef.current.deadlineTs = deadlineTs
+
+    // Visual timer
+    if (turnTimerRef.current) clearInterval(turnTimerRef.current)
+    const tick = () => {
+      const leftMs = Math.max(0, deadlineTs - Date.now())
+      const leftSec = Math.ceil(leftMs / 1000)
+      setTurnTimer(leftSec)
+      if (leftSec <= 0 && turnTimerRef.current) {
+        clearInterval(turnTimerRef.current)
+        turnTimerRef.current = null
+      }
+    }
+    tick()
+    turnTimerRef.current = setInterval(tick, 250)
+
+    // Auto-skip at deadline
+    if (turnGuardRef.current.skipTimeout) clearTimeout(turnGuardRef.current.skipTimeout)
+    turnGuardRef.current.skipTimeout = setTimeout(() => {
+      // Ensure we're still on the same turn
+      if (turnGuardRef.current.key !== key) return
       if (!currentTurnPlayer) return
-
       dispatch({
         type: "ADD_LOG",
         entry: {
@@ -1242,10 +1265,10 @@ export function GameRoom() {
         },
       })
       dispatch({ type: "NEXT_TURN" })
-    }, 15000)
+    }, TURN_MS + 25)
 
-    return () => clearTimeout(timeout)
-  }, [currentTurnPlayer, currentUser?.id, isSpinning, showResult, countdown, dispatch])
+    return () => {}
+  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch])
 
   /* ---- auto-skip for OTHER live players who went AFK or disconnected ---- */
   useEffect(() => {
