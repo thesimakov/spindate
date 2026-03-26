@@ -35,24 +35,33 @@ jobs:
       - name: Deploy to server via SSH
         env:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_SSH_KEY_B64: ${{ secrets.SERVER_SSH_KEY_B64 }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          set -e
-          if [ -z "$SERVER_SSH_KEY" ] || [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ]; then
-            echo "SERVER_SSH_KEY, SERVER_HOST or SERVER_USER not set — skipping deploy."
+          set -euo pipefail
+          if { [ -z "${SERVER_SSH_KEY:-}" ] && [ -z "${SERVER_SSH_KEY_B64:-}" ]; } || [ -z "${SERVER_HOST:-}" ] || [ -z "${SERVER_USER:-}" ]; then
+            echo "SERVER_SSH_KEY(_B64), SERVER_HOST or SERVER_USER not set — skipping deploy."
             echo "Add secrets in repo Settings → Secrets and variables → Actions."
             exit 0
           fi
           mkdir -p ~/.ssh
-          # Сырой ключ: убираем \r (Windows) и пробелы в конце строк — иначе "Load key: error in libcrypto"
-          echo "$SERVER_SSH_KEY" | sed 's/\r$//' | sed 's/[[:space:]]*$//' > ~/.ssh/deploy_key
+          # Ключ лучше хранить как base64 (одна строка), чтобы GitHub не ломал переносы.
+          # SERVER_SSH_KEY_B64: base64 от приватного ключа (например ~/.ssh/deploy).
+          if [ -n "${SERVER_SSH_KEY_B64:-}" ]; then
+            echo "$SERVER_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          else
+            # Сырой ключ: убираем \r (Windows) — иначе "Load key: error in libcrypto"
+            echo "$SERVER_SSH_KEY" | sed 's/\r$//' > ~/.ssh/deploy_key
+          fi
           chmod 600 ~/.ssh/deploy_key
           if ! grep -q -- "BEGIN" ~/.ssh/deploy_key || ! grep -q -- "PRIVATE KEY" ~/.ssh/deploy_key; then
             echo "::error::SERVER_SSH_KEY не похож на приватный ключ. Вставь в Secrets полное содержимое deploy_key (cat deploy_key)."
             exit 1
           fi
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "Checking SSH connectivity..."
+          ssh -o BatchMode=yes -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "echo ok"
           echo "Creating directory on server..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
           echo "Syncing files..."
