@@ -71,5 +71,5 @@ jobs:
             "$SERVER_USER@$SERVER_HOST:/var/www/spindate/"
           echo "Running npm ci and pm2 on server..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" \
-            "cd /var/www/spindate && npm ci && (pm2 restart spindate || pm2 start ecosystem.config.cjs) && pm2 save"
+            "cd /var/www/spindate && npm ci && PORT=3001 pm2 start ecosystem.config.cjs --update-env && pm2 save"
           echo "Deploy finished."
