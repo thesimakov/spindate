@@ -10,7 +10,6 @@ import {
   X,
   Coins,
   Send,
-  Zap,
   ArrowRight,
   Sparkles,
   User,
@@ -50,7 +49,7 @@ import {
   type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
-import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
+import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -258,6 +257,12 @@ const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow:
   skip:      { bg: "linear-gradient(180deg, #7f8c8d 0%, #636e72 100%)", border: "#535c5e", shadow: "#3d4648", text: "#f9fafb" },
 }
 
+/** Мобильная полоса эмоций: один ряд, кнопка = иконка + подпись в одну линию, без панели-обёртки */
+const MOBILE_EMOTION_STRIP_SCROLL =
+  "flex w-full max-w-full items-center justify-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain py-0.5 [-webkit-overflow-scrolling:touch]"
+const MOBILE_EMOTION_STRIP_BTN =
+  "flex h-8 shrink-0 flex-row items-center gap-1 rounded-full px-2 py-0 pr-2.5 text-left text-[10px] font-bold leading-none transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
+
 function isTableSyncedAction(action: GameAction): boolean {
   switch (action.type) {
     case "START_COUNTDOWN":
@@ -283,7 +288,6 @@ export function GameRoom() {
   const isMobile = useIsMobile()
   const isTablet = useIsTablet()
   const isMobileOrTablet = isMobile || isTablet
-  const isDesktopUser = useIsDesktopUser()
   const {
     players,
     currentTurnIndex,
@@ -419,10 +423,9 @@ export function GameRoom() {
   const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
 
   const { toast, showToast } = useInlineToast(2000)
-  const desktopGame = isDesktopUser || !isMobileOrTablet
-  const maxTableSize = desktopGame ? 10 : 6
-  const targetMales = desktopGame ? 5 : 3
-  const targetFemales = desktopGame ? 5 : 3
+  const maxTableSize = 10
+  const targetMales = 5
+  const targetFemales = 5
 
   const composePlayersFromLive = useCallback(
     (livePlayers: Player[]) => {
@@ -853,8 +856,6 @@ export function GameRoom() {
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
   /** Планшет (md–lg): узкая колонка иконок; по нажатию — полная панель */
   const [leftSideMenuExpanded, setLeftSideMenuExpanded] = useState(false)
-  /** Мобильная выезжающая панель с теми же действиями, что в левом меню ПК */
-  const [mobileSideDrawerOpen, setMobileSideDrawerOpen] = useState(false)
   const [sidebarTargetPlayer, setSidebarTargetPlayer] = useState<Player | null>(null)
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
@@ -875,6 +876,11 @@ export function GameRoom() {
   const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
+  /** Нижний блок «ход / пара / крутится» — верх развёрнутого общего чата на мобильной */
+  const underBoardStatusRef = useRef<HTMLDivElement>(null)
+  const [mobileOpenChatTop, setMobileOpenChatTop] = useState<number>(() =>
+    typeof window !== "undefined" ? Math.round(window.innerHeight * 0.42) : 320,
+  )
 
   // Prediction state
   const [predictionTarget, setPredictionTarget] = useState<Player | null>(null)
@@ -2257,7 +2263,8 @@ export function GameRoom() {
 
     // Обычный клик по аватарке на столе:
     // открываем мини-меню под выбранной аватаркой.
-    setSidebarTargetPlayer((prev) => (prev?.id === player.id ? null : player))
+    const nextTarget = sidebarTargetPlayer?.id === player.id ? null : player
+    setSidebarTargetPlayer(nextTarget)
     setSidebarGiftMode(false)
     setGiftCatalogDrawerPlayer(null)
   }
@@ -2342,6 +2349,68 @@ export function GameRoom() {
       : "Выбери аватар и нажми «Подарить эмоцию»"
   const shouldShowSidebarEmotionSubtitle =
     sidebarGiftMode && !!sidebarTargetPlayer
+
+  const showMobileEmotionStrip =
+    isMobileOrTablet &&
+    Boolean(
+      (sidebarGiftMode && sidebarTargetPlayer) ||
+        (showResult &&
+          resolvedTargetPlayer &&
+          resolvedTargetPlayer2 &&
+          (isEmotionLimitReached ||
+            isMyTurn ||
+            (currentUser &&
+              !currentUser.isBot &&
+              (currentUser.id === resolvedTargetPlayer.id ||
+                currentUser.id === resolvedTargetPlayer2.id)))),
+    )
+
+  const updateMobileOpenChatTop = useCallback(() => {
+    if (typeof window === "undefined") return
+    if (!isMobileOrTablet || mobileChatCollapsed) return
+    const el = underBoardStatusRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const gap = 6
+    const navClearance = window.matchMedia("(max-width: 767px)").matches ? 100 : 72
+    setMobileOpenChatTop(Math.max(navClearance, rect.bottom + gap))
+  }, [isMobileOrTablet, mobileChatCollapsed])
+
+  useEffect(() => {
+    if (!isMobileOrTablet || mobileChatCollapsed) return
+    let raf = 0
+    const schedule = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(updateMobileOpenChatTop)
+      })
+    }
+    schedule()
+    const ro = new ResizeObserver(schedule)
+    const statusEl = underBoardStatusRef.current
+    if (statusEl) ro.observe(statusEl)
+    const board = boardRef.current
+    board?.addEventListener("scroll", schedule, { passive: true })
+    window.addEventListener("resize", schedule)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+      board?.removeEventListener("scroll", schedule)
+      window.removeEventListener("resize", schedule)
+    }
+  }, [
+    isMobileOrTablet,
+    mobileChatCollapsed,
+    updateMobileOpenChatTop,
+    showResult,
+    isSpinning,
+    countdown,
+    currentTurnPlayer?.id,
+    predictionPhase,
+    players.length,
+    sidebarGiftMode,
+    sidebarTargetPlayer?.id,
+  ])
 
   const todayKey = useMemo(() => {
     const d = new Date()
@@ -2819,13 +2888,24 @@ export function GameRoom() {
 
       {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
       <div
-        className={`fixed z-40 flex gap-1.5 rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${isMobileOrTablet ? "left-2 top-2 flex-row items-center" : "left-1 top-1 flex-col"}`}
+        className={`fixed z-40 flex max-w-[calc(100vw-1rem)] gap-1.5 overflow-x-auto rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${
+          isMobileOrTablet
+            ? "left-2 max-md:top-[calc(env(safe-area-inset-top)+4.35rem)] md:top-2 flex-row items-center"
+            : "left-1 top-1 flex-col"
+        }`}
         style={{
           borderColor: "rgba(71, 85, 105, 0.8)",
           background: "rgba(15, 23, 42, 0.88)",
           backdropFilter: "blur(10px)",
         }}
       >
+        <div
+          className={
+            isMobileOrTablet
+              ? "max-md:hidden flex flex-row items-center gap-1.5 shrink-0"
+              : "contents"
+          }
+        >
         <div
           className="relative flex items-center"
           onMouseEnter={() => {
@@ -2892,6 +2972,23 @@ export function GameRoom() {
           <span className="hidden sm:inline">{soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}</span>
           <span className="sm:hidden">{soundsEnabled === false ? "Звук выкл" : "Звук вкл"}</span>
         </button>
+        </div>
+        {isMobileOrTablet && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
+          <div
+            className="flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold shadow-sm min-h-[32px]"
+            style={{
+              borderColor: "rgba(148, 163, 184, 0.6)",
+              background: "rgba(30, 41, 59, 0.6)",
+              color: "#e5e7eb",
+            }}
+          >
+            <span>{"ход"}</span>
+            <span className="text-base font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
+              {turnTimer}
+            </span>
+            <span style={{ color: "#9ca3af" }}>{"сек"}</span>
+          </div>
+        )}
       </div>
 
       {/* Фоновые частицы */}
@@ -3823,7 +3920,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-2 overflow-y-auto pb-20 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${isMobileOrTablet && mobileChatCollapsed ? "pt-10" : "pt-1"}`}
+        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1`}
         ref={boardRef}
       >
         {/* Анимация «вернулся к нам» после выхода из мини-игры Угадай-ка */}
@@ -3851,9 +3948,13 @@ export function GameRoom() {
           </div>
         )}
         {/* Инфо-статусы сверху: донор бутылки + таймер (таймер ниже статуса, без наложений) */}
-        {(bottleDonorName || (currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
+        {(bottleDonorName || (!isMobileOrTablet && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
           <div
-            className="absolute top-1 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2 lg:top-5"
+            className={`left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2 ${
+              isMobileOrTablet
+                ? "fixed max-md:top-[calc(env(safe-area-inset-top)+4.25rem)] md:top-[max(0.5rem,env(safe-area-inset-top))]"
+                : "absolute top-1 lg:top-5"
+            }`}
           >
             {/* Статус подаренной бутылки */}
             {bottleDonorName && (
@@ -3885,7 +3986,7 @@ export function GameRoom() {
             )}
 
             {/* Таймер хода для текущего пользователя */}
-            {currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
+            {!isMobileOrTablet && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
               <div
                 className="flex items-center gap-1.5 rounded-full px-3 py-1"
                 style={{
@@ -3903,20 +4004,162 @@ export function GameRoom() {
             )}
           </div>
         )}
-        {/* Обёртка игрового поля + статуса: при свёрнутом чате — flex-1 и центрирование; при открытом — без flex-1, чтобы чат заполнил пространство до низа */}
+        {/* Обёртка: мобильная — слот эмоций сверху (поток), стол статично ниже; ПК — стол по центру колонки */}
         <div
-          className={`flex min-h-0 flex-col ${isMobileOrTablet && mobileChatCollapsed ? "flex-1 min-h-0 justify-center" : ""} ${isMobileOrTablet && !mobileChatCollapsed ? "pt-8 shrink-0" : ""}`}
+          className={`flex min-h-0 w-full flex-col ${isMobileOrTablet ? "shrink-0 items-stretch gap-1.5" : "items-center"}`}
         >
-        {/* Прямоугольный стол: на мобильном резиновый; на планшете ограничена высота */}
+        {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
+        <div className="flex h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden px-0.5 md:hidden">
+          {showMobileEmotionStrip && (
+            <div className="relative z-[36] flex w-full max-w-full min-h-0 flex-col items-center justify-center gap-0.5">
+            {isEmotionLimitReached && (
+              <button
+                type="button"
+                onClick={handleBuyEmotionPackFromGame}
+                className="flex h-6 w-full max-w-[min(100%,20rem)] shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[9px] font-bold leading-none transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+                disabled={voiceBalance < EMOTION_PACK_COST}
+                style={{
+                  background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+                  color: "#0f172a",
+                  border: "1px solid rgba(103, 232, 249, 0.85)",
+                  boxShadow: "0 1px 0 rgba(30, 64, 175, 0.85)",
+                }}
+              >
+                {"Лимит — +50 за 5 ❤"}
+              </button>
+            )}
+            {sidebarGiftMode && sidebarTargetPlayer ? (
+              <div className={MOBILE_EMOTION_STRIP_SCROLL}>
+                {sidebarAvailableActions.filter((action) => action.id !== "skip").map((action) => {
+                  const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                  const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => handleSidebarGiftEmotion(action.id)}
+                      disabled={false}
+                      className={MOBILE_EMOTION_STRIP_BTN}
+                      style={{
+                        background: style.bg,
+                        color: style.text,
+                        border: `1px solid ${style.border}`,
+                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
+                      }}
+                    >
+                      <span className="flex shrink-0 items-center justify-center text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
+                        {renderActionIcon(action)}
+                      </span>
+                      <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
+                      {shouldShowActionCostBadge(action.id, actionCost) && (
+                        <span
+                          className="flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[9px] font-bold opacity-95"
+                          style={{ background: "rgba(0,0,0,0.12)", color: style.text }}
+                        >
+                          {actionCost}
+                          <Heart className="h-2.5 w-2.5" fill="currentColor" />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : isMyTurn ? (
+              <div className={MOBILE_EMOTION_STRIP_SCROLL}>
+                {availableActions.filter((action) => action.id !== "skip").map((action) => {
+                  const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                  const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                  const canAfford = actionCost === 0 || voiceBalance >= actionCost
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => handlePerformAction(action.id)}
+                      disabled={!canAfford}
+                      className={MOBILE_EMOTION_STRIP_BTN}
+                      style={{
+                        background: style.bg,
+                        color: style.text,
+                        border: `1px solid ${style.border}`,
+                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
+                      }}
+                    >
+                      <span className="flex shrink-0 items-center justify-center text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
+                        {renderActionIcon(action)}
+                      </span>
+                      <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
+                      {shouldShowActionCostBadge(action.id, actionCost) && (
+                        <span
+                          className="flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[9px] font-bold opacity-95"
+                          style={{ background: "rgba(0,0,0,0.12)", color: style.text }}
+                        >
+                          {actionCost}
+                          <Heart className="h-2.5 w-2.5" fill="currentColor" />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              currentUser &&
+              !currentUser.isBot &&
+              resolvedTargetPlayer &&
+              resolvedTargetPlayer2 &&
+              (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
+                <div className={MOBILE_EMOTION_STRIP_SCROLL}>
+                  {availableActions.filter((action) => action.id !== "skip").map((action) => {
+                    const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                    const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                    const canAfford = actionCost === 0 || voiceBalance >= actionCost
+                    return (
+                      <button
+                        key={action.id}
+                        type="button"
+                        disabled={!canAfford}
+                        onClick={() => handleResponseEmotion(action.id)}
+                        className={MOBILE_EMOTION_STRIP_BTN}
+                        style={{
+                          background: style.bg,
+                          color: style.text,
+                          border: `1px solid ${style.border}`,
+                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
+                        }}
+                      >
+                        <span className="flex shrink-0 items-center justify-center text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
+                          {renderActionIcon(action)}
+                        </span>
+                        <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
+                        {shouldShowActionCostBadge(action.id, actionCost) && (
+                          <span
+                            className="flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[9px] font-bold opacity-95"
+                            style={{ background: "rgba(0,0,0,0.12)", color: style.text }}
+                          >
+                            {actionCost}
+                            <Heart className="h-2.5 w-2.5" fill="currentColor" />
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            )}
+            </div>
+          )}
+        </div>
+        {/* Прямоугольный стол: на мобильном — статичный размер по ширине; на планшете ограничена высота */}
         <div
-          className={`relative flex items-center justify-center w-full max-w-[95vw] sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 shrink-0 border-2 sm:border-[3px] ${isMobileOrTablet ? "mt-3 mx-auto rounded-2xl" : "mt-1 rounded-2xl sm:rounded-[32px]"}`}
+          className={`relative flex w-full max-w-[95vw] shrink-0 items-center justify-center sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] ${
+            isMobileOrTablet ? "mx-auto rounded-2xl" : "mx-auto mt-1 rounded-2xl sm:rounded-[32px]"
+          }`}
           style={{
             aspectRatio: isMobileOrTablet ? "1 / 1" : "6 / 5",
             ...(isMobileOrTablet
               ? {
-                  width: "min(92vw, calc(100vh - 260px))",
-                  height: "min(92vw, calc(100vh - 260px))",
-                  maxHeight: "calc(100vh - 260px)",
+                  width: "min(92vw, 100%)",
+                  maxWidth: "min(92vw, 420px)",
+                  marginLeft: "auto",
+                  marginRight: "auto",
                 }
               : {}),
             borderColor: "rgba(56, 189, 248, 0.35)",
@@ -4296,116 +4539,13 @@ export function GameRoom() {
               )}
             </div>
           )}
-
-          {/* ---- МОБИЛЬНАЯ ПАНЕЛЬ ЭМОЦИЙ поверх бутылочки ---- */}
-          {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-35 flex md:hidden w-[90%] max-w-[280px] flex-col items-stretch gap-2 rounded-xl p-3 shadow-2xl"
-              style={{
-                background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
-                border: "2px solid #475569",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(71, 85, 105, 0.5)",
-              }}
-            >
-              <p className="text-center text-[11px] font-semibold" style={{ color: "#e8c06a" }}>
-                {"Пара: "}{resolvedTargetPlayer.name}{" & "}{resolvedTargetPlayer2.name}
-              </p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {limitedEmotionCounters.map((row) => (
-                  <div key={row.id} className="rounded-md px-1.5 py-1 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
-                    <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
-                    <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
-                      {row.used}/{row.limit}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              {isEmotionLimitReached && (
-                <button
-                  type="button"
-                  onClick={handleBuyEmotionPackFromGame}
-                  className="flex items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                  disabled={voiceBalance < EMOTION_PACK_COST}
-                  style={{
-                    background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
-                    color: "#0f172a",
-                    border: "2px solid rgba(103, 232, 249, 0.9)",
-                    boxShadow: "0 2px 0 rgba(30, 64, 175, 0.9), 0 3px 10px rgba(34, 211, 238, 0.28)",
-                  }}
-                >
-                  {"Лимит закончился — купить +50 за 5 ❤"}
-                </button>
-              )}
-              {isMyTurn ? (
-                <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto">
-                  {availableActions.map(action => {
-                    const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                    const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                    const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                    return (
-                      <button
-                        key={action.id}
-                        onClick={() => handlePerformAction(action.id)}
-                        disabled={!canAfford}
-                        className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-bold text-[13px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                        style={{
-                          background: style.bg,
-                          color: style.text,
-                          border: `2px solid ${style.border}`,
-                          boxShadow: `0 2px 0 ${style.shadow}, 0 3px 6px rgba(0,0,0,0.3)`,
-                        }}
-                      >
-                        {renderActionIcon(action)}
-                        <span className="flex-1 text-left truncate">{action.label}</span>
-                        {shouldShowActionCostBadge(action.id, actionCost) && (
-                          <span className="flex items-center gap-0.5 text-[13px] opacity-90 shrink-0">
-                            {actionCost}
-                            <Heart className="h-3 w-3" fill="currentColor" />
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : currentUser && !currentUser.isBot &&
-                (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
-                <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto">
-                  {availableActions.map(action => {
-                    const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                    const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                    const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                    return (
-                      <button
-                        key={action.id}
-                        type="button"
-                        disabled={!canAfford}
-                        onClick={() => handleResponseEmotion(action.id)}
-                        className="flex items-center justify-start gap-2 rounded-lg px-2.5 py-2 font-semibold text-[13px] transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                        style={{
-                          background: style.bg,
-                          color: style.text,
-                          border: `1px solid ${style.border}`,
-                          boxShadow: `0 1px 0 ${style.shadow}, 0 2px 4px rgba(0,0,0,0.25)`,
-                        }}
-                      >
-                        {renderActionIcon(action)}
-                        <span className="flex-1 text-left truncate">{action.label}</span>
-                        {shouldShowActionCostBadge(action.id, actionCost) && (
-                          <span className="flex items-center gap-0.5 text-[13px] opacity-90 shrink-0">
-                            {actionCost}
-                            <Heart className="h-3 w-3" fill="currentColor" />
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) + кнопка «Крутить вне очереди»; на мобильной — ниже и крупнее ---- */}
-        <div className="mt-6 md:mt-1.5 lg:mt-6 mb-0.5 flex min-h-[72px] md:min-h-[64px] lg:min-h-[80px] w-full flex-col items-center justify-center gap-2 md:gap-1.5 lg:gap-3 px-2 shrink-0">
+        <div
+          ref={underBoardStatusRef}
+          className="mt-2 md:mt-1.5 lg:mt-6 mb-0.5 flex min-h-[58px] md:min-h-[64px] lg:min-h-[80px] w-full flex-col items-center justify-center gap-1.5 md:gap-1.5 lg:gap-3 px-2 shrink-0"
+        >
           <div className="flex flex-wrap items-center justify-center gap-2.5 md:gap-2 lg:gap-4">
             {/* Who's turn label */}
             {!isSpinning && !showResult && countdown === null && currentTurnPlayer && (
@@ -4479,11 +4619,30 @@ export function GameRoom() {
 
         {/* ---- Общий чат под столом (мобильная и планшет); на планшете — по ширине как игровое поле ---- */}
         <div
-          className={`mt-2 sm:mt-1 w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 lg:hidden pb-0 ${isTablet ? "md:mx-auto" : ""} ${isMobileOrTablet ? (mobileChatCollapsed ? "mt-auto shrink-0" : "mt-4 flex-1 min-h-0 flex flex-col min-h-[140px]") : "shrink-0"}`}
-          style={isTablet ? { width: "min(92vw, calc(100vh - 260px))", maxWidth: "720px", marginLeft: "auto", marginRight: "auto" } : undefined}
+          className={`w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 lg:hidden pb-0 ${
+            isTablet ? "md:mx-auto" : ""
+          } ${
+            isMobileOrTablet
+              ? `fixed inset-x-0 bottom-0 z-[29] mx-auto shrink-0 flex flex-col ${!mobileChatCollapsed ? "min-h-0" : ""}`
+              : "mt-2 sm:mt-1 shrink-0"
+          }`}
+          style={
+            isMobileOrTablet
+              ? {
+                  width: isTablet ? "min(92vw, calc(100vh - 260px))" : "min(95vw, 720px)",
+                  maxWidth: "720px",
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+                  ...(!mobileChatCollapsed ? { top: mobileOpenChatTop } : {}),
+                }
+              : (isTablet
+                ? { width: "min(92vw, calc(100vh - 260px))", maxWidth: "720px", marginLeft: "auto", marginRight: "auto" }
+                : undefined)
+          }
         >
           <div
-            className={`overflow-hidden flex flex-col shrink-0 ${isMobileOrTablet ? "rounded-2xl" : "rounded-xl"} ${isMobileOrTablet && !mobileChatCollapsed ? "flex-1 min-h-0 flex flex-col max-h-full" : ""}`}
+            className={`overflow-hidden flex flex-col shrink-0 ${isMobileOrTablet ? "rounded-2xl" : "rounded-xl"} ${isMobileOrTablet && !mobileChatCollapsed ? "min-h-0 flex-1 flex flex-col h-full max-h-full" : ""}`}
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
               border: "1px solid rgba(71, 85, 105, 0.6)",
@@ -4514,7 +4673,10 @@ export function GameRoom() {
             </button>
             {!mobileChatCollapsed && (
             <>
-            <div className="px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-y-auto max-h-[min(40vh,280px)] overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
+            <div
+              className={`px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-y-auto overscroll-contain ${isMobileOrTablet ? "" : "max-h-[min(52vh,380px)]"}`}
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
               {generalChatMessages.slice(-4).map((msg) => (
                 <div key={msg.id} className="text-[11px] leading-tight">
                   <span className="font-semibold" style={{ color: "#e8c06a" }}>{msg.senderName}:</span>
@@ -4551,6 +4713,7 @@ export function GameRoom() {
                   }
                 }}
                 className="flex-1 min-w-0 rounded-lg px-2.5 py-1.5 text-[12px] bg-slate-800/80 border border-slate-600 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                aria-label="Поле общего чата"
               />
               <button
                 type="button"
@@ -4573,6 +4736,7 @@ export function GameRoom() {
                 disabled={!generalChatInput.trim()}
                 className="shrink-0 rounded-lg p-1.5 transition-opacity disabled:opacity-40"
                 style={{ background: "rgba(251, 191, 36, 0.25)", border: "1px solid rgba(251, 191, 36, 0.5)", color: "#fef3c7" }}
+                aria-label="Отправить сообщение в общий чат"
               >
                 <Send className="h-4 w-4" />
               </button>
@@ -4803,6 +4967,7 @@ export function GameRoom() {
                   borderBottom: "1px solid rgba(92,58,36,0.8)",
                   color: "#f0e0c8",
                 }}
+                aria-label="Поле чата стола"
               />
               <button
                 onClick={handleSendChat}
@@ -4810,6 +4975,7 @@ export function GameRoom() {
                 style={{
                   background: "linear-gradient(180deg, #3498db 0%, #2980b9 100%)",
                 }}
+                aria-label="Отправить сообщение в чат"
               >
                 <Send className="h-3.5 w-3.5" style={{ color: "#fff" }} />
               </button>
@@ -4820,331 +4986,13 @@ export function GameRoom() {
         )}
       </div>
 
-      {/* ---- МОБИЛЬНАЯ БОКОВАЯ КОЛОНКА ИКОНОК + ВЫЕЗЖАЮЩЕЕ МЕНЮ (< md) ---- */}
-      <div
-        className="pointer-events-none md:hidden fixed left-0 top-0 bottom-0 z-[42] flex w-[52px] flex-col items-stretch justify-end pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] pl-1.5 pt-[max(5rem,env(safe-area-inset-top))]"
-        aria-hidden={!mobileSideDrawerOpen}
-      >
-        <div className="pointer-events-auto flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => setMobileSideDrawerOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform active:scale-95"
-            style={{
-              background: "rgba(15, 23, 42, 0.92)",
-              borderColor: "rgba(71, 85, 105, 0.85)",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.45)",
-            }}
-            aria-label="Открыть полное меню стола"
-            aria-expanded={mobileSideDrawerOpen}
-          >
-            <Menu className="h-5 w-5" style={{ color: "#e8c06a" }} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowRatingModal(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform active:scale-95"
-            style={{
-              background: "rgba(15, 23, 42, 0.92)",
-              borderColor: "rgba(71, 85, 105, 0.85)",
-            }}
-            aria-label="Рейтинг"
-          >
-            <Trophy className="h-5 w-5" style={{ color: "#e8c06a" }} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowChatListModal(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform active:scale-95"
-            style={{
-              background: "rgba(15, 23, 42, 0.92)",
-              borderColor: "rgba(71, 85, 105, 0.85)",
-            }}
-            aria-label="Сообщения"
-          >
-            <MessageCircle className="h-5 w-5" style={{ color: "#e8c06a" }} />
-          </button>
-          {currentUser && (
-            <button
-              type="button"
-              onClick={() => setShowDailyTasksModal(true)}
-              className="flex h-11 w-11 items-center justify-center rounded-full border shadow-lg transition-transform active:scale-95"
-              style={{
-                background: "rgba(15, 23, 42, 0.92)",
-                borderColor: "rgba(71, 85, 105, 0.85)",
-              }}
-              aria-label="Ежедневные задачи"
-            >
-              <Sparkles className="h-5 w-5" style={{ color: "#e8c06a" }} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {mobileSideDrawerOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-[43] bg-black/55 backdrop-blur-[2px] md:hidden"
-            aria-hidden
-            onClick={() => setMobileSideDrawerOpen(false)}
-          />
-          <div
-            className="fixed left-0 top-0 z-[44] flex h-full w-[min(300px,88vw)] flex-col overflow-y-auto shadow-2xl md:hidden"
-            style={{
-              background: "linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(10, 15, 30, 0.99) 100%)",
-              borderRight: "1px solid rgba(71, 85, 105, 0.5)",
-              paddingTop: "max(0.5rem, env(safe-area-inset-top))",
-              paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Меню стола"
-          >
-            <div
-              className="flex items-center justify-between border-b px-3 py-2.5 mb-2 shrink-0"
-              style={{ borderColor: "rgba(71,85,105,0.45)" }}
-            >
-              <span className="text-sm font-bold" style={{ color: "#e8c06a" }}>
-                Меню стола
-              </span>
-              <button
-                type="button"
-                onClick={() => setMobileSideDrawerOpen(false)}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-700/60"
-                aria-label="Закрыть"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 px-3 pb-8">
-              <div
-                className="flex w-full min-w-0 items-center gap-2 rounded-[999px] px-3 py-2.5"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                }}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
-                  <span className="text-[14px] font-bold shrink-0" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
-                  <span className="min-w-0 truncate text-[12px]" style={{ color: "#cbd5e1" }}>
-                    Ваш банк
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    dispatch({ type: "SET_SCREEN", screen: "shop" })
-                    setMobileSideDrawerOpen(false)
-                  }}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
-                  style={{
-                    border: "1px solid rgba(56,189,248,0.5)",
-                    color: "#7dd3fc",
-                    background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-                  }}
-                  title="Пополнить банк"
-                  aria-label="Открыть магазин сердец"
-                >
-                  <Plus className="h-[18px] w-[18px]" strokeWidth={2.75} aria-hidden />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch({ type: "SET_SCREEN", screen: "shop" })
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110 active:scale-[0.99]"
-                style={{
-                  background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)",
-                  border: "1px solid rgba(245, 158, 11, 0.8)",
-                  color: "#1f2937",
-                }}
-              >
-                <Gift className="h-4 w-4 shrink-0" />
-                Магазин
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch({ type: "SET_SCREEN", screen: "profile" })
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <User className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                Профиль
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBottleCatalog(true)
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <span className="text-base" aria-hidden>
-                  🍾
-                </span>
-                Бутылочка
-                {cooldownLeftMs > 0 && (
-                  <span className="ml-auto text-xs font-semibold" style={{ color: "#e8c06a" }}>
-                    {formatCooldown(cooldownLeftMs)}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleChangeTable()
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <RotateCw className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                Сменить стол
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRatingModal(true)
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <Trophy className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                Рейтинг
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch({ type: "SET_SCREEN", screen: "favorites" })
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <Star className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                Избранное
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowChatListModal(true)
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                Сообщения
-              </button>
-              {currentUser && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDailyTasksModal(true)
-                    setMobileSideDrawerOpen(false)
-                  }}
-                  className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                    border: "1px solid rgba(56,189,248,0.28)",
-                    color: "#f0e0c8",
-                  }}
-                >
-                  <Sparkles className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                  Ежедневные задачи
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch({ type: "SET_SCREEN", screen: "ugadaika" })
-                  setMobileSideDrawerOpen(false)
-                }}
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2.5 font-semibold text-[13px] transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  color: "#f0e0c8",
-                }}
-              >
-                <span className="text-base" aria-hidden>
-                  💕
-                </span>
-                Угадай-ка
-              </button>
-              <div
-                className="flex items-center gap-2 rounded-[999px] px-3 py-2 text-[11px]"
-                style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)", color: "#94a3b8" }}
-              >
-                <RotateCw className="h-3.5 w-3.5 shrink-0" />
-                Столов в игре: {tablesCount ?? "—"}
-              </div>
-              {!isMyTurn && !isSpinning && !showResult && countdown === null && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleExtraSpin()
-                    setMobileSideDrawerOpen(false)
-                  }}
-                  disabled={voiceBalance < 10}
-                  className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[12px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                  style={{
-                    background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
-                    color: "#fff",
-                    border: "2px solid #7d3c98",
-                    boxShadow: "0 2px 0 #5b2c6f",
-                  }}
-                >
-                  <RotateCw className="h-4 w-4 shrink-0" />
-                  Крутить вне очереди (10 ❤)
-                </button>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
       {/* ---- МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ ---- */}
       <nav
-        className={`fixed inset-x-0 bottom-0 flex md:hidden items-center justify-around border-t px-2 py-2 ${showMobileMoreMenu ? "z-[100]" : "z-30"}`}
+        className={`fixed inset-x-0 top-0 flex md:hidden items-center justify-around border-b px-2 py-2 ${showMobileMoreMenu ? "z-[100]" : "z-30"}`}
         style={{
           background: "linear-gradient(180deg, rgba(15,8,3,0.98) 0%, rgba(10,5,2,0.99) 100%)",
           borderColor: "rgba(92,58,36,0.9)",
-          paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
+          paddingTop: "max(0.5rem, env(safe-area-inset-top))",
         }}
       >
         <button
@@ -5187,12 +5035,13 @@ export function GameRoom() {
           <button
             type="button"
             onClick={() => setShowMobileMoreMenu((v) => !v)}
-            className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 min-w-[64px] touch-manipulation transition-opacity active:opacity-80"
+            className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-2 min-w-[56px] touch-manipulation transition-opacity active:opacity-80"
             style={{ color: "#f0e0c8" }}
             aria-expanded={showMobileMoreMenu}
+            aria-label="Меню стола"
           >
-            <Zap className="h-5 w-5" />
-            <span className="text-[10px] font-semibold">Ещё</span>
+            <Menu className="h-5 w-5" style={{ color: "#e8c06a" }} />
+            <span className="text-[10px] font-semibold leading-tight text-center">Стол</span>
           </button>
           {showMobileMoreMenu && (
             <>
@@ -5202,63 +5051,86 @@ export function GameRoom() {
                 onClick={() => setShowMobileMoreMenu(false)}
               />
               <div
-                className="fixed right-4 left-auto z-[2] flex w-48 flex-col rounded-xl border py-2 shadow-xl"
+                className="fixed right-2 left-auto z-[2] flex w-[min(17rem,calc(100vw-1rem))] max-h-[min(70vh,420px)] flex-col overflow-y-auto rounded-xl border py-2 shadow-xl"
                 style={{
-                  bottom: "calc(4.5rem + max(0.5rem, env(safe-area-inset-bottom)))",
+                  top: "calc(4.5rem + max(0.5rem, env(safe-area-inset-top)))",
                   background: "rgba(19,10,4,0.98)",
                   borderColor: "#334155",
                 }}
+                role="menu"
+                aria-label="Меню стола"
               >
+                <div
+                  className="mx-2 mb-2 flex min-w-0 items-center gap-2 rounded-[999px] px-3 py-2"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                    border: "1px solid rgba(56,189,248,0.28)",
+                  }}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
+                    <span className="text-sm font-bold shrink-0" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+                    <span className="min-w-0 truncate text-xs" style={{ color: "#cbd5e1" }}>
+                      Ваш банк
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dispatch({ type: "SET_SCREEN", screen: "shop" })
+                      setShowMobileMoreMenu(false)
+                    }}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
+                    style={{
+                      border: "1px solid rgba(56,189,248,0.5)",
+                      color: "#7dd3fc",
+                      background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                    }}
+                    title="Пополнить банк"
+                    aria-label="Открыть магазин сердец"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => { setShowBottleCatalog(true); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
-                  <span aria-hidden>🍾</span>
-                  Бутылочка
+                  <span className="flex items-center gap-2">
+                    <span aria-hidden>🍾</span>
+                    Бутылочка
+                  </span>
+                  {cooldownLeftMs > 0 && (
+                    <span className="text-xs font-semibold shrink-0" style={{ color: "#e8c06a" }}>
+                      {formatCooldown(cooldownLeftMs)}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => { handleChangeTable(); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
-                  <RotateCw className="h-4 w-4" />
+                  <RotateCw className="h-4 w-4 shrink-0" />
                   Сменить стол
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setMusicEnabled((v) => !v); setShowMobileMoreMenu(false) }}
-                  title="Громкость"
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
-                  style={{ color: "#f0e0c8" }}
-                >
-                  <span aria-hidden>{musicEnabled ? "🔊" : "🔇"}</span>
-                  {musicEnabled ? "Музыка вкл" : "Музыка выкл"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false }); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
-                  style={{ color: "#f0e0c8" }}
-                >
-                  <span aria-hidden>{soundsEnabled === false ? "🔇" : "🔊"}</span>
-                  {soundsEnabled === false ? "Звуки выкл" : "Звуки вкл"}
-                </button>
-                <button
-                  type="button"
                   onClick={() => { setShowRatingModal(true); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
-                  <Trophy className="h-4 w-4" />
+                  <Trophy className="h-4 w-4 shrink-0" />
                   Рейтинг
                 </button>
                 <button
                   type="button"
                   onClick={() => { dispatch({ type: "SET_SCREEN", screen: "ugadaika" }); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
                   <span aria-hidden>💕</span>
@@ -5267,20 +5139,68 @@ export function GameRoom() {
                 <button
                   type="button"
                   onClick={() => { setShowChatListModal(true); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-white/10"
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  <MessageCircle className="h-4 w-4 shrink-0" />
                   Сообщения
+                </button>
+                {currentUser && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowDailyTasksModal(true); setShowMobileMoreMenu(false) }}
+                    className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
+                    style={{ color: "#f0e0c8" }}
+                  >
+                    <Sparkles className="h-4 w-4 shrink-0" />
+                    Ежедневные задачи
+                  </button>
+                )}
+                <div
+                  className="mx-2 my-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+                  style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)", color: "#94a3b8" }}
+                >
+                  <RotateCw className="h-3.5 w-3.5 shrink-0" />
+                  Столов в игре: {tablesCount ?? "—"}
+                </div>
+                {!isMyTurn && !isSpinning && !showResult && countdown === null && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleExtraSpin()
+                      setShowMobileMoreMenu(false)
+                    }}
+                    disabled={voiceBalance < 10}
+                    className="mx-2 mb-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                    style={{
+                      background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
+                      color: "#fff",
+                      border: "2px solid #7d3c98",
+                      boxShadow: "0 2px 0 #5b2c6f",
+                    }}
+                  >
+                    <RotateCw className="h-4 w-4 shrink-0" />
+                    Крутить вне очереди (10 ❤)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setMusicEnabled((v) => !v); setShowMobileMoreMenu(false) }}
+                  title="Громкость"
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
+                  style={{ color: "#f0e0c8" }}
+                >
+                  <span aria-hidden>{musicEnabled ? "🔊" : "🔇"}</span>
+                  {musicEnabled ? "Музыка вкл" : "Музыка выкл"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowDailyTasksModal(true); setShowMobileMoreMenu(false) }}
-                  className="flex items-center justify-start gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
+                  onClick={() => { dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false }); setShowMobileMoreMenu(false) }}
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
-                  <Sparkles className="h-4 w-4" />
-                  Ежедневные задачи
+                  <span aria-hidden>{soundsEnabled === false ? "🔇" : "🔊"}</span>
+                  {soundsEnabled === false ? "Звуки выкл" : "Звуки вкл"}
                 </button>
               </div>
             </>
@@ -5288,7 +5208,7 @@ export function GameRoom() {
         </div>
       </nav>
 
-      {/* ---- ЕЖЕДНЕВНЫЕ ЗАДАЧИ — модальное окно (открывается по кнопке «Ещё» или из сайдбара) ---- */}
+      {/* ---- ЕЖЕДНЕВНЫЕ ЗАДАЧИ — модальное окно (из меню «Стол» или сайдбара) ---- */}
       {currentUser && showDailyTasksModal && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 md:p-4"
