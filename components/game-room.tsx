@@ -401,6 +401,7 @@ export function GameRoom() {
         if (snap.revision > since) {
           applyAuthoritySnapshot(snap)
         }
+        setTableAuthorityReady(true)
       } catch {
         // ignore
       }
@@ -408,10 +409,13 @@ export function GameRoom() {
     [applyAuthoritySnapshot],
   )
 
-  // Локальный лоадер при входе/смене стола, чтобы скрыть «скачки» при расстановке игроков
+  // Локальный лоадер при входе/смене стола: ждём реальной готовности live-состава и authority.
   const [tableLoading, setTableLoading] = useState(true)
   const [tableLoaderProgress, setTableLoaderProgress] = useState(0)
   const lastTableIdRef = useRef<number | null>(null)
+  const [tableLiveReady, setTableLiveReady] = useState(false)
+  const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
+  const tableLoadStartedAtRef = useRef<number>(Date.now())
   const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
 
   const { toast, showToast } = useInlineToast(2000)
@@ -468,6 +472,7 @@ export function GameRoom() {
           dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
         }
         await fetchTableAuthority(nextTableId)
+        setTableLiveReady(true)
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
         return null
@@ -483,19 +488,41 @@ export function GameRoom() {
       lastTableIdRef.current = tableId
       setTableLoading(true)
     }
+    tableLoadStartedAtRef.current = Date.now()
+    setTableLiveReady(false)
+    setTableAuthorityReady(false)
     setTableLoaderProgress(0)
-    const stepTimers = TABLE_LOADER_PROGRESS_STEPS.map(({ pct, at }) =>
+    const stepTimers = TABLE_LOADER_PROGRESS_STEPS
+      .filter((s) => s.pct < 100)
+      .map(({ pct, at }) =>
       setTimeout(() => setTableLoaderProgress(pct), at),
     )
+    // Fail-safe, чтобы не зависнуть бесконечно при плохой сети/API.
     const done = setTimeout(() => {
+      setTableLoaderProgress(100)
       setTableLoading(false)
       setTableLoaderProgress(0)
-    }, TABLE_LOADER_DURATION_MS)
+    }, Math.max(TABLE_LOADER_DURATION_MS + 6500, 9000))
     return () => {
       stepTimers.forEach(clearTimeout)
       clearTimeout(done)
     }
   }, [tableId])
+
+  useEffect(() => {
+    if (!tableLoading) return
+    const hasPlayers = players.length > 0
+    const minDurationPassed = Date.now() - tableLoadStartedAtRef.current >= 1200
+    const ready = hasPlayers && tableLiveReady && tableAuthorityReady && minDurationPassed
+    if (!ready) return
+
+    setTableLoaderProgress(100)
+    const done = setTimeout(() => {
+      setTableLoading(false)
+      setTableLoaderProgress(0)
+    }, 250)
+    return () => clearTimeout(done)
+  }, [tableLoading, players.length, tableLiveReady, tableAuthorityReady])
 
   // Синхронизация живых игроков за столом: если кто-то подключился,
   // добавляем его в список и убираем лишнего бота.
@@ -686,7 +713,7 @@ export function GameRoom() {
   const [welcomeClaimedForSession, setWelcomeClaimedForSession] = useState(false)
 
   useEffect(() => {
-    if (!currentUser) return
+    if (!currentUser || tableLoading) return
     try {
       const raw = localStorage.getItem(WELCOME_GIFT_KEY)
       const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
@@ -704,7 +731,7 @@ export function GameRoom() {
     } catch {
       setShowWelcomeGift(true)
     }
-  }, [currentUser?.id, currentUser?.authProvider, voiceBalance])
+  }, [currentUser?.id, currentUser?.authProvider, voiceBalance, tableLoading])
 
   const handleClaimWelcomeGift = useCallback(() => {
     dispatch({ type: "CLAIM_WELCOME_GIFT" })
@@ -741,7 +768,7 @@ export function GameRoom() {
   }, [])
 
   useEffect(() => {
-    if (!currentUser) return
+    if (!currentUser || tableLoading) return
     try {
       // Сначала показываем приветственный подарок при первом заходе
       const welcomeRaw = localStorage.getItem(WELCOME_GIFT_KEY)
@@ -772,7 +799,7 @@ export function GameRoom() {
       setDailyClaimedToday(false)
       setDailyOpen(false)
     }
-  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession])
+  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession, tableLoading])
 
   const _handleClaimDaily = useCallback(() => {
     if (dailyClaimedToday) return
