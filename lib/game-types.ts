@@ -258,6 +258,8 @@ export interface GameState {
     dateKey: string
     extraPerType: number
   }
+  /** Если true — пользователь поставил «паузу»: вышел из live-стола и не синхронизируется, пока не возобновит. */
+  tablePaused?: boolean
 }
 
 export type GameAction =
@@ -332,5 +334,6 @@ export type GameAction =
   | { type: "SET_SOUNDS_ENABLED"; enabled: boolean }
   /** Магазин: добавить пакет эмоций на сегодня (например, +50 к каждому лимитируемому виду). */
   | { type: "BUY_EMOTION_PACK"; cost: number; extraPerType: number; dateKey: string }
+  | { type: "SET_TABLE_PAUSED"; paused: boolean }
   /** Подтянуть состояние стола с сервера (не отправляется на сервер) */
   | { type: "SYNC_TABLE_AUTHORITY"; payload: TableAuthorityPayload }

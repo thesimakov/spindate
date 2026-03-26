@@ -325,6 +325,7 @@ export function GameRoom() {
     soundsEnabled,
     generalChatMessages = [],
     emotionDailyBoost,
+    tablePaused,
   } = state
 
   const remoteActionRef = useRef(false)
@@ -500,7 +501,7 @@ export function GameRoom() {
   // добавляем его в список и убираем лишнего бота.
   // При возврате фокуса синхронизируемся немедленно (setInterval ненадёжен в фоновых вкладках).
   useEffect(() => {
-    if (!currentUser) return
+    if (!currentUser || tablePaused) return
     let cancelled = false
 
     const tick = async () => {
@@ -530,7 +531,7 @@ export function GameRoom() {
 
   // Повторная подтяжка списка живых игроков в середине лоадера — меньше расхождения между клиентами.
   useEffect(() => {
-    if (!tableLoading || !currentUser) return
+    if (!tableLoading || !currentUser || tablePaused) return
     const t = setTimeout(() => {
       void syncLiveTable("sync")
     }, 1200)
@@ -539,7 +540,7 @@ export function GameRoom() {
 
   // Авторитетное состояние стола с сервера (фаза раунда, спин, очередь, лог, общий чат).
   useEffect(() => {
-    if (!currentUser) return
+    if (!currentUser || tablePaused) return
     let cancelled = false
 
     const poll = async () => {
@@ -2755,6 +2756,40 @@ export function GameRoom() {
         </div>
       )}
 
+      {/* Пауза: пользователь вышел из live-стола */}
+      {tablePaused && currentUser && (
+        <div className="fixed inset-0 z-[46] flex items-center justify-center bg-black/45 p-6 backdrop-blur-md">
+          <div
+            className="w-full max-w-md rounded-2xl border px-5 py-5 text-center shadow-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(2,6,23,0.98) 100%)",
+              borderColor: "rgba(148,163,184,0.25)",
+            }}
+          >
+            <p className="text-lg font-extrabold text-slate-100">Пауза</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Вы вышли из стола и не участвуете в очереди. Нажмите «Возобновить», чтобы вернуться за стол.
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                dispatch({ type: "SET_TABLE_PAUSED", paused: false })
+                await syncLiveTable("join", false)
+                showToast("Вы вернулись за стол", "success")
+              }}
+              className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-bold text-slate-950 transition-all hover:brightness-110 active:scale-[0.99]"
+              style={{
+                background: "linear-gradient(135deg, #22d3ee 0%, #6366f1 100%)",
+                border: "1px solid rgba(125,211,252,0.6)",
+                boxShadow: "0 2px 0 rgba(15,23,42,0.85)",
+              }}
+            >
+              Возобновить
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
       <div
         className={`fixed z-40 flex gap-1.5 rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${isMobileOrTablet ? "left-2 top-2 flex-row items-center" : "left-1 top-1 flex-col"}`}
@@ -3371,6 +3406,42 @@ export function GameRoom() {
             <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
           </button>
 
+          {/* Пауза: выйти из live-стола (явно) */}
+          {currentUser && (
+            <button
+              type="button"
+              onClick={() => {
+                // Явно освобождаем место за live-столом и отключаем синхронизацию, пока пользователь не возобновит.
+                const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
+                try {
+                  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+                    navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
+                  } else {
+                    void fetch("/api/table/live", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      keepalive: true,
+                      body: payload,
+                    }).catch(() => {})
+                  }
+                } catch {
+                  // ignore
+                }
+                dispatch({ type: "SET_TABLE_PAUSED", paused: true })
+                showToast("Пауза включена — вы покинули стол", "info")
+              }}
+              className={sideBtnClass}
+              style={{
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                border: "1px solid rgba(239,68,68,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+              }}
+            >
+              <span className="text-base" aria-hidden>{"⏸"}</span>
+              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Пауза"}</span>
+            </button>
+          )}
+
           {/* Рейтинг */}
           <button
             onClick={() => setShowRatingModal(true)}
@@ -3752,49 +3823,57 @@ export function GameRoom() {
             </div>
           </div>
         )}
-        {/* Статус подаренной бутылки */}
-        {bottleDonorName && (
+        {/* Инфо-статусы сверху: донор бутылки + таймер (таймер ниже статуса, без наложений) */}
+        {(bottleDonorName || (currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
           <div
-            className="absolute top-1 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold lg:top-5"
-            style={{
-              background: "rgba(15,23,42,0.9)",
-              border: "1px solid #475569",
-              boxShadow: "0 3px 10px rgba(0,0,0,0.6)",
-              color: "#f0e0c8",
-            }}
+            className="absolute top-1 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2 lg:top-5"
           >
-            <span>
-              {"Бутылку нашему столу подарил(а): "}
-              <span style={{ color: "#e8c06a" }}>{bottleDonorName}</span>
-            </span>
-            <button
-              onClick={handleThankDonor}
-              className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:brightness-110 active:scale-95"
-              style={{
-                background: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)",
-                border: "1px solid #166534",
-                color: "#ecfdf5",
-              }}
-            >
-              {"Спасибо"}
-            </button>
-          </div>
-        )}
+            {/* Статус подаренной бутылки */}
+            {bottleDonorName && (
+              <div
+                className="flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold"
+                style={{
+                  background: "rgba(15,23,42,0.9)",
+                  border: "1px solid #475569",
+                  boxShadow: "0 3px 10px rgba(0,0,0,0.6)",
+                  color: "#f0e0c8",
+                }}
+              >
+                <span>
+                  {"Бутылку нашему столу подарил(а): "}
+                  <span style={{ color: "#e8c06a" }}>{bottleDonorName}</span>
+                </span>
+                <button
+                  onClick={handleThankDonor}
+                  className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:brightness-110 active:scale-95"
+                  style={{
+                    background: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)",
+                    border: "1px solid #166534",
+                    color: "#ecfdf5",
+                  }}
+                >
+                  {"Спасибо"}
+                </button>
+              </div>
+            )}
 
-        {/* Таймер хода для текущего пользователя */}
-        {currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
-          <div className="absolute top-4 left-1/2 z-30 -translate-x-1/2 flex items-center gap-1.5 rounded-full px-3 py-1"
-            style={{
-              background: "rgba(15,23,42,0.9)",
-              border: "1px solid rgba(248, 250, 252, 0.3)",
-              boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
-            }}
-          >
-            <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
-            <span className="text-sm font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
-              {turnTimer}
-            </span>
-            <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
+            {/* Таймер хода для текущего пользователя */}
+            {currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
+              <div
+                className="flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={{
+                  background: "rgba(15,23,42,0.9)",
+                  border: "1px solid rgba(248, 250, 252, 0.3)",
+                  boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
+                }}
+              >
+                <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
+                <span className="text-sm font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
+                  {turnTimer}
+                </span>
+                <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
+              </div>
+            )}
           </div>
         )}
         {/* Обёртка игрового поля + статуса: при свёрнутом чате — flex-1 и центрирование; при открытом — без flex-1, чтобы чат заполнил пространство до низа */}

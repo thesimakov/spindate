@@ -73,6 +73,7 @@ const initialState: GameState = {
     dateKey: "",
     extraPerType: 0,
   },
+  tablePaused: false,
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -444,6 +445,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
     }
+
+    case "SET_TABLE_PAUSED":
+      return { ...state, tablePaused: action.paused }
 
     // ---- Daily quests ----
     case "CLAIM_DAILY_QUEST": {

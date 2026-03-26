@@ -21,7 +21,7 @@ import { vkBridge } from "@/lib/vk-bridge"
 
 export function ShopScreen() {
   const { state, dispatch } = useGame()
-  const { currentUser, voiceBalance, players, inventory, emotionDailyBoost } = state
+  const { currentUser, voiceBalance, players, inventory, emotionDailyBoost, tableId } = state
   const { toast, showToast } = useInlineToast(1700)
   const rosesCount = inventory.filter((i) => i.type === "rose").length
   const [exchangeTab, setExchangeTab] = useState<"voices-to-roses" | "roses-to-voices">("voices-to-roses")
@@ -96,6 +96,34 @@ export function ShopScreen() {
     }
   }, [vipTrialKey])
 
+  const runLiveKeepAlive = async (user: typeof currentUser, ms: number) => {
+    if (!user) return () => {}
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled) return
+      try {
+        await fetch("/api/table/live", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            mode: "sync",
+            user,
+            tableId,
+          }),
+        })
+      } catch {
+        // ignore
+      }
+    }
+    await tick()
+    const t = setInterval(() => void tick(), ms)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+  }
+
   const handleActivateVip = async ({
     days,
     cost,
@@ -121,7 +149,9 @@ export function ShopScreen() {
     }
 
     if (cost > 0) {
+      const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
       const ok = await vkBridge.showPaymentWall(cost, itemId)
+      stopKeepAlive()
       if (!ok) {
         showToast("Активация VIP отменена", "error")
         return
@@ -153,7 +183,9 @@ export function ShopScreen() {
   }
 
   const handleTopUp = async (amount: number, votes: number, itemId: string) => {
+    const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
     const ok = await vkBridge.showPaymentWall(votes, itemId)
+    stopKeepAlive()
     if (!ok) {
       showToast("Пополнение отменено", "error")
       return
