@@ -123,6 +123,14 @@ export function applyTableAuthorityAction(
         },
       }
     }
+    case "SET_BOTTLE_SKIN":
+      return { ...snapshot, bottleSkin: action.skin }
+    case "SET_BOTTLE_DONOR":
+      return {
+        ...snapshot,
+        bottleDonorId: action.playerId,
+        bottleDonorName: action.playerName,
+      }
     default:
       return null
   }

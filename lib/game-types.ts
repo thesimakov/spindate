@@ -65,6 +65,8 @@ export interface GameLogEntry {
     | "cocktail"
     | "prediction"
     | "care"
+    /** Благодарность дарителю бутылочки (⭐ на столе у всех, в т.ч. у донора) */
+    | "bottle_thanks"
   fromPlayer?: Player
   toPlayer?: Player
   text: string
@@ -79,6 +81,11 @@ export interface TableAuthorityPayload {
   isSpinning: boolean
   countdown: number | null
   bottleAngle: number
+  /** Скин бутылки на столе — общий для всех игроков за столом */
+  bottleSkin?: BottleSkin
+  /** Кто последним купил бутылочку для стола (баннер «Спасибо») */
+  bottleDonorId?: number
+  bottleDonorName?: string
   targetPlayer: Player | null
   targetPlayer2: Player | null
   showResult: boolean

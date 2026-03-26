@@ -275,6 +275,8 @@ function isTableSyncedAction(action: GameAction): boolean {
     case "SEND_GENERAL_CHAT":
     case "SET_AVATAR_FRAME":
     case "ADD_DRUNK_TIME":
+    case "SET_BOTTLE_SKIN":
+    case "SET_BOTTLE_DONOR":
       return true
     default:
       return false
@@ -902,8 +904,6 @@ export function GameRoom() {
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id
-  const myPlayer = players.find(p => p.id === currentUser?.id)
-  const isVip = !!myPlayer?.isVip && (myPlayer.vipUntilTs == null || myPlayer.vipUntilTs > Date.now())
   const nowTs = Date.now()
   const isCurrentTurnDrunk =
     !!currentTurnPlayer &&
@@ -956,10 +956,12 @@ export function GameRoom() {
   }, [bottleCooldownUntil, now])
 
   useEffect(() => {
-    if (!showBottleCatalog) return
+    const cooldownRunning =
+      bottleCooldownUntil != null && bottleCooldownUntil > Date.now()
+    if (!showBottleCatalog && !cooldownRunning) return
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
-  }, [showBottleCatalog])
+  }, [showBottleCatalog, bottleCooldownUntil])
 
   const formatCooldown = (ms: number) => {
     const totalSec = Math.ceil(ms / 1000)
@@ -1474,11 +1476,29 @@ export function GameRoom() {
     }
     const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya"])
 
-    type QueuedEmotion = { fromIdx: number; toIdx: number; type: string; emoji?: string; imgSrc?: string }
+    type QueuedEmotion = {
+      fromIdx: number
+      toIdx: number
+      type: string
+      emoji?: string
+      imgSrc?: string
+      thanksTriple?: boolean
+    }
     const queue: QueuedEmotion[] = []
 
     for (const entry of gameLog) {
       if (seen.has(entry.id)) continue
+
+      if (entry.type === "bottle_thanks" && entry.fromPlayer && entry.toPlayer) {
+        seen.add(entry.id)
+        if (entry.fromPlayer.id === currentUser.id) continue
+        const fromIdx = players.findIndex((p) => p.id === entry.fromPlayer!.id)
+        const toIdx = players.findIndex((p) => p.id === entry.toPlayer!.id)
+        if (fromIdx === -1 || toIdx === -1) continue
+        queue.push({ fromIdx, toIdx, type: entry.type, emoji: "⭐", thanksTriple: true })
+        continue
+      }
+
       seen.add(entry.id)
 
       if (!EMOTION_TYPES.has(entry.type)) continue
@@ -1503,9 +1523,15 @@ export function GameRoom() {
 
     queue.forEach((item, i) => {
       const t = setTimeout(() => {
-        launchEmoji(item.fromIdx, item.toIdx, item.emoji, item.imgSrc)
-        if (item.type === "banya") launchSteam(item.toIdx)
-        playEmotionSound(item.type)
+        if (item.thanksTriple) {
+          for (let j = 0; j < 3; j++) {
+            setTimeout(() => launchEmoji(item.fromIdx, item.toIdx, item.emoji ?? "⭐"), j * 120)
+          }
+        } else {
+          launchEmoji(item.fromIdx, item.toIdx, item.emoji, item.imgSrc)
+          if (item.type === "banya") launchSteam(item.toIdx)
+          playEmotionSound(item.type)
+        }
       }, i * STAGGER_MS)
       remoteEmotionTimersRef.current.push(t)
     })
@@ -1987,7 +2013,9 @@ export function GameRoom() {
         type: "ADD_LOG",
         entry: {
           id: generateLogId(),
-          type: "system",
+          type: "bottle_thanks",
+          fromPlayer,
+          toPlayer: donor,
           text: `${fromPlayer.name} благодарит ${donor.name} за бутылочку`,
           timestamp: Date.now(),
         },
@@ -3749,7 +3777,7 @@ export function GameRoom() {
                       className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-amber-200/90"
                       style={{ background: "rgba(251, 191, 36, 0.12)", border: "1px solid rgba(251, 191, 36, 0.25)" }}
                     >
-                      Блок: {formatCooldown(cooldownLeftMs)}
+                      Покупка: {formatCooldown(cooldownLeftMs)}
                     </span>
                   )}
                 </div>
@@ -3771,14 +3799,12 @@ export function GameRoom() {
               const ownedSet = new Set(ownedBottleSkins ?? ["classic"])
               const isClassicId = (id: typeof bottleSkins[number]["id"]) => id === "classic"
               const isVipId = (id: typeof bottleSkins[number]["id"]) => id === "vip"
-              const isLockedVip = (id: typeof bottleSkins[number]["id"]) => isVipId(id) && !isVip
 
               const entries = bottleSkins.map((skin) => {
                 const owned = ownedSet.has(skin.id)
                 const selected = bottleSkin === skin.id
                 const cooldownActive = cooldownLeftMs > 0
-                const vipLocked = isLockedVip(skin.id)
-                const purchaseLocked = (cooldownActive && !owned && !isClassicId(skin.id)) || vipLocked
+                const purchaseLocked = cooldownActive && !owned && !isClassicId(skin.id)
                 const notEnough = !owned && !isClassicId(skin.id) && voiceBalance < skin.cost
                 const disabled = purchaseLocked || notEnough
 
@@ -3786,23 +3812,17 @@ export function GameRoom() {
                   ? (selected ? "Выбрано" : "Куплено")
                   : isClassicId(skin.id)
                     ? "Бесплатно"
-                    : vipLocked
-                      ? "Только VIP"
-                      : cooldownActive
-                        ? `Через ${formatCooldown(cooldownLeftMs)}`
-                        : `${skin.cost} ❤`
+                    : purchaseLocked
+                      ? `Через ${formatCooldown(cooldownLeftMs)}`
+                      : `${skin.cost} ❤`
 
                 const handleClick = () => {
                   if (owned || isClassicId(skin.id)) {
                     dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
                     return
                   }
-                  if (vipLocked) {
-                    showToast("Эта бутылочка только для VIP", "info")
-                    return
-                  }
-                  if (cooldownActive) {
-                    showToast(`Покупки через ${formatCooldown(cooldownLeftMs)}`, "info")
+                  if (purchaseLocked) {
+                    showToast(`Следующая покупка через ${formatCooldown(cooldownLeftMs)}`, "info")
                     return
                   }
                   if (voiceBalance < skin.cost) {
@@ -3828,17 +3848,8 @@ export function GameRoom() {
                   showToast("Бутылочка куплена", "success")
                 }
 
-                return { skin, owned, selected, vipLocked, disabled, notEnough, purchaseLocked, status, handleClick }
+                return { skin, owned, selected, disabled, notEnough, purchaseLocked, status, handleClick }
               })
-
-              const sortKey = (e: typeof entries[number]) => {
-                if (e.selected) return 0
-                if (isClassicId(e.skin.id)) return 1
-                if (e.owned) return 2
-                if (isVipId(e.skin.id)) return 4
-                return 3
-              }
-              entries.sort((a, b) => sortKey(a) - sortKey(b) || a.skin.name.localeCompare(b.skin.name, "ru"))
 
               const free = entries.filter((e) => isClassicId(e.skin.id))
               const vip = entries.filter((e) => isVipId(e.skin.id))
@@ -3858,13 +3869,11 @@ export function GameRoom() {
                         ? { background: "rgba(34,197,94,0.16)", border: "1px solid rgba(34,197,94,0.28)", color: "#86efac" }
                         : e.owned
                           ? { background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.22)", color: "#bae6fd" }
-                          : e.vipLocked
-                            ? { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.22)", color: "#fde68a" }
-                            : e.purchaseLocked
-                              ? { background: "rgba(148,163,184,0.10)", border: "1px solid rgba(148,163,184,0.18)", color: "#cbd5e1" }
-                              : e.notEnough
-                                ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
-                                : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
+                          : e.purchaseLocked
+                            ? { background: "rgba(148,163,184,0.10)", border: "1px solid rgba(148,163,184,0.18)", color: "#cbd5e1" }
+                            : e.notEnough
+                              ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
+                              : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
 
                       return (
                         <button
@@ -6231,6 +6240,7 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
     song: "#9b59b6",
     rose: "#e74c3c",
     prediction: "#e8c06a",
+    bottle_thanks: "#facc15",
   }
   const accentColor = colorMap[entry.type] ?? "#94a3b8"
 

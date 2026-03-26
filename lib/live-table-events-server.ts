@@ -63,6 +63,8 @@ function isActionAllowed(action: GameAction): boolean {
     case "SEND_GENERAL_CHAT":
     case "SET_AVATAR_FRAME":
     case "ADD_DRUNK_TIME":
+    case "SET_BOTTLE_SKIN":
+    case "SET_BOTTLE_DONOR":
       return true
     default:
       return false
