@@ -1,7 +1,6 @@
 import { AdminLemnityClient } from "./admin-lemnity-client"
 
-/** Чтобы HTML не кэшировался годами со старыми путями к /_next/static (иначе после деплоя — 404 на чанках). */
-export const dynamic = "force-dynamic"
+/** Без `force-dynamic`: иначе `output: "export"` (GitHub Pages) не собирается. Пре-рендер с клиентским блоком ок; чанки обновляются при каждой сборке. Кэш HTML — через headers в next.config на своём сервере. */
 
 export default function AdminLemnityPage() {
   return (
