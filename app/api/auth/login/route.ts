@@ -78,6 +78,7 @@ export async function POST(req: Request) {
     },
     voiceBalance,
     inventory,
+    sessionToken: token,
   })
   setSessionCookie(res, token, expiresAt)
   return res

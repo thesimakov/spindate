@@ -17,6 +17,7 @@ import { InlineToast } from "@/components/ui/inline-toast"
 import { generateLogId, useGame } from "@/lib/game-context"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { listVotesForPack, payVotesForPack } from "@/lib/heart-shop-pricing"
+import { apiFetch } from "@/lib/api-fetch"
 import { vkBridge } from "@/lib/vk-bridge"
 
 export function ShopScreen() {
@@ -102,7 +103,7 @@ export function ShopScreen() {
     const tick = async () => {
       if (cancelled) return
       try {
-        await fetch("/api/table/live", {
+        await apiFetch("/api/table/live", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",

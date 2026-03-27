@@ -80,6 +80,18 @@ function serializeVkLaunchParamsFromBridge(data: Record<string, unknown>): strin
  * Полная строка параметров запуска для POST /api/auth/vk: из URL или VKWebAppGetLaunchParams.
  * Вызывать после initVk().
  */
+function unwrapVkLaunchParamsPayload(raw: unknown): Record<string, unknown> | null {
+  if (raw == null || typeof raw !== "object") return null
+  const o = raw as Record<string, unknown>
+  if (typeof o.sign === "string" && o.vk_user_id != null) return o
+  const inner = o.data
+  if (inner != null && typeof inner === "object") {
+    const d = inner as Record<string, unknown>
+    if (typeof d.sign === "string" && d.vk_user_id != null) return d
+  }
+  return null
+}
+
 export async function ensureVkLaunchSearch(): Promise<string> {
   if (typeof window === "undefined") return ""
   const fromLoc = getVkLaunchSearchFromLocation()
@@ -87,9 +99,10 @@ export async function ensureVkLaunchSearch(): Promise<string> {
   const b = await getBridgeAsync()
   if (!b) return fromLoc
   try {
-    const raw = (await b.send("VKWebAppGetLaunchParams", {})) as Record<string, unknown>
-    if (raw && raw.sign != null && raw.vk_user_id != null) {
-      const ser = serializeVkLaunchParamsFromBridge(raw)
+    const raw = await b.send("VKWebAppGetLaunchParams", {})
+    const payload = unwrapVkLaunchParamsPayload(raw)
+    if (payload) {
+      const ser = serializeVkLaunchParamsFromBridge(payload)
       if (ser) return ser
     }
   } catch {

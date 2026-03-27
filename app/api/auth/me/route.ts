@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
-import { sha256Base64 } from "@/lib/auth/session"
+import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
 
 export async function GET(req: Request) {
-  const token = req.headers.get("cookie")?.match(/(?:^|;\s*)session=([^;]+)/)?.[1] ?? null
+  const token = getSessionTokenFromRequest(req)
   if (!token) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }

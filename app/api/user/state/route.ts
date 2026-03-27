@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
-import { sha256Base64 } from "@/lib/auth/session"
+import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
 
 function getUserIdFromSession(req: Request): string | null {
-  const token = req.headers.get("cookie")?.match(/(?:^|;\s*)session=([^;]+)/)?.[1] ?? null
+  const token = getSessionTokenFromRequest(req)
   if (!token) return null
   const db = getDb()
   const tokenHash = sha256Base64(token)

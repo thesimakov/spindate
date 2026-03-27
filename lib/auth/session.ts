@@ -40,3 +40,21 @@ export function clearSessionCookie(res: NextResponse) {
   })
 }
 
+/** Cookie или заголовок (для VK iframe, где cookie может не сохраняться). */
+export function getSessionTokenFromRequest(req: Request): string | null {
+  const fromHeader = req.headers.get("x-session-token")?.trim()
+  if (fromHeader) return fromHeader
+  const auth = req.headers.get("authorization")?.trim()
+  if (auth?.toLowerCase().startsWith("bearer ")) {
+    const t = auth.slice(7).trim()
+    if (t) return t
+  }
+  const raw = req.headers.get("cookie")?.match(/(?:^|;\s*)session=([^;]+)/)?.[1]
+  if (!raw) return null
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
+

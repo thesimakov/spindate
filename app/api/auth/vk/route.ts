@@ -209,6 +209,7 @@ export async function POST(req: Request) {
       user: userPayload,
       voiceBalance,
       inventory,
+      sessionToken: token,
     },
     token,
     expiresAt,

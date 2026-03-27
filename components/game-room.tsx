@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
+import { apiFetch } from "@/lib/api-fetch"
 import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
@@ -355,7 +356,7 @@ export function GameRoom() {
     const current = syncMetaRef.current
     if (!current.userId || !current.tableId) return
     try {
-      await fetch("/api/table/events", {
+      await apiFetch("/api/table/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -395,7 +396,7 @@ export function GameRoom() {
     async (tid: number) => {
       const since = lastAuthorityRevisionRef.current
       try {
-        const res = await fetch("/api/table/state", {
+        const res = await apiFetch("/api/table/state", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -450,7 +451,7 @@ export function GameRoom() {
     async (mode: "join" | "sync", forceNew = false) => {
       if (!currentUser) return null
       try {
-        const res = await fetch("/api/table/live", {
+        const res = await apiFetch("/api/table/live", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -598,7 +599,7 @@ export function GameRoom() {
       if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
         navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
       } else {
-        void fetch("/api/table/live", {
+        void apiFetch("/api/table/live", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           keepalive: true,
@@ -3569,7 +3570,7 @@ export function GameRoom() {
                   if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
                     navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
                   } else {
-                    void fetch("/api/table/live", {
+                    void apiFetch("/api/table/live", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       keepalive: true,

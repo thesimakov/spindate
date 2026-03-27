@@ -5,6 +5,7 @@ import type { GameState, GameAction, Player, InventoryItem } from "./game-types"
 import { generateBots as generateBotsImpl, AVATAR_FRAME_IDS, randomAvatarFrame as randomAvatarFrameImpl } from "@/lib/bots"
 import { generateLogId as generateLogIdImpl, generateMessageId as generateMessageIdImpl } from "@/lib/ids"
 import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
+import { apiFetch } from "@/lib/api-fetch"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
 export { AVATAR_FRAME_IDS }
@@ -713,7 +714,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ? `/api/user/state?vk_user_id=${encodeURIComponent(String(state.currentUser.id))}`
       : "/api/user/state"
     const t = setTimeout(() => {
-      fetch(endpoint, {
+      apiFetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

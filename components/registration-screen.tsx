@@ -10,6 +10,7 @@ import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-quer
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
 import { AppLoader } from "@/components/app-loader"
+import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
@@ -62,7 +63,7 @@ export function RegistrationScreen() {
     let livePlayers: typeof user[] = [user]
     let tablesCount = 1
     try {
-      const res = await fetch("/api/table/live", {
+      const res = await apiFetch("/api/table/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -99,7 +100,7 @@ export function RegistrationScreen() {
     dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId })
     dispatch({ type: "SET_TABLES_COUNT", tablesCount })
     try {
-      const st = await fetch("/api/table/state", {
+      const st = await apiFetch("/api/table/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -116,19 +117,23 @@ export function RegistrationScreen() {
   }
 
   useLayoutEffect(() => {
-    if (typeof window !== "undefined" && isVkMiniApp()) setVkGate(true)
+    if (typeof window === "undefined") return
+    try {
+      if (isVkMiniApp() || window.self !== window.top) setVkGate(true)
+    } catch {
+      setVkGate(true)
+    }
   }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (!isVkMiniApp()) return
 
     let cancelled = false
     setLoading(true)
     setError("")
 
     const tryEnterFromSession = async (): Promise<boolean> => {
-      const meRes = await fetch("/api/auth/me", { credentials: "include" })
+      const meRes = await apiFetch("/api/auth/me", { credentials: "include" })
       if (!meRes.ok) return false
       const meData = (await meRes.json().catch(() => null)) as {
         user?: {
@@ -158,7 +163,7 @@ export function RegistrationScreen() {
           : defaultPurpose) as Purpose,
         authProvider: (typeof u.vkUserId === "number" ? "vk" : "login") as "vk" | "login",
       }
-      const stRes = await fetch("/api/user/state", { credentials: "include" })
+      const stRes = await apiFetch("/api/user/state", { credentials: "include" })
       const stData = await stRes.json().catch(() => null)
       if (stRes.ok && stData?.ok) {
         const voiceBalance = typeof stData.voiceBalance === "number" ? stData.voiceBalance : 0
@@ -175,10 +180,26 @@ export function RegistrationScreen() {
         await initVk()
         if (cancelled) return
 
+        const launchSearch = await ensureVkLaunchSearch()
+        let inIframe = false
+        try {
+          inIframe = window.self !== window.top
+        } catch {
+          inIframe = true
+        }
+        const vkContext =
+          isVkMiniApp() || launchSearch.includes("vk_user_id=") || inIframe
+
+        if (!vkContext) {
+          if (!cancelled) setLoading(false)
+          return
+        }
+
+        if (!cancelled) setVkGate(true)
+
         if (await tryEnterFromSession()) return
         if (cancelled) return
 
-        const launchSearch = await ensureVkLaunchSearch()
         if (!launchSearch.includes("vk_user_id=") || !launchSearch.includes("sign=")) {
           if (!cancelled) {
             setVkGate(false)
@@ -190,7 +211,7 @@ export function RegistrationScreen() {
         const vkUser = await vkBridge.getUserInfo()
         if (cancelled) return
 
-        const res = await fetch("/api/auth/vk", {
+        const res = await apiFetch("/api/auth/vk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -208,6 +229,7 @@ export function RegistrationScreen() {
         const data = (await res.json().catch(() => null)) as {
           ok?: boolean
           error?: string
+          sessionToken?: string
           user?: {
             id: string
             username?: string
@@ -228,6 +250,7 @@ export function RegistrationScreen() {
           return
         }
         if (data?.user) {
+          if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
           const u = data.user
           const uid = typeof u.vkUserId === "number" ? u.vkUserId : userIdToNumber(u.id)
           const genderValue: Gender =
@@ -291,11 +314,19 @@ export function RegistrationScreen() {
       await initVk()
       const vkUser = await vkBridge.getUserInfo()
       const launchSearch = await ensureVkLaunchSearch()
+      let inIframe = false
+      try {
+        inIframe = window.self !== window.top
+      } catch {
+        inIframe = true
+      }
       const canServerVkAuth =
-        launchSearch.includes("vk_user_id=") && launchSearch.includes("sign=") && isVkMiniApp()
+        launchSearch.includes("vk_user_id=") &&
+        launchSearch.includes("sign=") &&
+        (isVkMiniApp() || inIframe)
 
       if (canServerVkAuth) {
-        const res = await fetch("/api/auth/vk", {
+        const res = await apiFetch("/api/auth/vk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -311,6 +342,7 @@ export function RegistrationScreen() {
           }),
         })
         const data = (await res.json().catch(() => null)) as {
+          sessionToken?: string
           user?: {
             id: string
             username?: string
@@ -325,6 +357,7 @@ export function RegistrationScreen() {
           inventory?: unknown[]
         } | null
         if (res.ok && data?.user) {
+          if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
           const u = data.user
           const uid = typeof u.vkUserId === "number" ? u.vkUserId : userIdToNumber(u.id)
           const genderValue: Gender =
@@ -360,7 +393,7 @@ export function RegistrationScreen() {
         authProvider: "vk" as const,
       }
       try {
-        const res = await fetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
+        const res = await apiFetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
           method: "GET",
           credentials: "include",
         })
@@ -390,7 +423,7 @@ export function RegistrationScreen() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: login.trim(), password }),
@@ -407,6 +440,7 @@ export function RegistrationScreen() {
         return
       }
       if (data?.user) {
+        if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
         const u = data.user
         const user = {
           id: userIdToNumber(u.id),
@@ -441,7 +475,7 @@ export function RegistrationScreen() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await apiFetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -469,6 +503,7 @@ export function RegistrationScreen() {
         return
       }
       if (data?.user) {
+        if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
         const u = data.user
         const user = {
           id: userIdToNumber(u.id),
