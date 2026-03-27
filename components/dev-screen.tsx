@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import {
   getDevRegistryUsers,
@@ -55,11 +55,17 @@ export function DevScreen() {
     setAuthError("")
   }
 
+  const refresh = useCallback(() => {
+    setUsers(getDevRegistryUsers())
+    setBlockedIds(getBlockedUserIds())
+    setBannedList(getBannedList())
+  }, [])
+
   useEffect(() => {
     if (authenticated) {
       refresh()
     }
-  }, [authenticated])
+  }, [authenticated, refresh])
 
   if (!authenticated) {
     return (
@@ -109,12 +115,6 @@ export function DevScreen() {
         </div>
       </div>
     )
-  }
-
-  const refresh = () => {
-    setUsers(getDevRegistryUsers())
-    setBlockedIds(getBlockedUserIds())
-    setBannedList(getBannedList())
   }
 
   const now = Date.now()
