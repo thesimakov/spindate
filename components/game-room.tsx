@@ -6026,21 +6026,37 @@ export function GameRoom() {
               </button>
             </div>
             <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-5 sm:pt-4">
-              <div className="player-menu-catalog flex min-h-0 w-full flex-1 flex-col gap-3">
+              <div className="player-menu-catalog flex min-h-0 w-full flex-1 flex-col gap-4">
                 <div className="shrink-0 px-0.5">
-                  <h2 className="text-[17px] font-extrabold leading-snug tracking-tight text-slate-50 sm:text-xl">
-                    {`Подарки для ${giftCatalogDrawerPlayer.name}`}
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-400">до 10 ❤</p>
+                  <div className="flex items-start gap-2">
+                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500/25 to-amber-500/20 ring-1 ring-rose-400/20">
+                      <Gift className="h-[18px] w-[18px] text-rose-300/90" strokeWidth={2} aria-hidden />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="bg-gradient-to-r from-slate-50 via-white to-slate-200 bg-clip-text text-[17px] font-extrabold leading-snug tracking-tight text-transparent sm:text-xl">
+                        {`Подарки для ${giftCatalogDrawerPlayer.name}`}
+                      </h2>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                        <Sparkles className="h-3 w-3 text-amber-400/70" aria-hidden />
+                        <span>до 10</span>
+                        <span className="text-rose-400" aria-hidden>
+                          ❤
+                        </span>
+                        <span className="text-slate-500">за подарок</span>
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div
-                  className="flex min-h-0 flex-1 flex-col rounded-2xl border border-amber-500/20 p-3 sm:p-4"
+                  className="flex min-h-0 flex-1 flex-col rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
                   style={{
-                    background: "rgba(15,23,42,0.95)",
-                    boxShadow: "inset 0 1px 0 rgba(251,191,36,0.05), 0 4px 16px rgba(0,0,0,0.2)",
+                    background:
+                      "linear-gradient(165deg, rgba(30,41,59,0.55) 0%, rgba(15,23,42,0.92) 45%, rgba(15,23,42,0.98) 100%)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(251,191,36,0.06)",
                   }}
                 >
-                  <div className="player-menu-gifts-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden py-1 max-h-[min(62dvh,520px)] sm:max-h-[min(68dvh,560px)]">
+                  <div className="player-menu-gifts-scroll max-h-[min(62dvh,520px)] min-h-0 flex-1 space-y-6 overflow-y-auto overflow-x-hidden py-1 sm:max-h-[min(68dvh,560px)]">
                     {(
                       [
                         {
@@ -6048,28 +6064,62 @@ export function GameRoom() {
                           title: "Бесплатные",
                           gifts: GIFT_CATALOG_FREE,
                           emptyHint: "Скоро добавим подарки",
-                          titleClass: "text-sky-400/95",
+                          accent: "sky" as const,
                         },
                         {
                           key: "premium",
                           title: "Премиум",
                           gifts: GIFT_CATALOG_PREMIUM,
-                          titleClass: "text-amber-400/95",
+                          accent: "amber" as const,
                         },
                       ] as const
                     ).map((section) => (
                       <div key={section.key}>
-                        <h3
-                          className={`mb-1.5 text-[10px] font-bold uppercase tracking-wider sm:text-[11px] ${section.titleClass}`}
-                        >
-                          {section.title}
-                        </h3>
+                        <div className="mb-3 flex items-center gap-2.5">
+                          <span
+                            className={`h-9 w-1 shrink-0 rounded-full shadow-lg ${
+                              section.accent === "sky"
+                                ? "bg-gradient-to-b from-sky-400 to-cyan-500 shadow-sky-500/25"
+                                : "bg-gradient-to-b from-amber-300 to-amber-600 shadow-amber-500/30"
+                            }`}
+                            aria-hidden
+                          />
+                          <h3
+                            className={`text-[11px] font-bold uppercase tracking-[0.22em] sm:text-xs ${
+                              section.accent === "sky"
+                                ? "text-sky-300/95"
+                                : "text-amber-300/95"
+                            }`}
+                          >
+                            {section.title}
+                          </h3>
+                          <span
+                            className={`h-px min-w-[1.5rem] flex-1 bg-gradient-to-r opacity-60 ${
+                              section.accent === "sky"
+                                ? "from-sky-500/40 to-transparent"
+                                : "from-amber-500/40 to-transparent"
+                            }`}
+                            aria-hidden
+                          />
+                        </div>
                         {section.gifts.length === 0 ? (
-                          <p className="rounded-lg border border-dashed border-slate-600/50 bg-slate-900/40 px-2 py-2 text-center text-[10px] leading-snug text-slate-500">
-                            {"emptyHint" in section ? section.emptyHint : "—"}
-                          </p>
+                          <div className="relative overflow-hidden rounded-2xl border border-dashed border-sky-500/20 bg-gradient-to-br from-slate-800/50 via-slate-900/30 to-slate-800/40 px-4 py-9 text-center">
+                            <div
+                              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_30%,rgba(56,189,248,0.12),transparent_65%)]"
+                              aria-hidden
+                            />
+                            <Gift
+                              className="relative mx-auto mb-3 h-11 w-11 text-sky-400/45"
+                              strokeWidth={1.15}
+                              aria-hidden
+                            />
+                            <p className="relative text-sm font-semibold text-slate-200">
+                              {"emptyHint" in section ? section.emptyHint : "—"}
+                            </p>
+                            <p className="relative mt-1.5 text-xs text-slate-500">Новые сюрпризы уже в пути</p>
+                          </div>
                         ) : (
-                          <div className="grid grid-cols-3 content-start gap-1 sm:gap-1.5">
+                          <div className="grid grid-cols-3 content-start gap-2 sm:gap-2.5">
                             {section.gifts.map((gift) => {
                               const toId = giftCatalogDrawerPlayer.id
                               const alreadyGifted = inventory.some(
@@ -6103,40 +6153,41 @@ export function GameRoom() {
                                   } as GameLogEntry,
                                 })
                               }
+                              const isPremiumSection = section.key === "premium"
                               return (
                                 <button
                                   key={`${section.key}-${gift.id}`}
                                   type="button"
                                   onClick={handleGiftClick}
                                   aria-label={gift.name}
-                                  className="player-menu-gift-item group flex flex-col items-center justify-center gap-1 rounded-lg p-1 transition-colors hover:bg-slate-700/35 disabled:opacity-40 sm:gap-1.5 sm:p-1.5"
+                                  title={gift.name}
+                                  className="player-menu-gift-item group relative flex flex-col items-center gap-2 rounded-2xl border border-white/[0.06] bg-gradient-to-b from-slate-700/35 to-slate-950/50 p-2 pb-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/20 hover:shadow-[0_14px_28px_-10px_rgba(0,0,0,0.55),0_0_24px_-6px_rgba(251,191,36,0.12)] disabled:translate-y-0 disabled:opacity-45 disabled:hover:border-white/[0.06] disabled:hover:shadow-none sm:gap-2.5 sm:p-2.5"
                                   disabled={disabled}
                                 >
                                   <div
-                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 ${
-                                      disabled ? "opacity-40" : "opacity-100"
-                                    }`}
-                                    style={
-                                      !disabled
-                                        ? {
-                                            background: "rgba(51,65,85,0.4)",
-                                            border: "1px solid rgba(71,85,105,0.5)",
-                                          }
-                                        : undefined
-                                    }
+                                    className={`relative flex h-[2.65rem] w-[2.65rem] shrink-0 items-center justify-center rounded-2xl ring-1 ring-white/10 transition-transform duration-200 group-hover:scale-[1.06] sm:h-12 sm:w-12 ${
+                                      isPremiumSection && !disabled
+                                        ? "bg-gradient-to-br from-amber-500/20 via-slate-700/40 to-slate-900/80 group-hover:ring-amber-400/25"
+                                        : "bg-gradient-to-br from-slate-600/45 to-slate-900/75 group-hover:ring-sky-400/20"
+                                    } ${disabled ? "opacity-50 grayscale-[0.35]" : ""}`}
                                   >
-                                    <span className="text-lg leading-none sm:text-xl">{gift.emoji}</span>
+                                    <span className="select-none text-[1.35rem] leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-2xl">
+                                      {gift.emoji}
+                                    </span>
                                   </div>
+                                  <span className="line-clamp-2 min-h-[2rem] w-full px-0.5 text-center text-[9px] font-medium leading-tight text-slate-400 group-hover:text-slate-300 sm:min-h-[2.25rem] sm:text-[10px]">
+                                    {gift.name}
+                                  </span>
                                   {alreadyGifted ? (
-                                    <span className="rounded-full border border-slate-500/50 bg-slate-800/80 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 sm:text-[10px]">
-                                      ✓
+                                    <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300/90 sm:text-[10px]">
+                                      ✓ Дарено
                                     </span>
                                   ) : gift.cost === 0 ? (
-                                    <span className="inline-flex min-w-[2.25rem] items-center justify-center rounded-full border border-sky-400/40 bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-extrabold text-sky-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:min-w-[2.5rem] sm:text-[10px]">
+                                    <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-sky-400/35 bg-gradient-to-b from-sky-500/25 to-sky-600/10 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-sky-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] sm:text-[10px]">
                                       0 ❤
                                     </span>
                                   ) : (
-                                    <span className="inline-flex min-w-[2.25rem] items-center justify-center gap-0.5 rounded-full border border-emerald-400/45 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-extrabold tabular-nums text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:min-w-[2.5rem] sm:text-[10px]">
+                                    <span className="inline-flex min-w-[2.75rem] items-center justify-center gap-0.5 rounded-full border border-rose-500/30 bg-gradient-to-b from-rose-500/20 to-slate-900/60 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:text-[10px]">
                                       <span className="text-[10px] leading-none text-rose-400 sm:text-[11px]" aria-hidden>
                                         ❤
                                       </span>
