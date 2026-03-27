@@ -187,6 +187,8 @@ export const PAIR_ACTIONS: PairAction[] = [
   { id: "skip",    label: "Пропустить",         icon: "skip",     cost: 0,  combo: ["MM", "MF", "FF"] },
 ]
 
+export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily"
+
 export interface GameState {
   screen: "registration" | "payment" | "game" | "chat" | "favorites" | "shop" | "profile" | "ugadaika" | "intergame-chat"
   currentUser: Player | null
@@ -267,10 +269,13 @@ export interface GameState {
   }
   /** Если true — пользователь поставил «паузу»: вышел из live-стола и не синхронизируется, пока не возобновит. */
   tablePaused?: boolean
+  /** Боковая панель поверх стола: профиль, магазин, избранное, рейтинг, ежедневные задачи. */
+  gameSidePanel: GameSidePanelId | null
 }
 
 export type GameAction =
   | { type: "SET_SCREEN"; screen: GameState["screen"] }
+  | { type: "SET_GAME_SIDE_PANEL"; panel: GameSidePanelId | null }
   | { type: "SET_USER"; user: Player }
   | { type: "CLEAR_USER" }
   | { type: "UPDATE_USER_NAME"; playerId: number; name: string }

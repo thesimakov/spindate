@@ -12,15 +12,25 @@ const nextConfig = {
     unoptimized: true,
   },
   async headers() {
+    const csp = {
+      key: "Content-Security-Policy",
+      value: "frame-ancestors 'self' https://vk.com https://vk.ru https://*.vk.com https://*.vk.ru",
+    }
     return [
+      /** Не кэшировать HTML админки годами — иначе после деплоя браузер тянет старые ссылки на /_next/static/* (404, чёрный экран). */
       {
-        source: "/(.*)",
+        source: "/admin-lemnity",
         headers: [
+          csp,
           {
-            key: "Content-Security-Policy",
-            value: "frame-ancestors 'self' https://vk.com https://vk.ru https://*.vk.com https://*.vk.ru",
+            key: "Cache-Control",
+            value: "private, no-store, must-revalidate",
           },
         ],
+      },
+      {
+        source: "/(.*)",
+        headers: [csp],
       },
     ]
   },

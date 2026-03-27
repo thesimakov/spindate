@@ -33,7 +33,7 @@ import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/asse
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { TableDecorations } from "@/components/decorations"
-import { RatingModal } from "@/components/rating-screen"
+import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
@@ -388,6 +388,7 @@ export function GameRoom() {
     generalChatMessages = [],
     emotionDailyBoost,
     tablePaused,
+    gameSidePanel,
   } = state
 
   const gameRoomDustParticles = useMemo(
@@ -907,7 +908,6 @@ export function GameRoom() {
   }, [showResult, roundNumber])
 
   const [showBottleCatalog, setShowBottleCatalog] = useState(false)
-  const [showRatingModal, setShowRatingModal] = useState(false)
   const [showRosesReceivedPopover, setShowRosesReceivedPopover] = useState(false)
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
@@ -2649,7 +2649,6 @@ export function GameRoom() {
     [giftsToday, emotionsToday, careToday, spinsToday, predictionsToday, chatMessagesToday, purchasesToday],
   )
 
-  const [showDailyTasksModal, setShowDailyTasksModal] = useState(false)
   const [confettiQuestIndex, setConfettiQuestIndex] = useState<number | null>(null)
   const [dailyProgressPoints, setDailyProgressPoints] = useState(0)
   const [dailyRewardedLevels, setDailyRewardedLevels] = useState<number[]>([])
@@ -3534,7 +3533,7 @@ export function GameRoom() {
             </div>
             <button
               type="button"
-              onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
               className={
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95" +
                 (!leftSideMenuExpanded ? " max-lg:flex" : "")
@@ -3554,7 +3553,7 @@ export function GameRoom() {
 
           {/* Магазин */}
           <button
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
+            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
             className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)",
@@ -3568,7 +3567,7 @@ export function GameRoom() {
 
           {/* Профиль */}
           <button
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "profile" })}
+            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })}
             className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
@@ -3664,7 +3663,7 @@ export function GameRoom() {
 
           {/* Рейтинг */}
           <button
-            onClick={() => setShowRatingModal(true)}
+            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "rating" })}
             className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
@@ -3678,7 +3677,7 @@ export function GameRoom() {
 
           {/* Избранное */}
           <button
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "favorites" })}
+            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })}
             className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
@@ -3709,7 +3708,7 @@ export function GameRoom() {
           {/* Ежедневные задачи */}
           {currentUser && (
             <button
-              onClick={() => setShowDailyTasksModal(true)}
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "daily" })}
               className={sideBtnClass}
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
@@ -3746,8 +3745,6 @@ export function GameRoom() {
       </div>
 
       {/* Модалка каталога бутылочек */}
-      {showRatingModal && <RatingModal onClose={() => setShowRatingModal(false)} />}
-
       {/* Модалка: выбор собеседника для приватного чата */}
       {showChatListModal && currentUser && (
         <div
@@ -3943,24 +3940,30 @@ export function GameRoom() {
                               ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
                               : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
 
+                      const ctaLabel = e.selected
+                        ? "На столу"
+                        : e.purchaseLocked
+                          ? `Подать через ${formatCooldown(cooldownLeftMs)}`
+                          : e.notEnough
+                            ? "Недостаточно ❤"
+                            : "Подать на стол"
+
                       return (
-                        <button
+                        <div
                           key={e.skin.id}
-                          type="button"
-                          onClick={e.handleClick}
-                          disabled={e.disabled}
-                          className={`group relative flex min-w-0 flex-col items-center justify-between rounded-2xl px-3 py-3 text-left transition hover:brightness-110 active:scale-[0.99] ${ring} ${dim}`}
+                          className={`group relative flex min-w-0 flex-col items-stretch rounded-2xl px-3 pb-3 pt-3 text-left ${ring} ${dim}`}
                           style={{
                             background: "linear-gradient(180deg, rgba(30,41,59,0.30) 0%, rgba(15,23,42,0.18) 100%)",
                           }}
                         >
-                          <div className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-xl"
+                          <div
+                            className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-xl"
                             style={{ background: "radial-gradient(circle at 50% 35%, rgba(251,191,36,0.10) 0%, transparent 60%)" }}
                           >
                             <img
                               src={e.skin.img}
                               alt={e.skin.name}
-                              className="h-full w-full object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)]"
+                              className="h-full w-full object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)] pointer-events-none select-none"
                               loading="eager"
                               draggable={false}
                             />
@@ -3976,7 +3979,32 @@ export function GameRoom() {
                               </span>
                             </div>
                           </div>
-                        </button>
+
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.preventDefault()
+                              ev.stopPropagation()
+                              e.handleClick()
+                            }}
+                            disabled={e.disabled || e.selected}
+                            className={
+                              "mt-2 w-full touch-manipulation rounded-xl px-2 py-2 text-center text-[11px] font-extrabold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 " +
+                              (e.selected
+                                ? "border border-emerald-500/35 bg-emerald-950/40 text-emerald-200"
+                                : e.disabled
+                                  ? "border border-slate-600/50 bg-slate-900/80 text-slate-500"
+                                  : "border border-amber-500/40 text-amber-950 shadow-[0_6px_16px_rgba(251,191,36,0.22)] hover:brightness-110")
+                            }
+                            style={
+                              e.selected || e.disabled
+                                ? undefined
+                                : { background: "linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%)" }
+                            }
+                          >
+                            {ctaLabel}
+                          </button>
+                        </div>
                       )
                     })}
                   </div>
@@ -5083,7 +5111,7 @@ export function GameRoom() {
         </button>
         <button
           type="button"
-          onClick={() => dispatch({ type: "SET_SCREEN", screen: "favorites" })}
+          onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })}
           className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 min-w-[64px] touch-manipulation transition-opacity active:opacity-80"
           style={{ color: "#f0e0c8" }}
         >
@@ -5092,7 +5120,7 @@ export function GameRoom() {
         </button>
         <button
           type="button"
-          onClick={() => dispatch({ type: "SET_SCREEN", screen: "shop" })}
+          onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
           className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 min-w-[64px] touch-manipulation transition-opacity active:opacity-80"
           style={{ color: "#facc15" }}
         >
@@ -5101,7 +5129,7 @@ export function GameRoom() {
         </button>
         <button
           type="button"
-          onClick={() => dispatch({ type: "SET_SCREEN", screen: "profile" })}
+          onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })}
           className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 min-w-[64px] touch-manipulation transition-opacity active:opacity-80"
           style={{ color: "#f0e0c8" }}
         >
@@ -5154,7 +5182,7 @@ export function GameRoom() {
                   <button
                     type="button"
                     onClick={() => {
-                      dispatch({ type: "SET_SCREEN", screen: "shop" })
+                      dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
                       setShowMobileMoreMenu(false)
                     }}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
@@ -5197,7 +5225,7 @@ export function GameRoom() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowRatingModal(true); setShowMobileMoreMenu(false) }}
+                  onClick={() => { dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "rating" }); setShowMobileMoreMenu(false) }}
                   className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                   style={{ color: "#f0e0c8" }}
                 >
@@ -5225,7 +5253,7 @@ export function GameRoom() {
                 {currentUser && (
                   <button
                     type="button"
-                    onClick={() => { setShowDailyTasksModal(true); setShowMobileMoreMenu(false) }}
+                    onClick={() => { dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "daily" }); setShowMobileMoreMenu(false) }}
                     className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
                     style={{ color: "#f0e0c8" }}
                   >
@@ -5285,59 +5313,34 @@ export function GameRoom() {
         </div>
       </nav>
 
-      {/* ---- ЕЖЕДНЕВНЫЕ ЗАДАЧИ — модальное окно (из меню «Стол» или сайдбара) ---- */}
-      {currentUser && showDailyTasksModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 md:p-4"
-          onClick={() => setShowDailyTasksModal(false)}
-          aria-hidden
-        >
-          <div
-            className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-t-2xl md:rounded-2xl overflow-hidden shadow-2xl"
-            style={{
-              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
-              border: "1px solid rgba(251, 191, 36, 0.25)",
-              boxShadow: "0 -4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(251, 191, 36, 0.08)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "rgba(251, 191, 36, 0.15)", border: "1px solid rgba(251, 191, 36, 0.3)" }}>
-                  <Sparkles className="h-4 w-4" style={{ color: "#fcd34d" }} />
-                </div>
-                <span className="text-sm font-bold" style={{ color: "#fef3c7", textShadow: "0 0 12px rgba(251, 191, 36, 0.2)" }}>
-                  Ежедневные задачи
-                </span>
+      {/* ---- Ежедневные задачи — боковая панель (как профиль) ---- */}
+      {currentUser && gameSidePanel === "daily" && (
+        <GameSidePanelShell
+          title="Ежедневные задачи"
+          onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+          headerRight={
+            <div className="flex max-w-[min(12rem,42vw)] items-center gap-1.5 sm:gap-2">
+              <div className="h-2 min-w-[3rem] flex-1 rounded-full overflow-hidden" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(71, 85, 105, 0.6)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(completedQuests / 5) * 100}%`,
+                    background: "linear-gradient(90deg, #22c55e 0%, #e8c06a 100%)",
+                    boxShadow: "0 0 8px rgba(34, 197, 94, 0.5)",
+                  }}
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-20 rounded-full overflow-hidden" style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(71, 85, 105, 0.6)" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${(completedQuests / 5) * 100}%`,
-                      background: "linear-gradient(90deg, #22c55e 0%, #e8c06a 100%)",
-                      boxShadow: "0 0 8px rgba(34, 197, 94, 0.5)",
-                    }}
-                  />
-                </div>
-                <span className="text-xs font-bold tabular-nums" style={{ color: completedQuests >= 5 ? "#86efac" : "#fcd34d" }}>
-                  {completedQuests}/5
-                </span>
-                <span className="rounded-md px-2 py-1 text-[10px] font-bold" style={{ color: "#7dd3fc", background: "rgba(2,132,199,0.15)", border: "1px solid rgba(56,189,248,0.35)" }}>
-                  Lvl {dailyLevel}/30
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowDailyTasksModal(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-600/50 hover:text-slate-200"
-                  aria-label="Закрыть"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+              <span className="text-[10px] font-bold tabular-nums sm:text-xs" style={{ color: completedQuests >= 5 ? "#86efac" : "#fcd34d" }}>
+                {completedQuests}/5
+              </span>
+              <span className="hidden rounded-md px-1.5 py-0.5 text-[9px] font-bold sm:inline" style={{ color: "#7dd3fc", background: "rgba(2,132,199,0.15)", border: "1px solid rgba(56,189,248,0.35)" }}>
+                Lvl {dailyLevel}/30
+              </span>
             </div>
-            <div className="px-4 py-2 border-b" style={{ borderColor: "rgba(71, 85, 105, 0.35)" }}>
+          }
+        >
+          <div className="space-y-3">
+            <div className="rounded-xl border px-3 py-2" style={{ borderColor: "rgba(71, 85, 105, 0.35)", background: "rgba(15,23,42,0.5)" }}>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold" style={{ color: "#bae6fd" }}>
                   Уровень ежедневных задач: {dailyLevel}/30
@@ -5357,7 +5360,7 @@ export function GameRoom() {
                 />
               </div>
             </div>
-            <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-2">
+            <div className="space-y-2">
               {todayQuests.map((q, i) => {
                   const progress = getProgressForType(q.type)
                   const claimed = dailyQuests?.dateKey === todayKey && dailyQuests.claimed[i]
@@ -5441,7 +5444,7 @@ export function GameRoom() {
               </div>
             </div>
           </div>
-        </div>
+        </GameSidePanelShell>
       )}
 
       {/* ---- PREDICTION PICKER MODAL ---- */}
@@ -5871,7 +5874,7 @@ export function GameRoom() {
                             <button
                               type="button"
                               onClick={() => {
-                                dispatch({ type: "SET_SCREEN", screen: "shop" })
+                                dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
                                 dispatch({ type: "CLOSE_PLAYER_MENU" })
                               }}
                               className={`${buyHeartsBtnCls} text-amber-950`}
@@ -5896,7 +5899,7 @@ export function GameRoom() {
                             <button
                               type="button"
                               onClick={() => {
-                                dispatch({ type: "SET_SCREEN", screen: "shop" })
+                                dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
                                 dispatch({ type: "CLOSE_PLAYER_MENU" })
                               }}
                               className={`${buyHeartsBtnCls} w-full text-amber-950`}

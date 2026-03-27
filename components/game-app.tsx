@@ -13,6 +13,8 @@ import { ShopScreen } from "@/components/shop-screen"
 import { ProfileScreen } from "@/components/profile-screen"
 import { UgadaikaScreen } from "@/components/ugadaika-screen"
 import { IntergameChatScreen } from "@/components/intergame-chat-screen"
+import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { RatingLeaderboardBody } from "@/components/rating-screen"
 
 /** Задержка после готовности стола, чтобы интерфейс успел стабилизироваться */
 const NORMALIZE_DELAY_MS = 500
@@ -119,15 +121,44 @@ export function GameApp() {
     case "registration":
       return <RegistrationScreen />
     case "game":
-      return <GameRoom />
+      return (
+        <>
+          <GameRoom />
+          {state.gameSidePanel === "profile" && (
+            <ProfileScreen
+              variant="panel"
+              onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+            />
+          )}
+          {state.gameSidePanel === "shop" && (
+            <ShopScreen
+              variant="panel"
+              onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+            />
+          )}
+          {state.gameSidePanel === "favorites" && (
+            <FavoritesScreen
+              variant="panel"
+              onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+            />
+          )}
+          {state.gameSidePanel === "rating" && (
+            <GameSidePanelShell
+              title="Рейтинг"
+              subtitle="За последние 7 дней"
+              onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+            >
+              <RatingLeaderboardBody />
+            </GameSidePanelShell>
+          )}
+        </>
+      )
     case "chat":
       return <ChatScreen />
     case "favorites":
       return <FavoritesScreen />
     case "shop":
       return <ShopScreen />
-    case "profile":
-      return <ProfileScreen />
     case "ugadaika":
       return <UgadaikaScreen />
     case "intergame-chat":

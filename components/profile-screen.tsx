@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX } from "lucide-react"
+import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useGame } from "@/lib/game-context"
@@ -28,7 +28,13 @@ function getDailyLevelByPoints(points: number): number {
   return level
 }
 
-export function ProfileScreen() {
+type ProfileScreenProps = {
+  /** `panel` — боковая панель поверх стола; `page` — полноэкранный режим (не используется в маршрутизации). */
+  variant?: "page" | "panel"
+  onClose?: () => void
+}
+
+export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps = {}) {
   const { state, dispatch } = useGame()
   const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog, avatarFrames, soundsEnabled } = state
 
@@ -178,22 +184,63 @@ export function ProfileScreen() {
     showToast("Имя сохранено", "success")
   }
 
+  const isPanel = variant === "panel"
+  const closePanel = () => {
+    if (isPanel && onClose) onClose()
+    else dispatch({ type: "SET_SCREEN", screen: "game" })
+  }
+
   return (
-    <div className="flex h-dvh max-h-dvh flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated">
+    <>
+      {isPanel && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]"
+          onClick={onClose}
+          aria-label="Закрыть профиль"
+        />
+      )}
+      <div
+        className={
+          isPanel
+            ? "fixed inset-y-0 right-0 z-[60] flex h-dvh max-h-dvh w-full max-w-md flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
+            : "flex h-dvh max-h-dvh flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated"
+        }
+        role={isPanel ? "dialog" : undefined}
+        aria-modal={isPanel ? true : undefined}
+        aria-labelledby={isPanel ? "profile-panel-title" : undefined}
+      >
       {toast && <InlineToast toast={toast} />}
-      <div className="w-full max-w-lg flex-1 min-h-0 flex flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]">
+      <div
+        className={`w-full ${isPanel ? "max-w-full min-h-0 flex-1" : "max-w-lg flex-1 min-h-0"} flex flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]`}
+      >
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 sm:py-7 space-y-4">
         <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 mb-1 border-b border-cyan-300/15 bg-slate-950/85 px-4 py-3 backdrop-blur-md sm:px-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl font-bold text-slate-100 tracking-wide">Профиль</h1>
-          <span className="text-xs sm:text-sm text-slate-400">ID: {currentUser.id}</span>
+        <div className="flex items-center justify-between gap-2">
+          <h1 id={isPanel ? "profile-panel-title" : undefined} className="text-lg sm:text-xl font-bold text-slate-100 tracking-wide">
+            Профиль
+          </h1>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs sm:text-sm text-slate-400">ID: {currentUser.id}</span>
+            {isPanel && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
+                aria-label="Закрыть"
+              >
+                <X className="h-5 w-5" strokeWidth={2} />
+              </button>
+            )}
+          </div>
         </div>
         </div>
         {/* Карточка профиля: аватар + имя + фото (login) */}
         <div className={`${sectionCardClass} space-y-4`}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Ваш профиль</p>
-          <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-            <div className="mx-auto flex shrink-0 items-center gap-3 sm:mx-0">
+          <div className="flex flex-col items-stretch gap-6 sm:flex-row sm:items-start">
+            {/* Слева: аватар + возраст / пол */}
+            <div className="flex shrink-0 flex-col items-center gap-2.5 sm:items-start">
               <div className="relative h-[5.5rem] w-[5.5rem] overflow-visible sm:h-24 sm:w-24">
                 {roseGiftFx && (
                   <>
@@ -304,50 +351,49 @@ export function ProfileScreen() {
                   <span className="text-[11px] font-black tabular-nums leading-none text-white">{profileDailyLevel}</span>
                 </div>
               </div>
+              <p className="max-w-[9rem] text-center text-sm leading-snug text-slate-400 sm:max-w-none sm:text-left">
+                {currentUser.age} лет <span className="text-slate-600">·</span> {genderLabel(currentUser.gender)}
+              </p>
             </div>
 
+            {/* Справа: заголовок → поле → кнопка (вертикально) */}
             <div className="min-w-0 w-full flex-1 space-y-3">
-              <div>
+              <div className="flex flex-col gap-2">
                 <label htmlFor="profile-name" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Имя в игре
                 </label>
-                <div className="mt-1.5 flex min-w-0 flex-row items-stretch gap-2">
-                  <input
-                    id="profile-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    maxLength={16}
-                    className="h-11 min-w-0 flex-1 rounded-xl border border-slate-600/80 bg-slate-950/80 px-3.5 text-sm font-semibold text-slate-50 outline-none ring-0 transition-colors focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-500/20"
-                    placeholder="Как вас видят за столом"
-                    autoComplete="nickname"
-                  />
-                  <Button
-                    onClick={handleSaveName}
-                    disabled={!canSaveName}
-                    className="h-11 shrink-0 rounded-xl px-4 text-sm font-bold disabled:!opacity-100 sm:min-w-[8.5rem]"
-                    style={
-                      canSaveName
-                        ? {
-                            background: "linear-gradient(135deg,#38bdf8,#a78bfa)",
-                            color: "#0b1220",
-                            border: "1px solid rgba(56,189,248,0.45)",
-                            boxShadow: "0 0 0 1px rgba(255,255,255,0.08) inset",
-                          }
-                        : {
-                            background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
-                            color: "#e2e8f0",
-                            border: "1px solid rgba(148,163,184,0.55)",
-                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-                          }
-                    }
-                  >
-                    Сохранить имя
-                  </Button>
-                </div>
+                <input
+                  id="profile-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={16}
+                  className="h-11 w-full min-w-0 rounded-xl border border-slate-600/80 bg-slate-950/80 px-3.5 text-sm font-semibold text-slate-50 outline-none ring-0 transition-colors focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-500/20"
+                  placeholder="Как вас видят за столом"
+                  autoComplete="nickname"
+                />
+                <Button
+                  onClick={handleSaveName}
+                  disabled={!canSaveName}
+                  className="h-11 w-full shrink-0 rounded-xl px-4 text-sm font-bold disabled:!opacity-100 sm:w-auto sm:self-start"
+                  style={
+                    canSaveName
+                      ? {
+                          background: "linear-gradient(135deg,#38bdf8,#a78bfa)",
+                          color: "#0b1220",
+                          border: "1px solid rgba(56,189,248,0.45)",
+                          boxShadow: "0 0 0 1px rgba(255,255,255,0.08) inset",
+                        }
+                      : {
+                          background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
+                          color: "#e2e8f0",
+                          border: "1px solid rgba(148,163,184,0.55)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                        }
+                  }
+                >
+                  Сохранить имя
+                </Button>
               </div>
-              <p className="text-sm text-slate-400">
-                {currentUser.age} лет <span className="text-slate-600">·</span> {genderLabel(currentUser.gender)}
-              </p>
 
               {currentUser.authProvider === "login" && (
                 <div className="space-y-2 border-t border-slate-700/50 pt-3">
@@ -393,11 +439,11 @@ export function ProfileScreen() {
         {/* Быстрые настройки */}
         <div className={`${sectionCardClass} space-y-2`}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Настройки</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setShowFramesModal(true)}
-              className={`flex items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
+              className={`flex w-full items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
             >
               <Sparkles className="h-4 w-4 text-amber-400/90" aria-hidden />
               Рамки аватара
@@ -409,7 +455,7 @@ export function ProfileScreen() {
                 dispatch({ type: "SET_SOUNDS_ENABLED", enabled: nextEnabled })
                 showToast(nextEnabled ? "Звуки включены" : "Звуки отключены", "success")
               }}
-              className={`flex items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
+              className={`flex w-full items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
             >
               {soundsEnabled === false ? (
                 <>
@@ -426,56 +472,111 @@ export function ProfileScreen() {
           </div>
         </div>
 
-        {/* Достижения */}
-        <div
-          className={sectionCardClass}
+        {/* Достижения — отдельный акцентный блок: цель → счётчик → полоса */}
+        <section
+          className="rounded-2xl border border-slate-800/90 bg-[#070b12] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_40px_rgba(0,0,0,0.45)]"
+          aria-labelledby="achievements-heading"
         >
-          <div className="mb-2 flex items-center gap-1.5">
-            <Sparkles className="h-4 w-4 text-amber-400" />
-            <span className="text-sm font-semibold text-slate-100">Достижения</span>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="rounded-lg border border-slate-700/80 bg-slate-900/50 px-2.5 py-2">
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span style={{ color: heartbreakerCount >= 100 ? "#f97373" : "#e2e8f0" }}>
-                Сердцеед
-              </span>
-              <span className="text-slate-400">
-                {Math.min(heartbreakerCount, 100)}/100
-              </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                <div className="h-full rounded-full bg-rose-400" style={{ width: `${Math.min(100, (heartbreakerCount / 100) * 100)}%` }} />
-              </div>
+          <div className="mb-4 flex items-start gap-3">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/25"
+              style={{
+                background: "linear-gradient(145deg, rgba(251,191,36,0.18) 0%, rgba(15,23,42,0.9) 100%)",
+                boxShadow: "0 0 20px rgba(251,191,36,0.12)",
+              }}
+              aria-hidden
+            >
+              <Sparkles className="h-5 w-5 text-amber-400" strokeWidth={2.25} />
             </div>
-            <div className="rounded-lg border border-slate-700/80 bg-slate-900/50 px-2.5 py-2">
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span style={{ color: giftSpent >= 1000 ? "#facc15" : "#e2e8f0" }}>
-                Щедрый
-              </span>
-              <span className="text-slate-400">
-                {Math.min(giftSpent, 1000)}/1000
-              </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.min(100, (giftSpent / 1000) * 100)}%` }} />
-              </div>
-            </div>
-            <div className="rounded-lg border border-slate-700/80 bg-slate-900/50 px-2.5 py-2">
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span style={{ color: spinCount >= 50 ? "#4ade80" : "#e2e8f0" }}>
-                Душа компании
-              </span>
-              <span className="text-slate-400">
-                {Math.min(spinCount, 50)}/50
-              </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, (spinCount / 50) * 100)}%` }} />
-              </div>
+            <div className="min-w-0 flex-1">
+              <h2 id="achievements-heading" className="text-base font-bold tracking-tight text-white">
+                Достижения
+              </h2>
+              <p className="mt-0.5 text-xs leading-snug text-slate-500">
+                Накопительный прогресс по игре: поцелуи, траты на подарки и кручения бутылочки.
+              </p>
             </div>
           </div>
-        </div>
+          <ul className="flex flex-col gap-3">
+            {(
+              [
+                {
+                  key: "heartbreaker",
+                  label: "Сердцеед",
+                  hint: "поцелуи в игре",
+                  current: heartbreakerCount,
+                  target: 100,
+                  fillClass: "bg-gradient-to-r from-rose-500 to-pink-400",
+                  done: heartbreakerCount >= 100,
+                },
+                {
+                  key: "generous",
+                  label: "Щедрый",
+                  hint: "потрачено ❤ на подарки",
+                  current: giftSpent,
+                  target: 1000,
+                  fillClass: "bg-gradient-to-r from-amber-500 to-yellow-400",
+                  done: giftSpent >= 1000,
+                },
+                {
+                  key: "soul",
+                  label: "Душа компании",
+                  hint: "раз крутили бутылочку",
+                  current: spinCount,
+                  target: 50,
+                  fillClass: "bg-gradient-to-r from-emerald-500 to-teal-400",
+                  done: spinCount >= 50,
+                },
+              ] as const
+            ).map((row) => {
+              const shown = Math.min(row.current, row.target)
+              const pct = row.target > 0 ? Math.min(100, (shown / row.target) * 100) : 0
+              return (
+                <li
+                  key={row.key}
+                  className={
+                    "rounded-xl border px-3.5 py-3 transition-colors " +
+                    (row.done
+                      ? "border-emerald-500/35 bg-emerald-950/20"
+                      : "border-slate-800 bg-slate-950/60")
+                  }
+                >
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-[13px] font-semibold text-white">{row.label}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">{row.hint}</span>
+                    </div>
+                    <span
+                      className={
+                        "shrink-0 tabular-nums text-sm font-semibold " +
+                        (row.done ? "text-emerald-400" : "text-slate-400")
+                      }
+                      title={`${shown} из ${row.target}`}
+                    >
+                      {shown}/{row.target}
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-slate-900 ring-1 ring-slate-800/80"
+                    role="progressbar"
+                    aria-valuenow={shown}
+                    aria-valuemin={0}
+                    aria-valuemax={row.target}
+                    aria-label={`${row.label}: ${shown} из ${row.target}`}
+                  >
+                    <div
+                      className={
+                        "h-full rounded-full transition-[width] duration-500 ease-out " +
+                        (pct > 0 ? row.fillClass : "bg-transparent")
+                      }
+                      style={{ width: `${pct}%`, minWidth: pct > 0 ? "2px" : undefined }}
+                    />
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
 
         <div className={`${sectionCardClass} overflow-hidden p-0`}>
           <p className="border-b border-cyan-400/10 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -617,7 +718,7 @@ export function ProfileScreen() {
           <Button
             variant="outline"
             className="w-full rounded-xl text-sm"
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "game" })}
+            onClick={closePanel}
           >
             {"Назад к столу"}
           </Button>
@@ -627,7 +728,7 @@ export function ProfileScreen() {
 
       {showFramesModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
           style={{ background: "rgba(2,6,23,0.76)", backdropFilter: "blur(10px)" }}
           onClick={() => setShowFramesModal(false)}
         >
@@ -819,7 +920,7 @@ export function ProfileScreen() {
 
       {showGiveRoseModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
           style={{ background: "rgba(2,6,23,0.76)", backdropFilter: "blur(10px)" }}
           onClick={() => setShowGiveRoseModal(false)}
         >
@@ -877,12 +978,16 @@ export function ProfileScreen() {
       )}
 
       <button
-        onClick={() => dispatch({ type: "SET_SCREEN", screen: "registration" })}
-        className="mt-4 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors"
+        onClick={() => {
+          if (isPanel && onClose) onClose()
+          dispatch({ type: "SET_SCREEN", screen: "registration" })
+        }}
+        className={`mt-4 text-sm font-medium text-slate-400 transition-colors hover:text-slate-200 ${isPanel ? "px-1" : ""}`}
       >
         {"Выйти из профиля"}
       </button>
-    </div>
+      </div>
+    </>
   )
 }
 

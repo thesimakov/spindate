@@ -75,23 +75,57 @@ const initialState: GameState = {
     extraPerType: 0,
   },
   tablePaused: false,
+  gameSidePanel: null,
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
+    case "SET_GAME_SIDE_PANEL":
+      return { ...state, gameSidePanel: action.panel }
     case "SET_SCREEN": {
+      if (action.screen === "profile") {
+        return { ...state, screen: "game", gameSidePanel: "profile" }
+      }
+      if (action.screen === "shop") {
+        return { ...state, screen: "game", gameSidePanel: "shop" }
+      }
+      if (action.screen === "favorites") {
+        return { ...state, screen: "game", gameSidePanel: "favorites" }
+      }
       if (action.screen === "ugadaika") {
-        return { ...state, screen: action.screen, playerInUgadaika: state.currentUser?.id ?? null }
+        return {
+          ...state,
+          screen: action.screen,
+          playerInUgadaika: state.currentUser?.id ?? null,
+          gameSidePanel: null,
+        }
       }
       if (action.screen === "game" && state.playerInUgadaika != null) {
-        return { ...state, screen: action.screen, playerInUgadaika: null, showReturnedFromUgadaika: true }
+        return {
+          ...state,
+          screen: action.screen,
+          playerInUgadaika: null,
+          showReturnedFromUgadaika: true,
+          gameSidePanel: null,
+        }
       }
-      return { ...state, screen: action.screen }
+      const leaveGame = action.screen !== "game"
+      return {
+        ...state,
+        screen: action.screen,
+        gameSidePanel: leaveGame ? null : state.gameSidePanel,
+      }
     }
     case "SET_USER":
       return { ...state, currentUser: action.user }
     case "CLEAR_USER":
-      return { ...state, currentUser: null, players: [], tableId: Math.floor(Math.random() * 9999) + 1 }
+      return {
+        ...state,
+        currentUser: null,
+        players: [],
+        tableId: Math.floor(Math.random() * 9999) + 1,
+        gameSidePanel: null,
+      }
     case "ADD_DRUNK_TIME": {
       const now = Date.now()
       const current = state.drunkUntil?.[action.playerId] ?? 0
@@ -401,6 +435,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         voiceBalance: Math.max(0, action.voiceBalance),
         inventory: Array.isArray(action.inventory) ? [...action.inventory] : [],
+        gameSidePanel: null,
       }
     case "ADD_BONUS":
       return { ...state, bonusBalance: state.bonusBalance + action.amount }

@@ -19,8 +19,14 @@ import { useInlineToast } from "@/hooks/use-inline-toast"
 import { listVotesForPack, payVotesForPack } from "@/lib/heart-shop-pricing"
 import { apiFetch } from "@/lib/api-fetch"
 import { vkBridge } from "@/lib/vk-bridge"
+import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 
-export function ShopScreen() {
+type ShopScreenProps = {
+  variant?: "page" | "panel"
+  onClose?: () => void
+}
+
+export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) {
   const { state, dispatch } = useGame()
   const { currentUser, voiceBalance, players, inventory, emotionDailyBoost, tableId } = state
   const { toast, showToast } = useInlineToast(1700)
@@ -108,6 +114,10 @@ export function ShopScreen() {
   }, [])
 
   if (!currentUser) return null
+
+  const isPanel = variant === "panel"
+  /** Узкая колонка боковой панели: всё идёт сверху вниз без сетки 2–4 колонки */
+  const layoutDense = isPanel
 
   const currentPlayer = players.find((p) => p.id === currentUser.id)
   const vipUntilTs = currentPlayer?.vipUntilTs
@@ -268,43 +278,26 @@ export function ShopScreen() {
     showToast("Пакет эмоций активирован", "success")
   }
 
-  return (
-    <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden entry-bg-animated">
-      {toast && <InlineToast toast={toast} />}
-      <div className="game-particles game-particles--dust" aria-hidden="true">
-        {shopParticles.map((d, idx) => {
-          const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
-          return (
-            <span
-              key={idx}
-              className="pointer-events-none absolute"
-              style={{ left: `${d.x}%`, top: `${d.y}%`, opacity: d.dustOpacity }}
-            >
-              <span
-                className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""} ${d.isYellow ? "game-particles__dot--yellow" : ""}`}
-                style={
-                  {
-                    position: "relative",
-                    left: 0,
-                    top: 0,
-                    ["--particle-anim"]: anim,
-                    ["--particle-dur"]: `${d.duration}s`,
-                    ["--particle-delay"]: `${d.delay}s`,
-                    ["--particle-ease"]: d.ease,
-                    ["--dust-size"]: d.dustSize,
-                  } as CSSProperties
-                }
-              />
-            </span>
-          )
-        })}
-      </div>
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center overflow-y-auto overflow-x-hidden px-4 py-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:py-10">
-      <div className="w-full max-w-2xl shrink-0 space-y-6 rounded-3xl border border-slate-500/80 bg-slate-900/95 px-6 py-8 shadow-[0_28px_60px_rgba(0,0,0,0.75)] backdrop-blur-md">
+  const backToTable = () => {
+    if (isPanel && onClose) onClose()
+    else dispatch({ type: "SET_SCREEN", screen: "game" })
+  }
+
+  const shopInnerCard = (
+    <div
+      className={
+        "w-full shrink-0 space-y-6 rounded-3xl border border-slate-500/80 bg-slate-900/95 shadow-[0_28px_60px_rgba(0,0,0,0.75)] backdrop-blur-md " +
+        (isPanel ? "max-w-full px-4 py-5 sm:px-5" : "max-w-2xl px-6 py-8")
+      }
+    >
+        {!isPanel && (
+          <>
         <h1 className="mb-2 text-center text-lg sm:text-2xl font-bold text-slate-50 tracking-wide">{"Магазин"}</h1>
         <p className="mb-2 text-center text-slate-300 text-sm sm:text-base">
           {"Здесь можно выделиться за столом и пополнить запас сердец."}
         </p>
+          </>
+        )}
         <p className="mb-5 text-center text-xs sm:text-sm text-slate-300/90">
           Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. Соответствие п. 2.3.8{" "}
           <a href="https://dev.vk.com/ru/mini-apps-rules" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-400">правил VK Mini Apps</a>.
@@ -319,7 +312,19 @@ export function ShopScreen() {
           </div>
         </div>
         {/* Пополнение сердечек (оплата через VK по пакетам) */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {layoutDense && (
+          <div className="border-t border-slate-600/40 pt-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Пополнение</p>
+            <p className="mt-1 text-xs text-slate-400">Пакеты сердец — оплата голосами VK</p>
+          </div>
+        )}
+        <div
+          className={
+            layoutDense
+              ? "mt-2 grid grid-cols-3 gap-2 sm:gap-3"
+              : "mt-5 grid grid-cols-3 gap-3"
+          }
+        >
           {heartOffers.map((offer) => {
             const hasDiscount = offer.listVotes > offer.votes
             const discountPercent = hasDiscount ? Math.round((1 - offer.votes / offer.listVotes) * 100) : 0
@@ -361,48 +366,80 @@ export function ShopScreen() {
                         Icon: Heart,
                         filled: false,
                       }
+            const cardAccent =
+              isBest
+                ? "border-amber-400/45 bg-gradient-to-b from-amber-500/[0.14] via-slate-950/75 to-[#060a12] shadow-[0_12px_40px_rgba(245,158,11,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                : offer.hearts >= 1000
+                  ? "border-indigo-400/35 bg-gradient-to-b from-indigo-500/[0.12] via-slate-950/80 to-[#060a12] shadow-[0_12px_40px_rgba(99,102,241,0.14),inset_0_1px_0_rgba(255,255,255,0.05)]"
+                  : hasDiscount
+                    ? "border-rose-500/40 bg-gradient-to-b from-rose-500/[0.11] via-slate-950/80 to-[#060a12] shadow-[0_12px_40px_rgba(244,63,94,0.1),inset_0_1px_0_rgba(255,255,255,0.05)]"
+                    : "border-cyan-500/25 bg-gradient-to-b from-cyan-500/[0.08] via-slate-950/85 to-[#060a12] shadow-[0_12px_36px_rgba(34,211,238,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]"
+
+            const iconWellStyle =
+              offer.hearts >= 5000
+                ? { background: "radial-gradient(circle at 30% 25%, rgba(254,243,199,0.95) 0%, rgba(251,191,36,0.55) 42%, rgba(180,83,9,0.35) 100%)" }
+                : offer.hearts >= 1000
+                  ? { background: "radial-gradient(circle at 30% 25%, rgba(224,231,255,0.9) 0%, rgba(129,140,248,0.5) 45%, rgba(67,56,202,0.4) 100%)" }
+                  : offer.hearts >= 150
+                    ? { background: "radial-gradient(circle at 30% 25%, rgba(254,205,211,0.95) 0%, rgba(251,113,133,0.45) 48%, rgba(190,18,60,0.35) 100%)" }
+                    : { background: "radial-gradient(circle at 30% 25%, rgba(248,250,252,0.95) 0%, rgba(148,163,184,0.45) 50%, rgba(71,85,105,0.35) 100%)" }
+
+            const badgeSm = layoutDense ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px] sm:text-xs"
+
             return (
               <div
                 key={offer.hearts}
-                className={`relative flex h-full flex-col overflow-hidden rounded-3xl border text-slate-50 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(34,211,238,0.22)] ${
-                  isBest
-                    ? "border-amber-300/70 bg-gradient-to-b from-amber-200/15 via-slate-900/95 to-slate-900"
-                    : hasDiscount
-                      ? "border-rose-400/70 bg-gradient-to-b from-rose-300/10 via-slate-900/95 to-slate-900"
-                      : "border-slate-700/80 bg-gradient-to-b from-cyan-200/5 via-slate-900/95 to-slate-900"
-                }`}
+                className={`group relative flex h-full min-h-[11rem] flex-col overflow-hidden rounded-[1.25rem] border text-slate-50 backdrop-blur-md transition-all duration-300 sm:rounded-[1.35rem] sm:min-h-[12.5rem] ${cardAccent} hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(0,0,0,0.45)]`}
               >
-                <div className="pointer-events-none absolute inset-x-4 top-0 h-14 rounded-b-full bg-cyan-300/12 blur-xl" />
-                <div className="relative flex flex-1 flex-col items-center px-3 pt-3 pb-3 sm:px-4 sm:pt-4">
+                <div
+                  className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-80"
+                  aria-hidden
+                />
+                <div className="pointer-events-none absolute inset-x-6 top-8 h-16 rounded-full bg-cyan-400/10 blur-2xl" aria-hidden />
+
+                <div
+                  className={`relative flex min-h-0 flex-1 flex-col items-center px-2 pb-2 pt-3 sm:px-3 sm:pb-3 sm:pt-4 ${layoutDense ? "pt-2.5" : ""}`}
+                >
                   {(isPopular || isBest) && (
                     <span
-                      className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${
+                      className={`absolute left-1.5 top-1.5 z-[1] rounded-full font-bold uppercase tracking-wider shadow-md sm:left-2 sm:top-2 ${badgeSm} ${
                         isBest
-                          ? "bg-amber-300/95 text-amber-900"
-                          : "bg-cyan-300/95 text-cyan-950"
+                          ? "bg-gradient-to-r from-amber-300 to-yellow-400 text-amber-950 ring-1 ring-amber-200/60"
+                          : "bg-gradient-to-r from-cyan-400 to-sky-400 text-cyan-950 ring-1 ring-cyan-100/50"
                       }`}
                     >
-                      {isBest ? "топ" : "хит"}
+                      {isBest ? "Топ" : "Хит"}
                     </span>
                   )}
                   {hasDiscount && (
-                    <span className="absolute right-2 top-2 rounded-full bg-rose-500/95 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white shadow-[0_0_14px_rgba(248,113,113,0.9)]">
-                      {"-"}{discountPercent}{"%"}
+                    <span
+                      className={`absolute right-1.5 top-1.5 z-[1] rounded-full bg-gradient-to-r from-rose-600 to-rose-500 font-bold uppercase tracking-wide text-white shadow-[0_4px_14px_rgba(244,63,94,0.55)] ring-1 ring-rose-300/40 sm:right-2 sm:top-2 ${badgeSm}`}
+                    >
+                      −{discountPercent}%
                     </span>
                   )}
-                  <div className={`mb-2 flex h-14 w-14 items-center justify-center rounded-full ring-4 sm:mb-3 sm:h-16 sm:w-16 ${iconConfig.ring} ${iconConfig.bg} shadow-[0_0_22px_rgba(148,163,184,0.6)]`}>
+
+                  <div
+                    className={`relative mb-2 flex shrink-0 items-center justify-center rounded-full shadow-[0_8px_28px_rgba(0,0,0,0.35)] ring-2 ring-white/15 ${iconConfig.ring} ${layoutDense ? "h-[3.25rem] w-[3.25rem] sm:h-14 sm:w-14" : "h-14 w-14 sm:h-16 sm:w-16"}`}
+                    style={iconWellStyle}
+                  >
                     <iconConfig.Icon
-                      className={`h-[26px] w-[26px] sm:h-8 sm:w-8 ${iconConfig.fg}`}
+                      className={`${layoutDense ? "h-[1.35rem] w-[1.35rem] sm:h-7 sm:w-7" : "h-7 w-7 sm:h-8 sm:w-8"} ${iconConfig.fg} drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]`}
                       strokeWidth={iconConfig.filled ? 0 : mdIconStroke}
                       fill={iconConfig.filled ? "currentColor" : "none"}
                       aria-hidden
                     />
                   </div>
-                  <div className="text-center leading-tight">
-                    <div className="flex items-center justify-center gap-1 text-xl font-bold text-rose-300 sm:text-2xl">
+
+                  <div className="mt-auto flex w-full flex-col items-center justify-end pb-0.5 text-center">
+                    <div
+                      className={`flex items-center justify-center gap-0.5 font-black tabular-nums tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.4)] sm:gap-1 ${
+                        layoutDense ? "text-base sm:text-lg" : "text-lg sm:text-2xl"
+                      }`}
+                    >
                       <span>{offer.hearts}</span>
                       <Heart
-                        className="h-[1.1em] w-[1.1em] shrink-0 text-rose-400/95"
+                        className="h-[1em] w-[1em] shrink-0 text-rose-400"
                         strokeWidth={mdIconStroke}
                         fill="none"
                         aria-hidden
@@ -410,94 +447,136 @@ export function ShopScreen() {
                     </div>
                   </div>
                 </div>
+
                 <Button
                   size="lg"
-                  className={`${ctaPrimaryClass} rounded-b-[1.4rem] rounded-t-none border-t`}
+                  className={`mt-auto min-h-[2.75rem] w-full shrink-0 rounded-none rounded-b-[1.25rem] border-0 border-t border-white/10 px-2 py-2.5 font-bold shadow-none transition hover:brightness-105 active:brightness-95 sm:min-h-12 sm:rounded-b-[1.35rem] ${layoutDense ? "text-[10px] leading-tight sm:text-xs" : "text-xs sm:text-sm"}`}
                   style={{
-                    background: "linear-gradient(135deg,#22d3ee,#6366f1)",
-                    color: "#0b1120",
-                    borderRadius: "0 0 1.4rem 1.4rem",
+                    background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 70%, #6366f1 100%)",
+                    color: "#0f172a",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
                   }}
                   onClick={() => handleTopUp(offer.hearts, offer.votes, offer.itemId)}
                 >
-                  {"Купить за "}{offer.votes}{" гол."}
+                  Купить за {offer.votes} гол.
                 </Button>
               </div>
             )
           })}
         </div>
 
-        {/* VIP-статус + покупка */}
-        <div className={`flex flex-col gap-5 px-4 py-5 ${sectionCardClass}`}>
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-600 shadow-[0_0_22px_rgba(251,191,36,0.45)] ring-2 ring-amber-300/50">
-              <Crown className="h-5 w-5 text-amber-950" strokeWidth={mdIconStroke} aria-hidden />
-            </div>
-            <div className="min-w-0 flex flex-col gap-1">
-              <span className="text-base font-bold tracking-tight text-slate-50 sm:text-lg">VIP-статус</span>
-              <span className="text-sm leading-relaxed text-slate-400">
-                Золотая рамка и значок на аватаре, приоритетное место за столом.
-              </span>
-              {isVip && vipLeftDays != null && (
-                <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-amber-500/12 px-2.5 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/35">
-                  Активен ещё {vipLeftDays} дн.
-                </span>
-              )}
+        {/* VIP-статус: единый модуль + три карточки в один ряд */}
+        <div
+          className={`overflow-hidden rounded-2xl border border-slate-700/45 bg-gradient-to-b from-slate-900/95 via-[#0a0f18] to-[#06090f] shadow-[0_20px_50px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)] ${
+            layoutDense ? "border-t border-slate-600/40 pt-1" : ""
+          }`}
+        >
+          <div className="border-b border-slate-700/40 px-4 py-4 sm:px-5 sm:py-5">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14"
+                style={{
+                  background: "linear-gradient(145deg, #fcd34d 0%, #f59e0b 45%, #d97706 100%)",
+                  boxShadow: "0 0 28px rgba(251,191,36,0.35), inset 0 1px 0 rgba(255,255,255,0.35)",
+                }}
+              >
+                <Crown className="h-6 w-6 text-amber-950 sm:h-7 sm:w-7" strokeWidth={mdIconStroke} aria-hidden />
+              </div>
+              <div className="min-w-0 flex flex-col gap-1.5 pt-0.5">
+                <h3 className="text-lg font-bold tracking-tight text-white sm:text-xl">VIP-статус</h3>
+                <p className="text-sm leading-relaxed text-slate-400">
+                  Золотая рамка и значок на аватаре, приоритетное место за столом.
+                </p>
+                {isVip && vipLeftDays != null && (
+                  <span className="inline-flex w-fit items-center rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/30">
+                    Активен ещё {vipLeftDays} дн.
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-stretch">
-            {/* Пробный */}
-            <div className="flex min-h-[168px] flex-col overflow-hidden rounded-2xl border border-amber-400/45 bg-gradient-to-b from-amber-500/[0.12] via-slate-950/85 to-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="flex flex-1 flex-col px-4 pt-4 pb-2">
-                <div className="mb-2 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-400" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-400/95">Проба</span>
+          <div className="grid grid-cols-3 gap-1.5 px-2 pb-4 pt-1 sm:gap-3 sm:px-4 sm:pb-5 sm:pt-2">
+            {/* Проба */}
+            <div className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-lg border-2 border-amber-400/55 bg-gradient-to-b from-amber-500/[0.1] via-slate-950/92 to-[#070b12] shadow-[0_0_32px_rgba(245,158,11,0.1)] sm:min-h-[13rem] sm:rounded-xl">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/30 to-transparent" aria-hidden />
+              <div className="flex min-h-0 flex-1 flex-col px-2 pb-2 pt-2.5 sm:px-3 sm:pb-3 sm:pt-4">
+                <div className="mb-1.5 flex items-center gap-1 sm:mb-3 sm:gap-2">
+                  <Sparkles className="h-3 w-3 shrink-0 text-amber-400 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[8px] font-extrabold uppercase tracking-[0.12em] text-amber-300 sm:text-[10px] sm:tracking-[0.18em]">
+                    Проба
+                  </span>
                 </div>
-                <p className="text-xl font-black tracking-tight text-amber-100">3 дня</p>
-                <p className="mt-2 text-sm leading-snug text-slate-400">Полный доступ бесплатно — один раз на аккаунт.</p>
+                <p className="text-base font-black tracking-tight text-white sm:text-2xl sm:leading-none">3 дня</p>
+                <p className="mt-1 line-clamp-3 flex-1 text-[10px] leading-snug text-slate-400 sm:mt-2 sm:text-sm sm:leading-relaxed">
+                  Полный доступ бесплатно — один раз на аккаунт.
+                </p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || vipTrialUsed}
-                className={`${ctaPrimaryClass} mt-auto h-12 shrink-0 rounded-none rounded-b-2xl border-x-0 border-b-0 border-t border-amber-400/25 disabled:!opacity-100`}
+                className="mt-auto min-h-[2.65rem] shrink-0 rounded-none rounded-b-lg border-0 border-t border-amber-400/20 px-1 py-2 text-[9px] font-bold leading-tight disabled:!opacity-100 sm:min-h-[3rem] sm:rounded-b-xl sm:px-3 sm:py-3 sm:text-sm"
                 style={
                   !!isVip || vipTrialUsed
                     ? {
-                        background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
-                        color: "#e2e8f0",
-                        borderColor: "rgba(148,163,184,0.35)",
+                        background: "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
+                        color: "#cbd5e1",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
                       }
-                    : { background: "linear-gradient(135deg,#22d3ee,#6366f1)", color: "#0b1220" }
+                    : {
+                        background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
+                        color: "#0f172a",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+                      }
                 }
                 onClick={() => handleActivateVip({ days: 3, cost: 0, isTrial: true })}
               >
-                {isVip ? "Уже VIP" : vipTrialUsed ? "Проба использована" : "Попробовать бесплатно"}
+                {isVip ? (
+                  "Уже VIP"
+                ) : vipTrialUsed ? (
+                  <>
+                    <span className="hidden sm:inline">Проба использована</span>
+                    <span className="sm:hidden">Уже брали</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">Попробовать бесплатно</span>
+                    <span className="sm:hidden">Проба бесплатно</span>
+                  </>
+                )}
               </Button>
             </div>
 
             {/* 7 дней */}
-            <div className="flex min-h-[168px] flex-col overflow-hidden rounded-2xl border border-slate-600/75 bg-slate-950/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-              <div className="flex flex-1 flex-col px-4 pt-4 pb-2">
-                <div className="mb-2 flex items-center gap-2 text-slate-500">
-                  <CalendarDays className="h-4 w-4" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Тариф</span>
+            <div className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-lg border border-slate-600/70 bg-slate-950/85 backdrop-blur-[2px] sm:min-h-[13rem] sm:rounded-xl">
+              <div className="flex min-h-0 flex-1 flex-col px-2 pb-2 pt-2.5 sm:px-3 sm:pb-3 sm:pt-4">
+                <div className="mb-1.5 flex items-center gap-1 text-slate-500 sm:mb-3 sm:gap-2">
+                  <CalendarDays className="h-3 w-3 shrink-0 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[8px] font-extrabold uppercase tracking-[0.12em] sm:text-[10px] sm:tracking-[0.18em]">
+                    Тариф
+                  </span>
                 </div>
-                <p className="text-xl font-black tracking-tight text-slate-50">7 дней</p>
-                <p className="mt-2 text-sm leading-snug text-slate-500">Списание с баланса сердечек в приложении.</p>
+                <p className="text-base font-black tracking-tight text-white sm:text-2xl sm:leading-none">7 дней</p>
+                <p className="mt-1 line-clamp-3 flex-1 text-[10px] leading-snug text-slate-500 sm:mt-2 sm:text-sm sm:leading-relaxed">
+                  Списание с баланса сердечек в приложении.
+                </p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || voiceBalance < 20}
-                className={`${ctaPrimaryClass} mt-auto h-12 shrink-0 rounded-none rounded-b-2xl border-x-0 border-b-0 border-t border-slate-600/60 disabled:!opacity-100`}
+                className="mt-auto min-h-[2.65rem] shrink-0 rounded-none rounded-b-lg border-0 border-t border-slate-600/50 px-1 py-2 text-[9px] font-bold leading-tight disabled:!opacity-100 sm:min-h-[3rem] sm:rounded-b-xl sm:px-3 sm:py-3 sm:text-sm"
                 style={
                   !!isVip || voiceBalance < 20
                     ? {
-                        background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
-                        color: "#e2e8f0",
-                        borderColor: "rgba(148,163,184,0.35)",
+                        background: "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
+                        color: "#cbd5e1",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
                       }
-                    : { background: "linear-gradient(135deg,#38bdf8,#6366f1)", color: "#0b1220" }
+                    : {
+                        background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
+                        color: "#0f172a",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+                      }
                 }
                 onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
               >
@@ -506,39 +585,47 @@ export function ShopScreen() {
                 ) : voiceBalance < 20 ? (
                   <span className="inline-flex items-center justify-center gap-1.5">
                     Не хватает 20
-                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 ) : (
                   <span className="inline-flex items-center justify-center gap-1.5">
                     Купить за 20
-                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 )}
               </Button>
             </div>
 
             {/* 30 дней */}
-            <div className="flex min-h-[168px] flex-col overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-b from-cyan-500/[0.07] via-slate-950/90 to-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-              <div className="flex flex-1 flex-col px-4 pt-4 pb-2">
-                <div className="mb-2 flex items-center gap-2 text-cyan-400/80">
-                  <CalendarDays className="h-4 w-4" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Выгодно</span>
+            <div className="flex min-h-[10.5rem] flex-col overflow-hidden rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-500/[0.07] via-slate-950/90 to-[#070b12] shadow-[0_0_24px_rgba(34,211,238,0.08)] sm:min-h-[13rem] sm:rounded-xl">
+              <div className="flex min-h-0 flex-1 flex-col px-2 pb-2 pt-2.5 sm:px-3 sm:pb-3 sm:pt-4">
+                <div className="mb-1.5 flex items-center gap-1 sm:mb-3 sm:gap-2">
+                  <CalendarDays className="h-3 w-3 shrink-0 text-cyan-400 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[8px] font-extrabold uppercase tracking-[0.12em] text-cyan-400 sm:text-[10px] sm:tracking-[0.18em]">
+                    Выгодно
+                  </span>
                 </div>
-                <p className="text-xl font-black tracking-tight text-slate-50">30 дней</p>
-                <p className="mt-2 text-sm leading-snug text-slate-500">Максимум преимуществ на месяц вперёд.</p>
+                <p className="text-base font-black tracking-tight text-white sm:text-2xl sm:leading-none">30 дней</p>
+                <p className="mt-1 line-clamp-3 flex-1 text-[10px] leading-snug text-slate-500 sm:mt-2 sm:text-sm sm:leading-relaxed">
+                  Максимум преимуществ на месяц вперёд.
+                </p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || voiceBalance < 70}
-                className={`${ctaPrimaryClass} mt-auto h-12 shrink-0 rounded-none rounded-b-2xl border-x-0 border-b-0 border-t border-cyan-500/25 disabled:!opacity-100`}
+                className="mt-auto min-h-[2.65rem] shrink-0 rounded-none rounded-b-lg border-0 border-t border-cyan-500/25 px-1 py-2 text-[9px] font-bold leading-tight disabled:!opacity-100 sm:min-h-[3rem] sm:rounded-b-xl sm:px-3 sm:py-3 sm:text-sm"
                 style={
                   !!isVip || voiceBalance < 70
                     ? {
-                        background: "linear-gradient(180deg, rgba(71,85,105,0.95) 0%, rgba(51,65,85,0.98) 100%)",
-                        color: "#e2e8f0",
-                        borderColor: "rgba(148,163,184,0.35)",
+                        background: "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
+                        color: "#cbd5e1",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
                       }
-                    : { background: "linear-gradient(135deg,#22d3ee,#6366f1)", color: "#0b1220" }
+                    : {
+                        background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
+                        color: "#0f172a",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+                      }
                 }
                 onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
               >
@@ -547,12 +634,12 @@ export function ShopScreen() {
                 ) : voiceBalance < 70 ? (
                   <span className="inline-flex items-center justify-center gap-1.5">
                     Не хватает 70
-                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 ) : (
                   <span className="inline-flex items-center justify-center gap-1.5">
                     Купить за 70
-                    <Heart className="h-4 w-4 shrink-0 text-rose-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 )}
               </Button>
@@ -560,33 +647,127 @@ export function ShopScreen() {
           </div>
         </div>
 
-        {/* Пакет эмоций */}
-        <div className={`flex items-center justify-between gap-3 rounded-xl px-4 py-4 ${sectionCardClass}`}>
-          <div className="flex min-w-0 flex-col">
-            <span className="text-sm sm:text-base font-semibold text-slate-100">
-              {"Эмоции: +50 каждого вида"}
-            </span>
-            <span className={subtleTextClass}>
-              {"Добавляет +50 к дневному лимиту 💋 🍺 🍹 за 5 ❤"}
-            </span>
-            <span className="text-xs text-cyan-200/90">
-              {"Текущий лимит на сегодня: "}{totalDailyLimitPerType}
-            </span>
+        {/* Пакет эмоций — акцентный промо-блок (конверсия) */}
+        <section
+          className="relative overflow-hidden rounded-2xl border border-fuchsia-500/35 shadow-[0_0_48px_rgba(192,38,211,0.14),inset_0_1px_0_rgba(255,255,255,0.07)]"
+          style={{
+            background:
+              "linear-gradient(145deg, rgba(88,28,135,0.35) 0%, rgba(15,23,42,0.97) 42%, rgba(8,47,73,0.9) 100%)",
+          }}
+          aria-labelledby="shop-emotion-pack-title"
+        >
+          <div
+            className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-fuchsia-500/25 blur-3xl"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-cyan-500/15 blur-3xl"
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-300/40 to-transparent" aria-hidden />
+
+          <div className="relative px-4 py-5 sm:px-6 sm:py-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-8">
+              <div className="min-w-0 w-full flex-1 space-y-4">
+                <div className="flex flex-row items-start gap-3 sm:gap-4">
+                  <div
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-16 sm:w-16"
+                    style={{
+                      background: "linear-gradient(145deg, rgba(217,70,239,0.45) 0%, rgba(6,182,212,0.35) 100%)",
+                      boxShadow: "0 0 32px rgba(217,70,239,0.25), inset 0 1px 0 rgba(255,255,255,0.2)",
+                    }}
+                  >
+                    <Sparkles className="h-7 w-7 text-white drop-shadow sm:h-9 sm:w-9" strokeWidth={mdIconStroke} aria-hidden />
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-fuchsia-300/90">
+                      За столом
+                    </p>
+                    <h3
+                      id="shop-emotion-pack-title"
+                      className="mt-1 max-w-full text-balance text-lg font-black leading-snug tracking-tight text-white sm:text-2xl sm:leading-tight"
+                    >
+                      +50 к лимиту каждого типа
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                      Не обрывайте флирт на полуслове: больше поцелуев, напитков и смеха (
+                      <span aria-hidden>💋 🍺 🍹</span>) в тот же день.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex w-full min-w-0 flex-col gap-2 rounded-xl border border-cyan-400/25 bg-slate-950/70 px-4 py-3 backdrop-blur-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Сегодня на один тип
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-1.5 sm:ml-auto">
+                    <span className="text-2xl font-black tabular-nums leading-none text-cyan-300 sm:text-3xl">
+                      {totalDailyLimitPerType}
+                    </span>
+                    <span className="text-xs font-medium text-slate-500">лимит / день</span>
+                  </span>
+                </div>
+
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Пакет добавляет <span className="font-semibold text-fuchsia-200">+{emotionPackExtraPerType}</span> к
+                  базовому лимиту на сегодня для каждого вида эмоций. Стоимость пакета —{" "}
+                  <span className="font-semibold text-slate-300">{emotionPackCost} ❤</span>.
+                </p>
+              </div>
+
+              <div className="flex w-full min-w-0 shrink-0 flex-col justify-end lg:w-[min(100%,280px)]">
+                <Button
+                  type="button"
+                  size="lg"
+                  disabled={voiceBalance < emotionPackCost}
+                  className="h-auto min-h-[3.25rem] w-full rounded-2xl px-4 py-3.5 text-base font-bold shadow-[0_12px_32px_rgba(34,211,238,0.25)] transition hover:brightness-105 active:scale-[0.99] disabled:shadow-none disabled:hover:brightness-100"
+                  style={
+                    voiceBalance < emotionPackCost
+                      ? {
+                          background: "linear-gradient(180deg, #475569 0%, #334155 100%)",
+                          color: "#e2e8f0",
+                        }
+                      : {
+                          background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
+                          color: "#0f172a",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+                        }
+                  }
+                  onClick={handleBuyEmotionPack}
+                >
+                  {voiceBalance < emotionPackCost ? (
+                    <span className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-2">
+                      <span>Недостаточно сердец</span>
+                      <span className="text-sm font-semibold opacity-90">нужно {emotionPackCost} ❤</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <span>Разблокировать +{emotionPackExtraPerType}</span>
+                      <span className="rounded-lg bg-slate-900/25 px-2 py-0.5 text-sm font-black">
+                        {emotionPackCost} ❤
+                      </span>
+                    </span>
+                  )}
+                </Button>
+                <p className="mt-2 text-center text-[11px] text-slate-500 lg:text-left">
+                  Один тап — и лимит обновится до конца суток.
+                </p>
+              </div>
+            </div>
           </div>
-          <Button
-            size="sm"
-            disabled={voiceBalance < emotionPackCost}
-            className={`${ctaPrimaryClass} h-10 w-auto min-w-[146px] px-4`}
-            style={{ background: "linear-gradient(135deg,#22d3ee,#6366f1)" }}
-            onClick={handleBuyEmotionPack}
-          >
-            {voiceBalance < emotionPackCost ? "Не хватает ❤" : "Купить за 5 ❤"}
-          </Button>
-        </div>
+        </section>
 
         {/* Обмен валюты: Сердца ↔ Розы */}
-        <div className={`overflow-hidden p-0 ${sectionCardClass}`}>
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cyan-400/10 px-4 py-3">
+        <div
+          className={`overflow-hidden p-0 ${sectionCardClass} ${
+            layoutDense ? "border-t border-slate-600/35" : ""
+          }`}
+        >
+          <div
+            className={`border-b border-cyan-400/10 px-4 py-3 ${
+              layoutDense ? "flex flex-col items-stretch gap-3" : "flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+            }`}
+          >
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/15 ring-1 ring-cyan-400/25">
                 <ArrowRightLeft className="h-5 w-5 text-cyan-300" strokeWidth={mdIconStroke} aria-hidden />
@@ -596,7 +777,13 @@ export function ShopScreen() {
                 <h2 className="text-base font-bold tracking-tight text-slate-50">Конвертация</h2>
               </div>
             </div>
-            <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+            <div
+              className={
+                layoutDense
+                  ? "flex flex-wrap items-center gap-2"
+                  : "ml-auto flex shrink-0 flex-nowrap items-center gap-2"
+              }
+            >
               <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-slate-900/90 px-2.5 py-1 text-[11px] font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] sm:px-3 sm:py-1.5 sm:text-xs">
                 <span className="tabular-nums text-cyan-200">5</span>
                 <span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/30 sm:h-6 sm:w-6">
@@ -623,24 +810,41 @@ export function ShopScreen() {
           </div>
 
           <div className="space-y-4 px-4 py-4">
-            <div className="flex w-full">
-              <div className="flex w-full rounded-2xl bg-slate-950/95 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-slate-600/60">
+            <div className="space-y-2">
+              <p className="text-[11px] leading-snug text-slate-400 sm:text-xs">
+                <span className="font-semibold text-slate-300">Направление обмена</span>
+                {" — "}
+                курс <span className="tabular-nums text-cyan-300">5 ❤</span> за{" "}
+                <span className="tabular-nums text-fuchsia-300">1 🌹</span> и обратно. Нажмите вариант слева или справа.
+              </p>
+              <div
+                role="tablist"
+                aria-label="Выбор направления: сердца на розы или розы на сердца"
+                className="flex w-full flex-row gap-2 rounded-2xl bg-slate-950/95 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-slate-600/65"
+              >
                 <button
                   type="button"
+                  role="tab"
+                  id="exchange-tab-hearts"
+                  aria-selected={exchangeTab === "voices-to-roses"}
+                  aria-controls="exchange-panel"
+                  tabIndex={0}
                   onClick={() => setExchangeTab("voices-to-roses")}
-                  className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[0.65rem] px-3 py-2 text-sm font-bold transition-all sm:px-5 ${
+                  className={`flex min-h-[3rem] flex-1 touch-manipulation items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center transition-all sm:gap-2 sm:px-3 ${
                     exchangeTab === "voices-to-roses"
-                      ? "bg-gradient-to-r from-cyan-300 via-cyan-400 to-sky-400 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_24px_rgba(34,211,238,0.28)]"
-                      : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                      ? "bg-gradient-to-r from-cyan-400 via-sky-400 to-cyan-500 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_10px_28px_rgba(34,211,238,0.35)]"
+                      : "border border-slate-600/90 bg-slate-900/95 text-slate-200 hover:border-cyan-500/45 hover:bg-slate-800/90 active:scale-[0.98]"
                   }`}
                 >
                   <Heart
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-cyan-400/90"}`}
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-cyan-400"}`}
                     strokeWidth={mdIconStroke}
                     fill="none"
                     aria-hidden
                   />
-                  <span className="truncate">Сердца → Розы</span>
+                  <span className="min-w-0 truncate text-center text-[10px] font-bold leading-tight sm:text-sm">
+                    Сердца → Розы
+                  </span>
                   <Flower2
                     className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-fuchsia-400"}`}
                     strokeWidth={mdIconStroke}
@@ -649,21 +853,28 @@ export function ShopScreen() {
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  id="exchange-tab-roses"
+                  aria-selected={exchangeTab === "roses-to-voices"}
+                  aria-controls="exchange-panel"
+                  tabIndex={0}
                   onClick={() => setExchangeTab("roses-to-voices")}
-                  className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[0.65rem] px-3 py-2 text-sm font-bold transition-all sm:px-5 ${
+                  className={`flex min-h-[3rem] flex-1 touch-manipulation items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center transition-all sm:gap-2 sm:px-3 ${
                     exchangeTab === "roses-to-voices"
-                      ? "bg-gradient-to-r from-cyan-300 via-cyan-400 to-sky-400 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_24px_rgba(34,211,238,0.28)]"
-                      : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
+                      ? "bg-gradient-to-r from-fuchsia-500 via-pink-500 to-fuchsia-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_28px_rgba(217,70,239,0.35)]"
+                      : "border border-slate-600/90 bg-slate-900/95 text-slate-200 hover:border-fuchsia-500/40 hover:bg-slate-800/90 active:scale-[0.98]"
                   }`}
                 >
                   <Flower2
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-slate-900" : "text-fuchsia-400"}`}
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-white" : "text-fuchsia-400"}`}
                     strokeWidth={mdIconStroke}
                     aria-hidden
                   />
-                  <span className="truncate">Розы → Сердца</span>
+                  <span className="min-w-0 truncate text-center text-[10px] font-bold leading-tight sm:text-sm">
+                    Розы → Сердца
+                  </span>
                   <Heart
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-slate-900" : "text-cyan-400/90"}`}
+                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-white" : "text-cyan-400"}`}
                     strokeWidth={mdIconStroke}
                     fill="none"
                     aria-hidden
@@ -671,6 +882,8 @@ export function ShopScreen() {
                 </button>
               </div>
             </div>
+
+            <div id="exchange-panel" role="tabpanel" aria-labelledby={exchangeTab === "voices-to-roses" ? "exchange-tab-hearts" : "exchange-tab-roses"}>
 
             {exchangeTab === "voices-to-roses" ? (
               <div className="space-y-3">
@@ -683,7 +896,11 @@ export function ShopScreen() {
                     </span>
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                <div
+                  className={
+                    layoutDense ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 gap-2.5 sm:grid-cols-3"
+                  }
+                >
                   {(
                     [
                       { roses: 1, cost: 5 },
@@ -724,7 +941,11 @@ export function ShopScreen() {
                     </span>
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                <div
+                  className={
+                    layoutDense ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 gap-2.5 sm:grid-cols-3"
+                  }
+                >
                   <Button
                     type="button"
                     variant="outline"
@@ -782,11 +1003,16 @@ export function ShopScreen() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
 
         {/* Добавить друзей */}
-        <div className={`flex items-center justify-between rounded-xl px-3 py-3 ${sectionCardClass}`}>
+        <div
+          className={`rounded-xl px-3 py-3 ${sectionCardClass} ${
+            layoutDense ? "flex flex-col items-stretch gap-3" : "flex items-center justify-between"
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700/80">
               <Users className="h-5 w-5 text-slate-300" />
@@ -799,7 +1025,7 @@ export function ShopScreen() {
           <Button
             size="sm"
             variant="outline"
-            className={`${ctaSecondaryClass} h-9 px-4`}
+            className={`${ctaSecondaryClass} h-9 px-4 ${layoutDense ? "w-full" : ""}`}
             onClick={handleInviteFriends}
           >
             {"Пригласить"}
@@ -810,12 +1036,62 @@ export function ShopScreen() {
           <Button
             variant="outline"
             className={ctaSecondaryClass}
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "game" })}
+            onClick={backToTable}
           >
             {"Назад к столу"}
           </Button>
         </div>
+    </div>
+  )
+
+  if (isPanel) {
+    return (
+      <>
+        {toast && <InlineToast toast={toast} />}
+        <GameSidePanelShell
+          title="Магазин"
+          subtitle="Здесь можно выделиться за столом и пополнить запас сердец."
+          onClose={onClose!}
+        >
+          {shopInnerCard}
+        </GameSidePanelShell>
+      </>
+    )
+  }
+
+  return (
+    <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden entry-bg-animated">
+      {toast && <InlineToast toast={toast} />}
+      <div className="game-particles game-particles--dust" aria-hidden="true">
+        {shopParticles.map((d, idx) => {
+          const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
+          return (
+            <span
+              key={idx}
+              className="pointer-events-none absolute"
+              style={{ left: `${d.x}%`, top: `${d.y}%`, opacity: d.dustOpacity }}
+            >
+              <span
+                className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""} ${d.isYellow ? "game-particles__dot--yellow" : ""}`}
+                style={
+                  {
+                    position: "relative",
+                    left: 0,
+                    top: 0,
+                    ["--particle-anim"]: anim,
+                    ["--particle-dur"]: `${d.duration}s`,
+                    ["--particle-delay"]: `${d.delay}s`,
+                    ["--particle-ease"]: d.ease,
+                    ["--dust-size"]: d.dustSize,
+                  } as CSSProperties
+                }
+              />
+            </span>
+          )
+        })}
       </div>
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center overflow-y-auto overflow-x-hidden px-4 py-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:py-10">
+        {shopInnerCard}
       </div>
     </div>
   )

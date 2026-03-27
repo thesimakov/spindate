@@ -83,7 +83,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "kind", label: "Добрые" },
 ]
 
-export function RatingModal({ onClose }: { onClose: () => void }) {
+/** Табы и списки рейтинга — для боковой панели или модалки */
+export function RatingLeaderboardBody() {
   const { state } = useGame()
   const { gameLog } = state
   const [activeTab, setActiveTab] = useState<TabId>("love")
@@ -97,7 +98,6 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
       <span className="flex items-center gap-2 min-w-0">
         <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-600 bg-slate-700">
           {avatar ? (
-             
             <img src={avatar} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-xs text-slate-400">?</span>
@@ -157,12 +157,38 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
     return null
   }
 
-  const subtitle = activeTab === "love"
-    ? "Количество поцелуев"
-    : activeTab === "gifts"
-      ? "Кто больше всего подарил подарков"
-      : "Кто больше всего потратил на пиво, парить, бриллианты, цветы"
+  const subtitle =
+    activeTab === "love"
+      ? "Количество поцелуев"
+      : activeTab === "gifts"
+        ? "Кто больше всего подарил подарков"
+        : "Кто больше всего потратил на пиво, парить, бриллианты, цветы"
 
+  return (
+    <>
+      <div className="flex shrink-0 border-b border-slate-600 px-0 -mx-0 mb-3">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className="flex-1 px-2 py-2.5 text-center text-sm font-medium transition-colors"
+            style={{
+              color: activeTab === tab.id ? "#facc15" : "#94a3b8",
+              borderBottom: activeTab === tab.id ? "2px solid #facc15" : "2px solid transparent",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <p className="mb-3 text-xs text-slate-400">{subtitle}</p>
+      {content()}
+    </>
+  )
+}
+
+export function RatingModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -177,7 +203,6 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Заголовок */}
         <div className="flex shrink-0 items-center justify-between border-b px-4 py-3" style={{ borderColor: "#334155" }}>
           <div className="flex items-center gap-2">
             <div
@@ -203,29 +228,8 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
             <X className="h-5 w-5" />
           </button>
         </div>
-
-        {/* Табы */}
-        <div className="flex shrink-0 border-b px-2" style={{ borderColor: "#334155" }}>
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className="flex-1 px-3 py-2.5 text-center text-sm font-medium transition-colors"
-              style={{
-                color: activeTab === tab.id ? "#facc15" : "#94a3b8",
-                borderBottom: activeTab === tab.id ? "2px solid #facc15" : "2px solid transparent",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Контент выбранного таба */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <p className="mb-3 text-xs text-slate-400">{subtitle}</p>
-          {content()}
+          <RatingLeaderboardBody />
         </div>
       </div>
     </div>
