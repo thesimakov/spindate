@@ -60,17 +60,23 @@ jobs:
             exit 1
           fi
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=12 -o TCPKeepAlive=yes"
           echo "Checking SSH connectivity..."
-          ssh -o BatchMode=yes -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "echo ok"
+          ssh -o BatchMode=yes $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "echo ok"
           echo "Creating directory on server..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
+          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
           echo "Syncing files..."
+          # .next/cache — только для инкрементальной сборки, раздувает архив и даёт ошибки utime на части хостингов
+          # --omit-dir-times / --no-times — если на каталоге нет прав менять mtime (Operation not permitted)
           rsync -avz --delete \
+            --omit-dir-times \
+            --no-times \
             --exclude 'node_modules' \
             --exclude 'data' \
             --exclude '.env*' \
             --exclude '.git' \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude '.next/cache' \
+            -e "ssh $SSH_OPTS" \
             .next \
             public \
             package.json \
@@ -79,6 +85,6 @@ jobs:
             ecosystem.config.cjs \
             "$SERVER_USER@$SERVER_HOST:/var/www/spindate/"
           echo "Running npm ci and pm2 on server..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" \
+          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
             "cd /var/www/spindate && npm ci && PORT=3001 pm2 start ecosystem.config.cjs --update-env && pm2 save"
           echo "Deploy finished."
