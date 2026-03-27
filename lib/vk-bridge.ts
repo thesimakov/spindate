@@ -43,8 +43,8 @@ export function isVkMiniApp(): boolean {
   return params.has("vk_user_id") || params.has("vk_app_id")
 }
 
-/** Максимальная высота iframe по документации VK Mini Apps (ограничение платформы). */
-const VK_IFRAME_MAX_HEIGHT = 4050
+/** Максимальная высота iframe: в панели VK «Размер iframe» до 4500 px (см. dev.vk.com games → Отображение). */
+const VK_IFRAME_MAX_HEIGHT = 4500
 
 /** Размер видимой области для передачи в VKWebAppResizeWindow (вкладка / окно / visualViewport). */
 export function getViewportSizeForVk(): { width: number; height: number } {
@@ -57,9 +57,12 @@ export function getViewportSizeForVk(): { width: number; height: number } {
 }
 
 /**
- * Подгоняет размер iframe мини-приложения под текущее окно вкладки/браузера.
- * На части мобильных клиентов метод может быть недоступен — ошибка игнорируется.
+ * Подгоняет размер iframe под окно (VKWebAppResizeWindow).
+ * Ширина вкладки на десктопе учитывается, если в панели VK включён широкоформатный режим;
+ * иначе ширина ограничена настройкой «Размер iframe» (до 1000 px) — см. документацию VK.
+ * На части мобильных клиентов метод недоступен — ошибка игнорируется.
  * @see https://dev.vk.com/bridge/VKWebAppResizeWindow
+ * @see https://dev.vk.com/ru/games/settings/general/display
  */
 export async function resizeVkWindowToViewport(): Promise<boolean> {
   const b = await getBridgeAsync()
