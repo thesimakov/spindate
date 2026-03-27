@@ -17,6 +17,20 @@ const nextConfig = {
       value: "frame-ancestors 'self' https://vk.com https://vk.ru https://*.vk.com https://*.vk.ru",
     }
     return [
+      /**
+       * Главная: не отдавать из кэша устаревший HTML — иначе после деплоя подтягиваются старые хэши
+       * в <link>/<script>, а на диске уже новый .next → 500/битый визуал до жёсткого обновления.
+       */
+      {
+        source: "/",
+        headers: [
+          csp,
+          {
+            key: "Cache-Control",
+            value: "private, no-cache, must-revalidate",
+          },
+        ],
+      },
       /** Не кэшировать HTML админки годами — иначе после деплоя браузер тянет старые ссылки на /_next/static/* (404, чёрный экран). */
       {
         source: "/admin-lemnity",
