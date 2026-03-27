@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
-import { vkBridge } from "@/lib/vk-bridge"
+import { vkBridge, initVk, isVkMiniApp } from "@/lib/vk-bridge"
 import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
-import type { Gender, Purpose } from "@/lib/game-types"
+import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
 
 export function RegistrationScreen() {
@@ -26,6 +26,18 @@ export function RegistrationScreen() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginModalMode, setLoginModalMode] = useState<"login" | "register">("login")
   const defaultPurpose: Purpose = "communication"
+
+  /** Преобразует строковый id пользователя (UUID) в число для Player.id.
+   *  Гарантирует отсутствие конфликта с ID ботов (1000-1999). */
+  const userIdToNumber = (id: string): number => {
+    let h = 0
+    for (let i = 0; i < id.length; i++) {
+      h = (h << 5) - h + id.charCodeAt(i)
+      h = h | 0
+    }
+    const n = Math.abs(h) || 1
+    return n < 10000 ? n + 10000 : n
+  }
 
   const buildTableAndEnter = async (user: {
     id: number
@@ -100,6 +112,99 @@ export function RegistrationScreen() {
     dispatch({ type: "SET_SCREEN", screen: "game" })
   }
 
+  const vkAutoAttempted = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (!isVkMiniApp()) return
+    const search = window.location.search
+    if (!search.includes("vk_user_id=") || !search.includes("sign=")) return
+    if (vkAutoAttempted.current) return
+    vkAutoAttempted.current = true
+
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError("")
+      try {
+        await initVk()
+        if (cancelled) return
+        const vkUser = await vkBridge.getUserInfo()
+        if (cancelled) return
+        const res = await fetch("/api/auth/vk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            launchParams: search,
+            profile: {
+              firstName: vkUser.first_name,
+              lastName: vkUser.last_name,
+              photoUrl: vkUser.photo_200,
+              sex: vkUser.sex,
+              age: 25,
+            },
+          }),
+        })
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean
+          error?: string
+          user?: {
+            id: string
+            username?: string
+            displayName?: string
+            avatarUrl?: string
+            gender?: string
+            age?: number
+            purpose?: string
+            vkUserId?: number
+          }
+          voiceBalance?: number
+          inventory?: unknown[]
+        } | null
+        if (cancelled) return
+        if (!res.ok) {
+          vkAutoAttempted.current = false
+          setError((data?.error as string) || "Автовход через VK недоступен")
+          return
+        }
+        if (data?.user) {
+          const u = data.user
+          const uid = typeof u.vkUserId === "number" ? u.vkUserId : userIdToNumber(u.id)
+          const genderValue: Gender =
+            vkUser.sex === 2 ? "male" : vkUser.sex === 1 ? "female" : u.gender === "female" ? "female" : "male"
+          const user = {
+            id: uid,
+            name: u.displayName ?? u.username ?? `${vkUser.first_name} ${vkUser.last_name}`.trim(),
+            avatar: u.avatarUrl ?? vkUser.photo_200,
+            gender: genderValue,
+            age: typeof u.age === "number" ? u.age : 25,
+            purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
+              ? u.purpose
+              : defaultPurpose) as Purpose,
+            authProvider: "vk" as const,
+          }
+          const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+          const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
+          dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+          addToDevRegistry(user)
+          await buildTableAndEnter(user)
+        }
+      } catch {
+        if (!cancelled) {
+          vkAutoAttempted.current = false
+          setError("Ошибка автовхода. Нажмите «Войти через VK».")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- однократный автовход при монтировании
+  }, [])
+
   const ensureAgeValid = () => {
     const ageNum = parseInt(age)
     if (!age || isNaN(ageNum) || ageNum < 18) {
@@ -117,10 +222,65 @@ export function RegistrationScreen() {
     setError("")
 
     try {
-      // Simulate VK Bridge auth
+      await initVk()
       const vkUser = await vkBridge.getUserInfo()
+      const search = typeof window !== "undefined" ? window.location.search : ""
+      const canServerVkAuth =
+        search.includes("vk_user_id=") && search.includes("sign=") && isVkMiniApp()
 
-      // Определяем пол: сначала из VK, если есть, иначе из локального состояния
+      if (canServerVkAuth) {
+        const res = await fetch("/api/auth/vk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            launchParams: search,
+            profile: {
+              firstName: vkUser.first_name,
+              lastName: vkUser.last_name,
+              photoUrl: vkUser.photo_200,
+              sex: vkUser.sex,
+              age: ageNum,
+            },
+          }),
+        })
+        const data = (await res.json().catch(() => null)) as {
+          user?: {
+            id: string
+            username?: string
+            displayName?: string
+            avatarUrl?: string
+            gender?: string
+            age?: number
+            purpose?: string
+            vkUserId?: number
+          }
+          voiceBalance?: number
+          inventory?: unknown[]
+        } | null
+        if (res.ok && data?.user) {
+          const u = data.user
+          const uid = typeof u.vkUserId === "number" ? u.vkUserId : userIdToNumber(u.id)
+          const genderValue: Gender =
+            vkUser.sex === 2 ? "male" : vkUser.sex === 1 ? "female" : gender
+          const user = {
+            id: uid,
+            name: u.displayName ?? `${vkUser.first_name} ${vkUser.last_name}`.trim(),
+            avatar: u.avatarUrl ?? vkUser.photo_200,
+            gender: genderValue,
+            age: typeof u.age === "number" ? u.age : ageNum,
+            purpose: defaultPurpose,
+            authProvider: "vk" as const,
+          }
+          const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+          const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
+          dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+          addToDevRegistry(user)
+          await buildTableAndEnter(user)
+          return
+        }
+      }
+
       const genderValue: Gender =
         vkUser.sex === 2 ? "male" : vkUser.sex === 1 ? "female" : gender
 
@@ -154,18 +314,6 @@ export function RegistrationScreen() {
     } finally {
       setLoading(false)
     }
-  }
-
-  /** Преобразует строковый id пользователя (UUID) в число для Player.id.
-   *  Гарантирует отсутствие конфликта с ID ботов (1000-1999). */
-  const userIdToNumber = (id: string): number => {
-    let h = 0
-    for (let i = 0; i < id.length; i++) {
-      h = (h << 5) - h + id.charCodeAt(i)
-      h = h | 0
-    }
-    const n = Math.abs(h) || 1
-    return n < 10000 ? n + 10000 : n
   }
 
   const handleLogin = async () => {

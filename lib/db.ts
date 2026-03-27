@@ -62,6 +62,11 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
   `)
+
+  const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
+  if (!userCols.some((c) => c.name === "vk_user_id")) {
+    database.exec(`ALTER TABLE users ADD COLUMN vk_user_id INTEGER UNIQUE`)
+  }
 }
 
 export function getDb() {

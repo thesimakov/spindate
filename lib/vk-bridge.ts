@@ -43,6 +43,68 @@ export function isVkMiniApp(): boolean {
   return params.has("vk_user_id") || params.has("vk_app_id")
 }
 
+/** Максимальная высота iframe по документации VK Mini Apps (ограничение платформы). */
+const VK_IFRAME_MAX_HEIGHT = 4050
+
+/** Размер видимой области для передачи в VKWebAppResizeWindow (вкладка / окно / visualViewport). */
+export function getViewportSizeForVk(): { width: number; height: number } {
+  if (typeof window === "undefined") return { width: 800, height: 600 }
+  const vv = window.visualViewport
+  const w = Math.max(1, Math.round(vv?.width ?? window.innerWidth))
+  const rawH = vv?.height ?? window.innerHeight
+  const h = Math.max(1, Math.min(Math.round(rawH), VK_IFRAME_MAX_HEIGHT))
+  return { width: w, height: h }
+}
+
+/**
+ * Подгоняет размер iframe мини-приложения под текущее окно вкладки/браузера.
+ * На части мобильных клиентов метод может быть недоступен — ошибка игнорируется.
+ * @see https://dev.vk.com/bridge/VKWebAppResizeWindow
+ */
+export async function resizeVkWindowToViewport(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  const { width, height } = getViewportSizeForVk()
+  try {
+    await b.send("VKWebAppResizeWindow", { width, height })
+    return true
+  } catch {
+    return false
+  }
+}
+
+const RESIZE_DEBOUNCE_MS = 120
+
+/**
+ * Повторно вызывает resize при изменении окна, вкладки или visualViewport (адресная строка на мобильных).
+ * Верните функцию отписки при размонтировании корневого компонента.
+ */
+export function subscribeVkViewportResize(): () => void {
+  if (typeof window === "undefined") return () => {}
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const run = () => {
+    void resizeVkWindowToViewport()
+  }
+  const schedule = () => {
+    if (timer != null) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      run()
+    }, RESIZE_DEBOUNCE_MS)
+  }
+  window.addEventListener("resize", schedule)
+  window.addEventListener("orientationchange", schedule)
+  window.visualViewport?.addEventListener("resize", schedule)
+  window.visualViewport?.addEventListener("scroll", schedule)
+  return () => {
+    if (timer != null) clearTimeout(timer)
+    window.removeEventListener("resize", schedule)
+    window.removeEventListener("orientationchange", schedule)
+    window.visualViewport?.removeEventListener("resize", schedule)
+    window.visualViewport?.removeEventListener("scroll", schedule)
+  }
+}
+
 /** Инициализация VK Mini App (вызвать при загрузке в VK). */
 export async function initVk(): Promise<void> {
   const b = await getBridgeAsync()
@@ -165,5 +227,8 @@ export const vkBridge = {
   inviteFriends,
   initVk,
   isVkMiniApp,
+  getViewportSizeForVk,
+  resizeVkWindowToViewport,
+  subscribeVkViewportResize,
   VK_ITEM_IDS,
 }

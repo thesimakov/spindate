@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useGame } from "@/lib/game-context"
-import { initVk } from "@/lib/vk-bridge"
+import { initVk, isVkMiniApp, resizeVkWindowToViewport, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
@@ -28,7 +28,19 @@ export function GameApp() {
     (state.players?.length ?? 0) > 0
 
   useEffect(() => {
-    initVk()
+    let cancelled = false
+    ;(async () => {
+      await initVk()
+      if (cancelled) return
+      if (isVkMiniApp()) {
+        await resizeVkWindowToViewport()
+      }
+    })()
+    const unsub = isVkMiniApp() ? subscribeVkViewportResize() : () => {}
+    return () => {
+      cancelled = true
+      unsub()
+    }
   }, [])
 
   useEffect(() => {

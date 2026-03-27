@@ -24,8 +24,8 @@ export async function GET(req: Request) {
   }
 
   const userRow = db
-    .prepare(`SELECT id, username FROM users WHERE id = ?`)
-    .get(session.user_id) as { id: string; username: string } | undefined
+    .prepare(`SELECT id, username, vk_user_id FROM users WHERE id = ?`)
+    .get(session.user_id) as { id: string; username: string; vk_user_id: number | null } | undefined
 
   if (!userRow) {
     return NextResponse.json({ ok: false, error: "Пользователь не найден" }, { status: 401 })
@@ -57,6 +57,7 @@ export async function GET(req: Request) {
       gender,
       age,
       purpose,
+      ...(userRow.vk_user_id != null ? { vkUserId: userRow.vk_user_id } : {}),
     },
   })
 }
