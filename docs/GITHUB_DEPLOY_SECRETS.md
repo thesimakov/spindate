@@ -113,6 +113,7 @@ pm2 startup
 
 ## Ошибки
 
+- **`mkstemp ... Permission denied` при rsync** — пользователь из **SERVER_USER** не может писать в `/var/www/spindate`. Один раз на сервере: `chown -R ВАШ_ПОЛЬЗОВАТЕЛЬ:ВАШ_ПОЛЬЗОВАТЕЛЬ /var/www/spindate` (тот же логин, что в секрете; не IP и не `user@host`). Либо задайте владельца каталога тому пользователю, под которым идёт SSH-деплой. В workflow также используется временный каталог `/tmp/rsync-spindate` для приёма файлов.
 - **Permission denied (publickey)** — на сервере нет этого публичного ключа в `~/.ssh/authorized_keys` или в секрете другой ключ. Проверь шаги 1–2 и что в SERVER_SSH_KEY вставлен ключ от того же ключа, что и в `authorized_keys`.
 - **Load key: error in libcrypto** — ключ в секрете испорчен (потеряны переносы строк или лишние символы). Вставь заново через `cat deploy_key` и копирование из терминала.
 - **base64: invalid input** — в workflow не используется base64; если видишь эту ошибку, в репозитории на GitHub должна быть актуальная версия `.github/workflows/deploy-server.yml` (без base64). Сделай push и перезапусти workflow.

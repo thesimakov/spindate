@@ -67,17 +67,21 @@ jobs:
           SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=40 -o TCPKeepAlive=yes"
           echo "Checking SSH connectivity..."
           ssh -o BatchMode=yes $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "echo ok"
-          echo "Creating directory on server..."
-          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
+          echo "Preparing directories on server..."
+          # Временные файлы rsync на приёмнике — в /tmp (иначе mkstemp в /var/www/... даёт Permission denied, если каталог не принадлежит SERVER_USER)
+          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate /tmp/rsync-spindate && chmod 1777 /tmp/rsync-spindate"
           echo "Syncing files..."
           # Без -a и без -t: не трогаем mtime (иначе Operation not permitted на приёмнике).
           # Без -o/-g: не пытаемся сохранить uid/gid с раннера GitHub на вашем сервере.
+          # -M: на удалённый rsync — временные файлы в /tmp (обход Permission denied на mkstemp в /var/www)
           rsync -rlpvz --delete \
+            -M '--temp-dir=/tmp/rsync-spindate' \
             --exclude 'node_modules' \
             --exclude 'data' \
             --exclude '.env*' \
             --exclude '.git' \
             --exclude 'cache' \
+            --exclude '.DS_Store' \
             -e "ssh $SSH_OPTS" \
             .next \
             public \
