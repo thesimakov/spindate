@@ -1,10 +1,6 @@
 import { AdminLemnityClient } from "./admin-lemnity-client"
 
-/**
- * Явно статическая страница: `output: "export"` (GitHub Pages) не поддерживает `force-dynamic`.
- * Не возвращайте сюда `force-dynamic` — сборка Pages упадёт.
- */
-export const dynamic = "force-static"
+/** Не добавляйте `export const dynamic = "force-dynamic"` — при `output: "export"` (GitHub Pages) сборка упадёт. */
 
 export default function AdminLemnityPage() {
   return (

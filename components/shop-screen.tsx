@@ -498,7 +498,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   }}
                   onClick={() => handleTopUp(offer.hearts, offer.votes, offer.itemId)}
                 >
-                  Купить за {offer.votes} гол.
+                  <span className="tabular-nums">{offer.votes}</span> гол.
                 </Button>
               </div>
             )
@@ -544,26 +544,26 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 px-2 pb-4 pt-1 sm:gap-3 sm:px-4 sm:pb-5 sm:pt-2">
+          <div className="flex flex-col gap-3 px-3 pb-4 pt-2 sm:gap-4 sm:px-4 sm:pb-5 sm:pt-2">
             {/* Проба */}
-            <div className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-lg border-2 border-amber-400/55 bg-gradient-to-b from-amber-500/[0.1] via-slate-950/92 to-[#070b12] shadow-[0_0_32px_rgba(245,158,11,0.1)] sm:min-h-[13rem] sm:rounded-xl">
+            <div className="relative flex min-h-0 flex-col overflow-hidden rounded-xl border-2 border-amber-400/55 bg-gradient-to-b from-amber-500/[0.1] via-slate-950/92 to-[#070b12] shadow-[0_0_32px_rgba(245,158,11,0.1)]">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/30 to-transparent" aria-hidden />
-              <div className="flex min-h-0 flex-1 flex-col px-2 pb-2 pt-2.5 sm:px-3 sm:pb-3 sm:pt-4">
-                <div className="mb-1.5 flex items-center gap-1 sm:mb-3 sm:gap-2">
-                  <Sparkles className="h-3 w-3 shrink-0 text-amber-400 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[8px] font-extrabold uppercase tracking-[0.12em] text-amber-300 sm:text-[10px] sm:tracking-[0.18em]">
+              <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-5 sm:pb-4 sm:pt-5">
+                <div className="mb-2 flex items-center gap-2 sm:mb-3">
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-400 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-300 sm:text-xs">
                     Проба
                   </span>
                 </div>
-                <p className="text-base font-black tracking-tight text-white sm:text-2xl sm:leading-none">3 дня</p>
-                <p className="mt-1 line-clamp-3 flex-1 text-[10px] leading-snug text-slate-400 sm:mt-2 sm:text-sm sm:leading-relaxed">
+                <p className="text-2xl font-black tracking-tight text-white sm:text-3xl sm:leading-none">3 дня</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">
                   Полный доступ бесплатно — один раз на аккаунт.
                 </p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || vipTrialUsed}
-                className="mt-auto min-h-[2.65rem] shrink-0 rounded-none rounded-b-lg border-0 border-t border-amber-400/20 px-1 py-2 text-[9px] font-bold leading-tight disabled:!opacity-100 sm:min-h-[3rem] sm:rounded-b-xl sm:px-3 sm:py-3 sm:text-sm"
+                className="mt-auto min-h-12 shrink-0 rounded-none rounded-b-xl border-0 border-t border-amber-400/20 px-4 py-3 text-sm font-bold disabled:!opacity-100"
                 style={
                   !!isVip || vipTrialUsed
                     ? {
@@ -582,37 +582,31 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 {isVip ? (
                   "Уже VIP"
                 ) : vipTrialUsed ? (
-                  <>
-                    <span className="hidden sm:inline">Проба использована</span>
-                    <span className="sm:hidden">Уже брали</span>
-                  </>
+                  "Проба уже использована"
                 ) : (
-                  <>
-                    <span className="hidden sm:inline">Попробовать бесплатно</span>
-                    <span className="sm:hidden">Проба бесплатно</span>
-                  </>
+                  "Попробовать бесплатно"
                 )}
               </Button>
             </div>
 
             {/* 7 дней */}
-            <div className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-lg border border-slate-600/70 bg-slate-950/85 backdrop-blur-[2px] sm:min-h-[13rem] sm:rounded-xl">
-              <div className="flex min-h-0 flex-1 flex-col px-2 pb-2 pt-2.5 sm:px-3 sm:pb-3 sm:pt-4">
-                <div className="mb-1.5 flex items-center gap-1 text-slate-500 sm:mb-3 sm:gap-2">
-                  <CalendarDays className="h-3 w-3 shrink-0 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[8px] font-extrabold uppercase tracking-[0.12em] sm:text-[10px] sm:tracking-[0.18em]">
+            <div className="relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-600/70 bg-slate-950/85 backdrop-blur-[2px]">
+              <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-5 sm:pb-4 sm:pt-5">
+                <div className="mb-2 flex items-center gap-2 text-slate-500 sm:mb-3">
+                  <CalendarDays className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] sm:text-xs">
                     Тариф
                   </span>
                 </div>
-                <p className="text-base font-black tracking-tight text-white sm:text-2xl sm:leading-none">7 дней</p>
-                <p className="mt-1 line-clamp-3 flex-1 text-[10px] leading-snug text-slate-500 sm:mt-2 sm:text-sm sm:leading-relaxed">
+                <p className="text-2xl font-black tracking-tight text-white sm:text-3xl sm:leading-none">7 дней</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">
                   Списание с баланса сердечек в приложении.
                 </p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || voiceBalance < 20}
-                className="mt-auto min-h-[2.65rem] shrink-0 rounded-none rounded-b-lg border-0 border-t border-slate-600/50 px-1 py-2 text-[9px] font-bold leading-tight disabled:!opacity-100 sm:min-h-[3rem] sm:rounded-b-xl sm:px-3 sm:py-3 sm:text-sm"
+                className="mt-auto min-h-12 shrink-0 rounded-none rounded-b-xl border-0 border-t border-slate-600/50 px-4 py-3 text-sm font-bold disabled:!opacity-100"
                 style={
                   !!isVip || voiceBalance < 20
                     ? {
@@ -636,8 +630,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                     <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 ) : (
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    Купить за 20
+                  <span className="inline-flex items-center justify-center gap-1.5 tabular-nums">
+                    20
                     <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 )}
@@ -645,23 +639,23 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             </div>
 
             {/* 30 дней */}
-            <div className="flex min-h-[10.5rem] flex-col overflow-hidden rounded-lg border border-cyan-500/40 bg-gradient-to-b from-cyan-500/[0.07] via-slate-950/90 to-[#070b12] shadow-[0_0_24px_rgba(34,211,238,0.08)] sm:min-h-[13rem] sm:rounded-xl">
-              <div className="flex min-h-0 flex-1 flex-col px-2 pb-2 pt-2.5 sm:px-3 sm:pb-3 sm:pt-4">
-                <div className="mb-1.5 flex items-center gap-1 sm:mb-3 sm:gap-2">
-                  <CalendarDays className="h-3 w-3 shrink-0 text-cyan-400 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[8px] font-extrabold uppercase tracking-[0.12em] text-cyan-400 sm:text-[10px] sm:tracking-[0.18em]">
+            <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-cyan-500/40 bg-gradient-to-b from-cyan-500/[0.07] via-slate-950/90 to-[#070b12] shadow-[0_0_24px_rgba(34,211,238,0.08)]">
+              <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-5 sm:pb-4 sm:pt-5">
+                <div className="mb-2 flex items-center gap-2 sm:mb-3">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-cyan-400 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} aria-hidden />
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-cyan-400 sm:text-xs">
                     Выгодно
                   </span>
                 </div>
-                <p className="text-base font-black tracking-tight text-white sm:text-2xl sm:leading-none">30 дней</p>
-                <p className="mt-1 line-clamp-3 flex-1 text-[10px] leading-snug text-slate-500 sm:mt-2 sm:text-sm sm:leading-relaxed">
+                <p className="text-2xl font-black tracking-tight text-white sm:text-3xl sm:leading-none">30 дней</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">
                   Максимум преимуществ на месяц вперёд.
                 </p>
               </div>
               <Button
                 size="lg"
                 disabled={!!isVip || voiceBalance < 70}
-                className="mt-auto min-h-[2.65rem] shrink-0 rounded-none rounded-b-lg border-0 border-t border-cyan-500/25 px-1 py-2 text-[9px] font-bold leading-tight disabled:!opacity-100 sm:min-h-[3rem] sm:rounded-b-xl sm:px-3 sm:py-3 sm:text-sm"
+                className="mt-auto min-h-12 shrink-0 rounded-none rounded-b-xl border-0 border-t border-cyan-500/25 px-4 py-3 text-sm font-bold disabled:!opacity-100"
                 style={
                   !!isVip || voiceBalance < 70
                     ? {
@@ -685,8 +679,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                     <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 ) : (
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    Купить за 70
+                  <span className="inline-flex items-center justify-center gap-1.5 tabular-nums">
+                    70
                     <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
                   </span>
                 )}

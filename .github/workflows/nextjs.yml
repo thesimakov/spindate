@@ -58,7 +58,8 @@ jobs:
       - name: Clear Next.js cache before static build
         run: rm -rf .next
       - name: Build with Next.js (static export for Pages)
-        run: npx --no-install next build
+        # Как в package.json: --webpack — тот же бандлер, что локально; без флага Next 16 может взять Turbopack.
+        run: npm run build
       - name: Restore API routes
         if: always()
         run: if [ -d .api-backup ]; then mv .api-backup app/api; fi
