@@ -5,7 +5,7 @@ import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
-import { vkBridge, initVk, isVkMiniApp } from "@/lib/vk-bridge"
+import { vkBridge, initVk, isVkMiniApp, ensureVkLaunchSearch } from "@/lib/vk-bridge"
 import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
@@ -178,8 +178,8 @@ export function RegistrationScreen() {
         if (await tryEnterFromSession()) return
         if (cancelled) return
 
-        const search = window.location.search
-        if (!search.includes("vk_user_id=") || !search.includes("sign=")) {
+        const launchSearch = await ensureVkLaunchSearch()
+        if (!launchSearch.includes("vk_user_id=") || !launchSearch.includes("sign=")) {
           if (!cancelled) {
             setVkGate(false)
             setError("")
@@ -195,7 +195,7 @@ export function RegistrationScreen() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            launchParams: search,
+            launchParams: launchSearch,
             profile: {
               firstName: vkUser.first_name,
               lastName: vkUser.last_name,
@@ -290,9 +290,9 @@ export function RegistrationScreen() {
     try {
       await initVk()
       const vkUser = await vkBridge.getUserInfo()
-      const search = typeof window !== "undefined" ? window.location.search : ""
+      const launchSearch = await ensureVkLaunchSearch()
       const canServerVkAuth =
-        search.includes("vk_user_id=") && search.includes("sign=") && isVkMiniApp()
+        launchSearch.includes("vk_user_id=") && launchSearch.includes("sign=") && isVkMiniApp()
 
       if (canServerVkAuth) {
         const res = await fetch("/api/auth/vk", {
@@ -300,7 +300,7 @@ export function RegistrationScreen() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            launchParams: search,
+            launchParams: launchSearch,
             profile: {
               firstName: vkUser.first_name,
               lastName: vkUser.last_name,

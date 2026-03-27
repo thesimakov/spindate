@@ -36,11 +36,82 @@ async function getBridgeAsync(): Promise<Bridge | null> {
   return bridgePromise
 }
 
+function locationHasVkMiniParams(searchOrHash: string): boolean {
+  return /[?&#]vk_user_id=/.test(searchOrHash) || /[?&#]vk_app_id=/.test(searchOrHash)
+}
+
+/**
+ * Строка query с подписанными параметрами запуска VK (search или фрагмент URL).
+ * Не вызывает bridge — только адресная строка.
+ */
+export function getVkLaunchSearchFromLocation(): string {
+  if (typeof window === "undefined") return ""
+  const search = window.location.search
+  if (search.includes("vk_user_id=") && search.includes("sign=")) return search
+  const hash = window.location.hash.slice(1)
+  if (!hash) return search
+  let fromHash = ""
+  const q = hash.indexOf("?")
+  if (q >= 0) fromHash = hash.slice(q)
+  else if (/^vk_\w+=/.test(hash) || /&vk_\w+=/.test(hash)) fromHash = `?${hash}`
+  if (fromHash.includes("vk_user_id=") && fromHash.includes("sign=")) return fromHash
+  return search || fromHash
+}
+
+function serializeVkLaunchParamsFromBridge(data: Record<string, unknown>): string {
+  const vkPairs: { key: string; value: string }[] = []
+  let sign = ""
+  for (const [key, val] of Object.entries(data)) {
+    if (key === "sign" && typeof val === "string") {
+      sign = val
+      continue
+    }
+    if (!key.startsWith("vk_")) continue
+    if (val === undefined || val === null) continue
+    vkPairs.push({ key, value: String(val) })
+  }
+  if (!sign || vkPairs.length === 0) return ""
+  vkPairs.sort((a, b) => a.key.localeCompare(b.key))
+  const qs = vkPairs.map(({ key, value }) => `${key}=${encodeURIComponent(value)}`).join("&")
+  return `?${qs}&sign=${encodeURIComponent(sign)}`
+}
+
+/**
+ * Полная строка параметров запуска для POST /api/auth/vk: из URL или VKWebAppGetLaunchParams.
+ * Вызывать после initVk().
+ */
+export async function ensureVkLaunchSearch(): Promise<string> {
+  if (typeof window === "undefined") return ""
+  const fromLoc = getVkLaunchSearchFromLocation()
+  if (fromLoc.includes("vk_user_id=") && fromLoc.includes("sign=")) return fromLoc
+  const b = await getBridgeAsync()
+  if (!b) return fromLoc
+  try {
+    const raw = (await b.send("VKWebAppGetLaunchParams", {})) as Record<string, unknown>
+    if (raw && raw.sign != null && raw.vk_user_id != null) {
+      const ser = serializeVkLaunchParamsFromBridge(raw)
+      if (ser) return ser
+    }
+  } catch {
+    // вне VK или метод недоступен
+  }
+  return fromLoc
+}
+
 /** Запущено ли приложение внутри VK Mini App (iframe/клиент). */
 export function isVkMiniApp(): boolean {
   if (typeof window === "undefined") return false
-  const params = new URLSearchParams(window.location.search)
-  return params.has("vk_user_id") || params.has("vk_app_id")
+  const search = window.location.search
+  const hash = window.location.hash
+  if (locationHasVkMiniParams(search) || locationHasVkMiniParams(hash)) return true
+  if (/(^|[?&])vk_platform=/.test(search)) return true
+  try {
+    const r = document.referrer || ""
+    if (/\/\/(m\.)?vk\.(com|ru)\//i.test(r)) return true
+  } catch {
+    /* ignore */
+  }
+  return false
 }
 
 /** Максимальная высота iframe: в панели VK «Размер iframe» до 4500 px (см. dev.vk.com games → Отображение). */
@@ -230,6 +301,8 @@ export const vkBridge = {
   inviteFriends,
   initVk,
   isVkMiniApp,
+  ensureVkLaunchSearch,
+  getVkLaunchSearchFromLocation,
   getViewportSizeForVk,
   resizeVkWindowToViewport,
   subscribeVkViewportResize,
