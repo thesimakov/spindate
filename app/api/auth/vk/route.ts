@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { generateSalt, hashPassword } from "@/lib/auth/password"
-import { newId, newSessionToken, sha256Base64 } from "@/lib/auth/session"
+import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { parseVkAppIdFromLaunchSearch, parseVkUserIdFromLaunchSearch, verifyVkLaunchParams } from "@/lib/vk-launch-params"
 
 const VALID_GENDERS = ["male", "female"] as const
@@ -17,14 +17,7 @@ function sessionCookieResponse(
   expiresAt: number,
 ) {
   const res = NextResponse.json(body)
-  const isProd = process.env.NODE_ENV === "production"
-  res.cookies.set("session", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    expires: new Date(expiresAt),
-  })
+  setSessionCookie(res, token, expiresAt)
   return res
 }
 

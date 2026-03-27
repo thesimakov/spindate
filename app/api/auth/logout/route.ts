@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
-import { sha256Base64 } from "@/lib/auth/session"
+import { clearSessionCookie, sha256Base64 } from "@/lib/auth/session"
 
 export async function POST(req: Request) {
   const token = req.headers.get("cookie")?.match(/(?:^|;\s*)session=([^;]+)/)?.[1] ?? null
@@ -12,14 +12,7 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ ok: true })
-  const isProd = process.env.NODE_ENV === "production"
-  res.cookies.set("session", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    expires: new Date(0),
-  })
+  clearSessionCookie(res)
   return res
 }
 

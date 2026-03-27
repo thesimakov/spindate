@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { verifyPassword } from "@/lib/auth/password"
-import { newId, newSessionToken, sha256Base64 } from "@/lib/auth/session"
+import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
@@ -79,14 +79,7 @@ export async function POST(req: Request) {
     voiceBalance,
     inventory,
   })
-  const isProd = process.env.NODE_ENV === "production"
-  res.cookies.set("session", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: isProd,
-    path: "/",
-    expires: new Date(expiresAt),
-  })
+  setSessionCookie(res, token, expiresAt)
   return res
 }
 
