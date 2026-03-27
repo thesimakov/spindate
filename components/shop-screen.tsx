@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import {
   ArrowRightLeft,
   CalendarDays,
@@ -54,24 +54,54 @@ export function ShopScreen() {
   /** Обводка как у Material Symbols Outlined (~24dp, weight 400) */
   const mdIconStroke = 2
 
+  const SHOP_PARTICLE_EASE = [
+    "cubic-bezier(0.45, 0.02, 0.29, 0.98)",
+    "cubic-bezier(0.33, 0.12, 0.53, 0.94)",
+    "cubic-bezier(0.52, 0.01, 0.19, 0.99)",
+    "cubic-bezier(0.4, 0.18, 0.32, 0.92)",
+    "cubic-bezier(0.28, 0.09, 0.46, 1)",
+    "cubic-bezier(0.55, 0.05, 0.15, 0.95)",
+  ] as const
+
   const shopParticles = useMemo(() => {
-    const count = 16
-    const list: { x: number; y: number; duration: number; delay: number; isPink: boolean; isYellow: boolean; reverse: boolean }[] = []
-    let s = 54321
+    let s = 0x5b0b5 % 233280
+    s = (s * 9301 + 49297) % 233280
+    const count = 10 + (s % 30)
+    const list: {
+      x: number
+      y: number
+      duration: number
+      delay: number
+      isPink: boolean
+      isYellow: boolean
+      reverse: boolean
+      chaos: number
+      ease: string
+      dustOpacity: number
+      dustSize: string
+    }[] = []
     for (let i = 0; i < count; i++) {
       s = (s * 9301 + 49297) % 233280
-      const x = 5 + (s / 233280) * 90
+      const x = 1 + (s / 233280) * 97
       s = (s * 9301 + 49297) % 233280
-      const y = 8 + (s / 233280) * 85
+      const y = 5 + (s / 233280) * 90
       s = (s * 9301 + 49297) % 233280
+      const chaos = s % 6
+      s = (s * 9301 + 49297) % 233280
+      const dustSize = `${(2 + (s / 233280) * 2.9).toFixed(2)}px`
+      const dustOpacity = 0.4 + (s / 233280) * 0.5
       list.push({
         x,
         y,
-        duration: 19 + (s % 10),
-        delay: (s % 18) / 2,
+        duration: 16 + (s % 26),
+        delay: (s % 36) * 0.3,
         isPink: i % 3 === 1,
         isYellow: i % 3 === 2,
-        reverse: i % 2 === 1,
+        reverse: (s + i * 3) % 2 === 1,
+        chaos,
+        ease: SHOP_PARTICLE_EASE[(s + chaos) % SHOP_PARTICLE_EASE.length],
+        dustOpacity,
+        dustSize,
       })
     }
     return list
@@ -241,19 +271,33 @@ export function ShopScreen() {
   return (
     <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden entry-bg-animated">
       {toast && <InlineToast toast={toast} />}
-      <div className="game-particles" aria-hidden="true">
-        {shopParticles.map((d, idx) => (
-          <span
-            key={idx}
-            className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""} ${d.isYellow ? "game-particles__dot--yellow" : ""} ${d.reverse ? "game-particles__dot--reverse" : ""}`}
-            style={{
-              left: `${d.x}%`,
-              top: `${d.y}%`,
-              animationDuration: `${d.duration}s`,
-              animationDelay: `${d.delay}s`,
-            }}
-          />
-        ))}
+      <div className="game-particles game-particles--dust" aria-hidden="true">
+        {shopParticles.map((d, idx) => {
+          const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
+          return (
+            <span
+              key={idx}
+              className="pointer-events-none absolute"
+              style={{ left: `${d.x}%`, top: `${d.y}%`, opacity: d.dustOpacity }}
+            >
+              <span
+                className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""} ${d.isYellow ? "game-particles__dot--yellow" : ""}`}
+                style={
+                  {
+                    position: "relative",
+                    left: 0,
+                    top: 0,
+                    ["--particle-anim"]: anim,
+                    ["--particle-dur"]: `${d.duration}s`,
+                    ["--particle-delay"]: `${d.delay}s`,
+                    ["--particle-ease"]: d.ease,
+                    ["--dust-size"]: d.dustSize,
+                  } as CSSProperties
+                }
+              />
+            </span>
+          )
+        })}
       </div>
       <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center overflow-y-auto overflow-x-hidden px-4 py-6 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:py-10">
       <div className="w-full max-w-2xl shrink-0 space-y-6 rounded-3xl border border-slate-500/80 bg-slate-900/95 px-6 py-8 shadow-[0_28px_60px_rgba(0,0,0,0.75)] backdrop-blur-md">

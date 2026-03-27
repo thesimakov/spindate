@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef, type CSSProperties } from "react"
 import { ArrowLeft, Heart, Trophy } from "lucide-react"
 import { AppLoader } from "@/components/app-loader"
 import { useGame, generateBots } from "@/lib/game-context"
@@ -12,6 +12,15 @@ const SIMULATED_UPDATE_INTERVAL_MS = 5000
 const ROUND_SECONDS = 10
 /** Минимальное время показа лоадера (мс): подгрузка currentUser, участников и стабилизация кода перед стартом */
 const LOADER_MIN_MS = 900
+
+const UGADAIKA_PARTICLE_EASE = [
+  "cubic-bezier(0.45, 0.02, 0.29, 0.98)",
+  "cubic-bezier(0.33, 0.12, 0.53, 0.94)",
+  "cubic-bezier(0.52, 0.01, 0.19, 0.99)",
+  "cubic-bezier(0.4, 0.18, 0.32, 0.92)",
+  "cubic-bezier(0.28, 0.09, 0.46, 1)",
+  "cubic-bezier(0.55, 0.05, 0.15, 0.95)",
+] as const
 
 function nextSeed(s: number) {
   return (s * 9301 + 49297) % 233280
@@ -222,15 +231,24 @@ export function UgadaikaScreen() {
   )
 
   const bgDots = useMemo(() => {
-    const seed = Date.now()
-    return Array.from({ length: 18 }, (_, i) => {
-      const x = (seed * (i + 11) * 9301) % 100
-      const y = (seed * (i + 29) * 49297) % 100
-      const size = 6 + ((seed + i * 17) % 8)
-      const duration = 16 + ((seed + i * 31) % 16)
-      const delay = ((seed + i * 13) % 10)
+    let gen = 0xc0ffee00 % 233280
+    gen = nextSeed(gen)
+    const n = 14 + (gen % 26)
+    return Array.from({ length: n }, (_, i) => {
+      gen = nextSeed(gen + i)
+      const x = gen % 100
+      gen = nextSeed(gen)
+      const y = gen % 100
+      gen = nextSeed(gen)
+      const duration = 15 + ((0xc0ffee + i * 31) % 24)
+      const delay = ((0xa5 + i * 13) % 16) * 0.48
       const isPink = i % 3 === 0
-      return { x, y, size, duration, delay, isPink }
+      const chaos = (0x77 + i * 7) % 6
+      const rev = (0x13 + i * 19) % 2 === 1
+      const ease = UGADAIKA_PARTICLE_EASE[(i + chaos) % UGADAIKA_PARTICLE_EASE.length]
+      const dustOpacity = 0.38 + ((gen + i * 41) % 100) / 220
+      const dustSize = `${(1.8 + ((gen + i) % 50) / 18).toFixed(2)}px`
+      return { x, y, duration, delay, isPink, chaos, rev, ease, dustOpacity, dustSize }
     })
   }, [])
 
@@ -640,21 +658,33 @@ export function UgadaikaScreen() {
 
   return (
     <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden text-slate-100 pb-[env(safe-area-inset-bottom)] game-bg-animated">
-      <div className="game-particles" aria-hidden="true">
-        {bgDots.map((d, idx) => (
-          <span
-            key={idx}
-            className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""}`}
-            style={{
-              left: `${d.x}%`,
-              top: `${d.y}%`,
-              width: `${d.size}px`,
-              height: `${d.size}px`,
-              animationDuration: `${d.duration}s`,
-              animationDelay: `${d.delay}s`,
-            }}
-          />
-        ))}
+      <div className="game-particles game-particles--dust" aria-hidden="true">
+        {bgDots.map((d, idx) => {
+          const anim = d.rev ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
+          return (
+            <span
+              key={idx}
+              className="pointer-events-none absolute"
+              style={{ left: `${d.x}%`, top: `${d.y}%`, opacity: d.dustOpacity }}
+            >
+              <span
+                className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""}`}
+                style={
+                  {
+                    position: "relative",
+                    left: 0,
+                    top: 0,
+                    ["--particle-anim"]: anim,
+                    ["--particle-dur"]: `${d.duration}s`,
+                    ["--particle-delay"]: `${d.delay}s`,
+                    ["--particle-ease"]: d.ease,
+                    ["--dust-size"]: d.dustSize,
+                  } as CSSProperties
+                }
+              />
+            </span>
+          )
+        })}
       </div>
       <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">

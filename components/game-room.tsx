@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import {
   Heart,
   MessageCircle,
@@ -113,6 +113,59 @@ const GIFT_CATALOG_PREMIUM: GiftCatalogDef[] = [
   { id: "souvenir_keychain", name: "Брелок-сувенир", emoji: "🔑", cost: 5 },
   { id: "chocolate_box", name: "Коробка конфет", emoji: "🍫", cost: 4 },
 ]
+
+const BG_PARTICLE_EASE = [
+  "cubic-bezier(0.45, 0.02, 0.29, 0.98)",
+  "cubic-bezier(0.33, 0.12, 0.53, 0.94)",
+  "cubic-bezier(0.52, 0.01, 0.19, 0.99)",
+  "cubic-bezier(0.4, 0.18, 0.32, 0.92)",
+  "cubic-bezier(0.28, 0.09, 0.46, 1)",
+  "cubic-bezier(0.55, 0.05, 0.15, 0.95)",
+] as const
+
+/** Случайные пылинки стола (позиции снизу + траектории particleChaos*) */
+function buildGameRoomDustParticles(count: number, seed: number) {
+  let s = seed % 233280
+  const list: {
+    left: string
+    bottom: string
+    delay: string
+    dur: string
+    chaos: number
+    rev: boolean
+    pink?: boolean
+    yellow?: boolean
+    dustOpacity: number
+    dustSize: string
+  }[] = []
+  for (let i = 0; i < count; i++) {
+    s = (s * 9301 + 49297) % 233280
+    const left = `${2 + (s / 233280) * 92}%`
+    s = (s * 9301 + 49297) % 233280
+    const bottom = `${-(11 + (s / 233280) * 42)}%`
+    s = (s * 9301 + 49297) % 233280
+    const delay = `${((s % 22) * 0.72).toFixed(2)}s`
+    s = (s * 9301 + 49297) % 233280
+    const dur = `${15 + (s % 16)}s`
+    const chaos = s % 6
+    const rev = (s + i * 3) % 2 === 1
+    const dustSize = `${(2.1 + (s / 233280) * 2.75).toFixed(2)}px`
+    const dustOpacity = 0.4 + (s / 233280) * 0.5
+    list.push({
+      left,
+      bottom,
+      delay,
+      dur,
+      chaos,
+      rev,
+      pink: i % 4 === 1,
+      yellow: i % 4 === 2,
+      dustOpacity,
+      dustSize,
+    })
+  }
+  return list
+}
 
 /* ------------------------------------------------------------------ */
 /*  Flying emoji animation                                            */
@@ -285,6 +338,8 @@ function isTableSyncedAction(action: GameAction): boolean {
 }
 
 
+const GAME_ROOM_DUST_SEED = 0x51ab1e
+
 export function GameRoom() {
   const { state, dispatch: rawDispatch } = useGame()
   useTheme()
@@ -334,6 +389,11 @@ export function GameRoom() {
     emotionDailyBoost,
     tablePaused,
   } = state
+
+  const gameRoomDustParticles = useMemo(
+    () => buildGameRoomDustParticles(8 + (GAME_ROOM_DUST_SEED % 19), GAME_ROOM_DUST_SEED),
+    [],
+  )
 
   const remoteActionRef = useRef(false)
   const playersRef = useRef(players)
@@ -3020,27 +3080,34 @@ export function GameRoom() {
         )}
       </div>
 
-      {/* Фоновые частицы */}
-      <div className="game-particles">
-        {/* Левая сторона */}
-        <div className="game-particles__dot" style={{ left: "4%", bottom: "-25%", animationDelay: "0s", animationDuration: "19s" }} />
-        <div className="game-particles__dot game-particles__dot--pink game-particles__dot--reverse" style={{ left: "10%", bottom: "-35%", animationDelay: "5s", animationDuration: "23s" }} />
-        <div className="game-particles__dot game-particles__dot--yellow" style={{ left: "18%", bottom: "-30%", animationDelay: "2s", animationDuration: "21s" }} />
-        <div className="game-particles__dot game-particles__dot--reverse" style={{ left: "22%", bottom: "-40%", animationDelay: "9s", animationDuration: "27s" }} />
-
-        {/* Центр */}
-        <div className="game-particles__dot" style={{ left: "34%", bottom: "-28%", animationDelay: "7s", animationDuration: "24s" }} />
-        <div className="game-particles__dot game-particles__dot--pink" style={{ left: "40%", bottom: "-38%", animationDelay: "3s", animationDuration: "20s" }} />
-        <div className="game-particles__dot game-particles__dot--yellow game-particles__dot--reverse" style={{ left: "46%", bottom: "-32%", animationDelay: "11s", animationDuration: "26s" }} />
-        <div className="game-particles__dot" style={{ left: "52%", bottom: "-42%", animationDelay: "13s", animationDuration: "22s" }} />
-
-        {/* Правая сторона */}
-        <div className="game-particles__dot game-particles__dot--pink" style={{ left: "62%", bottom: "-30%", animationDelay: "4s", animationDuration: "21s" }} />
-        <div className="game-particles__dot game-particles__dot--yellow game-particles__dot--reverse" style={{ left: "68%", bottom: "-38%", animationDelay: "10s", animationDuration: "28s" }} />
-        <div className="game-particles__dot" style={{ left: "74%", bottom: "-34%", animationDelay: "6s", animationDuration: "23s" }} />
-        <div className="game-particles__dot game-particles__dot--pink" style={{ left: "80%", bottom: "-40%", animationDelay: "15s", animationDuration: "25s" }} />
-        <div className="game-particles__dot game-particles__dot--yellow" style={{ left: "86%", bottom: "-36%", animationDelay: "8s", animationDuration: "22s" }} />
-        <div className="game-particles__dot game-particles__dot--reverse" style={{ left: "92%", bottom: "-32%", animationDelay: "17s", animationDuration: "24s" }} />
+      {/* Фоновые частицы (пылинки) */}
+      <div className="game-particles game-particles--dust">
+        {gameRoomDustParticles.map((p, idx) => {
+          const anim = p.rev ? `particleChaosRev${p.chaos + 1}` : `particleChaos${p.chaos + 1}`
+          return (
+            <div
+              key={idx}
+              className="pointer-events-none absolute"
+              style={{ left: p.left, bottom: p.bottom, opacity: p.dustOpacity }}
+            >
+              <div
+                className={`game-particles__dot ${p.pink ? "game-particles__dot--pink" : ""} ${p.yellow ? "game-particles__dot--yellow" : ""}`}
+                style={
+                  {
+                    position: "relative",
+                    left: 0,
+                    bottom: 0,
+                    ["--particle-anim"]: anim,
+                    ["--particle-dur"]: p.dur,
+                    ["--particle-delay"]: p.delay,
+                    ["--particle-ease"]: BG_PARTICLE_EASE[(idx + p.chaos) % BG_PARTICLE_EASE.length],
+                    ["--dust-size"]: p.dustSize,
+                  } as CSSProperties
+                }
+              />
+            </div>
+          )
+        })}
       </div>
 
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); md–lg: узкие иконки, по нажатию — полная панель ---- */}

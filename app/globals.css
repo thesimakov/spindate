@@ -1274,6 +1274,50 @@ body {
   z-index: 0;
 }
 
+/* Пылинки: мельче, мягкое свечение, лёгкий blur — вместо «неоновых» точек */
+.game-particles--dust .game-particles__dot {
+  width: var(--dust-size, 3.5px);
+  height: var(--dust-size, 3.5px);
+  filter: blur(0.55px);
+  background: radial-gradient(
+    circle,
+    rgba(252, 252, 255, 0.98) 0%,
+    rgba(226, 232, 240, 0.45) 38%,
+    rgba(148, 163, 184, 0.12) 62%,
+    transparent 74%
+  );
+  box-shadow:
+    0 0 3px rgba(248, 250, 252, 0.65),
+    0 0 10px rgba(203, 213, 225, 0.28),
+    0 0 18px rgba(148, 163, 184, 0.12);
+}
+
+.game-particles--dust .game-particles__dot--pink {
+  background: radial-gradient(
+    circle,
+    rgba(255, 241, 242, 0.95) 0%,
+    rgba(251, 207, 232, 0.38) 40%,
+    rgba(244, 114, 182, 0.1) 65%,
+    transparent 76%
+  );
+  box-shadow:
+    0 0 4px rgba(254, 215, 226, 0.45),
+    0 0 12px rgba(244, 114, 182, 0.15);
+}
+
+.game-particles--dust .game-particles__dot--yellow {
+  background: radial-gradient(
+    circle,
+    rgba(254, 252, 232, 0.96) 0%,
+    rgba(253, 230, 138, 0.35) 42%,
+    rgba(234, 179, 8, 0.1) 64%,
+    transparent 76%
+  );
+  box-shadow:
+    0 0 4px rgba(254, 249, 195, 0.4),
+    0 0 11px rgba(202, 138, 4, 0.12);
+}
+
 .game-particles__dot {
   position: absolute;
   width: 7px;
@@ -1283,7 +1327,12 @@ body {
   box-shadow:
     0 0 10px rgba(56, 189, 248, 0.9),
     0 0 22px rgba(56, 189, 248, 0.7);
-  animation: particleFloat 22s linear infinite;
+  animation-name: var(--particle-anim, particleChaos1);
+  animation-duration: var(--particle-dur, 22s);
+  animation-timing-function: var(--particle-ease, cubic-bezier(0.42, 0.01, 0.24, 0.98));
+  animation-delay: var(--particle-delay, 0s);
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
 }
 
 .game-particles__dot--pink {
@@ -1300,40 +1349,324 @@ body {
     0 0 22px rgba(250, 204, 21, 0.7);
 }
 
-.game-particles__dot--reverse {
-  animation-name: particleFloatReverse;
+/* Хаотичные траектории: несколько изломов по X + лёгкий rotate + неровный scale */
+@keyframes particleChaos1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.82) rotate(0deg);
+    opacity: 0;
+  }
+  9% {
+    opacity: 1;
+  }
+  18% {
+    transform: translate3d(min(12vw, 52px), -18vh, 0) scale(1.02) rotate(14deg);
+  }
+  38% {
+    transform: translate3d(max(-10vw, -44px), -42vh, 0) scale(1.08) rotate(-8deg);
+  }
+  58% {
+    transform: translate3d(min(14vw, 58px), -68vh, 0) scale(0.94) rotate(18deg);
+  }
+  78% {
+    transform: translate3d(max(-8vw, -36px), -98vh, 0) scale(1.06) rotate(-12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(min(6vw, 28px), -132vh, 0) scale(1.14) rotate(6deg);
+    opacity: 0;
+  }
 }
 
-@keyframes particleFloat {
+@keyframes particleChaos2 {
   0% {
-    transform: translate3d(0, 0, 0) scale(0.9);
+    transform: translate3d(0, 0, 0) scale(0.88) rotate(0deg);
+    opacity: 0;
+  }
+  11% {
+    opacity: 1;
+  }
+  24% {
+    transform: translate3d(max(-16vw, -56px), -20vh, 0) scale(1.05) rotate(-16deg);
+  }
+  44% {
+    transform: translate3d(min(18vw, 64px), -46vh, 0) scale(0.92) rotate(10deg);
+  }
+  62% {
+    transform: translate3d(max(-11vw, -48px), -74vh, 0) scale(1.1) rotate(-20deg);
+  }
+  82% {
+    transform: translate3d(min(9vw, 40px), -104vh, 0) scale(0.97) rotate(14deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(max(-14vw, -52px), -128vh, 0) scale(1.12) rotate(-6deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaos3 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.9) rotate(0deg);
     opacity: 0;
   }
   8% {
     opacity: 1;
   }
+  28% {
+    transform: translate3d(min(20vw, 72px), -24vh, 0) scale(1.06) rotate(22deg);
+  }
+  48% {
+    transform: translate3d(min(8vw, 32px), -52vh, 0) scale(0.9) rotate(-14deg);
+  }
+  66% {
+    transform: translate3d(max(-18vw, -62px), -80vh, 0) scale(1.12) rotate(16deg);
+  }
   85% {
     opacity: 1;
   }
   100% {
-    transform: translate3d(60px, -130vh, 0) scale(1.15);
+    transform: translate3d(min(4vw, 20px), -130vh, 0) scale(1.08) rotate(-10deg);
     opacity: 0;
   }
 }
 
-@keyframes particleFloatReverse {
+@keyframes particleChaos4 {
   0% {
-    transform: translate3d(0, 0, 0) scale(0.9);
+    transform: translate3d(0, 0, 0) scale(0.85) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  22% {
+    transform: translate3d(max(-22vw, -76px), -16vh, 0) scale(1.04) rotate(-18deg);
+  }
+  42% {
+    transform: translate3d(max(-6vw, -28px), -44vh, 0) scale(1.1) rotate(12deg);
+  }
+  64% {
+    transform: translate3d(min(16vw, 60px), -72vh, 0) scale(0.93) rotate(-22deg);
+  }
+  84% {
+    transform: translate3d(max(-12vw, -50px), -102vh, 0) scale(1.07) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(min(11vw, 46px), -134vh, 0) scale(1.02) rotate(-14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaos5 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.87) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  30% {
+    transform: translate3d(min(7vw, 30px), -26vh, 0) scale(1.08) rotate(9deg);
+  }
+  50% {
+    transform: translate3d(max(-20vw, -68px), -54vh, 0) scale(0.91) rotate(-24deg);
+  }
+  70% {
+    transform: translate3d(min(19vw, 70px), -86vh, 0) scale(1.05) rotate(20deg);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(max(-9vw, -38px), -129vh, 0) scale(1.15) rotate(-8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaos6 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.91) rotate(0deg);
+    opacity: 0;
+  }
+  7% {
+    opacity: 1;
+  }
+  26% {
+    transform: translate3d(max(-14vw, -54px), -22vh, 0) scale(0.95) rotate(-11deg);
+  }
+  46% {
+    transform: translate3d(min(22vw, 78px), -50vh, 0) scale(1.1) rotate(19deg);
+  }
+  66% {
+    transform: translate3d(max(-7vw, -32px), -76vh, 0) scale(0.88) rotate(-16deg);
+  }
+  86% {
+    transform: translate3d(min(13vw, 54px), -108vh, 0) scale(1.04) rotate(11deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(max(-17vw, -58px), -131vh, 0) scale(1.1) rotate(-18deg);
+    opacity: 0;
+  }
+}
+
+/* Зеркальные траектории (бывший «reverse») */
+@keyframes particleChaosRev1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.82) rotate(0deg);
+    opacity: 0;
+  }
+  9% {
+    opacity: 1;
+  }
+  18% {
+    transform: translate3d(max(-12vw, -52px), -18vh, 0) scale(1.02) rotate(-14deg);
+  }
+  38% {
+    transform: translate3d(min(10vw, 44px), -42vh, 0) scale(1.08) rotate(8deg);
+  }
+  58% {
+    transform: translate3d(max(-14vw, -58px), -68vh, 0) scale(0.94) rotate(-18deg);
+  }
+  78% {
+    transform: translate3d(min(8vw, 36px), -98vh, 0) scale(1.06) rotate(12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(max(-6vw, -28px), -132vh, 0) scale(1.14) rotate(-6deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaosRev2 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.88) rotate(0deg);
+    opacity: 0;
+  }
+  11% {
+    opacity: 1;
+  }
+  24% {
+    transform: translate3d(min(16vw, 56px), -20vh, 0) scale(1.05) rotate(16deg);
+  }
+  44% {
+    transform: translate3d(max(-18vw, -64px), -46vh, 0) scale(0.92) rotate(-10deg);
+  }
+  62% {
+    transform: translate3d(min(11vw, 48px), -74vh, 0) scale(1.1) rotate(20deg);
+  }
+  82% {
+    transform: translate3d(max(-9vw, -40px), -104vh, 0) scale(0.97) rotate(-14deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(min(14vw, 52px), -128vh, 0) scale(1.12) rotate(6deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaosRev3 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.9) rotate(0deg);
     opacity: 0;
   }
   8% {
     opacity: 1;
   }
+  28% {
+    transform: translate3d(max(-20vw, -72px), -24vh, 0) scale(1.06) rotate(-22deg);
+  }
+  48% {
+    transform: translate3d(max(-8vw, -32px), -52vh, 0) scale(0.9) rotate(14deg);
+  }
+  66% {
+    transform: translate3d(min(18vw, 62px), -80vh, 0) scale(1.12) rotate(-16deg);
+  }
   85% {
     opacity: 1;
   }
   100% {
-    transform: translate3d(-60px, -120vh, 0) scale(1.1);
+    transform: translate3d(max(-4vw, -20px), -130vh, 0) scale(1.08) rotate(10deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaosRev4 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.85) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  22% {
+    transform: translate3d(min(22vw, 76px), -16vh, 0) scale(1.04) rotate(18deg);
+  }
+  42% {
+    transform: translate3d(min(6vw, 28px), -44vh, 0) scale(1.1) rotate(-12deg);
+  }
+  64% {
+    transform: translate3d(max(-16vw, -60px), -72vh, 0) scale(0.93) rotate(22deg);
+  }
+  84% {
+    transform: translate3d(min(12vw, 50px), -102vh, 0) scale(1.07) rotate(-8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(max(-11vw, -46px), -134vh, 0) scale(1.02) rotate(14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaosRev5 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.87) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  30% {
+    transform: translate3d(max(-7vw, -30px), -26vh, 0) scale(1.08) rotate(-9deg);
+  }
+  50% {
+    transform: translate3d(min(20vw, 68px), -54vh, 0) scale(0.91) rotate(24deg);
+  }
+  70% {
+    transform: translate3d(max(-19vw, -70px), -86vh, 0) scale(1.05) rotate(-20deg);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(min(9vw, 38px), -129vh, 0) scale(1.15) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes particleChaosRev6 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.91) rotate(0deg);
+    opacity: 0;
+  }
+  7% {
+    opacity: 1;
+  }
+  26% {
+    transform: translate3d(min(14vw, 54px), -22vh, 0) scale(0.95) rotate(11deg);
+  }
+  46% {
+    transform: translate3d(max(-22vw, -78px), -50vh, 0) scale(1.1) rotate(-19deg);
+  }
+  66% {
+    transform: translate3d(min(7vw, 32px), -76vh, 0) scale(0.88) rotate(16deg);
+  }
+  86% {
+    transform: translate3d(max(-13vw, -54px), -108vh, 0) scale(1.04) rotate(-11deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(min(17vw, 58px), -131vh, 0) scale(1.1) rotate(18deg);
     opacity: 0;
   }
 }

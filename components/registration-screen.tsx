@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react"
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
-import { vkBridge, initVk, isVkMiniApp, ensureVkLaunchSearch } from "@/lib/vk-bridge"
+import { vkBridge, initVkResilient, isVkMiniApp, ensureVkLaunchSearch } from "@/lib/vk-bridge"
 import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
@@ -177,29 +177,28 @@ export function RegistrationScreen() {
 
     ;(async () => {
       try {
-        await initVk()
-        if (cancelled) return
-
-        const launchSearch = await ensureVkLaunchSearch()
         let inIframe = false
         try {
           inIframe = window.self !== window.top
         } catch {
           inIframe = true
         }
-        const vkContext =
-          isVkMiniApp() || launchSearch.includes("vk_user_id=") || inIframe
-
-        if (!vkContext) {
+        const quickVkHint = isVkMiniApp() || inIframe
+        if (!quickVkHint) {
           if (!cancelled) setLoading(false)
           return
         }
 
         if (!cancelled) setVkGate(true)
 
+        // Сессия не зависит от bridge: запросы /api/auth/me до initVk (иначе зависший VKWebAppInit блокирует сеть)
         if (await tryEnterFromSession()) return
         if (cancelled) return
 
+        await initVkResilient()
+        if (cancelled) return
+
+        const launchSearch = await ensureVkLaunchSearch()
         if (!launchSearch.includes("vk_user_id=") || !launchSearch.includes("sign=")) {
           if (!cancelled) {
             setVkGate(false)
@@ -311,7 +310,7 @@ export function RegistrationScreen() {
     setError("")
 
     try {
-      await initVk()
+      await initVkResilient()
       const vkUser = await vkBridge.getUserInfo()
       const launchSearch = await ensureVkLaunchSearch()
       let inIframe = false
@@ -528,24 +527,55 @@ export function RegistrationScreen() {
     }
   }
 
+  const PARTICLE_EASE = [
+    "cubic-bezier(0.45, 0.02, 0.29, 0.98)",
+    "cubic-bezier(0.33, 0.12, 0.53, 0.94)",
+    "cubic-bezier(0.52, 0.01, 0.19, 0.99)",
+    "cubic-bezier(0.4, 0.18, 0.32, 0.92)",
+    "cubic-bezier(0.28, 0.09, 0.46, 1)",
+    "cubic-bezier(0.55, 0.05, 0.15, 0.95)",
+  ] as const
+
+  /** Детерминированно (без Math.random) — одинаково на SSR и клиенте, без пустого фона */
   const entryParticles = useMemo(() => {
-    const count = 18
-    const list: { x: number; y: number; duration: number; delay: number; isPink: boolean; isYellow: boolean; reverse: boolean }[] = []
-    let s = 12345
+    let s = 0xdecaf001 % 233280
+    s = (s * 9301 + 49297) % 233280
+    const count = 12 + (s % 34)
+    const list: {
+      x: number
+      y: number
+      duration: number
+      delay: number
+      isPink: boolean
+      isYellow: boolean
+      reverse: boolean
+      chaos: number
+      ease: string
+      dustOpacity: number
+      dustSize: string
+    }[] = []
     for (let i = 0; i < count; i++) {
       s = (s * 9301 + 49297) % 233280
-      const x = 5 + (s / 233280) * 90
+      const x = 2 + (s / 233280) * 96
       s = (s * 9301 + 49297) % 233280
-      const y = 10 + (s / 233280) * 80
+      const y = 4 + (s / 233280) * 92
       s = (s * 9301 + 49297) % 233280
+      const chaos = s % 6
+      s = (s * 9301 + 49297) % 233280
+      const dustSize = `${(2.1 + (s / 233280) * 2.85).toFixed(2)}px`
+      const dustOpacity = 0.42 + (s / 233280) * 0.48
       list.push({
         x,
         y,
-        duration: 18 + (s % 12),
-        delay: (s % 20) / 2,
+        duration: 16 + (s % 28),
+        delay: (s % 38) * 0.32,
         isPink: i % 3 === 1,
         isYellow: i % 3 === 2,
-        reverse: i % 2 === 1,
+        reverse: (s + i) % 2 === 1,
+        chaos,
+        ease: PARTICLE_EASE[(s + chaos) % PARTICLE_EASE.length],
+        dustOpacity,
+        dustSize,
       })
     }
     return list
@@ -561,19 +591,33 @@ export function RegistrationScreen() {
 
   return (
     <div className="relative flex min-h-dvh min-h-[100vh] flex-col items-center justify-center overflow-y-auto entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
-      <div className="game-particles" aria-hidden="true">
-        {entryParticles.map((d, idx) => (
-          <span
-            key={idx}
-            className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""} ${d.isYellow ? "game-particles__dot--yellow" : ""} ${d.reverse ? "game-particles__dot--reverse" : ""}`}
-            style={{
-              left: `${d.x}%`,
-              top: `${d.y}%`,
-              animationDuration: `${d.duration}s`,
-              animationDelay: `${d.delay}s`,
-            }}
-          />
-        ))}
+      <div className="game-particles game-particles--dust" aria-hidden="true">
+        {entryParticles.map((d, idx) => {
+          const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
+          return (
+            <span
+              key={idx}
+              className="pointer-events-none absolute"
+              style={{ left: `${d.x}%`, top: `${d.y}%`, opacity: d.dustOpacity }}
+            >
+              <span
+                className={`game-particles__dot ${d.isPink ? "game-particles__dot--pink" : ""} ${d.isYellow ? "game-particles__dot--yellow" : ""}`}
+                style={
+                  {
+                    position: "relative",
+                    left: 0,
+                    top: 0,
+                    ["--particle-anim"]: anim,
+                    ["--particle-dur"]: `${d.duration}s`,
+                    ["--particle-delay"]: `${d.delay}s`,
+                    ["--particle-ease"]: d.ease,
+                    ["--dust-size"]: d.dustSize,
+                  } as CSSProperties
+                }
+              />
+            </span>
+          )
+        })}
       </div>
       <div className="relative z-10 w-full flex flex-col items-center">
       <div className="w-full max-w-sm rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm">

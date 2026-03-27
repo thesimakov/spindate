@@ -98,8 +98,16 @@ export async function ensureVkLaunchSearch(): Promise<string> {
   if (fromLoc.includes("vk_user_id=") && fromLoc.includes("sign=")) return fromLoc
   const b = await getBridgeAsync()
   if (!b) return fromLoc
+  /** Часть WebView ВК не отвечает на GetLaunchParams — не блокируем вход бесконечно. */
+  const BRIDGE_GET_LAUNCH_TIMEOUT_MS = 8000
   try {
-    const raw = await b.send("VKWebAppGetLaunchParams", {})
+    const raw = await Promise.race([
+      b.send("VKWebAppGetLaunchParams", {}),
+      new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), BRIDGE_GET_LAUNCH_TIMEOUT_MS),
+      ),
+    ])
+    if (raw === "timeout") return fromLoc
     const payload = unwrapVkLaunchParamsPayload(raw)
     if (payload) {
       const ser = serializeVkLaunchParamsFromBridge(payload)
@@ -201,6 +209,19 @@ export async function initVk(): Promise<void> {
   } catch {
     // вне VK или старая версия клиента
   }
+}
+
+const VK_INIT_TIMEOUT_MS = 8000
+
+/**
+ * То же, что initVk, но не ждёт дольше VK_INIT_TIMEOUT_MS.
+ * В части клиентов ВК promise VKWebAppInit не завершается — иначе не доходят до /api/auth/me.
+ */
+export async function initVkResilient(): Promise<void> {
+  await Promise.race([
+    initVk(),
+    new Promise<void>((resolve) => setTimeout(resolve, VK_INIT_TIMEOUT_MS)),
+  ])
 }
 
 /** Получить данные пользователя VK. */
@@ -313,6 +334,7 @@ export const vkBridge = {
   buyVip,
   inviteFriends,
   initVk,
+  initVkResilient,
   isVkMiniApp,
   ensureVkLaunchSearch,
   getVkLaunchSearchFromLocation,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useGame } from "@/lib/game-context"
-import { initVk, isVkMiniApp, resizeVkWindowToViewport, subscribeVkViewportResize } from "@/lib/vk-bridge"
+import { initVkResilient, isVkMiniApp, resizeVkWindowToViewport, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
@@ -30,7 +30,7 @@ export function GameApp() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      await initVk()
+      await initVkResilient()
       if (cancelled) return
       if (isVkMiniApp()) {
         await resizeVkWindowToViewport()
