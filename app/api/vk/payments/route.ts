@@ -1,89 +1,129 @@
 /**
  * URL для платёжных уведомлений ВКонтакте.
  * Указывается в настройках мини-приложения: Платежи → Подключение.
+ * Формат ответов и подпись — как в VK Payments API (обёртка `response` / `error`).
  * @see https://dev.vk.com/ru/mini-apps/settings/payments/setting-up
+ * @see https://dev.vk.ru/ru/api/payments/notifications/overview
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { payVotesForPack } from "@/lib/heart-shop-pricing"
+import { verifyVkPaymentsSig } from "@/lib/vk-payments-sign"
 
-/** Идентификаторы товаров (голоса ВКонтакте). Должны совпадать с item_id при открытии формы оплаты. */
+/** Защищённый ключ приложения (совпадает с полем в настройках VK). Обязателен для проверки sig в продакшене. */
+const VK_PAYMENTS_SECRET = process.env.VK_PAYMENTS_SECRET ?? ""
+
+const JSON_VK = { "Content-Type": "application/json; encoding=utf-8" } as const
+
+/** Идентификаторы товаров (голоса ВКонтакте). Должны совпадать с `item` в VKWebAppOpenPayForm. */
 const VK_PAYMENT_ITEMS = {
-  hearts_5: { title: "5 сердец", price: payVotesForPack(5), description: "Пополнение сердец для игры" },
-  hearts_50: { title: "50 сердец", price: payVotesForPack(50), description: "Пополнение сердец для игры" },
-  hearts_150: { title: "150 сердец", price: payVotesForPack(150), description: "Пополнение сердец для игры" },
-  hearts_500: { title: "500 сердец", price: payVotesForPack(500), description: "Пополнение сердец для игры" },
-  hearts_1000: { title: "1000 сердец", price: payVotesForPack(1000), description: "Пополнение сердец для игры" },
-  hearts_5000: { title: "5000 сердец", price: payVotesForPack(5000), description: "Пополнение сердец для игры" },
-  vip_7d: { title: "VIP 7 дней", price: 20, description: "VIP-подписка на 7 дней" },
-  vip_30d: { title: "VIP 30 дней", price: 70, description: "VIP-подписка на 30 дней" },
+  hearts_5: { title: "5 сердец", price: payVotesForPack(5) },
+  hearts_50: { title: "50 сердец", price: payVotesForPack(50) },
+  hearts_150: { title: "150 сердец", price: payVotesForPack(150) },
+  hearts_500: { title: "500 сердец", price: payVotesForPack(500) },
+  hearts_1000: { title: "1000 сердец", price: payVotesForPack(1000) },
+  hearts_5000: { title: "5000 сердец", price: payVotesForPack(5000) },
+  vip_7d: { title: "VIP 7 дней", price: 20 },
+  vip_30d: { title: "VIP 30 дней", price: 70 },
 } as const
 
 type ItemId = keyof typeof VK_PAYMENT_ITEMS
 
-function parseBody(req: NextRequest): Promise<Record<string, unknown>> {
-  const ct = req.headers.get("content-type") ?? ""
-  if (ct.includes("application/json")) return req.json().catch(() => ({}))
-  return req.formData().then((fd) => Object.fromEntries(fd.entries())) as Promise<Record<string, unknown>>
+function vkJson(body: unknown, status = 200) {
+  return new NextResponse(JSON.stringify(body), { status, headers: JSON_VK })
 }
 
-/** get_item — запрос информации о товаре. Платформа вызывает при показе формы оплаты. */
-function handleGetItem(itemId: string): NextResponse {
-  const item = itemId && VK_PAYMENT_ITEMS[itemId as ItemId]
-  if (!item) {
-    return NextResponse.json({ error: "item_not_found" }, { status: 404 })
+/** Ошибка по спецификации VK (коды 1–999 — на стороне приложения). */
+function vkError(code: number, msg: string, critical: boolean) {
+  return vkJson({ error: { error_code: code, error_msg: msg, critical } })
+}
+
+async function bodyToUrlParams(req: NextRequest): Promise<URLSearchParams> {
+  const ct = req.headers.get("content-type") ?? ""
+  if (ct.includes("application/json")) {
+    const raw = await req.json().catch(() => ({}))
+    const p = new URLSearchParams()
+    if (raw && typeof raw === "object") {
+      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (v == null) continue
+        if (Array.isArray(v)) v.forEach((x) => p.append(k, String(x)))
+        else p.append(k, String(v))
+      }
+    }
+    return p
   }
-  return NextResponse.json({
-    title: item.title,
-    price: item.price,
-    description: item.description,
+  const text = await req.text()
+  return new URLSearchParams(text)
+}
+
+function normalizeNotificationType(t: string): string {
+  return t.replace(/_test$/i, "")
+}
+
+/** get_item — информация о товаре; в запросе поле `item` (как передал клиент). */
+function handleGetItem(itemKey: string): NextResponse {
+  const item = itemKey && VK_PAYMENT_ITEMS[itemKey as ItemId]
+  if (!item) {
+    return vkError(20, "Product does not exist", true)
+  }
+  return vkJson({
+    response: {
+      title: item.title,
+      price: item.price,
+      item_id: itemKey,
+    },
   })
 }
 
-/** order_status_change — уведомление об изменении статуса заказа (оплата/возврат). */
-function handleOrderStatusChange(
-  orderId: string,
-  itemId: string,
-  status: string,
-  _userId: string,
-): NextResponse {
-  if (!orderId || !itemId) {
-    return NextResponse.json({ error: "invalid_request" }, { status: 400 })
+/** order_status_change — подтверждение обработки заказа; в ответе — order_id (число). */
+function handleOrderStatusChange(orderIdRaw: string, itemKey: string): NextResponse {
+  const orderId = Number.parseInt(orderIdRaw, 10)
+  if (!orderIdRaw || Number.isNaN(orderId)) {
+    return vkError(11, "Invalid order_id", true)
   }
-  const item = VK_PAYMENT_ITEMS[itemId as ItemId]
+  if (!itemKey) {
+    return vkError(11, "Missing item", true)
+  }
+  const item = VK_PAYMENT_ITEMS[itemKey as ItemId]
   if (!item) {
-    return NextResponse.json({ error: "item_not_found" }, { status: 404 })
+    return vkError(20, "Product does not exist", true)
   }
-  if (status === "chargeable" || status === "paid" || status === "confirmed") {
-    return NextResponse.json({ order_id: orderId, success: 1 })
-  }
-  if (status === "cancelled" || status === "refunded") {
-    return NextResponse.json({ order_id: orderId, success: 1 })
-  }
-  return NextResponse.json({ order_id: orderId, success: 1 })
+  return vkJson({ response: { order_id: orderId } })
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await parseBody(req)
-    const notificationType = String(body?.notification_type ?? body?.type ?? "")
+    const params = await bodyToUrlParams(req)
+    const sig = params.get("sig") ?? undefined
 
-    if (notificationType === "get_item") {
-      const itemId = String(body?.item_id ?? body?.item ?? "")
-      return handleGetItem(itemId)
+    if (VK_PAYMENTS_SECRET) {
+      if (!verifyVkPaymentsSig(params, sig, VK_PAYMENTS_SECRET)) {
+        return vkError(10, "The calculated and sent signatures do not match", true)
+      }
     }
 
-    if (notificationType === "order_status_change") {
-      const orderId = String(body?.order_id ?? body?.order ?? "")
-      const itemId = String(body?.item_id ?? body?.item ?? "")
-      const status = String(body?.status ?? "")
-      const userId = String(body?.user_id ?? body?.receiver_id ?? "")
-      return handleOrderStatusChange(orderId, itemId, status, userId)
+    const notificationType = String(params.get("notification_type") ?? "")
+    const baseType = normalizeNotificationType(notificationType)
+
+    if (baseType === "get_item") {
+      const itemKey = String(params.get("item") ?? params.get("item_id") ?? "")
+      return handleGetItem(itemKey)
     }
 
-    return NextResponse.json({ error: "unknown_notification_type" }, { status: 400 })
+    if (baseType === "order_status_change") {
+      const orderId = String(params.get("order_id") ?? "")
+      const itemKey = String(params.get("item_id") ?? params.get("item") ?? "")
+      return handleOrderStatusChange(orderId, itemKey)
+    }
+
+    return vkError(1, `${notificationType || "empty"} not processed`, true)
   } catch (e) {
     console.error("[vk/payments]", e)
-    return NextResponse.json({ error: "internal_error" }, { status: 500 })
+    return vkError(2, "internal_error", false)
   }
+}
+
+/** GET — проверка доступности URL (мониторинг); не часть API VK. */
+export async function GET() {
+  return NextResponse.json({ ok: true, service: "vk-payments" })
 }

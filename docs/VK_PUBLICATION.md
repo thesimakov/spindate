@@ -41,7 +41,8 @@
 2. Перейдите в **Платежи** → **Подключение** ([подробнее](https://dev.vk.com/ru/mini-apps/settings/payments/setting-up)).
 3. В поле **«URL для платёжных уведомлений ВКонтакте»** укажите:  
    **`https://spindate.lemnity.ru/api/vk/payments`**  
-   (или ваш домен + `/api/vk/payments`). Без этого URL запросы get_item и order_status_change не будут обрабатываться.
+   (или ваш домен + `/api/vk/payments`). Без этого URL запросы get_item и order_status_change не будут обрабатываться.  
+   На сервере задайте **`VK_PAYMENTS_SECRET`** (тот же защищённый ключ, что в настройках приложения ВК), иначе проверка подписи уведомлений не включится — см. [VK_PAYMENTS_SETUP.md](VK_PAYMENTS_SETUP.md).
 4. При необходимости добавьте **тестировщиков платежей** (до публикации платить могут только они).
 5. Подробная инструкция по платежам: [VK_PAYMENTS_SETUP.md](VK_PAYMENTS_SETUP.md).
 
