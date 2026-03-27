@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
@@ -9,6 +9,7 @@ import { vkBridge, initVk, isVkMiniApp } from "@/lib/vk-bridge"
 import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
+import { AppLoader } from "@/components/app-loader"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
@@ -25,6 +26,8 @@ export function RegistrationScreen() {
   const [error, setError] = useState("")
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginModalMode, setLoginModalMode] = useState<"login" | "register">("login")
+  /** В VK Mini App: показываем только лоадер, пока идёт тихий вход (сессия или launch params). */
+  const [vkGate, setVkGate] = useState(false)
   const defaultPurpose: Purpose = "communication"
 
   /** Преобразует строковый id пользователя (UUID) в число для Player.id.
@@ -112,25 +115,81 @@ export function RegistrationScreen() {
     dispatch({ type: "SET_SCREEN", screen: "game" })
   }
 
-  const vkAutoAttempted = useRef(false)
+  useLayoutEffect(() => {
+    if (typeof window !== "undefined" && isVkMiniApp()) setVkGate(true)
+  }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
     if (!isVkMiniApp()) return
-    const search = window.location.search
-    if (!search.includes("vk_user_id=") || !search.includes("sign=")) return
-    if (vkAutoAttempted.current) return
-    vkAutoAttempted.current = true
 
     let cancelled = false
+    setLoading(true)
+    setError("")
+
+    const tryEnterFromSession = async (): Promise<boolean> => {
+      const meRes = await fetch("/api/auth/me", { credentials: "include" })
+      if (!meRes.ok) return false
+      const meData = (await meRes.json().catch(() => null)) as {
+        user?: {
+          id: string
+          username?: string
+          displayName?: string
+          avatarUrl?: string
+          gender?: string
+          age?: number
+          purpose?: string
+          vkUserId?: number
+        }
+      } | null
+      const u = meData?.user
+      if (!u) return false
+      const uid = typeof u.vkUserId === "number" ? u.vkUserId : userIdToNumber(u.id)
+      const user = {
+        id: uid,
+        name: u.displayName ?? u.username ?? "Игрок",
+        avatar:
+          u.avatarUrl ??
+          `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(u.username ?? "u")}`,
+        gender: (u.gender === "female" ? "female" : "male") as Gender,
+        age: typeof u.age === "number" ? u.age : 25,
+        purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
+          ? u.purpose
+          : defaultPurpose) as Purpose,
+        authProvider: (typeof u.vkUserId === "number" ? "vk" : "login") as "vk" | "login",
+      }
+      const stRes = await fetch("/api/user/state", { credentials: "include" })
+      const stData = await stRes.json().catch(() => null)
+      if (stRes.ok && stData?.ok) {
+        const voiceBalance = typeof stData.voiceBalance === "number" ? stData.voiceBalance : 0
+        const inventory = (Array.isArray(stData.inventory) ? stData.inventory : []) as InventoryItem[]
+        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+      }
+      addToDevRegistry(user)
+      await buildTableAndEnter(user)
+      return true
+    }
+
     ;(async () => {
-      setLoading(true)
-      setError("")
       try {
         await initVk()
         if (cancelled) return
+
+        if (await tryEnterFromSession()) return
+        if (cancelled) return
+
+        const search = window.location.search
+        if (!search.includes("vk_user_id=") || !search.includes("sign=")) {
+          if (!cancelled) {
+            setVkGate(false)
+            setError("")
+          }
+          return
+        }
+
         const vkUser = await vkBridge.getUserInfo()
         if (cancelled) return
+
         const res = await fetch("/api/auth/vk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -164,7 +223,7 @@ export function RegistrationScreen() {
         } | null
         if (cancelled) return
         if (!res.ok) {
-          vkAutoAttempted.current = false
+          setVkGate(false)
           setError((data?.error as string) || "Автовход через VK недоступен")
           return
         }
@@ -192,17 +251,18 @@ export function RegistrationScreen() {
         }
       } catch {
         if (!cancelled) {
-          vkAutoAttempted.current = false
-          setError("Ошибка автовхода. Нажмите «Войти через VK».")
+          setVkGate(false)
+          setError("Ошибка входа. Нажмите «Войти через VK» или войдите по логину.")
         }
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
+
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- однократный автовход при монтировании
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- тихий вход при монтировании в VK
   }, [])
 
   const ensureAgeValid = () => {
@@ -215,8 +275,14 @@ export function RegistrationScreen() {
   }
 
   const handleContinueVk = async () => {
-    const ageNum = ensureAgeValid()
-    if (!ageNum) return
+    let ageNum = parseInt(age, 10)
+    if (!Number.isFinite(ageNum) || ageNum < 18) {
+      if (isVkMiniApp()) ageNum = 25
+      else {
+        setError("Укажите возраст (18+)")
+        return
+      }
+    }
 
     setLoading(true)
     setError("")
@@ -449,6 +515,14 @@ export function RegistrationScreen() {
     }
     return list
   }, [])
+
+  if (isVkMiniApp() && vkGate) {
+    return (
+      <div className="relative min-h-dvh min-h-[100vh] entry-bg-animated pb-[env(safe-area-inset-bottom)]">
+        <AppLoader title="Вход…" subtitle="Подключаем профиль ВКонтакте" hint="Крути и знакомься" />
+      </div>
+    )
+  }
 
   return (
     <div className="relative flex min-h-dvh min-h-[100vh] flex-col items-center justify-center overflow-y-auto entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
