@@ -1,6 +1,10 @@
 import { AdminLemnityClient } from "./admin-lemnity-client"
 
-/** Без `force-dynamic`: иначе `output: "export"` (GitHub Pages) не собирается. Пре-рендер с клиентским блоком ок; чанки обновляются при каждой сборке. Кэш HTML — через headers в next.config на своём сервере. */
+/**
+ * Явно статическая страница: `output: "export"` (GitHub Pages) не поддерживает `force-dynamic`.
+ * Не возвращайте сюда `force-dynamic` — сборка Pages упадёт.
+ */
+export const dynamic = "force-static"
 
 export default function AdminLemnityPage() {
   return (

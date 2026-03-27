@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import {
+  ArrowLeft,
   ArrowRightLeft,
   CalendarDays,
   Crown,
@@ -50,7 +51,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     return { ...o, votes, listVotes }
   })
   const sectionCardClass =
-    "rounded-2xl border border-cyan-300/25 bg-slate-900/90 shadow-[0_12px_30px_rgba(15,23,42,0.55)]"
+    "rounded-2xl border border-white/[0.07] bg-slate-900/75 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-sm"
+  const sectionLabelClass = "text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500"
   const subtleTextClass = "text-xs sm:text-sm text-slate-300"
   const ctaPrimaryClass =
     "h-10 w-full rounded-xl border border-cyan-200/70 text-sm font-semibold text-slate-950 shadow-[0_8px_20px_rgba(56,189,248,0.5)] disabled:opacity-60"
@@ -286,43 +288,81 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const shopInnerCard = (
     <div
       className={
-        "w-full shrink-0 space-y-6 rounded-3xl border border-slate-500/80 bg-slate-900/95 shadow-[0_28px_60px_rgba(0,0,0,0.75)] backdrop-blur-md " +
-        (isPanel ? "max-w-full px-4 py-5 sm:px-5" : "max-w-2xl px-6 py-8")
+        "w-full shrink-0 space-y-6 rounded-[1.75rem] border border-white/[0.08] bg-gradient-to-b from-slate-900/[0.98] via-[#0a1020]/[0.97] to-slate-950/95 shadow-[0_28px_80px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.04] backdrop-blur-md " +
+        (isPanel ? "max-w-full space-y-5 px-4 py-5 sm:px-5" : "max-w-2xl space-y-7 px-5 py-7 sm:px-8 sm:py-9")
       }
     >
         {!isPanel && (
-          <>
-        <h1 className="mb-2 text-center text-lg sm:text-2xl font-bold text-slate-50 tracking-wide">{"Магазин"}</h1>
-        <p className="mb-2 text-center text-slate-300 text-sm sm:text-base">
-          {"Здесь можно выделиться за столом и пополнить запас сердец."}
-        </p>
-          </>
+          <header className="space-y-2 text-center sm:text-left">
+            <p className={sectionLabelClass}>Стол и валюта</p>
+            <h1 className="bg-gradient-to-r from-slate-50 via-white to-slate-300 bg-clip-text text-2xl font-bold tracking-tight text-transparent sm:text-3xl">
+              Магазин
+            </h1>
+            <p className="text-sm leading-relaxed text-slate-400 sm:text-base">
+              Пополнение сердец, VIP и обмен — всё в одном месте.
+            </p>
+          </header>
         )}
-        <p className="mb-5 text-center text-xs sm:text-sm text-slate-300/90">
-          Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. Соответствие п. 2.3.8{" "}
-          <a href="https://dev.vk.com/ru/mini-apps-rules" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-400">правил VK Mini Apps</a>.
-        </p>
 
         {/* Баланс */}
-        <div className={`mb-3 flex items-center justify-between px-4 py-3 ${sectionCardClass}`}>
-          <span className="text-sm sm:text-base font-semibold text-slate-100">{"Баланс сердец"}</span>
-          <div className="flex items-center gap-2">
-            <Heart className="h-5 w-5 shrink-0 text-rose-400 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} fill="none" aria-hidden />
-            <span className="text-base sm:text-lg font-bold text-slate-100">{voiceBalance}</span>
+        <div
+          className={`relative overflow-hidden ${sectionCardClass} ${
+            layoutDense ? "p-4" : "p-5 sm:p-6"
+          }`}
+        >
+          <div
+            className="pointer-events-none absolute -right-6 -top-10 h-36 w-36 rounded-full bg-rose-500/[0.12] blur-3xl"
+            aria-hidden
+          />
+          <div className="pointer-events-none absolute -bottom-8 left-1/2 h-24 w-48 -translate-x-1/2 rounded-full bg-cyan-500/[0.06] blur-2xl" aria-hidden />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className={sectionLabelClass}>Баланс</p>
+              <p className={`mt-1 font-medium text-slate-300 ${layoutDense ? "text-xs" : "text-sm"}`}>
+                Сердечки на столе
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
+              <div
+                className={`flex items-center justify-center rounded-2xl bg-rose-500/15 ring-1 ring-rose-400/25 ${
+                  layoutDense ? "h-11 w-11" : "h-12 w-12 sm:h-14 sm:w-14"
+                }`}
+              >
+                <Heart
+                  className={`shrink-0 text-rose-300 ${layoutDense ? "h-5 w-5" : "h-6 w-6 sm:h-7 sm:w-7"}`}
+                  strokeWidth={mdIconStroke}
+                  fill="none"
+                  aria-hidden
+                />
+              </div>
+              <span
+                className={`font-black tabular-nums tracking-tight text-white ${
+                  layoutDense ? "text-2xl" : "text-3xl sm:text-4xl"
+                }`}
+              >
+                {voiceBalance}
+              </span>
+            </div>
           </div>
         </div>
+
         {/* Пополнение сердечек (оплата через VK по пакетам) */}
-        {layoutDense && (
-          <div className="border-t border-slate-600/40 pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Пополнение</p>
-            <p className="mt-1 text-xs text-slate-400">Пакеты сердец — оплата голосами VK</p>
+        {layoutDense ? (
+          <div className="border-t border-slate-600/35 pt-5">
+            <p className={sectionLabelClass}>Пополнение</p>
+            <p className="mt-1.5 text-sm font-semibold text-slate-100">Пакеты сердец</p>
+            <p className="mt-0.5 text-xs text-slate-500">Оплата голосами VK</p>
+          </div>
+        ) : (
+          <div className="space-y-1 px-0.5">
+            <p className={sectionLabelClass}>Пополнение</p>
+            <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl">Пакеты сердец</h2>
+            <p className="text-xs text-slate-500 sm:text-sm">Оплата голосами VK · скидки на крупные пакеты</p>
           </div>
         )}
         <div
           className={
-            layoutDense
-              ? "mt-2 grid grid-cols-3 gap-2 sm:gap-3"
-              : "mt-5 grid grid-cols-3 gap-3"
+            layoutDense ? "grid grid-cols-3 gap-2 sm:gap-3" : "grid grid-cols-3 gap-3 sm:gap-3.5"
           }
         >
           {heartOffers.map((offer) => {
@@ -466,12 +506,18 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         </div>
 
         {/* VIP-статус: единый модуль + три карточки в один ряд */}
+        <div className="space-y-3">
+          <div className="px-0.5">
+            <p className={sectionLabelClass}>Премиум</p>
+            <h2 className="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">VIP за столом</h2>
+            <p className="mt-1 text-xs text-slate-500 sm:text-sm">Рамка, значок и приоритет в списке игроков</p>
+          </div>
         <div
-          className={`overflow-hidden rounded-2xl border border-slate-700/45 bg-gradient-to-b from-slate-900/95 via-[#0a0f18] to-[#06090f] shadow-[0_20px_50px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)] ${
-            layoutDense ? "border-t border-slate-600/40 pt-1" : ""
+          className={`overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-b from-amber-950/[0.15] via-[#0a0f18] to-[#06090f] shadow-[0_24px_56px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] ${
+            layoutDense ? "" : ""
           }`}
         >
-          <div className="border-b border-slate-700/40 px-4 py-4 sm:px-5 sm:py-5">
+          <div className="border-b border-amber-500/10 px-4 py-4 sm:px-5 sm:py-5">
             <div className="flex items-start gap-3 sm:gap-4">
               <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14"
@@ -482,10 +528,12 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               >
                 <Crown className="h-6 w-6 text-amber-950 sm:h-7 sm:w-7" strokeWidth={mdIconStroke} aria-hidden />
               </div>
-              <div className="min-w-0 flex flex-col gap-1.5 pt-0.5">
-                <h3 className="text-lg font-bold tracking-tight text-white sm:text-xl">VIP-статус</h3>
+              <div className="min-w-0 flex flex-col gap-2 pt-0.5">
+                <p className="text-base font-semibold leading-snug text-white sm:text-lg">
+                  Золотая рамка и корона на аватаре
+                </p>
                 <p className="text-sm leading-relaxed text-slate-400">
-                  Золотая рамка и значок на аватаре, приоритетное место за столом.
+                  Заметный статус и приоритетное место за столом.
                 </p>
                 {isVip && vipLeftDays != null && (
                   <span className="inline-flex w-fit items-center rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/30">
@@ -646,8 +694,11 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             </div>
           </div>
         </div>
+        </div>
 
         {/* Пакет эмоций — акцентный промо-блок (конверсия) */}
+        <div className="space-y-2">
+          <p className={`${sectionLabelClass} px-0.5`}>Лимиты за столом</p>
         <section
           className="relative overflow-hidden rounded-2xl border border-fuchsia-500/35 shadow-[0_0_48px_rgba(192,38,211,0.14),inset_0_1px_0_rgba(255,255,255,0.07)]"
           style={{
@@ -681,7 +732,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   </div>
                   <div className="min-w-0 flex-1 pt-0.5">
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-fuchsia-300/90">
-                      За столом
+                      Пакет дня
                     </p>
                     <h3
                       id="shop-emotion-pack-title"
@@ -756,15 +807,22 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             </div>
           </div>
         </section>
+        </div>
 
         {/* Обмен валюты: Сердца ↔ Розы */}
+        <div className="space-y-3">
+          <div className="px-0.5">
+            <p className={sectionLabelClass}>Обмен</p>
+            <h2 className="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">Сердца и розы</h2>
+            <p className="mt-1 text-xs text-slate-500 sm:text-sm">Мгновенная конвертация по фиксированному курсу</p>
+          </div>
         <div
           className={`overflow-hidden p-0 ${sectionCardClass} ${
-            layoutDense ? "border-t border-slate-600/35" : ""
+            layoutDense ? "" : ""
           }`}
         >
           <div
-            className={`border-b border-cyan-400/10 px-4 py-3 ${
+            className={`border-b border-cyan-400/10 px-4 py-3.5 ${
               layoutDense ? "flex flex-col items-stretch gap-3" : "flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
             }`}
           >
@@ -773,8 +831,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 <ArrowRightLeft className="h-5 w-5 text-cyan-300" strokeWidth={mdIconStroke} aria-hidden />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Обмен</p>
-                <h2 className="text-base font-bold tracking-tight text-slate-50">Конвертация</h2>
+                <p className="text-xs font-semibold text-slate-300">Курс обмена</p>
+                <p className="text-[11px] text-slate-500 sm:text-xs">Выберите направление ниже</p>
               </div>
             </div>
             <div
@@ -812,10 +870,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           <div className="space-y-4 px-4 py-4">
             <div className="space-y-2">
               <p className="text-[11px] leading-snug text-slate-400 sm:text-xs">
-                <span className="font-semibold text-slate-300">Направление обмена</span>
-                {" — "}
-                курс <span className="tabular-nums text-cyan-300">5 ❤</span> за{" "}
-                <span className="tabular-nums text-fuchsia-300">1 🌹</span> и обратно. Нажмите вариант слева или справа.
+                Курс: <span className="tabular-nums text-cyan-300">5 ❤</span> ↔{" "}
+                <span className="tabular-nums text-fuchsia-300">1 🌹</span>. Выберите вкладку и сумму.
               </p>
               <div
                 role="tablist"
@@ -1006,39 +1062,62 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             </div>
           </div>
         </div>
+        </div>
 
         {/* Добавить друзей */}
+        <div className="space-y-2">
+          <p className={`${sectionLabelClass} px-0.5`}>Сообщество</p>
         <div
-          className={`rounded-xl px-3 py-3 ${sectionCardClass} ${
-            layoutDense ? "flex flex-col items-stretch gap-3" : "flex items-center justify-between"
+          className={`rounded-2xl px-4 py-4 ${sectionCardClass} ${
+            layoutDense ? "flex flex-col items-stretch gap-4" : "flex items-center justify-between gap-4"
           }`}
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700/80">
-              <Users className="h-5 w-5 text-slate-300" />
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-600/80 to-slate-800/90 ring-1 ring-white/10"
+              aria-hidden
+            >
+              <Users className="h-5 w-5 text-slate-200" strokeWidth={mdIconStroke} />
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-slate-100">{"Добавить друзей"}</span>
-              <span className={subtleTextClass}>{"Пригласите друзей в игру — веселее вместе"}</span>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-sm font-semibold text-slate-100">Добавить друзей</span>
+              <span className={subtleTextClass}>Пригласите в игру — веселее вместе</span>
             </div>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className={`${ctaSecondaryClass} h-9 px-4 ${layoutDense ? "w-full" : ""}`}
+            className={`${ctaSecondaryClass} h-10 shrink-0 px-5 ${layoutDense ? "w-full" : ""}`}
             onClick={handleInviteFriends}
           >
-            {"Пригласить"}
+            Пригласить
           </Button>
         </div>
+        </div>
 
-        <div className="flex flex-col gap-2">
+        <footer className="rounded-2xl border border-slate-700/40 bg-slate-950/50 px-4 py-3 text-center sm:text-left">
+          <p className="text-[11px] leading-relaxed text-slate-500 sm:text-xs">
+            Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. П. 2.3.8{" "}
+            <a
+              href="https://dev.vk.com/ru/mini-apps-rules"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-300"
+            >
+              правил VK Mini Apps
+            </a>
+            .
+          </p>
+        </footer>
+
+        <div className="flex flex-col gap-2 pt-1">
           <Button
             variant="outline"
-            className={ctaSecondaryClass}
+            className={`${ctaSecondaryClass} inline-flex items-center justify-center gap-2`}
             onClick={backToTable}
           >
-            {"Назад к столу"}
+            <ArrowLeft className="h-4 w-4 shrink-0 opacity-80" strokeWidth={mdIconStroke} aria-hidden />
+            Назад к столу
           </Button>
         </div>
     </div>
@@ -1050,7 +1129,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         {toast && <InlineToast toast={toast} />}
         <GameSidePanelShell
           title="Магазин"
-          subtitle="Здесь можно выделиться за столом и пополнить запас сердец."
+          subtitle="Баланс, пакеты, VIP и обмен в одном месте."
           onClose={onClose!}
         >
           {shopInnerCard}
