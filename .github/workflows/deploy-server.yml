@@ -32,6 +32,10 @@ jobs:
       - name: Build (for Node server, no static export)
         run: npm run build
 
+      # Кэш webpack/swc не нужен для `next start`, только раздувает rsync и провоцирует Broken pipe
+      - name: Remove .next/cache before deploy
+        run: rm -rf .next/cache
+
       - name: Deploy to server via SSH
         env:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
@@ -60,22 +64,20 @@ jobs:
             exit 1
           fi
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=12 -o TCPKeepAlive=yes"
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=40 -o TCPKeepAlive=yes"
           echo "Checking SSH connectivity..."
           ssh -o BatchMode=yes $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "echo ok"
           echo "Creating directory on server..."
           ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate"
           echo "Syncing files..."
-          # .next/cache — только для инкрементальной сборки, раздувает архив и даёт ошибки utime на части хостингов
-          # --omit-dir-times / --no-times — если на каталоге нет прав менять mtime (Operation not permitted)
-          rsync -avz --delete \
-            --omit-dir-times \
-            --no-times \
+          # Без -a и без -t: не трогаем mtime (иначе Operation not permitted на приёмнике).
+          # Без -o/-g: не пытаемся сохранить uid/gid с раннера GitHub на вашем сервере.
+          rsync -rlpvz --delete \
             --exclude 'node_modules' \
             --exclude 'data' \
             --exclude '.env*' \
             --exclude '.git' \
-            --exclude '.next/cache' \
+            --exclude 'cache' \
             -e "ssh $SSH_OPTS" \
             .next \
             public \
