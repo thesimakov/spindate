@@ -1,4 +1,10 @@
 node_modules
+
+# Секреты и локальные env (на VPS — только вне репозитория)
+.env
+.env.local
+.env.*.local
+
 .next
 .DS_Store
 .git_backup
