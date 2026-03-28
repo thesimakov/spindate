@@ -6372,7 +6372,7 @@ function TableChatPanel({
             {"Игра начинается..."}
           </p>
         )}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2.5 px-0.5 py-1">
           {chatEntries.map((entry) => (
             <ChatBubble key={entry.id} entry={entry} currentUserId={currentUserId} />
           ))}
@@ -6432,10 +6432,10 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
     skip: "#94a3b8",
     invite: "#e8c06a",
     join: "#2ecc71",
-    system: "#3498db",
-    chat: "#3498db",
+    system: "#38bdf8",
+    chat: "#38bdf8",
     hug: "#2ecc71",
-    selfie: "#3498db",
+    selfie: "#38bdf8",
     flowers: "#e74c3c",
     song: "#9b59b6",
     rose: "#e74c3c",
@@ -6443,6 +6443,42 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
     bottle_thanks: "#facc15",
   }
   const accentColor = colorMap[entry.type] ?? "#94a3b8"
+  const isChat = entry.type === "chat"
+
+  if (isChat) {
+    return (
+      <div
+        className={cn(
+          "flex max-w-[95%] gap-2.5 rounded-2xl px-3 py-2.5 shadow-[0_2px_12px_rgba(0,0,0,0.35)] transition-colors",
+          isOwn
+            ? "ml-auto flex-row-reverse border-r-[3px] border-sky-400 bg-[linear-gradient(135deg,rgba(28,32,42,0.95)_0%,rgba(18,22,30,0.98)_100%)]"
+            : "mr-auto border-l-[3px] border-sky-500 bg-[linear-gradient(135deg,rgba(32,28,24,0.96)_0%,rgba(20,18,16,0.98)_100%)]",
+        )}
+      >
+        {entry.fromPlayer && (
+          <div
+            className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-sky-500/45 ring-offset-1 ring-offset-[rgba(12,10,9,0.6)]"
+            style={{ boxShadow: `0 0 0 1px ${accentColor}33` }}
+          >
+            <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1 text-left">
+          {entry.fromPlayer && (
+            <div className={cn("mb-0.5 text-xs font-semibold tracking-tight text-sky-300", isOwn && "text-sky-200")}>
+              {entry.fromPlayer.name}
+            </div>
+          )}
+          <p
+            className="text-[13px] leading-snug text-[#d8c9a8]"
+            style={{ wordBreak: "break-word" }}
+          >
+            {entry.text}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -6458,7 +6494,6 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
             className="h-4 w-4 shrink-0 overflow-hidden rounded-full"
             style={{ border: `1.5px solid ${accentColor}` }}
           >
-            { }
             <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
           </div>
           <span className="text-[10px] font-bold" style={{ color: accentColor }}>
