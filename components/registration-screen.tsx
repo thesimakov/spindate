@@ -594,7 +594,7 @@ export function RegistrationScreen() {
 
   if (isVkMiniApp() && vkGate) {
     return (
-      <div className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden entry-bg-animated">
+      <div className="relative flex min-h-app min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden entry-bg-animated">
         <AppLoader
           className="!min-h-0 min-h-0 flex-1 bg-slate-900/98"
           title="Вход…"
@@ -606,7 +606,7 @@ export function RegistrationScreen() {
   }
 
   return (
-    <div className="relative flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden entry-bg-animated px-4 pt-8 sm:pt-10 pb-[max(0px,env(safe-area-inset-bottom))]">
+    <div className="relative flex min-h-app min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden entry-bg-animated px-4 pt-8 sm:pt-10 pb-[max(0px,env(safe-area-inset-bottom))]">
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {entryParticles.map((d, idx) => {
           const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`

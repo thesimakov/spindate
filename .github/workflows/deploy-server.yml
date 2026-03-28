@@ -30,6 +30,9 @@ jobs:
         run: npm ci
 
       - name: Build (for Node server, no static export)
+        env:
+          # Видно в HTML (`data-build` на body) — сверка с коммитом на GitHub
+          NEXT_PUBLIC_BUILD_ID: ${{ github.sha }}
         run: npm run build
 
       # Кэш webpack/swc не нужен для `next start`, только раздувает rsync и провоцирует Broken pipe

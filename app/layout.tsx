@@ -41,6 +41,7 @@ export default function RootLayout({
     <html lang="ru" className="dark h-full w-full max-w-none" suppressHydrationWarning>
       <body
         className={`${_inter.className} font-sans antialiased bg-background text-foreground h-full min-h-0 w-full min-w-0 max-w-none`}
+        data-build={process.env.NEXT_PUBLIC_BUILD_ID || undefined}
         suppressHydrationWarning
       >
         <ThemeProvider
