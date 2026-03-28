@@ -12,7 +12,7 @@ import {
   ensureVkLaunchSearchResilient,
   type VkUserInfo,
 } from "@/lib/vk-bridge"
-import { useIsMobile } from "@/lib/use-media-query"
+import { useGameLayoutMode } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
 import { AppLoader } from "@/components/app-loader"
@@ -20,7 +20,7 @@ import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
-  const isMobile = useIsMobile()
+  const { layoutMobile: isMobile, isDesktopUser } = useGameLayoutMode()
   /** Узкая карточка по центру на всех размерах экрана */
   const entryCardMax = "w-full max-w-sm sm:max-w-md"
   const loginModalMax = !isMobile ? "max-w-xl" : "max-w-sm"
@@ -60,7 +60,7 @@ export function RegistrationScreen() {
   }) => {
     dispatch({ type: "SET_USER", user })
 
-    const desktopGame = !isMobile
+    const desktopGame = isDesktopUser
     const maxTableSize = desktopGame ? 10 : 6
     const targetMales = desktopGame ? 5 : 3
     const targetFemales = desktopGame ? 5 : 3

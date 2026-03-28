@@ -51,7 +51,7 @@ import {
   type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
-import { useIsMobile } from "@/lib/use-media-query"
+import { useGameLayoutMode } from "@/lib/use-media-query"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -365,8 +365,8 @@ const GAME_ROOM_DUST_SEED = 0x51ab1e
 export function GameRoom() {
   const { state, dispatch: rawDispatch } = useGame()
   useTheme()
-  const isMobile = useIsMobile()
-  /** Планшет и ПК — одна вёрстка; компактный UI только на телефоне (isMobile) */
+  const { layoutMobile: isMobile } = useGameLayoutMode()
+  /** Планшет и ПК — одна вёрстка; компактный UI только на телефоне (узкий экран без десктопного пользователя ВК) */
   const {
     players,
     currentTurnIndex,
