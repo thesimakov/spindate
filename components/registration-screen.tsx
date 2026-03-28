@@ -16,8 +16,9 @@ export function RegistrationScreen() {
   const { dispatch } = useGame()
   const isMobile = useIsMobile()
   const isTablet = useIsTablet()
-  const isMobileOrTablet = isMobile || isTablet
   const isDesktopUser = useIsDesktopUser()
+  const isTabletLayout = isTablet && !isDesktopUser
+  const isMobileOrTablet = isMobile || isTabletLayout
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")

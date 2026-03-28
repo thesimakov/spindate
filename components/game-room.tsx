@@ -50,7 +50,7 @@ import {
   type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
-import { useIsMobile, useIsTablet } from "@/lib/use-media-query"
+import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -345,7 +345,10 @@ export function GameRoom() {
   useTheme()
   const isMobile = useIsMobile()
   const isTablet = useIsTablet()
-  const isMobileOrTablet = isMobile || isTablet
+  const isDesktopUser = useIsDesktopUser()
+  /** В iframe VK на ПК ширина часто 768–1023px — иначе включалась «планшетная» сетка при окне на весь браузер */
+  const isTabletLayout = isTablet && !isDesktopUser
+  const isMobileOrTablet = isMobile || isTabletLayout
   const {
     players,
     currentTurnIndex,
@@ -975,7 +978,7 @@ export function GameRoom() {
   // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
   // чтобы аватарки с рамками не накладывались друг на друга.
   const manyPlayersOnMobile = isMobileOrTablet && players.length > 6
-  const radius = manyPlayersOnMobile ? 32 : isMobile ? 26 : isTablet ? 27 : 28
+  const radius = manyPlayersOnMobile ? 32 : isMobile ? 26 : isTabletLayout ? 27 : 28
   const radiusX = radius
   const radiusY = manyPlayersOnMobile ? 34 : isMobile ? 28 : Math.round(radius * (6 / 5))
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
@@ -4325,7 +4328,7 @@ export function GameRoom() {
               ? [...getGiftsForPlayer(player.id), "rose" as const]
               : getGiftsForPlayer(player.id)
             const steamAvatarSize =
-              manyPlayersOnMobile ? 42 : isTablet ? 76 : isMobile || manyPlayersOnMobile ? 52 : 70
+              manyPlayersOnMobile ? 42 : isTabletLayout ? 76 : isMobile || manyPlayersOnMobile ? 52 : 70
             const steamBorder = steamAvatarSize <= 52 ? 3 : 4
             const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
             return (
@@ -4347,7 +4350,7 @@ export function GameRoom() {
                   <PlayerAvatar
                     player={player}
                     compact={isMobile || manyPlayersOnMobile}
-                    size={manyPlayersOnMobile ? 42 : isTablet ? 76 : undefined}
+                    size={manyPlayersOnMobile ? 42 : isTabletLayout ? 76 : undefined}
                     // Во время результата подсвечиваем только пару, а не крутящего
                     isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
                     isTarget={
@@ -4552,7 +4555,7 @@ export function GameRoom() {
           {/* ---- BOTTLE in the centre (на мобильной — крупнее) ---- */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
             <div
-              style={isMobile ? { transform: "scale(1.4)" } : isTablet ? { transform: "scale(0.9)" } : undefined}
+              style={isMobile ? { transform: "scale(1.4)" } : isTabletLayout ? { transform: "scale(0.9)" } : undefined}
               className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
             >
               <Bottle
@@ -4725,7 +4728,7 @@ export function GameRoom() {
         {/* ---- Общий чат под столом (мобильная и планшет); на планшете — по ширине как игровое поле ---- */}
         <div
           className={`w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 lg:hidden pb-0 ${
-            isTablet ? "md:mx-auto" : ""
+            isTabletLayout ? "md:mx-auto" : ""
           } ${
             isMobileOrTablet
               ? `fixed inset-x-0 bottom-0 z-[29] mx-auto shrink-0 flex flex-col ${!mobileChatCollapsed ? "min-h-0" : ""}`
@@ -4734,14 +4737,14 @@ export function GameRoom() {
           style={
             isMobileOrTablet
               ? {
-                  width: isTablet ? "min(92vw, calc(100vh - 260px))" : "min(95vw, 720px)",
+                  width: isTabletLayout ? "min(92vw, calc(100vh - 260px))" : "min(95vw, 720px)",
                   maxWidth: "720px",
                   marginLeft: "auto",
                   marginRight: "auto",
                   paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
                   ...(!mobileChatCollapsed ? { top: mobileOpenChatTop } : {}),
                 }
-              : (isTablet
+              : (isTabletLayout
                 ? { width: "min(92vw, calc(100vh - 260px))", maxWidth: "720px", marginLeft: "auto", marginRight: "auto" }
                 : undefined)
           }
