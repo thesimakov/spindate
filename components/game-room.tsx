@@ -1,15 +1,6 @@
 "use client"
 
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  type CSSProperties,
-  type Dispatch,
-  type SetStateAction,
-} from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import {
   Heart,
   MessageCircle,
@@ -58,7 +49,6 @@ import {
   type PairGenderCombo,
   type InventoryItem,
   type TableAuthorityPayload,
-  type GeneralChatMessage,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
@@ -373,209 +363,6 @@ function isTableSyncedAction(action: GameAction): boolean {
 
 const GAME_ROOM_DUST_SEED = 0x51ab1e
 
-/** Общий чат: в центре (телефон / узкий без ПК-режима) или справа (ПК — без дубля с чатом стола). */
-function GameRoomGeneralChatBlock({
-  variant,
-  isMobile,
-  mobileChatCollapsed,
-  setMobileChatCollapsed,
-  generalChatMessages,
-  generalChatInput,
-  setGeneralChatInput,
-  dispatch,
-  currentUser,
-  mobileOpenChatTop,
-}: {
-  variant: "center" | "sidebar"
-  isMobile: boolean
-  mobileChatCollapsed: boolean
-  setMobileChatCollapsed: Dispatch<SetStateAction<boolean>>
-  generalChatMessages: GeneralChatMessage[]
-  generalChatInput: string
-  setGeneralChatInput: (v: string) => void
-  dispatch: (action: GameAction) => void
-  currentUser: Player | null
-  mobileOpenChatTop: number
-}) {
-  const isSidebar = variant === "sidebar"
-
-  const card = (
-    <div
-      className={cn(
-        "flex shrink-0 flex-col overflow-hidden",
-        isMobile ? "rounded-2xl" : "rounded-xl",
-        isSidebar && "min-h-0 max-h-full flex-1",
-        isMobile && !mobileChatCollapsed && !isSidebar ? "min-h-0 max-h-full flex-1 flex-col" : "",
-      )}
-      style={{
-        background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
-        border: "1px solid rgba(71, 85, 105, 0.6)",
-        boxShadow: isMobile ? "0 2px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 4px 20px rgba(0,0,0,0.35)",
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setMobileChatCollapsed((c) => !c)}
-        className="flex w-full shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5 text-left"
-        style={{ borderColor: "rgba(71, 85, 105, 0.4)" }}
-      >
-        <div className="flex items-center gap-2">
-          <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-          <span className="text-xs font-bold" style={{ color: "#fef3c7" }}>
-            Общий чат
-          </span>
-          {isSidebar && (
-            <span className="text-[9px] font-medium text-slate-500">· всем</span>
-          )}
-          {generalChatMessages.length > 0 && (
-            <span
-              className="min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold"
-              style={{ background: "rgba(251, 191, 36, 0.35)", color: "#fef3c7" }}
-            >
-              +{generalChatMessages.length}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] font-medium" style={{ color: "#94a3b8" }}>
-            {mobileChatCollapsed ? "Развернуть" : "Свернуть"}
-          </span>
-          {mobileChatCollapsed ? (
-            <ChevronUp className="h-4 w-4 shrink-0" style={{ color: "#94a3b8" }} />
-          ) : (
-            <ChevronDown className="h-4 w-4 shrink-0" style={{ color: "#94a3b8" }} />
-          )}
-        </div>
-      </button>
-      {!mobileChatCollapsed && (
-        <>
-          <div
-            className={cn(
-              "min-h-0 space-y-0.5 overflow-y-auto overscroll-contain px-2 py-1",
-              isMobile ? "" : "max-h-[min(52vh,380px)]",
-              isSidebar && "max-h-[min(28vh,200px)] flex-1",
-            )}
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            {generalChatMessages.slice(-4).map((msg) => (
-              <div key={msg.id} className="text-[11px] leading-tight">
-                <span className="font-semibold" style={{ color: "#e8c06a" }}>
-                  {msg.senderName}:
-                </span>
-                <span className="ml-1" style={{ color: "#e2e8f0" }}>
-                  {msg.text}
-                </span>
-              </div>
-            ))}
-            {generalChatMessages.length === 0 && (
-              <p className="text-[11px]" style={{ color: "#64748b" }}>
-                Пока нет сообщений
-              </p>
-            )}
-          </div>
-          <div className="flex shrink-0 gap-1 border-t p-1" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
-            <input
-              type="text"
-              placeholder="Написать..."
-              value={generalChatInput}
-              onChange={(e) => setGeneralChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  const t = generalChatInput.trim()
-                  if (t && currentUser) {
-                    dispatch({
-                      type: "SEND_GENERAL_CHAT",
-                      message: {
-                        id: `gc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                        senderId: currentUser.id,
-                        senderName: currentUser.name,
-                        text: t,
-                        timestamp: Date.now(),
-                      },
-                    })
-                    setGeneralChatInput("")
-                  }
-                }
-              }}
-              className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800/80 px-2.5 py-1.5 text-[12px] text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
-              aria-label="Поле общего чата"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                const t = generalChatInput.trim()
-                if (t && currentUser) {
-                  dispatch({
-                    type: "SEND_GENERAL_CHAT",
-                    message: {
-                      id: `gc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                      senderId: currentUser.id,
-                      senderName: currentUser.name,
-                      text: t,
-                      timestamp: Date.now(),
-                    },
-                  })
-                  setGeneralChatInput("")
-                }
-              }}
-              disabled={!generalChatInput.trim()}
-              className="shrink-0 rounded-lg p-1.5 transition-opacity disabled:opacity-40"
-              style={{
-                background: "rgba(251, 191, 36, 0.25)",
-                border: "1px solid rgba(251, 191, 36, 0.5)",
-                color: "#fef3c7",
-              }}
-              aria-label="Отправить в общий чат"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  )
-
-  if (isSidebar) {
-    return (
-      <section
-        className="mx-2 flex min-h-0 max-h-[min(40vh,320px)] shrink-0 flex-col gap-1"
-        aria-label="Общий чат для всех за столом"
-      >
-        {card}
-      </section>
-    )
-  }
-
-  return (
-    <div
-      className={cn(
-        "w-full max-w-[95vw] px-1 pb-0 sm:max-w-[min(90vw,720px)] sm:px-1 lg:hidden",
-        isMobile
-          ? cn(
-              "fixed inset-x-0 bottom-0 z-[29] mx-auto flex shrink-0 flex-col",
-              !mobileChatCollapsed && "min-h-0",
-            )
-          : "mt-2 shrink-0 sm:mt-1",
-      )}
-      style={
-        isMobile
-          ? {
-              width: "min(95vw, 720px)",
-              maxWidth: "720px",
-              marginLeft: "auto",
-              marginRight: "auto",
-              paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
-              ...(!mobileChatCollapsed ? { top: mobileOpenChatTop } : {}),
-            }
-          : undefined
-      }
-    >
-      {card}
-    </div>
-  )
-}
-
 export function GameRoom() {
   const { state, dispatch: rawDispatch } = useGame()
   useTheme()
@@ -621,7 +408,6 @@ export function GameRoom() {
     showReturnedFromUgadaika,
     spinSkips,
     soundsEnabled,
-    generalChatMessages = [],
     emotionDailyBoost,
     emotionUseTodayByPlayer,
     tablePaused,
@@ -1151,7 +937,6 @@ export function GameRoom() {
   const [showChatListModal, setShowChatListModal] = useState(false)
   const [followersBlockCollapsed, setFollowersBlockCollapsed] = useState(false)
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
-  const [generalChatInput, setGeneralChatInput] = useState("")
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
   /** Планшет (md–lg): узкая колонка иконок; по нажатию — полная панель */
@@ -1160,7 +945,6 @@ export function GameRoom() {
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
-  const [mobileChatCollapsed, setMobileChatCollapsed] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
@@ -1182,11 +966,7 @@ export function GameRoom() {
   const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
-  /** Нижний блок «ход / пара / крутится» — верх развёрнутого общего чата на мобильной */
   const underBoardStatusRef = useRef<HTMLDivElement>(null)
-  const [mobileOpenChatTop, setMobileOpenChatTop] = useState<number>(() =>
-    typeof window !== "undefined" ? Math.round(window.innerHeight * 0.42) : 320,
-  )
 
   // Prediction state
   const [predictionTarget, setPredictionTarget] = useState<Player | null>(null)
@@ -2736,53 +2516,6 @@ export function GameRoom() {
               (currentUser.id === resolvedTargetPlayer.id ||
                 currentUser.id === resolvedTargetPlayer2.id)))),
     )
-
-  const updateMobileOpenChatTop = useCallback(() => {
-    if (typeof window === "undefined") return
-    if (!isMobile || mobileChatCollapsed) return
-    const el = underBoardStatusRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const gap = 6
-    const navClearance = window.matchMedia("(max-width: 767px)").matches ? 100 : 72
-    setMobileOpenChatTop(Math.max(navClearance, rect.bottom + gap))
-  }, [isMobile, mobileChatCollapsed])
-
-  useEffect(() => {
-    if (!isMobile || mobileChatCollapsed) return
-    let raf = 0
-    const schedule = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        raf = requestAnimationFrame(updateMobileOpenChatTop)
-      })
-    }
-    schedule()
-    const ro = new ResizeObserver(schedule)
-    const statusEl = underBoardStatusRef.current
-    if (statusEl) ro.observe(statusEl)
-    const board = boardRef.current
-    board?.addEventListener("scroll", schedule, { passive: true })
-    window.addEventListener("resize", schedule)
-    return () => {
-      cancelAnimationFrame(raf)
-      ro.disconnect()
-      board?.removeEventListener("scroll", schedule)
-      window.removeEventListener("resize", schedule)
-    }
-  }, [
-    isMobile,
-    mobileChatCollapsed,
-    updateMobileOpenChatTop,
-    showResult,
-    isSpinning,
-    countdown,
-    currentTurnPlayer?.id,
-    predictionPhase,
-    players.length,
-    sidebarGiftMode,
-    sidebarTargetPlayer?.id,
-  ])
 
   const todayKey = useMemo(() => {
     const d = new Date()
@@ -4414,9 +4147,12 @@ export function GameRoom() {
       {/* ---- GAME BOARD CENTER ---- */}
       <div
         className={cn(
-          "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 px-0.5 sm:px-1",
+          "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1",
+          /* ПК: без overflow-y на колонке — иначе сетка 1fr/auto/1fr растягивается по контенту и стол «прилипает» к верху */
+          isPcLayout ? "max-h-full overflow-hidden" : "overflow-y-auto",
+          !isPcLayout && "pb-14 px-0.5 sm:px-1",
           isPcLayout
-            ? "w-full max-w-none pt-1 px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8"
+            ? "h-full w-full max-w-none min-h-0 self-stretch"
             : "max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8",
         )}
         ref={boardRef}
@@ -4502,12 +4238,21 @@ export function GameRoom() {
             )}
           </div>
         )}
+        {/* ПК: резина по высоте — равные «поля» сверху/снизу через grid 1fr / auto / 1fr */}
+        <div
+          className={cn(
+            isPcLayout
+              ? "grid h-full min-h-0 w-full min-w-0 flex-1 grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] px-2 lg:px-3"
+              : "contents",
+          )}
+        >
+          {isPcLayout && <div className="min-h-0 min-w-0" aria-hidden />}
         {/* Обёртка: мобильная — слот эмоций сверху (поток), стол статично ниже; ПК — стол по центру колонки */}
         <div
           className={cn(
-            "flex min-h-0 w-full flex-col",
+            "flex min-h-0 w-full min-w-0 flex-col",
             isMobile ? "shrink-0 items-stretch gap-1.5" : "items-center",
-            isPcLayout && "mx-auto max-w-[min(920px,100%)]",
+            isPcLayout && "mx-auto max-h-full max-w-[min(920px,100%)] min-w-0 overflow-y-auto overflow-x-hidden",
           )}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
@@ -5127,22 +4872,8 @@ export function GameRoom() {
         </div>
 
         </div>
-
-        {/* Общий чат: не в центре на ПК — в правой колонке, без дубля с чатом стола */}
-        {!isPcLayout && (
-          <GameRoomGeneralChatBlock
-            variant="center"
-            isMobile={isMobile}
-            mobileChatCollapsed={mobileChatCollapsed}
-            setMobileChatCollapsed={setMobileChatCollapsed}
-            generalChatMessages={generalChatMessages}
-            generalChatInput={generalChatInput}
-            setGeneralChatInput={setGeneralChatInput}
-            dispatch={dispatch}
-            currentUser={currentUser}
-            mobileOpenChatTop={mobileOpenChatTop}
-          />
-        )}
+          {isPcLayout && <div className="min-h-0" aria-hidden />}
+        </div>
 
       </div>
 
@@ -5315,22 +5046,7 @@ export function GameRoom() {
           </div>
         )}
 
-        {isPcLayout && (
-          <GameRoomGeneralChatBlock
-            variant="sidebar"
-            isMobile={isMobile}
-            mobileChatCollapsed={mobileChatCollapsed}
-            setMobileChatCollapsed={setMobileChatCollapsed}
-            generalChatMessages={generalChatMessages}
-            generalChatInput={generalChatInput}
-            setGeneralChatInput={setGeneralChatInput}
-            dispatch={dispatch}
-            currentUser={currentUser}
-            mobileOpenChatTop={mobileOpenChatTop}
-          />
-        )}
-
-        {/* Лог и чат за столом (отдельно от общего чата) */}
+        {/* Лог и чат за столом */}
         <div
           className="mx-2 flex min-h-0 flex-1 flex-col rounded-2xl overflow-hidden"
           style={{

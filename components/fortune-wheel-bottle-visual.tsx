@@ -78,27 +78,30 @@ export function FortuneWheelStatic({
             strokeWidth={strokeW}
           />
         ) : (
-          Array.from({ length: n }, (_, i) => {
-            const fill = SEGMENT_COLORS[i % SEGMENT_COLORS.length]
-            const a0 = i * slice - Math.PI / 2
-            const a1 = (i + 1) * slice - Math.PI / 2
-            const x0 = CX + R * Math.cos(a0)
-            const y0 = CY + R * Math.sin(a0)
-            const x1 = CX + R * Math.cos(a1)
-            const y1 = CY + R * Math.sin(a1)
-            const largeArc = slice > Math.PI ? 1 : 0
-            return (
-              <path
-                key={i}
-                className="fortune-wheel-seg"
-                style={segStyle(i)}
-                d={`M ${CX} ${CY} L ${x0} ${y0} A ${R} ${R} 0 ${largeArc} 1 ${x1} ${y1} Z`}
-                fill={fill}
-                stroke="#0f172a"
-                strokeWidth={strokeW}
-              />
-            )
-          })
+          // −180/n°: центр сектора i совпадает с аватаром i (circlePositions: игрок 0 сверху).
+          <g transform={`rotate(${-180 / n}, ${CX}, ${CY})`}>
+            {Array.from({ length: n }, (_, i) => {
+              const fill = SEGMENT_COLORS[i % SEGMENT_COLORS.length]
+              const a0 = i * slice - Math.PI / 2
+              const a1 = (i + 1) * slice - Math.PI / 2
+              const x0 = CX + R * Math.cos(a0)
+              const y0 = CY + R * Math.sin(a0)
+              const x1 = CX + R * Math.cos(a1)
+              const y1 = CY + R * Math.sin(a1)
+              const largeArc = slice > Math.PI ? 1 : 0
+              return (
+                <path
+                  key={i}
+                  className="fortune-wheel-seg"
+                  style={segStyle(i)}
+                  d={`M ${CX} ${CY} L ${x0} ${y0} A ${R} ${R} 0 ${largeArc} 1 ${x1} ${y1} Z`}
+                  fill={fill}
+                  stroke="#0f172a"
+                  strokeWidth={strokeW}
+                />
+              )
+            })}
+          </g>
         )}
       </g>
 
