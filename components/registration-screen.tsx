@@ -19,9 +19,9 @@ export function RegistrationScreen() {
   const isDesktopUser = useIsDesktopUser()
   const isTabletLayout = isTablet && !isDesktopUser
   const isMobileOrTablet = isMobile || isTabletLayout
-  /** Узкая колонка только для телефонов; на ПК (в т.ч. VK в широком iframe) — шире под окно */
-  const entryCardMax = isDesktopUser ? "max-w-2xl" : "max-w-sm"
-  const loginModalMax = isDesktopUser ? "max-w-lg" : "max-w-sm"
+  /** Телефон — узкая карточка; ПК / VK в браузере — на всю ширину iframe (ограничение снаружи только у vk.com) */
+  const entryCardMax = isDesktopUser ? "max-w-none" : "max-w-sm"
+  const loginModalMax = isDesktopUser ? "max-w-xl" : "max-w-sm"
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
@@ -623,9 +623,9 @@ export function RegistrationScreen() {
           )
         })}
       </div>
-      <div className="relative z-10 w-full flex flex-col items-center">
+      <div className="relative z-10 flex w-full min-w-0 max-w-none flex-col items-stretch px-3 sm:px-6 lg:px-10">
       <div
-        className={`w-full ${entryCardMax} rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 sm:px-8 sm:py-8 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm`}
+        className={`w-full min-w-0 ${entryCardMax} rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm`}
       >
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
