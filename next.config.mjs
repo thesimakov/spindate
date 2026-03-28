@@ -17,16 +17,6 @@ const nextConfig = {
       value: "frame-ancestors 'self' https://vk.com https://vk.ru https://*.vk.com https://*.vk.ru",
     }
     return [
-      /** Хэшированные чанки: долгий кэш OK; проблема «слетели стили» чаще из‑за старого HTML + 404/500 на старых URL. */
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
       /**
        * Главная: не отдавать из кэша устаревший HTML — иначе после деплоя подтягиваются старые хэши
        * в <link>/<script>, а на диске уже новый .next → 500/битый визуал до жёсткого обновления.
