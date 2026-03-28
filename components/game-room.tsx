@@ -52,6 +52,7 @@ import {
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
+import { cn } from "@/lib/utils"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -366,7 +367,8 @@ export function GameRoom() {
   const { state, dispatch: rawDispatch } = useGame()
   useTheme()
   const { layoutMobile: isMobile } = useGameLayoutMode()
-  /** Планшет и ПК — одна вёрстка; компактный UI только на телефоне (узкий экран без десктопного пользователя ВК) */
+  /** Только два режима: телефон (`isMobile`) и ПК (`isPcLayout`), без отдельного «планшетного» слоя по max-md/md/lg. */
+  const isPcLayout = !isMobile
   const {
     players,
     currentTurnIndex,
@@ -2964,7 +2966,10 @@ export function GameRoom() {
         >
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
             <div
-              className="player-menu-quote w-full max-w-md rounded-2xl px-4 py-5 text-left sm:px-6 sm:py-6"
+              className={cn(
+                "player-menu-quote w-full rounded-2xl px-4 py-5 text-left sm:px-6 sm:py-6",
+                isPcLayout ? "max-w-2xl" : "max-w-md",
+              )}
               style={{
                 background: "linear-gradient(135deg, rgba(51,65,85,0.55) 0%, rgba(30,41,59,0.65) 100%)",
                 border: "1px solid rgba(251, 191, 36, 0.22)",
@@ -3261,9 +3266,11 @@ export function GameRoom() {
 
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); фикс. ширина, не сжимается при резине центра ---- */}
       <div
-        className={`relative z-20 hidden md:flex shrink-0 flex-none flex-col gap-1.5 overflow-y-auto max-h-app p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out ${
-          leftSideMenuExpanded ? "w-[190px]" : "w-14 lg:w-[190px]"
-        }`}
+        className={cn(
+          "relative z-20 shrink-0 flex-none flex-col gap-1.5 overflow-y-auto max-h-app p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out",
+          isPcLayout ? "flex" : "hidden md:flex",
+          leftSideMenuExpanded ? "w-[190px]" : "w-14 lg:w-[190px]",
+        )}
       >
         <div className="mb-1 flex shrink-0 items-center justify-center lg:hidden">
           <button
@@ -3636,7 +3643,7 @@ export function GameRoom() {
               <>
           {/* Крутить вне очереди — только на мобильной (на ПК убрано из бокового меню) */}
           {!isMyTurn && !isSpinning && !showResult && countdown === null && (
-            <div className="md:hidden">
+            <div className={isPcLayout ? "hidden" : "md:hidden"}>
               <button
                 onClick={handleExtraSpin}
                 disabled={voiceBalance < 10}
@@ -4081,7 +4088,12 @@ export function GameRoom() {
                     <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">{title}</span>
                     <div className="h-px flex-1" style={{ background: "rgba(148,163,184,0.18)" }} />
                   </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  <div
+                    className={cn(
+                      "grid gap-3",
+                      isPcLayout ? "grid-cols-3 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
+                    )}
+                  >
                     {items.map((e) => {
                       const ring = e.selected ? "ring-2 ring-amber-400" : "ring-1 ring-slate-700/40"
                       const dim = e.disabled && !e.owned && e.skin.id !== "classic" ? "opacity-55" : ""
@@ -4188,7 +4200,12 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${!isMobile ? "w-full max-w-none" : ""}`}
+        className={cn(
+          "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 px-0.5 sm:px-1",
+          isPcLayout
+            ? "w-full max-w-none pt-1 px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8"
+            : "max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8",
+        )}
         ref={boardRef}
       >
         {/* Анимация «вернулся к нам» после выхода из мини-игры Угадай-ка */}
@@ -4277,7 +4294,12 @@ export function GameRoom() {
           className={`flex min-h-0 w-full flex-col ${isMobile ? "shrink-0 items-stretch gap-1.5" : "items-center"}`}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
-        <div className="flex h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden px-0.5 md:hidden">
+        <div
+          className={cn(
+            "h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden px-0.5",
+            isPcLayout ? "hidden" : "flex md:hidden",
+          )}
+        >
           {showMobileEmotionStrip && (
             <div className="relative z-[36] flex w-full max-w-full min-h-0 flex-col items-center justify-center gap-0.5">
             {isEmotionLimitReached && (
@@ -5018,7 +5040,11 @@ export function GameRoom() {
 
       {/* ---- RIGHT PANEL: фикс. ширина; центр между левым меню и этим блоком — резина ---- */}
       <div
-        className={`relative z-20 hidden md:flex min-h-0 shrink-0 flex-none flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65 ${rightPanelCollapsed ? "w-14" : "w-[230px]"}`}
+        className={cn(
+          "relative z-20 min-h-0 shrink-0 flex-none flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
+          isPcLayout ? "flex" : "hidden md:flex",
+          rightPanelCollapsed ? "w-14" : "w-[230px]",
+        )}
       >
         {rightPanelCollapsed ? (
           <button
@@ -5258,7 +5284,11 @@ export function GameRoom() {
 
       {/* ---- МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ ---- */}
       <nav
-        className={`fixed inset-x-0 top-0 flex md:hidden items-center justify-around border-b px-2 py-2 ${showMobileMoreMenu ? "z-[100]" : "z-30"}`}
+        className={cn(
+          "fixed inset-x-0 top-0 items-center justify-around border-b px-2 py-2",
+          isPcLayout ? "hidden" : "flex md:hidden",
+          showMobileMoreMenu ? "z-[100]" : "z-30",
+        )}
         style={{
           background: "linear-gradient(180deg, rgba(15,8,3,0.98) 0%, rgba(10,5,2,0.99) 100%)",
           borderColor: "rgba(92,58,36,0.9)",

@@ -111,7 +111,7 @@ export function useGameLayoutMode(): {
   }
 }
 
-/** Визуально планшетный layout: 768–1023px */
+/** @deprecated Игровой UI сведён к телефону и ПК; оставлено для отладки/внешних экранов */
 export function useIsTablet(): boolean {
   return useMediaQuery("(min-width: 768px) and (max-width: 1023px)")
 }
