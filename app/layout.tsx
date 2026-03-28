@@ -40,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className="dark h-full w-full max-w-none" suppressHydrationWarning>
       <body
-        className={`${_inter.className} font-sans antialiased bg-background text-foreground w-full min-w-0 max-w-none`}
+        className={`${_inter.className} font-sans antialiased bg-background text-foreground h-full min-h-0 w-full min-w-0 max-w-none`}
         suppressHydrationWarning
       >
         <ThemeProvider

@@ -119,6 +119,31 @@ export async function ensureVkLaunchSearch(): Promise<string> {
   return fromLoc
 }
 
+/**
+ * Как {@link ensureVkLaunchSearch}, но если подписи ещё нет в URL — один проход bridge,
+ * затем короткий опрос адресной строки (часть клиентов ВК дописывает hash после первого кадра).
+ */
+export async function ensureVkLaunchSearchResilient(): Promise<string> {
+  if (typeof window === "undefined") return ""
+
+  const immediate = getVkLaunchSearchFromLocation()
+  if (immediate.includes("vk_user_id=") && immediate.includes("sign=")) return immediate
+
+  const once = await ensureVkLaunchSearch()
+  if (once.includes("vk_user_id=") && once.includes("sign=")) return once
+
+  const POLL_MS = 400
+  const POLL_ATTEMPTS = 28
+
+  for (let i = 0; i < POLL_ATTEMPTS; i++) {
+    await new Promise<void>((resolve) => setTimeout(resolve, POLL_MS))
+    const loc = getVkLaunchSearchFromLocation()
+    if (loc.includes("vk_user_id=") && loc.includes("sign=")) return loc
+  }
+
+  return getVkLaunchSearchFromLocation() || once
+}
+
 /** Запущено ли приложение внутри VK Mini App (iframe/клиент). */
 export function isVkMiniApp(): boolean {
   if (typeof window === "undefined") return false
@@ -337,6 +362,7 @@ export const vkBridge = {
   initVkResilient,
   isVkMiniApp,
   ensureVkLaunchSearch,
+  ensureVkLaunchSearchResilient,
   getVkLaunchSearchFromLocation,
   getViewportSizeForVk,
   resizeVkWindowToViewport,

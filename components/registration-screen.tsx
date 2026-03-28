@@ -5,7 +5,13 @@ import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
-import { vkBridge, initVkResilient, isVkMiniApp, ensureVkLaunchSearch } from "@/lib/vk-bridge"
+import {
+  vkBridge,
+  initVkResilient,
+  isVkMiniApp,
+  ensureVkLaunchSearchResilient,
+  type VkUserInfo,
+} from "@/lib/vk-bridge"
 import { useIsMobile } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
@@ -15,8 +21,8 @@ import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 export function RegistrationScreen() {
   const { dispatch } = useGame()
   const isMobile = useIsMobile()
-  /** Планшет и ПК — одна ширина карточки; узкая только на телефоне */
-  const entryCardMax = !isMobile ? "max-w-none" : "max-w-sm"
+  /** Узкая карточка по центру на всех размерах экрана */
+  const entryCardMax = "w-full max-w-sm sm:max-w-md"
   const loginModalMax = !isMobile ? "max-w-xl" : "max-w-sm"
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
@@ -116,6 +122,37 @@ export function RegistrationScreen() {
     dispatch({ type: "SET_SCREEN", screen: "game" })
   }
 
+  /** Вход по данным bridge без подписанных launch params (как при нажатии «Войти через VK» в офлайне). */
+  const enterVkWithoutSignedServerAuth = async (vkUser: VkUserInfo, ageNum: number) => {
+    const genderValue: Gender =
+      vkUser.sex === 2 ? "male" : vkUser.sex === 1 ? "female" : gender
+    const user = {
+      id: vkUser.id,
+      name: `${vkUser.first_name} ${vkUser.last_name}`,
+      avatar: vkUser.photo_200,
+      gender: genderValue,
+      age: ageNum,
+      purpose: defaultPurpose,
+      authProvider: "vk" as const,
+    }
+    try {
+      const res = await apiFetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
+        method: "GET",
+        credentials: "include",
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.ok) {
+        const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+        const inventory = Array.isArray(data.inventory) ? data.inventory : []
+        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+      }
+    } catch {
+      // если сервер недоступен, продолжаем без восстановления прогресса
+    }
+    addToDevRegistry(user)
+    await buildTableAndEnter(user)
+  }
+
   useLayoutEffect(() => {
     if (typeof window === "undefined") return
     try {
@@ -198,11 +235,11 @@ export function RegistrationScreen() {
         await initVkResilient()
         if (cancelled) return
 
-        const launchSearch = await ensureVkLaunchSearch()
+        const launchSearch = await ensureVkLaunchSearchResilient()
         if (!launchSearch.includes("vk_user_id=") || !launchSearch.includes("sign=")) {
           if (!cancelled) {
-            setVkGate(false)
-            setError("")
+            const vkUserEarly = await vkBridge.getUserInfo()
+            await enterVkWithoutSignedServerAuth(vkUserEarly, 25)
           }
           return
         }
@@ -244,8 +281,7 @@ export function RegistrationScreen() {
         } | null
         if (cancelled) return
         if (!res.ok) {
-          setVkGate(false)
-          setError((data?.error as string) || "Автовход через VK недоступен")
+          await enterVkWithoutSignedServerAuth(vkUser, 25)
           return
         }
         if (data?.user) {
@@ -270,6 +306,8 @@ export function RegistrationScreen() {
           dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
           addToDevRegistry(user)
           await buildTableAndEnter(user)
+        } else {
+          await enterVkWithoutSignedServerAuth(vkUser, 25)
         }
       } catch {
         if (!cancelled) {
@@ -312,7 +350,7 @@ export function RegistrationScreen() {
     try {
       await initVkResilient()
       const vkUser = await vkBridge.getUserInfo()
-      const launchSearch = await ensureVkLaunchSearch()
+      const launchSearch = await ensureVkLaunchSearchResilient()
       let inIframe = false
       try {
         inIframe = window.self !== window.top
@@ -379,34 +417,7 @@ export function RegistrationScreen() {
         }
       }
 
-      const genderValue: Gender =
-        vkUser.sex === 2 ? "male" : vkUser.sex === 1 ? "female" : gender
-
-      const user = {
-        id: vkUser.id,
-        name: `${vkUser.first_name} ${vkUser.last_name}`,
-        avatar: vkUser.photo_200,
-        gender: genderValue,
-        age: ageNum,
-        purpose: defaultPurpose,
-        authProvider: "vk" as const,
-      }
-      try {
-        const res = await apiFetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
-          method: "GET",
-          credentials: "include",
-        })
-        const data = await res.json().catch(() => null)
-        if (res.ok && data?.ok) {
-          const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
-          const inventory = Array.isArray(data.inventory) ? data.inventory : []
-          dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
-        }
-      } catch {
-        // если сервер недоступен, продолжаем без восстановления прогресса
-      }
-      addToDevRegistry(user)
-      await buildTableAndEnter(user)
+      await enterVkWithoutSignedServerAuth(vkUser, ageNum)
     } catch {
       setError("Ошибка авторизации. Попробуйте снова.")
     } finally {
@@ -583,14 +594,19 @@ export function RegistrationScreen() {
 
   if (isVkMiniApp() && vkGate) {
     return (
-      <div className="relative min-h-app w-full min-w-0 max-w-none entry-bg-animated pb-[env(safe-area-inset-bottom)]">
-        <AppLoader title="Вход…" subtitle="Подключаем профиль ВКонтакте" hint="Крути и знакомься" />
+      <div className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden entry-bg-animated">
+        <AppLoader
+          className="!min-h-0 min-h-0 flex-1 bg-slate-900/98"
+          title="Вход…"
+          subtitle="Подключаем профиль ВКонтакте"
+          hint="Крути и знакомься"
+        />
       </div>
     )
   }
 
   return (
-    <div className="relative flex min-h-app w-full min-w-0 max-w-none flex-col items-center justify-center overflow-y-auto overflow-x-hidden entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
+    <div className="relative flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden entry-bg-animated px-4 pt-8 sm:pt-10 pb-[max(0px,env(safe-area-inset-bottom))]">
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {entryParticles.map((d, idx) => {
           const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
@@ -619,9 +635,9 @@ export function RegistrationScreen() {
           )
         })}
       </div>
-      <div className="relative z-10 flex w-full min-w-0 max-w-none flex-col items-stretch px-3 sm:px-6 lg:px-10">
+      <div className="relative z-10 flex w-full min-w-0 flex-1 flex-col items-center justify-center px-3 sm:px-6">
       <div
-        className={`w-full min-w-0 ${entryCardMax} rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm`}
+        className={`mx-auto min-w-0 ${entryCardMax} rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 sm:px-8 sm:py-8 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm`}
       >
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
@@ -636,19 +652,12 @@ export function RegistrationScreen() {
           </p>
         </div>
 
-        {/* Основные способы входа: в ряд на широкой карточке (десктоп / VK в браузере) */}
         <div className="flex flex-col gap-3">
-          <div
-            className={
-              !isMobile
-                ? "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4"
-                : "flex flex-col gap-3"
-            }
-          >
+          <div className="flex w-full flex-col items-stretch gap-3">
             <Button
               onClick={handleContinueVk}
               disabled={loading}
-              className={`w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2 ${!isMobile ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
+              className="w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2"
               size="lg"
               style={{
                 background: "#2787F5",
@@ -667,15 +676,13 @@ export function RegistrationScreen() {
               onClick={() => { setError(""); setLoginModalMode("login"); setShowLoginModal(true) }}
               disabled={loading}
               variant="outline"
-              className={`w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50 ${!isMobile ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
+              className="w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50"
             >
               {"Войти по логину"}
             </Button>
           </div>
 
-          <p
-            className={`text-center text-xs text-slate-400 leading-relaxed mx-auto ${!isMobile ? "max-w-none sm:max-w-2xl mt-1" : "max-w-[85%] mt-3"}`}
-          >
+          <p className="mt-1 text-center text-xs leading-relaxed text-slate-400">
             Нажимая кнопку, вы соглашаетесь с{" "}
             <a
               href="https://dev.vk.com/ru/mini-apps-rules"
