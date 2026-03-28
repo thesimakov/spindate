@@ -644,7 +644,7 @@ export function GameRoom() {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [currentUser, tableId, syncLiveTable])
+  }, [currentUser, tableId, syncLiveTable, tablePaused])
 
   // Повторная подтяжка списка живых игроков в середине лоадера — меньше расхождения между клиентами.
   useEffect(() => {
@@ -653,7 +653,7 @@ export function GameRoom() {
       void syncLiveTable("sync")
     }, 1200)
     return () => clearTimeout(t)
-  }, [tableLoading, currentUser, syncLiveTable])
+  }, [tableLoading, currentUser, syncLiveTable, tablePaused])
 
   // Авторитетное состояние стола с сервера (фаза раунда, спин, очередь, лог, общий чат).
   useEffect(() => {
@@ -673,7 +673,7 @@ export function GameRoom() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [currentUser, tableId, fetchTableAuthority])
+  }, [currentUser, tableId, fetchTableAuthority, tablePaused])
 
   // Освобождаем место за столом при выходе из комнаты/приложения.
   useEffect(() => {
