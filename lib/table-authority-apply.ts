@@ -1,4 +1,5 @@
 import type { GameAction, Player, TableAuthorityPayload } from "@/lib/game-types"
+import { GAME_TABLE_LOG_MAX_ENTRIES } from "@/lib/game-types"
 
 function playerById(players: Player[], id: number): Player | undefined {
   return players.find((p) => p.id === id)
@@ -17,7 +18,9 @@ export function applyTableAuthorityAction(
     case "ADD_LOG":
       return {
         ...snapshot,
-        gameLog: [...snapshot.gameLog.slice(-50), action.entry].slice(-50),
+        gameLog: [...snapshot.gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES), action.entry].slice(
+          -GAME_TABLE_LOG_MAX_ENTRIES,
+        ),
       }
     case "SEND_GENERAL_CHAT": {
       const list = [...(snapshot.generalChatMessages ?? []), action.message]

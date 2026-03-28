@@ -29,13 +29,10 @@ type ShopScreenProps = {
 
 export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) {
   const { state, dispatch } = useGame()
-  const { currentUser, voiceBalance, players, inventory, emotionDailyBoost, tableId } = state
+  const { currentUser, voiceBalance, players, inventory, tableId } = state
   const { toast, showToast } = useInlineToast(1700)
   const rosesCount = inventory.filter((i) => i.type === "rose").length
   const [exchangeTab, setExchangeTab] = useState<"voices-to-roses" | "roses-to-voices">("voices-to-roses")
-  const emotionPackCost = 5
-  const emotionPackExtraPerType = 50
-
   const heartOffers = (
     [
       { hearts: 5, itemId: vkBridge.VK_ITEM_IDS.hearts_5 },
@@ -125,9 +122,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const vipUntilTs = currentPlayer?.vipUntilTs
   const isVip = !!currentPlayer?.isVip && (vipUntilTs == null || vipUntilTs > Date.now())
   const vipLeftDays = vipUntilTs ? Math.max(0, Math.ceil((vipUntilTs - Date.now()) / (24 * 60 * 60 * 1000))) : null
-  const todayKey = getTodayKey()
-  const activeEmotionBoost = emotionDailyBoost?.dateKey === todayKey ? (emotionDailyBoost.extraPerType ?? 0) : 0
-  const totalDailyLimitPerType = 50 + activeEmotionBoost
   const vipTrialKey = `spindate_vip_trial_used_${currentUser.id}`
   const [vipTrialUsed, setVipTrialUsed] = useState(false)
 
@@ -246,38 +240,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     } else {
       showToast("Не удалось отправить приглашение", "error")
     }
-  }
-
-  function getTodayKey() {
-    const d = new Date()
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, "0")
-    const day = String(d.getDate()).padStart(2, "0")
-    return `${y}-${m}-${day}`
-  }
-
-  const handleBuyEmotionPack = () => {
-    if (voiceBalance < emotionPackCost) {
-      showToast("Недостаточно сердец", "error")
-      return
-    }
-    dispatch({
-      type: "BUY_EMOTION_PACK",
-      cost: emotionPackCost,
-      extraPerType: emotionPackExtraPerType,
-      dateKey: getTodayKey(),
-    })
-    dispatch({
-      type: "ADD_LOG",
-      entry: {
-        id: generateLogId(),
-        type: "system",
-        fromPlayer: currentUser,
-        text: `${currentUser.name} купил(а) пакет эмоций (+${emotionPackExtraPerType})`,
-        timestamp: Date.now(),
-      },
-    })
-    showToast("Пакет эмоций активирован", "success")
   }
 
   const backToTable = () => {
@@ -688,119 +650,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             </div>
           </div>
         </div>
-        </div>
-
-        {/* Пакет эмоций — акцентный промо-блок (конверсия) */}
-        <div className="space-y-2">
-          <p className={`${sectionLabelClass} px-0.5`}>Лимиты за столом</p>
-        <section
-          className="relative overflow-hidden rounded-2xl border border-fuchsia-500/35 shadow-[0_0_48px_rgba(192,38,211,0.14),inset_0_1px_0_rgba(255,255,255,0.07)]"
-          style={{
-            background:
-              "linear-gradient(145deg, rgba(88,28,135,0.35) 0%, rgba(15,23,42,0.97) 42%, rgba(8,47,73,0.9) 100%)",
-          }}
-          aria-labelledby="shop-emotion-pack-title"
-        >
-          <div
-            className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-fuchsia-500/25 blur-3xl"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-cyan-500/15 blur-3xl"
-            aria-hidden
-          />
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-300/40 to-transparent" aria-hidden />
-
-          <div className="relative px-4 py-5 sm:px-6 sm:py-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-8">
-              <div className="min-w-0 w-full flex-1 space-y-4">
-                <div className="flex flex-row items-start gap-3 sm:gap-4">
-                  <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-16 sm:w-16"
-                    style={{
-                      background: "linear-gradient(145deg, rgba(217,70,239,0.45) 0%, rgba(6,182,212,0.35) 100%)",
-                      boxShadow: "0 0 32px rgba(217,70,239,0.25), inset 0 1px 0 rgba(255,255,255,0.2)",
-                    }}
-                  >
-                    <Sparkles className="h-7 w-7 text-white drop-shadow sm:h-9 sm:w-9" strokeWidth={mdIconStroke} aria-hidden />
-                  </div>
-                  <div className="min-w-0 flex-1 pt-0.5">
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-fuchsia-300/90">
-                      Пакет дня
-                    </p>
-                    <h3
-                      id="shop-emotion-pack-title"
-                      className="mt-1 max-w-full text-balance text-lg font-black leading-snug tracking-tight text-white sm:text-2xl sm:leading-tight"
-                    >
-                      +50 к лимиту каждого типа
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-300">
-                      Не обрывайте флирт на полуслове: больше поцелуев, напитков и смеха (
-                      <span aria-hidden>💋 🍺 🍹</span>) в тот же день.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex w-full min-w-0 flex-col gap-2 rounded-xl border border-cyan-400/25 bg-slate-950/70 px-4 py-3 backdrop-blur-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Сегодня на один тип
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-1.5 sm:ml-auto">
-                    <span className="text-2xl font-black tabular-nums leading-none text-cyan-300 sm:text-3xl">
-                      {totalDailyLimitPerType}
-                    </span>
-                    <span className="text-xs font-medium text-slate-500">лимит / день</span>
-                  </span>
-                </div>
-
-                <p className="text-xs leading-relaxed text-slate-500">
-                  Пакет добавляет <span className="font-semibold text-fuchsia-200">+{emotionPackExtraPerType}</span> к
-                  базовому лимиту на сегодня для каждого вида эмоций. Стоимость пакета —{" "}
-                  <span className="font-semibold text-slate-300">{emotionPackCost} ❤</span>.
-                </p>
-              </div>
-
-              <div className="flex w-full min-w-0 shrink-0 flex-col justify-end lg:w-[min(100%,280px)]">
-                <Button
-                  type="button"
-                  size="lg"
-                  disabled={voiceBalance < emotionPackCost}
-                  className="h-auto min-h-[3.25rem] w-full rounded-2xl px-4 py-3.5 text-base font-bold shadow-[0_12px_32px_rgba(34,211,238,0.25)] transition hover:brightness-105 active:scale-[0.99] disabled:shadow-none disabled:hover:brightness-100"
-                  style={
-                    voiceBalance < emotionPackCost
-                      ? {
-                          background: "linear-gradient(180deg, #475569 0%, #334155 100%)",
-                          color: "#e2e8f0",
-                        }
-                      : {
-                          background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
-                          color: "#0f172a",
-                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
-                        }
-                  }
-                  onClick={handleBuyEmotionPack}
-                >
-                  {voiceBalance < emotionPackCost ? (
-                    <span className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-2">
-                      <span>Недостаточно сердец</span>
-                      <span className="text-sm font-semibold opacity-90">нужно {emotionPackCost} ❤</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center justify-center gap-2">
-                      <span>Разблокировать +{emotionPackExtraPerType}</span>
-                      <span className="rounded-lg bg-slate-900/25 px-2 py-0.5 text-sm font-black">
-                        {emotionPackCost} ❤
-                      </span>
-                    </span>
-                  )}
-                </Button>
-                <p className="mt-2 text-center text-[11px] text-slate-500 lg:text-left">
-                  Один тап — и лимит обновится до конца суток.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
         </div>
 
         {/* Обмен валюты: Сердца ↔ Розы */}

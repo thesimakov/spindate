@@ -189,6 +189,17 @@ export const PAIR_ACTIONS: PairAction[] = [
 
 export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily"
 
+/** Сколько последних записей лога стола храним на клиенте (эмоции с дневным лимитом считаются отдельно). */
+export const GAME_TABLE_LOG_MAX_ENTRIES = 400
+
+/** Счётчики лимитированных эмоций (поцелуй / пиво / коктейль) за календарный день по игроку. */
+export interface EmotionUseTodayBucket {
+  dateKey: string
+  kiss: number
+  beer: number
+  cocktail: number
+}
+
 export interface GameState {
   screen: "registration" | "payment" | "game" | "chat" | "favorites" | "shop" | "profile" | "ugadaika" | "intergame-chat"
   currentUser: Player | null
@@ -262,11 +273,16 @@ export interface GameState {
   generalChatMessages?: GeneralChatMessage[]
   /** Межигровой (глобальный) чат приложения. */
   intergameChatMessages?: GeneralChatMessage[]
-  /** Купленные в магазине доп. эмоции на сегодня (добавка к суточному лимиту для лимитируемых эмоций). */
+  /** Доп. лимиты эмоций на сегодня (поцелуй / пиво / коктейль). */
   emotionDailyBoost?: {
     dateKey: string
-    extraPerType: number
+    /** Общая добавка ко всем трём типам (старые покупки). */
+    extraPerType?: number
+    /** Доп. использований по выбранным типам (покупка +50 к типу). */
+    extraByType?: Partial<Record<"kiss" | "beer" | "cocktail", number>>
   }
+  /** Использования лимитированных эмоций за сегодня (не обнуляются при обрезке gameLog). */
+  emotionUseTodayByPlayer?: Record<number, EmotionUseTodayBucket>
   /** Если true — пользователь поставил «паузу»: вышел из live-стола и не синхронизируется, пока не возобновит. */
   tablePaused?: boolean
   /** Боковая панель поверх стола: профиль, магазин, избранное, рейтинг, ежедневные задачи. */
@@ -346,6 +362,14 @@ export type GameAction =
   | { type: "SET_SOUNDS_ENABLED"; enabled: boolean }
   /** Магазин: добавить пакет эмоций на сегодня (например, +50 к каждому лимитируемому виду). */
   | { type: "BUY_EMOTION_PACK"; cost: number; extraPerType: number; dateKey: string }
+  /** Купить +N к выбранным типам эмоций за сердечки (стол). */
+  | {
+      type: "BUY_EMOTION_QUOTA_SELECTION"
+      dateKey: string
+      selectedTypes: ("kiss" | "beer" | "cocktail")[]
+      extraPerPurchase: number
+      costPerType: number
+    }
   | { type: "SET_TABLE_PAUSED"; paused: boolean }
   /** Подтянуть состояние стола с сервера (не отправляется на сервер) */
   | { type: "SYNC_TABLE_AUTHORITY"; payload: TableAuthorityPayload }

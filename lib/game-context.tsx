@@ -1,7 +1,15 @@
 "use client"
 
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react"
-import type { GameState, GameAction, Player, InventoryItem } from "./game-types"
+import {
+  GAME_TABLE_LOG_MAX_ENTRIES,
+  type GameState,
+  type GameAction,
+  type Player,
+  type InventoryItem,
+  type GameLogEntry,
+  type EmotionUseTodayBucket,
+} from "./game-types"
 import { generateBots as generateBotsImpl, AVATAR_FRAME_IDS, randomAvatarFrame as randomAvatarFrameImpl } from "@/lib/bots"
 import { generateLogId as generateLogIdImpl, generateMessageId as generateMessageIdImpl } from "@/lib/ids"
 import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
@@ -73,9 +81,92 @@ const initialState: GameState = {
   emotionDailyBoost: {
     dateKey: "",
     extraPerType: 0,
+    extraByType: {},
   },
+  emotionUseTodayByPlayer: {},
   tablePaused: false,
   gameSidePanel: null,
+}
+
+function dateKeyFromTimestamp(ts: number): string {
+  const d = new Date(ts)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+function rebuildTodayLimitedEmotionsFromLog(
+  log: GameLogEntry[],
+  todayKey: string,
+): Record<number, EmotionUseTodayBucket> {
+  const out: Record<number, EmotionUseTodayBucket> = {}
+  for (const e of log) {
+    if (!e.fromPlayer) continue
+    if (e.type !== "kiss" && e.type !== "beer" && e.type !== "cocktail") continue
+    if (e.text.startsWith("Выпала пара:")) continue
+    if (dateKeyFromTimestamp(e.timestamp) !== todayKey) continue
+    const id = e.fromPlayer.id
+    if (!out[id]) {
+      out[id] = { dateKey: todayKey, kiss: 0, beer: 0, cocktail: 0 }
+    }
+    if (e.type === "kiss") out[id].kiss++
+    else if (e.type === "beer") out[id].beer++
+    else out[id].cocktail++
+  }
+  return out
+}
+
+/** При синхроне стола сохраняем локальные счётчики (в т.ч. с другого стола) и подмешиваем max с логом сервера. */
+function mergeEmotionBucketsForSync(
+  local: GameState["emotionUseTodayByPlayer"],
+  fromLog: Record<number, EmotionUseTodayBucket>,
+  todayKey: string,
+): Record<number, EmotionUseTodayBucket> {
+  const allPids = new Set<number>([
+    ...Object.keys(local ?? {}).map(Number),
+    ...Object.keys(fromLog).map(Number),
+  ])
+  const out: Record<number, EmotionUseTodayBucket> = {}
+  for (const pid of allPids) {
+    const prev = local?.[pid]
+    const logB = fromLog[pid]
+    const prevToday = prev && prev.dateKey === todayKey ? prev : null
+    if (!logB && !prevToday) continue
+    if (!logB) {
+      out[pid] = { ...prevToday! }
+      continue
+    }
+    if (!prevToday) {
+      out[pid] = { ...logB }
+      continue
+    }
+    out[pid] = {
+      dateKey: todayKey,
+      kiss: Math.max(prevToday.kiss, logB.kiss),
+      beer: Math.max(prevToday.beer, logB.beer),
+      cocktail: Math.max(prevToday.cocktail, logB.cocktail),
+    }
+  }
+  return out
+}
+
+function bumpEmotionUseForLogEntry(
+  prevMap: GameState["emotionUseTodayByPlayer"],
+  entry: GameLogEntry,
+): GameState["emotionUseTodayByPlayer"] {
+  if (!entry.fromPlayer) return prevMap ?? {}
+  if (entry.type !== "kiss" && entry.type !== "beer" && entry.type !== "cocktail") return prevMap ?? {}
+  if (entry.text.startsWith("Выпала пара:")) return prevMap ?? {}
+  const pid = entry.fromPlayer.id
+  const dk = dateKeyFromTimestamp(entry.timestamp)
+  const prev = prevMap?.[pid]
+  const base: EmotionUseTodayBucket =
+    prev && prev.dateKey === dk ? { ...prev } : { dateKey: dk, kiss: 0, beer: 0, cocktail: 0 }
+  if (entry.type === "kiss") base.kiss++
+  else if (entry.type === "beer") base.beer++
+  else base.cocktail++
+  return { ...(prevMap ?? {}), [pid]: base }
 }
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -310,7 +401,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         pot: 0,
         predictionPhase: false,
         roundNumber: 5 + Math.floor(Math.random() * 25),
-        gameLog: seedLog.slice(-50),
+        gameLog: seedLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES),
         avatarFrames: nextFrames,
         }
       }
@@ -448,8 +539,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         resultAction: null,
         isSpinning: false,
       }
-    case "ADD_LOG":
-      return { ...state, gameLog: [...state.gameLog.slice(-50), action.entry] }
+    case "ADD_LOG": {
+      const nextLog = [...state.gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES), action.entry]
+      return {
+        ...state,
+        gameLog: nextLog,
+        emotionUseTodayByPlayer: bumpEmotionUseForLogEntry(state.emotionUseTodayByPlayer, action.entry),
+      }
+    }
     case "REQUEST_EXTRA_TURN":
       return { ...state, extraTurnPlayerId: action.playerId }
     case "SET_BOTTLE_COOLDOWN_UNTIL":
@@ -470,14 +567,43 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (action.cost < 0 || action.extraPerType <= 0) return state
       if (state.voiceBalance < action.cost) return state
       const currentBoost = state.emotionDailyBoost
-      const sameDay = currentBoost?.dateKey === action.dateKey
+      const sameDay = Boolean(currentBoost?.dateKey) && currentBoost?.dateKey === action.dateKey
       const nextExtra = (sameDay ? currentBoost?.extraPerType ?? 0 : 0) + action.extraPerType
+      const mergedExtraByType = sameDay ? { ...(currentBoost?.extraByType ?? {}) } : {}
       return {
         ...state,
         voiceBalance: state.voiceBalance - action.cost,
         emotionDailyBoost: {
           dateKey: action.dateKey,
           extraPerType: nextExtra,
+          extraByType: mergedExtraByType,
+        },
+      }
+    }
+    case "BUY_EMOTION_QUOTA_SELECTION": {
+      const { dateKey, selectedTypes, extraPerPurchase, costPerType } = action
+      if (!selectedTypes.length || extraPerPurchase <= 0 || costPerType <= 0) return state
+      const totalCost = selectedTypes.length * costPerType
+      if (state.voiceBalance < totalCost) return state
+      const cur = state.emotionDailyBoost ?? { dateKey: "", extraPerType: 0, extraByType: {} }
+      // Только совпадение даты (без «truthy» extraByType) — иначе после первой покупки
+      // { kiss: 50 } терялся при повторном мерже из-за `sameDay && cur?.extraByType`.
+      const sameDay = Boolean(cur.dateKey) && cur.dateKey === dateKey
+      const extraByType: Partial<Record<"kiss" | "beer" | "cocktail", number>> = sameDay
+        ? { ...(cur.extraByType ?? {}) }
+        : {}
+      const legacy = sameDay ? (cur.extraPerType ?? 0) : 0
+      for (const t of selectedTypes) {
+        if (t !== "kiss" && t !== "beer" && t !== "cocktail") continue
+        extraByType[t] = (extraByType[t] ?? 0) + extraPerPurchase
+      }
+      return {
+        ...state,
+        voiceBalance: state.voiceBalance - totalCost,
+        emotionDailyBoost: {
+          dateKey,
+          extraPerType: legacy,
+          extraByType,
         },
       }
     }
@@ -684,6 +810,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const p = action.payload
       // Мержим рамки: серверные + локальные (для ботов, которым клиент назначает рамки)
       const mergedFrames = { ...(state.avatarFrames ?? {}), ...(p.avatarFrames ?? {}) }
+      const todayKey = dateKeyFromTimestamp(Date.now())
+      const fromLog = rebuildTodayLimitedEmotionsFromLog(p.gameLog, todayKey)
+      const emotionUseTodayByPlayer = mergeEmotionBucketsForSync(state.emotionUseTodayByPlayer, fromLog, todayKey)
       return {
         ...state,
         players: p.players,
@@ -705,6 +834,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         playerInUgadaika: p.playerInUgadaika ?? null,
         spinSkips: { ...p.spinSkips },
         gameLog: [...p.gameLog],
+        emotionUseTodayByPlayer,
         generalChatMessages: [...(p.generalChatMessages ?? [])],
         avatarFrames: mergedFrames,
         drunkUntil: { ...(state.drunkUntil ?? {}), ...(p.drunkUntil ?? {}) },

@@ -67,8 +67,9 @@ function circlePositions(count: number, radiusX: number, radiusY: number) {
 }
 
 const DAILY_EMOTION_LIMIT = 50
-const EMOTION_PACK_COST = 5
-const EMOTION_PACK_EXTRA_PER_TYPE = 50
+/** Покупка доп. лимита по выбранным типам: +50 использований за 10 ❤ на тип. */
+const EMOTION_QUOTA_PURCHASE_AMOUNT = 50
+const EMOTION_QUOTA_COST_PER_TYPE_HEARTS = 10
 
 function getTodayDateKey(): string {
   const d = new Date()
@@ -76,6 +77,26 @@ function getTodayDateKey(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
+}
+
+function getDailyEmotionLimitForActionId(
+  actionId: string,
+  boost:
+    | {
+        dateKey: string
+        extraPerType?: number
+        extraByType?: Partial<Record<"kiss" | "beer" | "cocktail", number>>
+      }
+    | undefined,
+): number {
+  if (actionId !== "kiss" && actionId !== "beer" && actionId !== "cocktail") {
+    return DAILY_EMOTION_LIMIT
+  }
+  const todayKey = getTodayDateKey()
+  if (!boost || boost.dateKey !== todayKey) return DAILY_EMOTION_LIMIT
+  const legacy = boost.extraPerType ?? 0
+  const typed = boost.extraByType?.[actionId as "kiss" | "beer" | "cocktail"] ?? 0
+  return DAILY_EMOTION_LIMIT + legacy + typed
 }
 
 function shouldShowActionCostBadge(actionId: string, actionCost: number): boolean {
@@ -386,6 +407,7 @@ export function GameRoom() {
     soundsEnabled,
     generalChatMessages = [],
     emotionDailyBoost,
+    emotionUseTodayByPlayer,
     tablePaused,
     gameSidePanel,
   } = state
@@ -925,6 +947,12 @@ export function GameRoom() {
   const [mobileChatCollapsed, setMobileChatCollapsed] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
+  const [emotionPurchasePick, setEmotionPurchasePick] = useState({
+    kiss: true,
+    beer: true,
+    cocktail: true,
+  })
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
   const [avatarSteamFog, setAvatarSteamFog] = useState<Record<string, AvatarSteamFog>>({})
@@ -1059,24 +1087,33 @@ export function GameRoom() {
     [gameLog],
   )
 
-  const effectiveDailyEmotionLimit = useMemo(() => {
-    const todayKey = getTodayDateKey()
-    const extra = emotionDailyBoost?.dateKey === todayKey ? (emotionDailyBoost.extraPerType ?? 0) : 0
-    return DAILY_EMOTION_LIMIT + Math.max(0, extra)
-  }, [emotionDailyBoost])
+  const getLimitedEmotionUseCount = useCallback(
+    (playerId: number, actionId: "kiss" | "beer" | "cocktail"): number => {
+      const todayKey = getTodayDateKey()
+      const fromLog = getTodayActionCount(playerId, actionId)
+      const bucket = emotionUseTodayByPlayer?.[playerId]
+      if (bucket && bucket.dateKey === todayKey) {
+        // max: бакет не теряет использования при обрезке лога; лог подстраховывает сбой бакета
+        return Math.max(bucket[actionId], fromLog)
+      }
+      return fromLog
+    },
+    [emotionUseTodayByPlayer, getTodayActionCount],
+  )
 
   const limitedEmotionCounters = useMemo(() => {
     const uid = currentUser?.id
-    const kissUsed = uid ? getTodayActionCount(uid, "kiss") : 0
-    const beerUsed = uid ? getTodayActionCount(uid, "beer") : 0
-    const cocktailUsed = uid ? getTodayActionCount(uid, "cocktail") : 0
-    const limit = effectiveDailyEmotionLimit
-    return [
-      { id: "kiss", label: "Поцелуй", emoji: "💋", used: kissUsed, left: Math.max(0, limit - kissUsed), limit },
-      { id: "beer", label: "Пиво", emoji: "🍺", used: beerUsed, left: Math.max(0, limit - beerUsed), limit },
-      { id: "cocktail", label: "Коктейль", emoji: "🍹", used: cocktailUsed, left: Math.max(0, limit - cocktailUsed), limit },
-    ] as const
-  }, [currentUser?.id, effectiveDailyEmotionLimit, getTodayActionCount])
+    const rows = [
+      { id: "kiss" as const, label: "Поцелуй", emoji: "💋" },
+      { id: "beer" as const, label: "Пиво", emoji: "🍺" },
+      { id: "cocktail" as const, label: "Коктейль", emoji: "🍹" },
+    ]
+    return rows.map((row) => {
+      const used = uid ? getLimitedEmotionUseCount(uid, row.id) : 0
+      const limit = getDailyEmotionLimitForActionId(row.id, emotionDailyBoost)
+      return { ...row, used, left: Math.max(0, limit - used), limit }
+    })
+  }, [currentUser?.id, emotionDailyBoost, getLimitedEmotionUseCount])
   const isEmotionLimitReached = useMemo(
     () => limitedEmotionCounters.some((row) => row.left <= 0),
     [limitedEmotionCounters],
@@ -1789,30 +1826,55 @@ export function GameRoom() {
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
 
-  const handleBuyEmotionPackFromGame = useCallback(() => {
+  const openEmotionPurchaseModal = useCallback(() => {
+    const next = { kiss: false, beer: false, cocktail: false }
+    for (const row of limitedEmotionCounters) {
+      if (row.id === "kiss" || row.id === "beer" || row.id === "cocktail") {
+        next[row.id] = row.left <= 0
+      }
+    }
+    if (!next.kiss && !next.beer && !next.cocktail) {
+      next.kiss = true
+      next.beer = true
+      next.cocktail = true
+    }
+    setEmotionPurchasePick(next)
+    setEmotionPurchaseOpen(true)
+  }, [limitedEmotionCounters])
+
+  const confirmEmotionQuotaPurchase = useCallback(() => {
     if (!currentUser) return
-    if (voiceBalance < EMOTION_PACK_COST) {
-      showToast("Недостаточно сердец для покупки", "error")
+    const types = (["kiss", "beer", "cocktail"] as const).filter((t) => emotionPurchasePick[t])
+    if (types.length === 0) {
+      showToast("Выберите хотя бы один тип эмоций", "info")
+      return
+    }
+    const totalCost = types.length * EMOTION_QUOTA_COST_PER_TYPE_HEARTS
+    if (voiceBalance < totalCost) {
+      showToast("Недостаточно сердец", "error")
       return
     }
     dispatch({
-      type: "BUY_EMOTION_PACK",
-      cost: EMOTION_PACK_COST,
-      extraPerType: EMOTION_PACK_EXTRA_PER_TYPE,
+      type: "BUY_EMOTION_QUOTA_SELECTION",
       dateKey: getTodayDateKey(),
+      selectedTypes: [...types],
+      extraPerPurchase: EMOTION_QUOTA_PURCHASE_AMOUNT,
+      costPerType: EMOTION_QUOTA_COST_PER_TYPE_HEARTS,
     })
+    const labelMap: Record<string, string> = { kiss: "поцелуи", beer: "пиво", cocktail: "коктейль" }
     dispatch({
       type: "ADD_LOG",
       entry: {
         id: generateLogId(),
         type: "system",
         fromPlayer: currentUser,
-        text: `${currentUser.name} купил(а) пакет эмоций (+${EMOTION_PACK_EXTRA_PER_TYPE})`,
+        text: `${currentUser.name} купил(а) +${EMOTION_QUOTA_PURCHASE_AMOUNT} к: ${types.map((t) => labelMap[t]).join(", ")}`,
         timestamp: Date.now(),
       },
     })
-    showToast("Лимит эмоций увеличен на сегодня", "success")
-  }, [currentUser, dispatch, showToast, voiceBalance])
+    showToast("Лимит эмоций увеличен до конца суток", "success")
+    setEmotionPurchaseOpen(false)
+  }, [currentUser, dispatch, emotionPurchasePick, showToast, voiceBalance])
 
   /* ---- perform gender-based action ---- */
   const handlePerformAction = (actionId: string) => {
@@ -1831,12 +1893,15 @@ export function GameRoom() {
     const pairCombo = getPairGenderCombo(tp, tp2)
     const actionCost = getEffectiveActionCost(actionId, pairCombo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = effectiveDailyEmotionLimit
+    const dailyLimit = getDailyEmotionLimitForActionId(actionId, emotionDailyBoost)
 
     // Стоимость списываем только, если действие делает живой игрок.
     // Боты (isBot) играют «за счёт системы» и не трогают баланс пользователя.
     if (!currentTurnPlayer.isBot && hasDailyLimit) {
-      const todayCount = getTodayActionCount(currentTurnPlayer.id, actionId)
+      const todayCount = getLimitedEmotionUseCount(
+        currentTurnPlayer.id,
+        actionId as "kiss" | "beer" | "cocktail",
+      )
       if (todayCount >= dailyLimit) {
         showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
         return
@@ -1921,12 +1986,12 @@ export function GameRoom() {
     const pairCombo = getPairGenderCombo(resolvedTargetPlayer, resolvedTargetPlayer2)
     const actionCost = getEffectiveActionCost(actionId, pairCombo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = effectiveDailyEmotionLimit
+    const dailyLimit = getDailyEmotionLimitForActionId(actionId, emotionDailyBoost)
 
     // Оплата за ответную эмоцию (та же цена, что и за основное действие)
     const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
     if (actionDef && hasDailyLimit) {
-      const todayCount = getTodayActionCount(from.id, actionId)
+      const todayCount = getLimitedEmotionUseCount(from.id, actionId as "kiss" | "beer" | "cocktail")
       if (todayCount >= dailyLimit) {
         showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
         return
@@ -1988,9 +2053,9 @@ export function GameRoom() {
 
     const actionCost = getEffectiveActionCost(actionId, combo)
     const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = effectiveDailyEmotionLimit
+    const dailyLimit = getDailyEmotionLimitForActionId(actionId, emotionDailyBoost)
     if (hasDailyLimit) {
-      const todayCount = getTodayActionCount(currentUser.id, actionId)
+      const todayCount = getLimitedEmotionUseCount(currentUser.id, actionId as "kiss" | "beer" | "cocktail")
       if (todayCount >= dailyLimit) {
         showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
         return
@@ -2973,18 +3038,104 @@ export function GameRoom() {
         </div>
       )}
 
-      {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
+      {/* Покупка доп. лимита эмоций (+50 к типу за 10 ❤) */}
+      {emotionPurchaseOpen && currentUser && (
+        <div className="fixed inset-0 z-[47] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div
+            className="w-full max-w-md rounded-2xl border px-5 py-5 shadow-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(2,6,23,0.99) 100%)",
+              borderColor: "rgba(148,163,184,0.3)",
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="emotion-purchase-title"
+          >
+            <h2 id="emotion-purchase-title" className="text-lg font-extrabold text-slate-100">
+              Купить доп. эмоции
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              +{EMOTION_QUOTA_PURCHASE_AMOUNT} использований к каждому выбранному типу до конца суток. Цена —{" "}
+              <span className="font-semibold text-slate-200">{EMOTION_QUOTA_COST_PER_TYPE_HEARTS} ❤</span> за тип.
+            </p>
+            <div className="mt-4 space-y-2">
+              {(
+                [
+                  { id: "kiss" as const, label: "Поцелуй", emoji: "💋" },
+                  { id: "beer" as const, label: "Пиво", emoji: "🍺" },
+                  { id: "cocktail" as const, label: "Коктейль", emoji: "🍹" },
+                ] as const
+              ).map((row) => (
+                <label
+                  key={row.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-600/60 bg-slate-900/80 px-3 py-2.5 transition hover:bg-slate-800/90"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-500 accent-cyan-500"
+                    checked={emotionPurchasePick[row.id]}
+                    onChange={(e) =>
+                      setEmotionPurchasePick((p) => ({ ...p, [row.id]: e.target.checked }))
+                    }
+                  />
+                  <span className="text-lg" aria-hidden>
+                    {row.emoji}
+                  </span>
+                  <span className="flex-1 text-sm font-semibold text-slate-100">{row.label}</span>
+                  <span className="text-xs tabular-nums text-cyan-300/90">+{EMOTION_QUOTA_PURCHASE_AMOUNT}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-4 flex items-center justify-between border-t border-slate-700/80 pt-3 text-sm text-slate-300">
+              <span>К оплате</span>
+              <span className="font-bold tabular-nums text-amber-200">
+                {(
+                  (emotionPurchasePick.kiss ? 1 : 0) +
+                  (emotionPurchasePick.beer ? 1 : 0) +
+                  (emotionPurchasePick.cocktail ? 1 : 0)
+                ) * EMOTION_QUOTA_COST_PER_TYPE_HEARTS}{" "}
+                ❤
+              </span>
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setEmotionPurchaseOpen(false)}
+                className="order-2 h-11 rounded-xl border border-slate-600 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 sm:order-1"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={confirmEmotionQuotaPurchase}
+                disabled={
+                  voiceBalance <
+                    ((emotionPurchasePick.kiss ? 1 : 0) +
+                      (emotionPurchasePick.beer ? 1 : 0) +
+                      (emotionPurchasePick.cocktail ? 1 : 0)) *
+                      EMOTION_QUOTA_COST_PER_TYPE_HEARTS ||
+                  !(emotionPurchasePick.kiss || emotionPurchasePick.beer || emotionPurchasePick.cocktail)
+                }
+                className="order-1 h-11 rounded-xl px-4 text-sm font-bold text-slate-950 transition hover:brightness-110 disabled:opacity-40 sm:order-2"
+                style={{
+                  background: "linear-gradient(135deg, #22d3ee 0%, #6366f1 100%)",
+                  border: "1px solid rgba(125,211,252,0.6)",
+                }}
+              >
+                Купить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top-left controls: музыка и звуки эмоций; на мобильной — в ряд, без общей оболочки */}
       <div
-        className={`fixed z-40 flex max-w-[calc(100vw-1rem)] gap-1.5 overflow-x-auto rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${
+        className={`fixed z-40 flex max-w-[calc(100vw-1rem)] gap-1.5 overflow-x-auto ${
           isMobile
             ? "left-2 max-md:top-[calc(env(safe-area-inset-top)+4.35rem)] md:top-2 flex-row items-center"
-            : "left-1 top-1 flex-col"
+            : "left-1 top-1 flex-col items-start"
         }`}
-        style={{
-          borderColor: "rgba(71, 85, 105, 0.8)",
-          background: "rgba(15, 23, 42, 0.88)",
-          backdropFilter: "blur(10px)",
-        }}
       >
         <div
           className={
@@ -2994,7 +3145,7 @@ export function GameRoom() {
           }
         >
         <div
-          className="relative flex items-center"
+          className="flex shrink-0 items-center gap-2 rounded-xl border border-transparent py-0.5 pl-0.5 pr-1"
           onMouseEnter={() => {
             if (musicTooltipTimeoutRef.current) {
               clearTimeout(musicTooltipTimeoutRef.current)
@@ -3003,33 +3154,9 @@ export function GameRoom() {
             setShowMusicTooltip(true)
           }}
           onMouseLeave={() => {
-            musicTooltipTimeoutRef.current = setTimeout(() => setShowMusicTooltip(false), 200)
+            musicTooltipTimeoutRef.current = setTimeout(() => setShowMusicTooltip(false), 280)
           }}
         >
-          {showMusicTooltip && (
-            <div
-              className="absolute left-full z-50 ml-2 flex items-center gap-2 rounded-lg border border-slate-500/80 bg-slate-800/95 px-3 py-2 shadow-lg"
-              style={{ backdropFilter: "blur(8px)" }}
-              onMouseEnter={() => {
-                if (musicTooltipTimeoutRef.current) {
-                  clearTimeout(musicTooltipTimeoutRef.current)
-                  musicTooltipTimeoutRef.current = null
-                }
-                setShowMusicTooltip(true)
-              }}
-              onMouseLeave={() => setShowMusicTooltip(false)}
-            >
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={musicVolume}
-                onChange={(e) => setMusicVolume(Number(e.target.value))}
-                className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-slate-600 accent-amber-500"
-                aria-label="Громкость музыки"
-              />
-            </div>
-          )}
           <button
             type="button"
             onClick={() => setMusicEnabled((v) => !v)}
@@ -3044,11 +3171,31 @@ export function GameRoom() {
             <span className="hidden sm:inline">{musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}</span>
             <span className="sm:hidden">{musicEnabled ? "Муз вкл" : "Муз выкл"}</span>
           </button>
+          {showMusicTooltip && (
+            <div className="flex min-w-0 items-center gap-2 bg-transparent px-0 py-0">
+              <span
+                className="w-9 shrink-0 text-right text-[11px] font-bold tabular-nums text-amber-300"
+                aria-live="polite"
+              >
+                {musicVolume}%
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={musicVolume}
+                onChange={(e) => setMusicVolume(Number(e.target.value))}
+                className="h-2 w-[4.5rem] shrink-0 cursor-pointer sm:w-24"
+                style={{ accentColor: "#fbbf24" }}
+                aria-label="Громкость музыки"
+              />
+            </div>
+          )}
         </div>
         <button
           type="button"
           onClick={() => dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false })}
-          className="flex items-center gap-1 rounded-xl border px-2.5 py-1.5 sm:py-1 text-[11px] font-semibold shadow-sm min-h-[32px] sm:min-h-0"
+          className="flex shrink-0 cursor-pointer items-center gap-1 rounded-xl border px-2.5 py-1.5 sm:py-1 text-[11px] sm:text-[11px] font-semibold shadow-sm min-h-[32px] sm:min-h-0 select-none"
           style={{
             borderColor: "rgba(148, 163, 184, 0.6)",
             background: "rgba(30, 41, 59, 0.6)",
@@ -3168,9 +3315,9 @@ export function GameRoom() {
           {isEmotionLimitReached && (
             <button
               type="button"
-              onClick={handleBuyEmotionPackFromGame}
+              onClick={openEmotionPurchaseModal}
               className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-              disabled={voiceBalance < EMOTION_PACK_COST}
+              disabled={voiceBalance < EMOTION_QUOTA_COST_PER_TYPE_HEARTS}
               style={{
                 background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
                 color: "#0f172a",
@@ -3178,7 +3325,7 @@ export function GameRoom() {
                 boxShadow: "0 1px 0 rgba(30, 64, 175, 0.9), 0 2px 8px rgba(34, 211, 238, 0.28)",
               }}
             >
-              {"Лимит закончился — +50 за 5 ❤"}
+              {`Купить +${EMOTION_QUOTA_PURCHASE_AMOUNT} (от ${EMOTION_QUOTA_COST_PER_TYPE_HEARTS} ❤)`}
             </button>
           )}
 
@@ -4119,9 +4266,9 @@ export function GameRoom() {
             {isEmotionLimitReached && (
               <button
                 type="button"
-                onClick={handleBuyEmotionPackFromGame}
+                onClick={openEmotionPurchaseModal}
                 className="flex h-6 w-full max-w-[min(100%,20rem)] shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[9px] font-bold leading-none transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
-                disabled={voiceBalance < EMOTION_PACK_COST}
+                disabled={voiceBalance < EMOTION_QUOTA_COST_PER_TYPE_HEARTS}
                 style={{
                   background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
                   color: "#0f172a",
@@ -4129,7 +4276,7 @@ export function GameRoom() {
                   boxShadow: "0 1px 0 rgba(30, 64, 175, 0.85)",
                 }}
               >
-                {"Лимит — +50 за 5 ❤"}
+                {`Купить (+${EMOTION_QUOTA_PURCHASE_AMOUNT})`}
               </button>
             )}
             {sidebarGiftMode && sidebarTargetPlayer ? (
@@ -4251,26 +4398,23 @@ export function GameRoom() {
             </div>
           )}
         </div>
-        {/* Прямоугольный стол: моб/планшет — фикс. max; десктоп — резина по центральной колонке, бока статичны */}
+        {/* Прямоугольный стол: ширина 90% колонки — по 5% поля с каждой стороны */}
         <div
           className={
             isMobile
-              ? `relative flex w-full max-w-[95vw] shrink-0 items-center justify-center sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] mx-auto rounded-2xl`
-              : `relative flex w-full min-w-0 max-w-full shrink-0 items-center justify-center border-2 sm:border-[3px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-[32px]`
+              ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] mx-auto rounded-2xl`
+              : `relative flex w-[90%] min-w-0 max-w-[min(960px,90vw)] shrink-0 items-center justify-center border-2 sm:border-[3px] md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-[32px]`
           }
           style={{
             aspectRatio: isMobile ? "1 / 1" : "6 / 5",
             ...(isMobile
               ? {
-                  width: "min(92vw, 100%)",
-                  maxWidth: "min(92vw, 420px)",
+                  width: "min(90vw, 100%)",
+                  maxWidth: "min(90vw, 420px)",
                   marginLeft: "auto",
                   marginRight: "auto",
                 }
-              : {
-                  width: "100%",
-                  maxWidth: "100%",
-                }),
+              : {}),
             borderColor: "rgba(56, 189, 248, 0.35)",
             background:
               "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",

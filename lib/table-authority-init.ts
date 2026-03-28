@@ -1,5 +1,5 @@
-import type { TableAuthorityPayload } from "@/lib/game-types"
-import type { Player } from "@/lib/game-types"
+import type { TableAuthorityPayload, Player } from "@/lib/game-types"
+import { GAME_TABLE_LOG_MAX_ENTRIES } from "@/lib/game-types"
 import { generateLogId } from "@/lib/ids"
 import { getPairGenderCombo } from "@/lib/pair-utils"
 /**
@@ -95,7 +95,7 @@ export function buildInitialAuthoritySnapshot(players: Player[], tableId: number
     predictionPhase: false,
     playerInUgadaika: null,
     generalChatMessages: [],
-    gameLog: gameLog.slice(-50),
+    gameLog: gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES),
     avatarFrames: {},
     drunkUntil: {},
   }
