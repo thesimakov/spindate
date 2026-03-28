@@ -1,13 +1,15 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX, X } from "lucide-react"
+import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
+import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
 import { assetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
+import { cn } from "@/lib/utils"
 
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
@@ -190,51 +192,8 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     else dispatch({ type: "SET_SCREEN", screen: "game" })
   }
 
-  return (
+  const renderProfileFields = () => (
     <>
-      {isPanel && (
-        <button
-          type="button"
-          className="fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]"
-          onClick={onClose}
-          aria-label="Закрыть профиль"
-        />
-      )}
-      <div
-        className={
-          isPanel
-            ? "fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
-            : "flex h-app max-h-app flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated"
-        }
-        role={isPanel ? "dialog" : undefined}
-        aria-modal={isPanel ? true : undefined}
-        aria-labelledby={isPanel ? "profile-panel-title" : undefined}
-      >
-      {toast && <InlineToast toast={toast} />}
-      <div
-        className={`w-full ${isPanel ? "max-w-full min-h-0 flex-1" : "max-w-lg flex-1 min-h-0"} flex flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]`}
-      >
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 sm:py-7 space-y-4">
-        <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 mb-1 border-b border-cyan-300/15 bg-slate-950/85 px-4 py-3 backdrop-blur-md sm:px-6">
-        <div className="flex items-center justify-between gap-2">
-          <h1 id={isPanel ? "profile-panel-title" : undefined} className="text-lg sm:text-xl font-bold text-slate-100 tracking-wide">
-            Профиль
-          </h1>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-xs sm:text-sm text-slate-400">ID: {currentUser.id}</span>
-            {isPanel && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
-                aria-label="Закрыть"
-              >
-                <X className="h-5 w-5" strokeWidth={2} />
-              </button>
-            )}
-          </div>
-        </div>
-        </div>
         {/* Карточка профиля: аватар + имя + фото (login) */}
         <div className={`${sectionCardClass} space-y-4`}>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Ваш профиль</p>
@@ -723,8 +682,61 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             {"Назад к столу"}
           </Button>
         </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (isPanel && onClose) onClose()
+          dispatch({ type: "SET_SCREEN", screen: "registration" })
+        }}
+        className={cn(
+          "mt-4 text-sm font-medium text-slate-400 transition-colors hover:text-slate-200",
+          isPanel && "px-1",
+        )}
+      >
+        {"Выйти из профиля"}
+      </button>
+    </>
+  )
+
+  return (
+    <>
+      {isPanel ? (
+        <>
+          {toast && <InlineToast toast={toast} />}
+          <GameSidePanelShell
+            title="Профиль"
+            subtitle="Имя, рамка, баланс и приватность"
+            onClose={onClose!}
+            headerRight={<span className="text-sm text-slate-400 tabular-nums">ID {currentUser.id}</span>}
+          >
+            <div
+              className={cn(
+                "w-full max-w-full space-y-4 rounded-[1.75rem] border border-white/[0.08] bg-gradient-to-b from-slate-900/[0.98] via-[#0a1020]/[0.97] to-slate-950/95 px-4 py-5 shadow-[0_28px_80px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.04] backdrop-blur-md sm:px-5",
+              )}
+            >
+              {renderProfileFields()}
+            </div>
+          </GameSidePanelShell>
+        </>
+      ) : (
+        <div className="flex h-app max-h-app flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated">
+          {toast && <InlineToast toast={toast} />}
+          <div className="flex h-full min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 py-5 sm:px-6 sm:py-7">
+              <div className="sticky top-0 z-10 -mx-4 mb-1 border-b border-cyan-300/15 bg-slate-950/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+                <div className="flex items-center justify-between gap-2">
+                  <h1 id="profile-page-title" className="text-lg font-bold tracking-wide text-slate-100 sm:text-xl">
+                    Профиль
+                  </h1>
+                  <span className="text-xs text-slate-400 sm:text-sm">ID: {currentUser.id}</span>
+                </div>
+              </div>
+              {renderProfileFields()}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {showFramesModal && (
         <div
@@ -977,16 +989,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         </div>
       )}
 
-      <button
-        onClick={() => {
-          if (isPanel && onClose) onClose()
-          dispatch({ type: "SET_SCREEN", screen: "registration" })
-        }}
-        className={`mt-4 text-sm font-medium text-slate-400 transition-colors hover:text-slate-200 ${isPanel ? "px-1" : ""}`}
-      >
-        {"Выйти из профиля"}
-      </button>
-      </div>
     </>
   )
 }
