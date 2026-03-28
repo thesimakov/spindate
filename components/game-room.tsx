@@ -29,8 +29,6 @@ import {
   Target,
   Trophy,
   Flower2,
-  ChevronDown,
-  ChevronUp,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -475,6 +473,7 @@ export function GameRoom() {
     emotionUseTodayByPlayer,
     tablePaused,
     gameSidePanel,
+    admirers,
   } = state
 
   const gameRoomDustParticles = useMemo(
@@ -998,7 +997,6 @@ export function GameRoom() {
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
   const [showChatListModal, setShowChatListModal] = useState(false)
-  const [followersBlockCollapsed, setFollowersBlockCollapsed] = useState(false)
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
@@ -1065,7 +1063,14 @@ export function GameRoom() {
   const crowdedRing = players.length >= 7
   const radius = manyPlayersOnMobile ? 32 : isMobile ? (crowdedRing ? 28 : 26) : crowdedRing ? 30 : 28
   const radiusX = radius
-  const radiusY = manyPlayersOnMobile ? 34 : isMobile ? (crowdedRing ? 29 : 28) : Math.round(radius * (6 / 5))
+  // Десктоп: кольцо чуть вытянуто по вертикали (не 6:5 — стол квадратнее); мобильный людный стол — как раньше.
+  const radiusY = manyPlayersOnMobile
+    ? 34
+    : isMobile
+      ? crowdedRing
+        ? 29
+        : 28
+      : Math.round(radius * (crowdedRing ? 11 / 10 : 21 / 20))
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -3271,6 +3276,14 @@ export function GameRoom() {
         })}
       </div>
 
+      {/* ПК: 80% игровой стол + меню / 20% инфо и чат; на телефоне — без обёртки (display:contents) */}
+      <div
+        className={cn(
+          isPcLayout
+            ? "flex min-h-0 min-w-0 flex-[4] basis-0 flex-row overflow-hidden"
+            : "contents",
+        )}
+      >
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); фикс. ширина, не сжимается при резине центра ---- */}
       <div
         className={cn(
@@ -4000,7 +4013,7 @@ export function GameRoom() {
         className={cn(
           "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1",
           /* ПК: без overflow-y на колонке — иначе сетка 1fr/auto/1fr растягивается по контенту и стол «прилипает» к верху */
-          isPcLayout ? "max-h-full overflow-hidden" : "overflow-y-auto",
+          isPcLayout ? "max-h-full min-w-0 flex-1 overflow-hidden" : "overflow-y-auto",
           !isPcLayout && "pb-14 px-0.5 sm:px-1",
           isPcLayout
             ? "h-full w-full max-w-none min-h-0 self-stretch"
@@ -4250,7 +4263,7 @@ export function GameRoom() {
             </div>
           )}
         </div>
-        {/* Прямоугольный стол: ширина 90% колонки — по 5% поля с каждой стороны */}
+        {/* Стол 1:1: ширина 90% колонки — по 5% поля с каждой стороны */}
         <div
           className={
             isMobile
@@ -4258,7 +4271,7 @@ export function GameRoom() {
               : `relative flex w-[90%] min-w-0 max-w-full shrink-0 items-center justify-center md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-3xl`
           }
           style={{
-            aspectRatio: isMobile ? "1 / 1" : "6 / 5",
+            aspectRatio: "1 / 1",
             ...(isMobile
               ? {
                   width: "min(90vw, 100%)",
@@ -4728,12 +4741,20 @@ export function GameRoom() {
 
       </div>
 
-      {/* ---- RIGHT PANEL: фикс. ширина; центр между левым меню и этим блоком — резина ---- */}
+      </div>
+
+      {/* ---- RIGHT PANEL: на ПК — ~20% ширины (инфо + чат); на планшете — прежняя колонка ---- */}
       <div
         className={cn(
-          "relative z-20 min-h-0 shrink-0 flex-none flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
+          "relative z-20 min-h-0 flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
           isPcLayout ? "flex" : "hidden md:flex",
-          rightPanelCollapsed ? "w-14" : "w-[264px]",
+          isPcLayout
+            ? rightPanelCollapsed
+              ? "w-14 shrink-0 flex-none"
+              : "flex min-h-0 min-w-0 flex-1 basis-0"
+            : rightPanelCollapsed
+              ? "w-14 shrink-0 flex-none"
+              : "w-[264px] shrink-0 flex-none",
         )}
       >
         {rightPanelCollapsed ? (
@@ -4805,97 +4826,6 @@ export function GameRoom() {
             <img src={assetUrl("Frame 1171276192.webp")} alt="Угадай-ка" className="relative w-full h-full max-h-[76px] object-contain" />
           </button>
         </div>
-
-        {/* Followers / favorites strip — можно свернуть */}
-        {currentUser && (
-          <div
-            className="mx-2 rounded-2xl px-2 py-1.5"
-            style={{
-              background: "rgba(0,0,0,0.45)",
-              boxShadow: "0 6px 14px rgba(0,0,0,0.8)",
-              border: "1px solid rgba(232,192,106,0.9)",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setFollowersBlockCollapsed((c) => !c)}
-              className="mb-0 flex w-full items-center justify-between gap-2 rounded-lg py-0.5 text-left transition-opacity hover:opacity-90"
-            >
-              <span
-                className="font-semibold tracking-wide"
-                style={{ color: "#e8c06a", fontSize: "14px" }}
-              >
-                {"Твои поклонники"}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="text-[9px]" style={{ color: "#64748b" }}>
-                  {"онлайн"}
-                </span>
-                {followersBlockCollapsed ? (
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: "#94a3b8" }} />
-                ) : (
-                  <ChevronUp className="h-3.5 w-3.5 shrink-0" style={{ color: "#94a3b8" }} />
-                )}
-              </span>
-            </button>
-            {!followersBlockCollapsed && (
-            <div className="mt-1 flex items-center gap-1.5 overflow-x-auto pb-1 pr-1">
-              {gameLog
-                .filter(
-                  (e) =>
-                    e.type === "invite" &&
-                    e.toPlayer?.id === currentUser.id &&
-                    e.fromPlayer &&
-                    !e.fromPlayer.isBot,
-                )
-                .reduce<{ ids: Set<number>; players: Player[] }>(
-                  (acc, e) => {
-                    const id = e.fromPlayer!.id
-                    if (!acc.ids.has(id)) {
-                      acc.ids.add(id)
-                      acc.players.push(e.fromPlayer as Player)
-                    }
-                    return acc
-                  },
-                  { ids: new Set<number>(), players: [] },
-                )
-                .players.map((p) => {
-                  const initials = p.name
-                    .split(" ")
-                    .map((part) => part[0])
-                    .join("")
-                    .slice(0, 2)
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => dispatch({ type: "OPEN_CHAT", player: p })}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
-                    style={{
-                      background: "radial-gradient(circle at 30% 0%, #111827 0%, #020617 60%)",
-                      border: "1px solid #facc15",
-                      boxShadow: "0 0 6px rgba(250,204,21,0.7)",
-                      color: "#e5e7eb",
-                    }}
-                  >
-                    {initials}
-                  </button>
-                )
-              })}
-              {gameLog.filter(
-                (e) =>
-                  e.type === "invite" &&
-                  e.toPlayer?.id === currentUser.id &&
-                  e.fromPlayer &&
-                  !e.fromPlayer.isBot,
-              ).length === 0 && (
-                <span className="text-[10px]" style={{ color: "#64748b" }}>
-                  {"Пока нет поклонников — пригласите игроков в чат."}
-                </span>
-              )}
-            </div>
-            )}
-          </div>
-        )}
 
         {/* Лог и чат за столом */}
         <TableChatPanel
@@ -5477,6 +5407,38 @@ export function GameRoom() {
                       Рамка
                     </button>
                   </div>
+                  {currentUser && currentUser.id !== playerMenuTarget.id && !playerMenuTarget.isBot && (
+                    <div className="relative z-[1] mt-3 w-full max-w-sm px-0.5">
+                      {admirers.some((a) => a.id === playerMenuTarget.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            dispatch({ type: "REMOVE_ADMIRER", playerId: playerMenuTarget.id })
+                            showToast("Убрано из поклонников", "info")
+                          }}
+                          className="w-full rounded-xl border border-amber-500/50 bg-slate-900/80 px-3 py-2.5 text-center text-xs font-bold text-amber-100 transition-all hover:bg-slate-800/90 sm:text-sm"
+                        >
+                          В поклонниках — нажмите, чтобы убрать
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            dispatch({ type: "ADD_ADMIRER", player: playerMenuTarget })
+                            showToast("Добавлено в «Твои поклонники» в профиле", "success")
+                          }}
+                          className="w-full rounded-xl px-3 py-2.5 text-center text-xs font-extrabold text-[#0f172a] shadow-md transition-all hover:brightness-110 active:scale-[0.99] sm:text-sm"
+                          style={{
+                            background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)",
+                            border: "2px solid rgba(250,204,21,0.6)",
+                            boxShadow: "0 2px 0 #92400e",
+                          }}
+                        >
+                          Стать поклонником
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-4 border-t border-slate-600/35 pt-3">
                   <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Анкета</p>

@@ -37,6 +37,7 @@ const initialState: GameState = {
   showResult: false,
   resultAction: null,
   favorites: [],
+  admirers: [],
   chatWith: null,
   chatMessages: {},
   voiceBalance: 0,
@@ -86,6 +87,52 @@ const initialState: GameState = {
   emotionUseTodayByPlayer: {},
   tablePaused: false,
   gameSidePanel: null,
+}
+
+const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
+
+function parseAdmirersFromStorage(raw: string): Player[] {
+  try {
+    const data = JSON.parse(raw) as unknown
+    if (!Array.isArray(data)) return []
+    const out: Player[] = []
+    for (const item of data) {
+      if (!item || typeof item !== "object") continue
+      const o = item as Record<string, unknown>
+      const id = Number(o.id)
+      if (!Number.isFinite(id)) continue
+      const name = typeof o.name === "string" ? o.name : ""
+      const avatar = typeof o.avatar === "string" ? o.avatar : ""
+      const gender = o.gender === "female" ? "female" : "male"
+      const age = typeof o.age === "number" && o.age > 0 ? Math.min(120, o.age) : 25
+      const purpose =
+        o.purpose === "love" || o.purpose === "communication" || o.purpose === "relationships"
+          ? o.purpose
+          : "relationships"
+      out.push({
+        id,
+        name: name || `Игрок ${id}`,
+        avatar: avatar || "",
+        gender,
+        age,
+        purpose,
+        isBot: Boolean(o.isBot),
+      })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+function persistAdmirersList(userId: number, list: Player[]) {
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ADMIRERS_LS_KEY(userId), JSON.stringify(list))
+    }
+  } catch {
+    // ignore
+  }
 }
 
 function dateKeyFromTimestamp(ts: number): string {
@@ -207,13 +254,24 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gameSidePanel: leaveGame ? null : state.gameSidePanel,
       }
     }
-    case "SET_USER":
-      return { ...state, currentUser: action.user }
+    case "SET_USER": {
+      let admirers: Player[] = []
+      try {
+        if (typeof window !== "undefined") {
+          const raw = window.localStorage.getItem(ADMIRERS_LS_KEY(action.user.id))
+          if (raw) admirers = parseAdmirersFromStorage(raw)
+        }
+      } catch {
+        admirers = []
+      }
+      return { ...state, currentUser: action.user, admirers }
+    }
     case "CLEAR_USER":
       return {
         ...state,
         currentUser: null,
         players: [],
+        admirers: [],
         tableId: Math.floor(Math.random() * 9999) + 1,
         gameSidePanel: null,
       }
@@ -495,6 +553,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "ADD_FAVORITE":
       if (state.favorites.find((f) => f.id === action.player.id)) return state
       return { ...state, favorites: [...state.favorites, action.player] }
+    case "ADD_ADMIRER": {
+      if (!state.currentUser || state.currentUser.id === action.player.id) return state
+      if (state.admirers.find((a) => a.id === action.player.id)) return state
+      const next = [...state.admirers, action.player]
+      persistAdmirersList(state.currentUser.id, next)
+      return { ...state, admirers: next }
+    }
+    case "REMOVE_ADMIRER": {
+      if (!state.currentUser) return state
+      const next = state.admirers.filter((a) => a.id !== action.playerId)
+      persistAdmirersList(state.currentUser.id, next)
+      return { ...state, admirers: next }
+    }
     case "OPEN_CHAT":
       return { ...state, chatWith: action.player, screen: "chat" }
     case "SEND_MESSAGE": {

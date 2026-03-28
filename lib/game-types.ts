@@ -215,6 +215,8 @@ export interface GameState {
   showResult: boolean
   resultAction: string | null
   favorites: Player[]
+  /** Игроки, отмеченные кнопкой «Стать поклонником» (список в профиле). */
+  admirers: Player[]
   chatWith: Player | null
   chatMessages: Record<number, ChatMessage[]>
   voiceBalance: number
@@ -308,6 +310,8 @@ export type GameAction =
   | { type: "STOP_SPIN"; action: string }
   | { type: "NEXT_TURN" }
   | { type: "ADD_FAVORITE"; player: Player }
+  | { type: "ADD_ADMIRER"; player: Player }
+  | { type: "REMOVE_ADMIRER"; playerId: number }
   | { type: "OPEN_CHAT"; player: Player }
   | { type: "SEND_MESSAGE"; toId: number; message: ChatMessage }
   | { type: "SEND_GENERAL_CHAT"; message: GeneralChatMessage }

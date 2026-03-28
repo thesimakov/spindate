@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX } from "lucide-react"
+import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
@@ -38,7 +38,20 @@ type ProfileScreenProps = {
 
 export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps = {}) {
   const { state, dispatch } = useGame()
-  const { currentUser, players, voiceBalance, bonusBalance, inventory, rosesGiven, courtshipProfileAllowed, allowChatInvite, gameLog, avatarFrames, soundsEnabled } = state
+  const {
+    currentUser,
+    players,
+    voiceBalance,
+    bonusBalance,
+    inventory,
+    rosesGiven,
+    courtshipProfileAllowed,
+    allowChatInvite,
+    gameLog,
+    avatarFrames,
+    soundsEnabled,
+    admirers,
+  } = state
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
   const FREE_FRAMES = [
@@ -65,6 +78,11 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const rosesBalance = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,
     [inventory],
+  )
+
+  const admirersResolved = useMemo(
+    () => admirers.map((a) => players.find((p) => p.id === a.id) ?? a),
+    [admirers, players],
   )
 
   const heartbreakerCount = useMemo(
@@ -393,6 +411,52 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               )}
             </div>
           </div>
+        </div>
+
+        {/* Поклонники — наполняется кнопкой «Стать поклонником» в профиле игрока за столом */}
+        <div className={`${sectionCardClass} space-y-3`}>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Твои поклонники</p>
+          {admirersResolved.length === 0 ? (
+            <p className="text-sm leading-relaxed text-slate-500">
+              Пока никого. Откройте игрока по аватарке за столом и нажмите «Стать поклонником» — он появится здесь.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {admirersResolved.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-amber-500/35 bg-slate-900/60 py-1.5 pl-1.5 pr-2"
+                >
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: "OPEN_CHAT", player: p })}
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-90"
+                  >
+                    {p.avatar ? (
+                      <img
+                        src={p.avatar}
+                        alt=""
+                        className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-600/80"
+                      />
+                    ) : (
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-slate-200 ring-1 ring-slate-600/80">
+                        {(p.name || "?").slice(0, 1)}
+                      </span>
+                    )}
+                    <span className="min-w-0 truncate text-sm font-semibold text-slate-100">{p.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Убрать ${p.name} из поклонников`}
+                    onClick={() => dispatch({ type: "REMOVE_ADMIRER", playerId: p.id })}
+                    className="shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Быстрые настройки */}
