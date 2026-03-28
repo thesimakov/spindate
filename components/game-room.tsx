@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type RefObject } from "react"
 import {
   Heart,
   MessageCircle,
@@ -2349,20 +2349,22 @@ export function GameRoom() {
   }
 
   /* ---- send chat message ---- */
-  const handleSendChat = () => {
-    if (!chatInput.trim() || !currentUser) return
+  const handleSendChat = useCallback(() => {
+    const msg = chatInput.trim()
+    if (!msg || !currentUser || tablePaused) return
     dispatch({
       type: "ADD_LOG",
       entry: {
         id: generateLogId(),
         type: "chat",
         fromPlayer: currentUser,
-        text: `${currentUser.name}: ${chatInput.trim()}`,
+        text: msg,
         timestamp: Date.now(),
       },
     })
     setChatInput("")
-  }
+    void fetchTableAuthority(tableId)
+  }, [chatInput, currentUser, tablePaused, dispatch, fetchTableAuthority, tableId])
 
   /* ---- player avatar click ---- */
   const handlePlayerClick = (player: Player) => {
@@ -4855,6 +4857,19 @@ export function GameRoom() {
           </div>
         </div>
 
+        {!isPcLayout && (
+          <TableChatPanel
+            gameLog={gameLog}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            onSend={handleSendChat}
+            logEndRef={logEndRef}
+            currentUserId={currentUser?.id}
+            chatDisabled={tablePaused}
+            className="w-full max-w-[min(95vw,720px)] mx-auto mt-2 mb-1 shrink-0 max-h-[min(38vh,320px)] min-h-[140px]"
+          />
+        )}
+
         </div>
           {isPcLayout && <div className="min-h-0" aria-hidden />}
         </div>
@@ -5031,83 +5046,16 @@ export function GameRoom() {
         )}
 
         {/* Лог и чат за столом */}
-        <div
-          className="mx-2 flex min-h-0 flex-1 flex-col rounded-2xl overflow-hidden"
-          style={{
-            border: "1px solid rgba(56, 189, 248, 0.24)",
-            background: "linear-gradient(180deg, rgba(2,6,23,0.7) 0%, rgba(2,6,23,0.5) 100%)",
-            boxShadow: "0 10px 24px rgba(2,6,23,0.6)",
-          }}
-        >
-          <div
-            className="flex shrink-0 flex-col gap-0.5 rounded-t-lg px-3 py-2"
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.9) 100%)",
-              borderBottom: "1px solid rgba(56,189,248,0.35)",
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-              <span className="text-sm font-bold" style={{ color: "#f0e0c8" }}>
-                Сообщения за столом
-              </span>
-            </div>
-            <span className="text-[10px] leading-tight" style={{ color: "#64748b" }}>
-              История ходов и реплик в этом раунде
-            </span>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1 overscroll-contain">
-            {gameLog.length === 0 && (
-              <p className="py-6 text-center text-[11px]" style={{ color: "#94a3b8" }}>
-                {"Игра начинается..."}
-              </p>
-            )}
-            <div className="flex flex-col gap-1.5">
-              {gameLog
-                .filter((entry) => entry.type === "chat")
-                .map((entry) => (
-                <ChatBubble key={entry.id} entry={entry} currentUserId={currentUser?.id} />
-              ))}
-              <div ref={logEndRef} />
-            </div>
-          </div>
-
-          <div
-            className="shrink-0 px-2 pb-2 pt-1.5"
-            style={{ borderTop: "1px solid rgba(92,58,36,0.6)" }}
-          >
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                placeholder="Введите сообщение..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSendChat()
-                }}
-                className="flex-1 px-1.5 py-1.5 text-[11px] focus:outline-none"
-                style={{
-                  backgroundColor: "transparent",
-                  border: "none",
-                  borderBottom: "1px solid rgba(92,58,36,0.8)",
-                  color: "#f0e0c8",
-                }}
-                aria-label="Поле чата стола"
-              />
-              <button
-                onClick={handleSendChat}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110"
-                style={{
-                  background: "linear-gradient(180deg, #3498db 0%, #2980b9 100%)",
-                }}
-                aria-label="Отправить сообщение в чат"
-              >
-                <Send className="h-3.5 w-3.5" style={{ color: "#fff" }} />
-              </button>
-            </div>
-          </div>
-        </div>
+        <TableChatPanel
+          gameLog={gameLog}
+          chatInput={chatInput}
+          setChatInput={setChatInput}
+          onSend={handleSendChat}
+          logEndRef={logEndRef}
+          currentUserId={currentUser?.id}
+          chatDisabled={tablePaused}
+          className="mx-2 flex min-h-0 flex-1 flex-col"
+        />
         </div>
         )}
       </div>
@@ -6364,6 +6312,111 @@ export function GameRoom() {
       )}
 
       {/* магазин теперь отдельным экраном (ShopScreen) */}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Table chat (общий чат за столом; один экземпляр на мобиле или в правой панели) */
+/* ------------------------------------------------------------------ */
+function TableChatPanel({
+  gameLog,
+  chatInput,
+  setChatInput,
+  onSend,
+  logEndRef,
+  currentUserId,
+  chatDisabled,
+  className,
+}: {
+  gameLog: GameLogEntry[]
+  chatInput: string
+  setChatInput: (v: string) => void
+  onSend: () => void
+  logEndRef: RefObject<HTMLDivElement | null>
+  currentUserId?: number
+  chatDisabled?: boolean
+  className?: string
+}) {
+  const chatEntries = gameLog.filter((entry) => entry.type === "chat")
+  return (
+    <div
+      className={cn("flex min-h-0 flex-col rounded-2xl overflow-hidden", className)}
+      style={{
+        border: "1px solid rgba(56, 189, 248, 0.24)",
+        background: "linear-gradient(180deg, rgba(2,6,23,0.7) 0%, rgba(2,6,23,0.5) 100%)",
+        boxShadow: "0 10px 24px rgba(2,6,23,0.6)",
+      }}
+    >
+      <div
+        className="flex shrink-0 flex-col gap-0.5 rounded-t-lg px-3 py-2"
+        style={{
+          background: "linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.9) 100%)",
+          borderBottom: "1px solid rgba(56,189,248,0.35)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
+          <span className="text-sm font-bold" style={{ color: "#f0e0c8" }}>
+            Сообщения за столом
+          </span>
+        </div>
+        <span className="text-[10px] leading-tight" style={{ color: "#64748b" }}>
+          История ходов и реплик в этом раунде
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1 overscroll-contain">
+        {chatEntries.length === 0 && (
+          <p className="py-6 text-center text-[11px]" style={{ color: "#94a3b8" }}>
+            {"Игра начинается..."}
+          </p>
+        )}
+        <div className="flex flex-col gap-1.5">
+          {chatEntries.map((entry) => (
+            <ChatBubble key={entry.id} entry={entry} currentUserId={currentUserId} />
+          ))}
+          <div ref={logEndRef} />
+        </div>
+      </div>
+
+      <div
+        className="shrink-0 px-2 pb-2 pt-1.5"
+        style={{ borderTop: "1px solid rgba(92,58,36,0.6)" }}
+      >
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            placeholder={chatDisabled ? "Пауза — чат недоступен" : "Введите сообщение..."}
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSend()
+            }}
+            disabled={chatDisabled}
+            className="flex-1 px-1.5 py-1.5 text-[11px] focus:outline-none disabled:opacity-50"
+            style={{
+              backgroundColor: "transparent",
+              border: "none",
+              borderBottom: "1px solid rgba(92,58,36,0.8)",
+              color: "#f0e0c8",
+            }}
+            aria-label="Поле чата стола"
+          />
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={chatDisabled}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 disabled:opacity-40"
+            style={{
+              background: "linear-gradient(180deg, #3498db 0%, #2980b9 100%)",
+            }}
+            aria-label="Отправить сообщение в чат"
+          >
+            <Send className="h-3.5 w-3.5" style={{ color: "#fff" }} />
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
