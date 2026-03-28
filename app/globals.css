@@ -207,6 +207,52 @@
   }
 }
 
+/* Облачки «Спасибо»: мягче дуга, лёгкий наклон и «приземление» */
+@keyframes flyThanksCloud {
+  0% {
+    left: var(--fly-from-left);
+    top: var(--fly-from-top);
+    transform: translate(-50%, -50%) scale(0.72) rotate(-6deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  46% {
+    left: var(--fly-mid-left);
+    top: var(--fly-mid-top);
+    transform: translate(-50%, -50%) scale(1.1) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    left: var(--fly-to-left);
+    top: var(--fly-to-top);
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Лёгкое покачивание содержимого облачка на фоне полёта */
+@keyframes thanksCloudInner {
+  0% {
+    transform: translateY(2px) rotate(-3deg);
+  }
+  35% {
+    transform: translateY(-5px) rotate(2deg);
+  }
+  70% {
+    transform: translateY(1px) rotate(-1deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+.thanks-cloud-bubble__inner {
+  animation: thanksCloudInner 2.35s cubic-bezier(0.33, 1, 0.68, 1) forwards;
+  will-change: transform;
+}
+
 /* Steam puff (banya) */
 @keyframes steamRise {
   0% { transform: translate(-50%, -50%) translateY(0) scale(0.9); opacity: 0; }

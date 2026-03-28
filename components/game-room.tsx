@@ -1,6 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type RefObject } from "react"
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useId,
+  type CSSProperties,
+  type RefObject,
+  type SetStateAction,
+} from "react"
 import {
   Heart,
   MessageCircle,
@@ -29,12 +39,13 @@ import {
 import { Button } from "@/components/ui/button"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
-import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
+import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
-import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
+import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
 import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
@@ -197,15 +208,67 @@ interface FlyingEmoji {
   id: string
   emoji?: string
   imgSrc?: string
+  /** Облачко с текстом «Спасибо» вместо эмодзи (благодарность за бутылочку) */
+  thanksCloud?: boolean
   fromX: number
   fromY: number
   toX: number
   toY: number
 }
 
+function ThanksCloudBubble() {
+  const uid = useId().replace(/:/g, "")
+  const gid = `tcg-${uid}`
+
+  return (
+    <div
+      className="thanks-cloud-bubble__inner relative inline-flex h-14 w-[132px] select-none items-center justify-center"
+      style={{
+        filter:
+          "drop-shadow(0 10px 22px rgba(59, 130, 246, 0.42)) drop-shadow(0 3px 6px rgba(15, 23, 42, 0.18))",
+      }}
+    >
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 132 56"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden
+      >
+        <defs>
+          <linearGradient id={gid} x1="66" y1="6" x2="66" y2="52" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ffffff" />
+            <stop offset="0.35" stopColor="#f8fafc" />
+            <stop offset="0.72" stopColor="#e0f2fe" />
+            <stop offset="1" stopColor="#bfdbfe" />
+          </linearGradient>
+        </defs>
+        <circle cx="28" cy="38" r="17" fill={`url(#${gid})`} />
+        <circle cx="50" cy="32" r="20" fill={`url(#${gid})`} />
+        <circle cx="78" cy="30" r="22" fill={`url(#${gid})`} />
+        <circle cx="104" cy="36" r="16" fill={`url(#${gid})`} />
+        <ellipse cx="66" cy="40" rx="52" ry="14" fill={`url(#${gid})`} />
+      </svg>
+      <span
+        className="relative z-10 text-center text-[13px] font-extrabold tracking-[0.06em]"
+        style={{
+          color: "#0c1e3d",
+          textShadow:
+            "0 1px 0 rgba(255,255,255,0.95), 0 -1px 8px rgba(255,255,255,0.35), 0 2px 4px rgba(59,130,246,0.12)",
+        }}
+      >
+        Спасибо
+      </span>
+    </div>
+  )
+}
+
 function FlyingEmojiContent({ fe }: { fe: FlyingEmoji }) {
   const [imgError, setImgError] = useState(false)
   useEffect(() => setImgError(false), [fe.imgSrc])
+  if (fe.thanksCloud) {
+    return <ThanksCloudBubble />
+  }
   if (fe.imgSrc && !imgError) {
     return (
        
@@ -1013,30 +1076,6 @@ export function GameRoom() {
 
   const _userPrediction = predictions.find(p => p.playerId === currentUser?.id)
 
-  /** Каталог бутылочек: id и пути из lib/assets.ts (BOTTLE_IMAGES), названия и стоимость в UI */
-  const bottleSkins = [
-    { id: "classic" as const, name: "Классическая", img: assetUrl(BOTTLE_IMAGES.classic), cost: 0 },
-    { id: "ruby" as const, name: "Лимонад", img: assetUrl(BOTTLE_IMAGES.ruby), cost: 5 },
-    { id: "neon" as const, name: "Виски", img: assetUrl(BOTTLE_IMAGES.neon), cost: 5 },
-    { id: "frost" as const, name: "Шампанское", img: assetUrl(BOTTLE_IMAGES.frost), cost: 5 },
-    { id: "baby" as const, name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby), cost: 5 },
-    { id: "vip" as const, name: "VIP-бутылка", img: assetUrl(BOTTLE_IMAGES.vip), cost: 5 },
-    { id: "milk" as const, name: "Молочная", img: assetUrl(BOTTLE_IMAGES.milk), cost: 5 },
-    { id: "frame_69" as const, name: "Бутылочка 69", img: assetUrl(BOTTLE_IMAGES.frame_69), cost: 5 },
-    { id: "frame_70" as const, name: "Бутылочка 70", img: assetUrl(BOTTLE_IMAGES.frame_70), cost: 5 },
-    { id: "frame_71" as const, name: "Бутылочка 71", img: assetUrl(BOTTLE_IMAGES.frame_71), cost: 5 },
-    { id: "frame_72" as const, name: "Бутылочка 72", img: assetUrl(BOTTLE_IMAGES.frame_72), cost: 5 },
-    { id: "frame_73" as const, name: "Бутылочка 73", img: assetUrl(BOTTLE_IMAGES.frame_73), cost: 5 },
-    { id: "frame_74" as const, name: "Бутылочка 74", img: assetUrl(BOTTLE_IMAGES.frame_74), cost: 5 },
-    { id: "frame_75" as const, name: "Бутылочка 75", img: assetUrl(BOTTLE_IMAGES.frame_75), cost: 5 },
-    { id: "frame_76" as const, name: "Бутылочка 76", img: assetUrl(BOTTLE_IMAGES.frame_76), cost: 5 },
-    { id: "frame_77" as const, name: "Бутылочка 77", img: assetUrl(BOTTLE_IMAGES.frame_77), cost: 5 },
-    { id: "frame_78" as const, name: "Бутылочка 78", img: assetUrl(BOTTLE_IMAGES.frame_78), cost: 5 },
-    { id: "frame_79" as const, name: "Бутылочка 79", img: assetUrl(BOTTLE_IMAGES.frame_79), cost: 5 },
-    { id: "frame_80" as const, name: "Бутылочка 80", img: assetUrl(BOTTLE_IMAGES.frame_80), cost: 5 },
-    { id: "fortune_wheel" as const, name: "Колесо фортуны", img: "", cost: 300 },
-  ]
-
   const cooldownLeftMs = useMemo(() => {
     if (!bottleCooldownUntil) return 0
     return Math.max(0, bottleCooldownUntil - now)
@@ -1045,7 +1084,8 @@ export function GameRoom() {
   useEffect(() => {
     const cooldownRunning =
       bottleCooldownUntil != null && bottleCooldownUntil > Date.now()
-    if (!showBottleCatalog && !cooldownRunning) return
+    if (!cooldownRunning) return
+    if (showBottleCatalog) return
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [showBottleCatalog, bottleCooldownUntil])
@@ -1461,7 +1501,13 @@ export function GameRoom() {
 
   /* ---- launch flying emoji ---- */
   const launchEmoji = useCallback(
-    (spinnerIdx: number, targetIdx: number, emoji?: string, imgSrc?: string) => {
+    (
+      spinnerIdx: number,
+      targetIdx: number,
+      emoji?: string,
+      imgSrc?: string,
+      thanksCloud?: boolean,
+    ) => {
       const fromPos = positions[spinnerIdx]
       const toPos = positions[targetIdx]
       if (!fromPos || !toPos) return
@@ -1471,15 +1517,17 @@ export function GameRoom() {
         id,
         emoji,
         imgSrc,
+        thanksCloud: thanksCloud === true,
         fromX: fromPos.x,
         fromY: fromPos.y,
         toX: toPos.x,
         toY: toPos.y,
       }
       setFlyingEmojis((prev) => [...prev, newEmoji])
+      const duration = thanksCloud === true ? 2500 : 1900
       setTimeout(() => {
         setFlyingEmojis((prev) => prev.filter((e) => e.id !== id))
-      }, 1900)
+      }, duration)
     },
     [positions]
   )
@@ -1579,6 +1627,7 @@ export function GameRoom() {
       emoji?: string
       imgSrc?: string
       thanksTriple?: boolean
+      thanksCloud?: boolean
     }
     const queue: QueuedEmotion[] = []
 
@@ -1591,7 +1640,7 @@ export function GameRoom() {
         const fromIdx = players.findIndex((p) => p.id === entry.fromPlayer!.id)
         const toIdx = players.findIndex((p) => p.id === entry.toPlayer!.id)
         if (fromIdx === -1 || toIdx === -1) continue
-        queue.push({ fromIdx, toIdx, type: entry.type, emoji: "⭐", thanksTriple: true })
+        queue.push({ fromIdx, toIdx, type: entry.type, thanksTriple: true, thanksCloud: true })
         continue
       }
 
@@ -1621,7 +1670,17 @@ export function GameRoom() {
       const t = setTimeout(() => {
         if (item.thanksTriple) {
           for (let j = 0; j < 3; j++) {
-            setTimeout(() => launchEmoji(item.fromIdx, item.toIdx, item.emoji ?? "⭐"), j * 120)
+            setTimeout(
+              () =>
+                launchEmoji(
+                  item.fromIdx,
+                  item.toIdx,
+                  item.emoji,
+                  item.imgSrc,
+                  item.thanksCloud === true,
+                ),
+              j * 120,
+            )
           }
         } else {
           launchEmoji(item.fromIdx, item.toIdx, item.emoji, item.imgSrc)
@@ -2131,7 +2190,7 @@ export function GameRoom() {
       if (!fromPlayer || !donor) return
 
       for (let i = 0; i < 3; i++) {
-        setTimeout(() => launchEmoji(fromIdx, donorIdx, "⭐"), i * 120)
+        setTimeout(() => launchEmoji(fromIdx, donorIdx, undefined, undefined, true), i * 120)
       }
       dispatch({
         type: "ADD_LOG",
@@ -3922,228 +3981,18 @@ export function GameRoom() {
       )}
 
       {showBottleCatalog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)" }}
-          onClick={() => setShowBottleCatalog(false)}
-        >
-          <div
-            className="w-full max-w-3xl max-h-[85vh] overflow-y-auto overscroll-contain rounded-2xl border p-0 shadow-2xl"
-            style={{
-              background: "linear-gradient(180deg, rgba(19,10,4,0.98) 0%, rgba(8,6,4,0.98) 100%)",
-              borderColor: "rgba(251, 191, 36, 0.22)",
-              boxShadow: "0 30px 70px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.06)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b px-5 py-4 backdrop-blur-md"
-              style={{ borderColor: "rgba(148, 163, 184, 0.14)", background: "rgba(8, 6, 4, 0.72)" }}
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-extrabold tracking-wide text-amber-100 sm:text-sm">Каталог бутылочек</span>
-                  {cooldownLeftMs > 0 && (
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-amber-200/90"
-                      style={{ background: "rgba(251, 191, 36, 0.12)", border: "1px solid rgba(251, 191, 36, 0.25)" }}
-                    >
-                      Покупка: {formatCooldown(cooldownLeftMs)}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 truncate text-[12px] font-semibold text-amber-200/75 sm:text-[13px]">
-                  Выберите бутылочку для стола
-                </p>
-              </div>
-              <button
-                type="button"
-                className="shrink-0 rounded-xl px-3 py-2 text-[12px] font-bold transition hover:brightness-110 active:scale-[0.99]"
-                style={{ border: "1px solid rgba(148,163,184,0.35)", color: "#f0e0c8", background: "rgba(15,23,42,0.12)" }}
-                onClick={() => setShowBottleCatalog(false)}
-              >
-                Закрыть
-              </button>
-            </div>
-
-            {(() => {
-              const ownedSet = new Set(ownedBottleSkins ?? ["classic"])
-              const isClassicId = (id: typeof bottleSkins[number]["id"]) => id === "classic"
-              const isVipId = (id: typeof bottleSkins[number]["id"]) => id === "vip"
-              const isPremiumFortuneId = (id: typeof bottleSkins[number]["id"]) => id === "fortune_wheel"
-
-              const entries = bottleSkins.map((skin) => {
-                const owned = ownedSet.has(skin.id)
-                const selected = bottleSkin === skin.id
-                const cooldownActive = cooldownLeftMs > 0
-                const purchaseLocked = cooldownActive && !owned && !isClassicId(skin.id)
-                const notEnough = !owned && !isClassicId(skin.id) && voiceBalance < skin.cost
-                const disabled = purchaseLocked || notEnough
-
-                const status = owned
-                  ? (selected ? "Выбрано" : "Куплено")
-                  : isClassicId(skin.id)
-                    ? "Бесплатно"
-                    : purchaseLocked
-                      ? `Через ${formatCooldown(cooldownLeftMs)}`
-                      : `${skin.cost} ❤`
-
-                const handleClick = () => {
-                  if (owned || isClassicId(skin.id)) {
-                    dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
-                    return
-                  }
-                  if (purchaseLocked) {
-                    showToast(`Следующая покупка через ${formatCooldown(cooldownLeftMs)}`, "info")
-                    return
-                  }
-                  if (voiceBalance < skin.cost) {
-                    showToast("Недостаточно сердец", "error")
-                    return
-                  }
-                  dispatch({ type: "PAY_VOICES", amount: skin.cost })
-                  dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
-                  dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: Date.now() + 30 * 60 * 1000 })
-                  if (currentUser) {
-                    dispatch({ type: "SET_BOTTLE_DONOR", playerId: currentUser.id, playerName: currentUser.name })
-                    dispatch({
-                      type: "ADD_LOG",
-                      entry: {
-                        id: generateLogId(),
-                        type: "system",
-                        fromPlayer: currentUser,
-                        text: `${currentUser.name} купил(а) бутылочку «${skin.name}»`,
-                        timestamp: Date.now(),
-                      },
-                    })
-                  }
-                  showToast("Бутылочка куплена", "success")
-                }
-
-                return { skin, owned, selected, disabled, notEnough, purchaseLocked, status, handleClick }
-              })
-
-              const free = entries.filter((e) => isClassicId(e.skin.id))
-              const vip = entries.filter((e) => isVipId(e.skin.id))
-              const premium = entries.filter((e) => isPremiumFortuneId(e.skin.id))
-              const rest = entries.filter(
-                (e) =>
-                  !isClassicId(e.skin.id) && !isVipId(e.skin.id) && !isPremiumFortuneId(e.skin.id),
-              )
-
-              const Section = ({ title, items }: { title: string; items: typeof entries }) => (
-                <div className="px-5 pb-5 pt-4">
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">{title}</span>
-                    <div className="h-px flex-1" style={{ background: "rgba(148,163,184,0.18)" }} />
-                  </div>
-                  <div
-                    className={cn(
-                      "grid gap-3",
-                      isPcLayout ? "grid-cols-3 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
-                    )}
-                  >
-                    {items.map((e) => {
-                      const ring = e.selected ? "ring-2 ring-amber-400" : "ring-1 ring-slate-700/40"
-                      const dim = e.disabled && !e.owned && e.skin.id !== "classic" ? "opacity-55" : ""
-                      const badgeTone = e.selected
-                        ? { background: "rgba(34,197,94,0.16)", border: "1px solid rgba(34,197,94,0.28)", color: "#86efac" }
-                        : e.owned
-                          ? { background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.22)", color: "#bae6fd" }
-                          : e.purchaseLocked
-                            ? { background: "rgba(148,163,184,0.10)", border: "1px solid rgba(148,163,184,0.18)", color: "#cbd5e1" }
-                            : e.notEnough
-                              ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
-                              : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
-
-                      const ctaLabel = e.selected
-                        ? "На столу"
-                        : e.purchaseLocked
-                          ? `Подать через ${formatCooldown(cooldownLeftMs)}`
-                          : e.notEnough
-                            ? "Недостаточно ❤"
-                            : "Подать на стол"
-
-                      return (
-                        <div
-                          key={e.skin.id}
-                          className={`group relative flex min-w-0 flex-col items-stretch rounded-2xl px-3 pb-3 pt-3 text-left ${ring} ${dim}`}
-                          style={{
-                            background: "linear-gradient(180deg, rgba(30,41,59,0.30) 0%, rgba(15,23,42,0.18) 100%)",
-                          }}
-                        >
-                          <div
-                            className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-xl"
-                            style={{ background: "radial-gradient(circle at 50% 35%, rgba(251,191,36,0.10) 0%, transparent 60%)" }}
-                          >
-                            {e.skin.id === "fortune_wheel" ? (
-                              <FortuneWheelBottleVisual
-                                segmentCount={players.length > 0 ? players.length : 8}
-                                className="h-full w-full max-h-[96px] object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)] pointer-events-none select-none"
-                              />
-                            ) : (
-                              <img
-                                src={e.skin.img}
-                                alt={e.skin.name}
-                                className="h-full w-full object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)] pointer-events-none select-none"
-                                loading="eager"
-                                draggable={false}
-                              />
-                            )}
-                          </div>
-
-                          <div className="mt-2 w-full min-w-0">
-                            <p className="truncate text-center text-[12px] font-extrabold text-amber-100 sm:text-[13px]">
-                              {e.skin.name}
-                            </p>
-                            <div className="mt-1 flex items-center justify-center">
-                              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={badgeTone}>
-                                {e.status}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={(ev) => {
-                              ev.preventDefault()
-                              ev.stopPropagation()
-                              e.handleClick()
-                            }}
-                            disabled={e.disabled || e.selected}
-                            className={
-                              "mt-2 w-full touch-manipulation rounded-xl px-2 py-2 text-center text-[11px] font-extrabold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 " +
-                              (e.selected
-                                ? "border border-emerald-500/35 bg-emerald-950/40 text-emerald-200"
-                                : e.disabled
-                                  ? "border border-slate-600/50 bg-slate-900/80 text-slate-500"
-                                  : "border border-amber-500/40 text-amber-950 shadow-[0_6px_16px_rgba(251,191,36,0.22)] hover:brightness-110")
-                            }
-                            style={
-                              e.selected || e.disabled
-                                ? undefined
-                                : { background: "linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%)" }
-                            }
-                          >
-                            {ctaLabel}
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-
-              return (
-                <div>
-                  <Section title="Бесплатно" items={free} />
-                  <Section title="Доступно" items={rest} />
-                  <Section title="VIP" items={vip} />
-                  <Section title="Премиум" items={premium} />
-                </div>
-              )
-            })()}
-          </div>
-        </div>
+        <BottleCatalogModal
+          onClose={() => setShowBottleCatalog(false)}
+          isPcLayout={isPcLayout}
+          players={players}
+          ownedBottleSkins={ownedBottleSkins}
+          bottleSkin={bottleSkin}
+          voiceBalance={voiceBalance}
+          bottleCooldownUntil={bottleCooldownUntil}
+          currentUser={currentUser}
+          dispatch={dispatch}
+          showToast={showToast}
+        />
       )}
 
       {/* ---- GAME BOARD CENTER ---- */}
@@ -4662,7 +4511,8 @@ export function GameRoom() {
           {/* ---- FLYING EMOJIS ---- */}
           {flyingEmojis.map((fe) => {
             const midX = (fe.fromX + fe.toX) / 2
-            const midY = (fe.fromY + fe.toY) / 2 - 5
+            const arcLift = fe.thanksCloud ? 14 : 5
+            const midY = (fe.fromY + fe.toY) / 2 - arcLift
             return (
             <div
               key={fe.id}
@@ -4670,7 +4520,9 @@ export function GameRoom() {
               style={{
                 left: `${fe.fromX}%`,
                 top: `${fe.fromY}%`,
-                animation: "flyEmoji 1.8s ease-in-out forwards",
+                animation: fe.thanksCloud
+                  ? "flyThanksCloud 2.35s cubic-bezier(0.22, 1, 0.36, 1) forwards"
+                  : "flyEmoji 1.8s ease-in-out forwards",
                 // @ts-expect-error CSS custom properties
                 "--fly-from-left": `${fe.fromX}%`,
                 "--fly-from-top": `${fe.fromY}%`,
@@ -4881,7 +4733,7 @@ export function GameRoom() {
         className={cn(
           "relative z-20 min-h-0 shrink-0 flex-none flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
           isPcLayout ? "flex" : "hidden md:flex",
-          rightPanelCollapsed ? "w-14" : "w-[230px]",
+          rightPanelCollapsed ? "w-14" : "w-[264px]",
         )}
       >
         {rightPanelCollapsed ? (
@@ -6331,7 +6183,7 @@ function TableChatPanel({
 }: {
   gameLog: GameLogEntry[]
   chatInput: string
-  setChatInput: (v: string) => void
+  setChatInput: (v: SetStateAction<string>) => void
   onSend: () => void
   logEndRef: RefObject<HTMLDivElement | null>
   currentUserId?: number
@@ -6385,6 +6237,10 @@ function TableChatPanel({
         style={{ borderTop: "1px solid rgba(92,58,36,0.6)" }}
       >
         <div className="flex items-center gap-1.5">
+          <TableChatEmojiPicker
+            disabled={chatDisabled}
+            onEmojiSelect={(emoji) => setChatInput((prev) => prev + emoji)}
+          />
           <input
             type="text"
             placeholder={chatDisabled ? "Пауза — чат недоступен" : "Введите сообщение..."}
@@ -6394,7 +6250,7 @@ function TableChatPanel({
               if (e.key === "Enter") onSend()
             }}
             disabled={chatDisabled}
-            className="flex-1 px-1.5 py-1.5 text-[11px] focus:outline-none disabled:opacity-50"
+            className="flex-1 min-w-0 px-1.5 py-1.5 text-[11px] focus:outline-none disabled:opacity-50"
             style={{
               backgroundColor: "transparent",
               border: "none",
