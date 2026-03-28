@@ -1133,7 +1133,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   }
 
   return (
-    <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden entry-bg-animated">
+    <div className="relative flex h-app min-h-app max-h-app flex-col overflow-hidden entry-bg-animated">
       {toast && <InlineToast toast={toast} />}
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {shopParticles.map((d, idx) => {

@@ -2877,7 +2877,7 @@ export function GameRoom() {
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
-    <div className="cinematic-desktop relative flex h-dvh w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
+    <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
       {toast && <InlineToast toast={toast} />}
       <WelcomeGiftDialog
         open={showWelcomeGift}
@@ -3114,7 +3114,7 @@ export function GameRoom() {
 
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); фикс. ширина, не сжимается при резине центра ---- */}
       <div
-        className={`relative z-20 hidden md:flex shrink-0 flex-none flex-col gap-1.5 overflow-y-auto max-h-[100dvh] p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out ${
+        className={`relative z-20 hidden md:flex shrink-0 flex-none flex-col gap-1.5 overflow-y-auto max-h-app p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out ${
           leftSideMenuExpanded ? "w-[190px]" : "w-14 lg:w-[190px]"
         }`}
       >
@@ -5594,7 +5594,7 @@ export function GameRoom() {
           role="presentation"
         >
           <div
-            className="player-menu-modal player-menu-modal-drawer relative flex h-[100dvh] max-h-[100dvh] w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
+            className="player-menu-modal player-menu-modal-drawer relative flex h-app max-h-app w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.25)",
@@ -6086,7 +6086,7 @@ export function GameRoom() {
           role="presentation"
         >
           <div
-            className="gift-catalog-panel gift-catalog-drawer relative flex h-[100dvh] max-h-[100dvh] w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
+            className="gift-catalog-panel gift-catalog-drawer relative flex h-app max-h-app w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
               border: "2px solid rgba(251, 191, 36, 0.25)",

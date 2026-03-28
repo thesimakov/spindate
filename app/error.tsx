@@ -14,7 +14,7 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-[#0f172a] px-4 text-slate-100">
+    <div className="flex min-h-app flex-col items-center justify-center bg-[#0f172a] px-4 text-slate-100">
       <div className="max-w-md rounded-2xl border border-slate-600/80 bg-slate-900/95 p-6 shadow-xl">
         <h1 className="mb-2 text-lg font-bold text-rose-300">Что-то пошло не так</h1>
         <p className="mb-4 text-sm text-slate-400">

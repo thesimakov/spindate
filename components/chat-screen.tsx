@@ -110,7 +110,7 @@ export function ChatScreen() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background pb-[env(safe-area-inset-bottom)]">
+    <div className="flex min-h-app flex-col bg-background pb-[env(safe-area-inset-bottom)]">
       {/* Header */}
       <header className="flex items-center gap-2 sm:gap-3 border-b border-border px-3 py-3 shrink-0">
         <button onClick={handleBack} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-secondary transition-colors">

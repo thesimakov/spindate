@@ -4,7 +4,7 @@ import { AdminLemnityClient } from "./admin-lemnity-client"
 
 export default function AdminLemnityPage() {
   return (
-    <main className="min-h-dvh overflow-y-auto bg-background">
+    <main className="min-h-app overflow-y-auto bg-background">
       <AdminLemnityClient />
     </main>
   )

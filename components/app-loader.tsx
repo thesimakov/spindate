@@ -11,7 +11,7 @@ interface AppLoaderProps {
 export function AppLoader({ title = "Загрузка...", subtitle, hint, className = "" }: AppLoaderProps) {
   return (
     <div
-      className={`flex min-h-dvh flex-col items-center justify-center gap-8 px-6 bg-slate-900/98 text-slate-100 ${className}`}
+      className={`flex min-h-app flex-col items-center justify-center gap-8 px-6 bg-slate-900/98 text-slate-100 ${className}`}
       role="status"
       aria-live="polite"
       aria-label={title}

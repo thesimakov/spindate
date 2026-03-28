@@ -657,7 +657,7 @@ export function UgadaikaScreen() {
   }
 
   return (
-    <div className="relative flex h-dvh min-h-dvh max-h-dvh flex-col overflow-hidden text-slate-100 pb-[env(safe-area-inset-bottom)] game-bg-animated">
+    <div className="relative flex h-app min-h-app max-h-app flex-col overflow-hidden text-slate-100 pb-[env(safe-area-inset-bottom)] game-bg-animated">
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {bgDots.map((d, idx) => {
           const anim = d.rev ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`

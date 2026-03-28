@@ -24,7 +24,7 @@ export function GameSidePanelShell({ title, subtitle, onClose, children, headerR
         role="dialog"
         aria-modal
         aria-labelledby="game-side-panel-title"
-        className="fixed inset-y-0 right-0 z-[60] flex h-dvh max-h-dvh w-full max-w-md flex-col border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
+        className="fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-cyan-500/15 px-4 py-3">
           <div className="min-w-0">

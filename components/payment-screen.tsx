@@ -30,7 +30,7 @@ export function PaymentScreen() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center overflow-y-auto px-4 py-8 pb-[env(safe-area-inset-bottom)]">
+    <div className="flex min-h-app flex-col items-center justify-center overflow-y-auto px-4 py-8 pb-[env(safe-area-inset-bottom)]">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent">

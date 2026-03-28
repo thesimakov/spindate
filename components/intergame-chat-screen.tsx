@@ -45,7 +45,7 @@ export function IntergameChatScreen() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background pb-[env(safe-area-inset-bottom)]">
+    <div className="flex min-h-app flex-col bg-background pb-[env(safe-area-inset-bottom)]">
       <header className="flex items-center gap-2 border-b border-border px-3 py-3 shrink-0">
         <button
           onClick={handleBack}

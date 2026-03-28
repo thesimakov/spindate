@@ -70,7 +70,7 @@ export function DevScreen() {
   if (!authenticated) {
     return (
       <div
-        className="flex min-h-dvh flex-col items-center justify-center p-6"
+        className="flex min-h-app flex-col items-center justify-center p-6"
         style={{
           background: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
           color: "#e2e8f0",
@@ -142,7 +142,7 @@ export function DevScreen() {
 
   return (
     <div
-      className="min-h-dvh overflow-auto p-4 pb-12"
+      className="min-h-app overflow-auto p-4 pb-12"
       style={{
         background: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
         color: "#e2e8f0",

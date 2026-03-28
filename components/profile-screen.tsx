@@ -203,8 +203,8 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       <div
         className={
           isPanel
-            ? "fixed inset-y-0 right-0 z-[60] flex h-dvh max-h-dvh w-full max-w-md flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
-            : "flex h-dvh max-h-dvh flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated"
+            ? "fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
+            : "flex h-app max-h-app flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated"
         }
         role={isPanel ? "dialog" : undefined}
         aria-modal={isPanel ? true : undefined}

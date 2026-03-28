@@ -1,19 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* VK Mini App (iframe) и обычная вкладка: корень на всю видимую область окна по ширине и высоте */
-html {
-  height: 100%;
-  width: 100%;
-  max-width: none;
-}
-body {
-  min-height: 100%;
-  min-height: 100dvh;
-  width: 100%;
-  max-width: none;
-}
-
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -147,14 +134,47 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+  /**
+   * Единый корень для Chrome / Firefox / Safari (в т.ч. iOS): ширина, safe-area,
+   * высота без «прыжков» (vh vs dvh vs -webkit-fill-available), без авто-зума текста.
+   */
   html {
-    /* Поддержка safe-area для вырезов и домашнего индикатора на мобильных */
+    height: 100%;
+    width: 100%;
+    max-width: none;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   body {
-    @apply bg-background text-foreground min-h-screen overflow-hidden;
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    @apply bg-background text-foreground overflow-hidden;
     font-size: 14px;
+  }
+}
+
+/* Повторяем цепочку высоты там, где Tailwind даёт только одно значение (100dvh без fallback) */
+@layer utilities {
+  .min-h-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+  }
+  .h-app {
+    height: 100vh;
+    height: 100dvh;
+    height: -webkit-fill-available;
+    min-height: 0;
+  }
+  .max-h-app {
+    max-height: 100vh;
+    max-height: 100dvh;
+    max-height: -webkit-fill-available;
   }
 }
 
@@ -1242,7 +1262,9 @@ body {
 /* Фон экрана входа: тёмный и анимированный, на весь экран без полос */
 .entry-bg-animated {
   position: relative;
+  min-height: 100vh;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   height: 100%;
   background-color: #0f172a;
   background-image:
