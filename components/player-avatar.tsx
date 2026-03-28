@@ -74,6 +74,11 @@ interface PlayerAvatarProps {
   showAsleep?: boolean
   /** Явный размер аватарки в px (если задан, переопределяет compact) */
   size?: number
+  /**
+   * Раскладка для кольца за игровым столом: точка (left/top) совпадает с центром аватарки,
+   * подпись имени не смещает геометрию круга (иначе слоты «плывут»).
+   */
+  tableRingLayout?: boolean
 }
 
 export function PlayerAvatar({
@@ -89,6 +94,7 @@ export function PlayerAvatar({
   inGame = false,
   showAsleep = false,
   size: sizeProp,
+  tableRingLayout = false,
 }: PlayerAvatarProps) {
   const frameStyle = frameId && frameId !== "none" ? FRAME_STYLES[frameId] ?? FRAME_STYLES.none : null
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
@@ -128,9 +134,17 @@ export function PlayerAvatar({
     return () => clearInterval(t)
   }, [bigGiftsKey, bigSeq.length])
 
+  const shellClass = tableRingLayout
+    ? "game-avatar-shell relative inline-block"
+    : "game-avatar-shell flex flex-col items-center gap-1"
+
+  const belowAvatarWrapClass = tableRingLayout
+    ? "absolute left-1/2 top-full z-[20] mt-1 flex w-max max-w-[104px] -translate-x-1/2 flex-col items-center gap-1"
+    : undefined
+
   return (
     <div
-      className="game-avatar-shell flex flex-col items-center gap-1"
+      className={shellClass}
       data-current-turn={isCurrentTurn ? "1" : "0"}
       data-target={isTarget ? "1" : "0"}
     >
@@ -555,52 +569,102 @@ export function PlayerAvatar({
         )}
       </div>
 
-      {/* Name label - dark badge style; на мобильной (compact) шире, чтобы имя не обрезалось */}
-      <div
-        className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
-        style={{
-          background: "linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.92) 100%)",
-          border: "1px solid rgba(56,189,248,0.24)",
-          minWidth: effectiveCompact ? 50 : 64,
-          maxWidth: effectiveCompact ? 96 : 96,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-        }}
-      >
-        <span
-          className="truncate text-center font-semibold leading-tight block w-full"
-          style={{
-            fontSize: effectiveCompact ? 10 : 12,
-            color: "#f8fafc",
-            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-          }}
-        >
-          {player.name}
-        </span>
-      </div>
-
-      {/* "ваш выбор" label for prediction target */}
-      {isPredictionTarget && (
-        <div
-          className="flex items-center justify-center rounded-full px-2 py-0.5 animate-in fade-in zoom-in duration-300"
-          style={{
-            backgroundColor: "rgba(46, 204, 113, 0.9)",
-            minWidth: effectiveCompact ? 48 : 60,
-            boxShadow: "0 2px 6px rgba(46, 204, 113, 0.4)",
-            marginTop: -2,
-          }}
-        >
-          <span
-            className="truncate text-center font-bold leading-tight"
+      {tableRingLayout ? (
+        <div className={belowAvatarWrapClass}>
+          {/* Name label — под аватаркой, вне потока позиционирования кольца */}
+          <div
+            className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
             style={{
-              fontSize: effectiveCompact ? 8 : 9,
-              color: "#fff",
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
+              background: "linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.24)",
+              minWidth: effectiveCompact ? 50 : 64,
+              maxWidth: effectiveCompact ? 96 : 96,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
             }}
           >
-            {"ваш выбор"}
-          </span>
+            <span
+              className="block w-full truncate text-center font-semibold leading-tight"
+              style={{
+                fontSize: effectiveCompact ? 10 : 12,
+                color: "#f8fafc",
+                textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+              }}
+            >
+              {player.name}
+            </span>
+          </div>
+          {isPredictionTarget && (
+            <div
+              className="flex animate-in items-center justify-center rounded-full px-2 py-0.5 fade-in zoom-in duration-300"
+              style={{
+                backgroundColor: "rgba(46, 204, 113, 0.9)",
+                minWidth: effectiveCompact ? 48 : 60,
+                boxShadow: "0 2px 6px rgba(46, 204, 113, 0.4)",
+              }}
+            >
+              <span
+                className="truncate text-center font-bold leading-tight"
+                style={{
+                  fontSize: effectiveCompact ? 8 : 9,
+                  color: "#fff",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                {"ваш выбор"}
+              </span>
+            </div>
+          )}
         </div>
+      ) : (
+        <>
+          {/* Name label - dark badge style; на мобильной (compact) шире, чтобы имя не обрезалось */}
+          <div
+            className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
+            style={{
+              background: "linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.24)",
+              minWidth: effectiveCompact ? 50 : 64,
+              maxWidth: effectiveCompact ? 96 : 96,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
+            }}
+          >
+            <span
+              className="block w-full truncate text-center font-semibold leading-tight"
+              style={{
+                fontSize: effectiveCompact ? 10 : 12,
+                color: "#f8fafc",
+                textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+              }}
+            >
+              {player.name}
+            </span>
+          </div>
+
+          {isPredictionTarget && (
+            <div
+              className="flex items-center justify-center rounded-full px-2 py-0.5 animate-in fade-in zoom-in duration-300"
+              style={{
+                backgroundColor: "rgba(46, 204, 113, 0.9)",
+                minWidth: effectiveCompact ? 48 : 60,
+                boxShadow: "0 2px 6px rgba(46, 204, 113, 0.4)",
+                marginTop: -2,
+              }}
+            >
+              <span
+                className="truncate text-center font-bold leading-tight"
+                style={{
+                  fontSize: effectiveCompact ? 8 : 9,
+                  color: "#fff",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                {"ваш выбор"}
+              </span>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -1002,10 +1002,12 @@ export function GameRoom() {
 
   // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
   // чтобы аватарки с рамками не накладывались друг на друга.
+  // При 7+ игроках на десктопе чуть увеличиваем эллипс — подписи вынесены из потока (tableRingLayout).
   const manyPlayersOnMobile = isMobile && players.length > 6
-  const radius = manyPlayersOnMobile ? 32 : isMobile ? 26 : 28
+  const crowdedRing = players.length >= 7
+  const radius = manyPlayersOnMobile ? 32 : isMobile ? (crowdedRing ? 28 : 26) : crowdedRing ? 30 : 28
   const radiusX = radius
-  const radiusY = manyPlayersOnMobile ? 34 : isMobile ? 28 : Math.round(radius * (6 / 5))
+  const radiusY = manyPlayersOnMobile ? 34 : isMobile ? (crowdedRing ? 29 : 28) : Math.round(radius * (6 / 5))
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -4509,6 +4511,7 @@ export function GameRoom() {
                 <div className="relative inline-flex flex-col items-center">
                   <PlayerAvatar
                     player={player}
+                    tableRingLayout
                     compact={isMobile || manyPlayersOnMobile}
                     size={manyPlayersOnMobile ? 42 : isMobile ? 52 : undefined}
                     // Во время результата подсвечиваем только пару, а не крутящего
