@@ -46,7 +46,15 @@ curl -sI "https://spindate.lemnity.ru/_next/static/css/" 2>/dev/null | head -3
 
 ---
 
-## 4. Полезные ссылки
+## 4. GitHub Pages: 404 на `https://user.github.io/repo/`
+
+Частые причины:
+
+1. **`export const revalidate = 0` в корневом `app/layout.tsx`** — страница становится динамической, при `output: "export"` **нет `index.html` в `out/`** → Pages отдаёт 404. В проекте для экспорта используется `revalidate = false`, свежий HTML на VPS — через `Cache-Control` в `next.config.mjs`.
+2. **Артефакт деплоя** — при `basePath=/имя-репо` файлы лежат в `out/имя-репо/`. В workflow нужно выкладывать **содержимое этой папки** как корень сайта (в `.github/workflows/nextjs.yml` шаг «Resolve GitHub Pages artifact root»), а не весь `out/` целиком.
+3. В **Settings → Pages** источник: **GitHub Actions**, ветка `main` с успешным workflow «Deploy Next.js site to Pages».
+
+## 5. Полезные ссылки
 
 - Настройка секретов деплоя: [GITHUB_DEPLOY_SECRETS.md](./GITHUB_DEPLOY_SECRETS.md)
 - Nginx и домен: [DOMAIN_NEW_SERVER.md](./DOMAIN_NEW_SERVER.md)

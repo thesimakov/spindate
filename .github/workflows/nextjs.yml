@@ -37,6 +37,8 @@ jobs:
       BUILD_FOR_PAGES: "true"
       # Путь приложения на GitHub Pages (https://user.github.io/REPO_NAME/) — без этого картинки из public/ не грузятся
       NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+      # Публичный URL мини-сайта (metadata, OG) — должен совпадать с доменом Pages
+      NEXT_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -86,10 +88,25 @@ jobs:
           FIRST=$(head -c 1 "${ASSET_DIR}/ram-fea.svg")
           test "$FIRST" = "<" || (echo "ram-fea.svg does not start with < (got: $FIRST)" && exit 1)
           echo "All required assets present and valid."
+      # При basePath=/REPO Next кладёт index.html в out/REPO/. Корень артефакта Pages должен совпадать с этой папкой — иначе в корне деплоя нет index.html → 404 на /REPO/.
+      - name: Resolve GitHub Pages artifact root
+        id: pages_root
+        run: |
+          set -e
+          REPO="${{ github.event.repository.name }}"
+          if [ -f "out/${REPO}/index.html" ]; then
+            echo "root=out/${REPO}" >> "$GITHUB_OUTPUT"
+          elif [ -f "out/index.html" ]; then
+            echo "root=out" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Нет index.html после export — см. app/layout.tsx (revalidate) и логи сборки."
+            ls -la out || true
+            exit 1
+          fi
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: ${{ steps.pages_root.outputs.root }}
 
   # Deployment job
   deploy:

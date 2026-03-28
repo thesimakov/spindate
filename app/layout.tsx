@@ -27,10 +27,11 @@ export const viewport: Viewport = {
 }
 
 /**
- * Свежий HTML при каждом запросе — после деплоя не залипают старые хэши `/_next/static/*` (сломанные стили/500).
- * Статический экспорт (GitHub Pages) собирается отдельным workflow без этого файла или с тем же значением — см. проверку CI.
+ * Не использовать `revalidate = 0` в корневом layout: при `output: "export"` (GitHub Pages) страница
+ * становится динамической и **в out/ не попадает index.html** → на Pages отдаётся 404.
+ * Свежий HTML на VPS после деплоя обеспечивает `Cache-Control: no-store` для `/` в next.config.mjs.
  */
-export const revalidate = 0
+export const revalidate = false
 
 export default function RootLayout({
   children,
