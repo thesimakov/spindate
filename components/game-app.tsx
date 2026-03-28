@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, resizeVkWindowToViewport, subscribeVkViewportResize } from "@/lib/vk-bridge"
+import { getLayoutConstraintDebug } from "@/lib/use-media-query"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
@@ -42,6 +43,16 @@ export function GameApp() {
     return () => {
       cancelled = true
       unsub()
+    }
+  }, [])
+
+  /** В консоли DevTools: `window.spindateLayoutDebug()` — что сдерживает ширину / «планшет». */
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const w = window as unknown as { spindateLayoutDebug?: typeof getLayoutConstraintDebug }
+    w.spindateLayoutDebug = getLayoutConstraintDebug
+    return () => {
+      delete w.spindateLayoutDebug
     }
   }, [])
 
