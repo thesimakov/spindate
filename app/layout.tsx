@@ -38,8 +38,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ru" className="dark" suppressHydrationWarning>
-      <body className={`${_inter.className} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
+    <html lang="ru" className="dark h-full w-full max-w-none" suppressHydrationWarning>
+      <body
+        className={`${_inter.className} font-sans antialiased bg-background text-foreground w-full min-w-0 max-w-none`}
+        suppressHydrationWarning
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

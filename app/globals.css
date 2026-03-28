@@ -1,13 +1,17 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-/* VK Mini App (iframe) и обычная вкладка: корень тянется на видимую высоту окна */
+/* VK Mini App (iframe) и обычная вкладка: корень на всю видимую область окна по ширине и высоте */
 html {
   height: 100%;
+  width: 100%;
+  max-width: none;
 }
 body {
   min-height: 100%;
   min-height: 100dvh;
+  width: 100%;
+  max-width: none;
 }
 
 @custom-variant dark (&:is(.dark *));

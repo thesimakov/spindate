@@ -587,14 +587,14 @@ export function RegistrationScreen() {
 
   if (isVkMiniApp() && vkGate) {
     return (
-      <div className="relative min-h-dvh min-h-[100vh] entry-bg-animated pb-[env(safe-area-inset-bottom)]">
+      <div className="relative min-h-dvh min-h-[100vh] w-full min-w-0 max-w-none entry-bg-animated pb-[env(safe-area-inset-bottom)]">
         <AppLoader title="Вход…" subtitle="Подключаем профиль ВКонтакте" hint="Крути и знакомься" />
       </div>
     )
   }
 
   return (
-    <div className="relative flex min-h-dvh min-h-[100vh] flex-col items-center justify-center overflow-y-auto entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
+    <div className="relative flex min-h-dvh min-h-[100vh] w-full min-w-0 max-w-none flex-col items-center justify-center overflow-y-auto overflow-x-hidden entry-bg-animated px-4 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {entryParticles.map((d, idx) => {
           const anim = d.reverse ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
