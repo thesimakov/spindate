@@ -26,6 +26,12 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
+/**
+ * Свежий HTML при каждом запросе — после деплоя не залипают старые хэши `/_next/static/*` (сломанные стили/500).
+ * Статический экспорт (GitHub Pages) собирается отдельным workflow без этого файла или с тем же значением — см. проверку CI.
+ */
+export const revalidate = 0
+
 export default function RootLayout({
   children,
 }: Readonly<{
