@@ -4404,7 +4404,7 @@ export function GameRoom() {
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative flex w-full min-w-0 max-w-full shrink-0 items-center justify-center md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-3xl`
+              : `relative flex w-[90%] min-w-0 max-w-full shrink-0 items-center justify-center md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-3xl`
           }
           style={{
             aspectRatio: isMobile ? "1 / 1" : "6 / 5",
