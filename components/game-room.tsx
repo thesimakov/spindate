@@ -4252,7 +4252,7 @@ export function GameRoom() {
           className={cn(
             "flex min-h-0 w-full min-w-0 flex-col",
             isMobile ? "shrink-0 items-stretch gap-1.5" : "items-center",
-            isPcLayout && "mx-auto max-h-full max-w-[min(920px,100%)] min-w-0 overflow-y-auto overflow-x-hidden",
+            isPcLayout && "mx-auto max-h-full w-full min-w-0 max-w-full overflow-y-auto overflow-x-hidden",
           )}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
@@ -4403,8 +4403,8 @@ export function GameRoom() {
         <div
           className={
             isMobile
-              ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] mx-auto rounded-2xl`
-              : `relative flex w-[90%] min-w-0 max-w-[min(960px,90vw)] shrink-0 items-center justify-center border-2 sm:border-[3px] md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-[32px]`
+              ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
+              : `relative flex w-full min-w-0 max-w-full shrink-0 items-center justify-center md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-3xl`
           }
           style={{
             aspectRatio: isMobile ? "1 / 1" : "6 / 5",
@@ -4416,29 +4416,13 @@ export function GameRoom() {
                   marginRight: "auto",
                 }
               : {}),
-            borderColor: "rgba(56, 189, 248, 0.35)",
             background:
               "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",
             boxShadow: isMobile
-              ? "0 10px 36px rgba(0,0,0,0.52), 0 0 40px rgba(56,189,248,0.12), inset 0 1px 0 rgba(255,255,255,0.05)"
-              : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1), inset 0 0 0 1px rgba(56,189,248,0.2), inset 0 0 60px rgba(0,0,0,0.65)",
+              ? "0 10px 36px rgba(0,0,0,0.52), 0 0 40px rgba(56,189,248,0.12)"
+              : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1)",
           }}
         >
-          {/* Холодное внешнее свечение по периметру */}
-          <div
-            className="pointer-events-none absolute inset-0 rounded-[inherit]"
-            style={{
-              boxShadow: "inset 0 0 0 1px rgba(125, 211, 252, 0.22), 0 0 22px rgba(56,189,248,0.18)",
-            }}
-          />
-          {/* Внутренняя теплая золотая рамка */}
-          <div
-            className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobile ? "inset-2 sm:inset-4" : "inset-4"}`}
-            style={{
-              border: "3px solid rgba(250, 204, 21, 0.88)",
-              boxShadow: "0 0 28px rgba(250,204,21,0.45), inset 0 0 34px rgba(0,0,0,0.78)",
-            }}
-          />
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
             className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobile ? "inset-2" : "inset-3"}`}
