@@ -40,6 +40,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru" className="dark h-full w-full max-w-none" suppressHydrationWarning>
+      <head>
+        {/* Если /_next/static/*.css отдаёт 500 или старый кэш — страница не остаётся «белой» */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html:
+              "html,body{min-height:100%;background:#0f172a;color:#f1f5f9}",
+          }}
+        />
+      </head>
       <body
         className={`${_inter.className} font-sans antialiased bg-background text-foreground h-full min-h-0 w-full min-w-0 max-w-none`}
         data-build={process.env.NEXT_PUBLIC_BUILD_ID || undefined}
