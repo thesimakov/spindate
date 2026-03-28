@@ -1,4 +1,5 @@
-/** PM2: запуск Next.js на сервере. Использование: pm2 start ecosystem.config.cjs */
+/** PM2: запуск Next.js на сервере. Использование: pm2 start ecosystem.config.cjs
+ *  Nginx proxy_pass должен указывать на тот же PORT (ниже). */
 module.exports = {
   apps: [
     {

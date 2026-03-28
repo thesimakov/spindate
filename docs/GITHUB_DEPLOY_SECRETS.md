@@ -96,6 +96,7 @@ pm2 startup
 
 ## 5. Как это работает
 
+- VK и прод-домен: [VK_GITHUB_PRODUCTION.md](./VK_GITHUB_PRODUCTION.md) (почему VK «не тянет» GitHub и что делать при пропавших стилях).
 - При **push в main** запускается workflow **"Build and deploy to own server"**.
 - Сборка идёт без статического экспорта (для `next start`).
 - По SSH на сервер копируются: `.next/`, `public/`, `package.json`, `package-lock.json`, `next.config.mjs`, `ecosystem.config.cjs`.
