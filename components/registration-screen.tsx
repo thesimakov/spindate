@@ -19,6 +19,9 @@ export function RegistrationScreen() {
   const isDesktopUser = useIsDesktopUser()
   const isTabletLayout = isTablet && !isDesktopUser
   const isMobileOrTablet = isMobile || isTabletLayout
+  /** Узкая колонка только для телефонов; на ПК (в т.ч. VK в широком iframe) — шире под окно */
+  const entryCardMax = isDesktopUser ? "max-w-2xl" : "max-w-sm"
+  const loginModalMax = isDesktopUser ? "max-w-lg" : "max-w-sm"
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
@@ -621,7 +624,9 @@ export function RegistrationScreen() {
         })}
       </div>
       <div className="relative z-10 w-full flex flex-col items-center">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+      <div
+        className={`w-full ${entryCardMax} rounded-2xl border border-slate-600/80 bg-slate-900/95 px-5 py-6 sm:px-8 sm:py-8 shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm`}
+      >
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
@@ -635,36 +640,46 @@ export function RegistrationScreen() {
           </p>
         </div>
 
-        {/* Основные способы входа */}
+        {/* Основные способы входа: в ряд на широкой карточке (десктоп / VK в браузере) */}
         <div className="flex flex-col gap-3">
-          <Button
-            onClick={handleContinueVk}
-            disabled={loading}
-            className="w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2"
-            size="lg"
-            style={{
-              background: "#2787F5",
-            }}
+          <div
+            className={
+              isDesktopUser
+                ? "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4"
+                : "flex flex-col gap-3"
+            }
           >
-            <span
-              className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-              style={{ backgroundColor: "#ffffff", color: "#2787F5" }}
+            <Button
+              onClick={handleContinueVk}
+              disabled={loading}
+              className={`w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2 ${isDesktopUser ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
+              size="lg"
+              style={{
+                background: "#2787F5",
+              }}
             >
-              {"VK"}
-            </span>
-            <span>{loading ? "Авторизация..." : "Войти через VK"}</span>
-          </Button>
+              <span
+                className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
+                style={{ backgroundColor: "#ffffff", color: "#2787F5" }}
+              >
+                {"VK"}
+              </span>
+              <span>{loading ? "Авторизация..." : "Войти через VK"}</span>
+            </Button>
 
-          <Button
-            onClick={() => { setError(""); setLoginModalMode("login"); setShowLoginModal(true) }}
-            disabled={loading}
-            variant="outline"
-            className="w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50"
+            <Button
+              onClick={() => { setError(""); setLoginModalMode("login"); setShowLoginModal(true) }}
+              disabled={loading}
+              variant="outline"
+              className={`w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50 ${isDesktopUser ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
+            >
+              {"Войти по логину"}
+            </Button>
+          </div>
+
+          <p
+            className={`text-center text-xs text-slate-400 leading-relaxed mx-auto ${isDesktopUser ? "max-w-none sm:max-w-2xl mt-1" : "max-w-[85%] mt-3"}`}
           >
-            {"Войти по логину"}
-          </Button>
-
-          <p className="mt-3 text-center text-xs text-slate-400 leading-relaxed max-w-[85%] mx-auto">
             Нажимая кнопку, вы соглашаетесь с{" "}
             <a
               href="https://dev.vk.com/ru/mini-apps-rules"
@@ -684,7 +699,7 @@ export function RegistrationScreen() {
       {showLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div
-            className="w-full max-w-sm rounded-2xl border border-slate-600/80 bg-slate-900/98 px-5 py-6 shadow-[0_24px_50px_rgba(0,0,0,0.8)]"
+            className={`w-full ${loginModalMax} rounded-2xl border border-slate-600/80 bg-slate-900/98 px-5 py-6 shadow-[0_24px_50px_rgba(0,0,0,0.8)]`}
           >
             {loginModalMode === "login" ? (
               <>
