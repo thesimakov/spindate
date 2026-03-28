@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
+import { FortuneWheelStatic, FortuneWheelArrow } from "@/components/fortune-wheel-bottle-visual"
 
 interface BottleProps {
   angle: number
@@ -26,13 +27,24 @@ interface BottleProps {
     | "frame_78"
     | "frame_79"
     | "frame_80"
+    | "fortune_wheel"
   isDrunk?: boolean
+  /** Для скина «Колесо фортуны»: число секторов = числу игроков за столом */
+  fortuneSegmentCount?: number
 }
 
-export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }: BottleProps) {
+type BottleSkinWithImage = Exclude<NonNullable<BottleProps["skin"]>, "fortune_wheel">
+
+export function Bottle({
+  angle,
+  isSpinning,
+  skin = "classic",
+  isDrunk = false,
+  fortuneSegmentCount,
+}: BottleProps) {
   const [imgError, setImgError] = useState(false)
 
-  const skinToImg: Record<NonNullable<BottleProps["skin"]>, string> = {
+  const skinToImg: Record<BottleSkinWithImage, string> = {
     classic: assetUrl(BOTTLE_IMAGES.classic),
     ruby: assetUrl(BOTTLE_IMAGES.ruby),
     neon: assetUrl(BOTTLE_IMAGES.neon),
@@ -54,10 +66,18 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
     frame_80: assetUrl(BOTTLE_IMAGES.frame_80),
   }
 
-  const imgSrc = skinToImg[skin]
+  const isFortuneWheel = skin === "fortune_wheel"
+  const imgSrc = isFortuneWheel ? "" : skinToImg[skin]
   useEffect(() => {
     setImgError(false)
   }, [skin, imgSrc])
+
+  const spinTransition = isSpinning
+    ? "transform 6s cubic-bezier(0.17, 0.67, 0.12, 0.99)"
+    : "none"
+  const bottleShadow = isSpinning
+    ? "drop-shadow(0 0 12px rgba(74, 154, 53, 0.6))"
+    : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
 
   return (
     <div
@@ -70,53 +90,70 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
           : undefined
       }
     >
+      {isFortuneWheel ? (
+        <div
+          className="relative h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
+          style={{ filter: bottleShadow, opacity: 1 }}
+        >
+          <FortuneWheelStatic
+            className="h-full w-full object-contain"
+            segmentCount={fortuneSegmentCount}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            style={{
+              transform: `rotate(${angle}deg)`,
+              transition: spinTransition,
+            }}
+          >
+            <FortuneWheelArrow className="h-full w-full object-contain" />
+          </div>
+        </div>
+      ) : (
       <div
         style={{
           transform: `rotate(${angle}deg)`,
-          transition: isSpinning
-            ? "transform 6s cubic-bezier(0.17, 0.67, 0.12, 0.99)"
-            : "none",
-          filter: isSpinning ? "drop-shadow(0 0 12px rgba(74, 154, 53, 0.6))" : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))",
+          transition: spinTransition,
+          filter: bottleShadow,
           opacity: 1,
         }}
       >
-        {/* Реальная бутылочка из файла (адаптивный размер, без прозрачности) */}
-        <div
-          className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
-          style={{
-            display: imgError ? "none" : undefined,
-            opacity: 1,
-            background: "transparent",
-          }}
-        >
-          { }
-          <img
-            key={skin}
-            src={imgSrc}
-            alt="Бутылочка"
-            className="h-full w-full object-contain"
-            style={{ opacity: 1 }}
-            draggable={false}
-            loading="eager"
-            onLoad={(e) => {
-              const img = e.currentTarget
-              if (img.naturalWidth === 0 || img.naturalHeight === 0) setImgError(true)
-              else setImgError(false)
-            }}
-            onError={() => setImgError(true)}
-          />
-        </div>
+            {/* Реальная бутылочка из файла (адаптивный размер, без прозрачности) */}
+            <div
+              className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
+              style={{
+                display: imgError ? "none" : undefined,
+                opacity: 1,
+                background: "transparent",
+              }}
+            >
+              <img
+                key={skin}
+                src={imgSrc}
+                alt="Бутылочка"
+                className="h-full w-full object-contain"
+                style={{ opacity: 1 }}
+                draggable={false}
+                loading="eager"
+                onLoad={(e) => {
+                  const img = e.currentTarget
+                  if (img.naturalWidth === 0 || img.naturalHeight === 0) setImgError(true)
+                  else setImgError(false)
+                }}
+                onError={() => setImgError(true)}
+              />
+            </div>
 
-        {/* SVG показываем при ошибке загрузки картинки или как фолбек */}
-        <svg
-          className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
-          style={{ display: imgError ? "block" : "none" }}
-          viewBox="0 0 120 120"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          role="img"
-          aria-label="Бутылочка"
-        >
+            {/* SVG показываем при ошибке загрузки картинки или как фолбек */}
+            <svg
+              className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
+              style={{ display: imgError ? "block" : "none" }}
+              viewBox="0 0 120 120"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              role="img"
+              aria-label="Бутылочка"
+            >
           {/* Shadow on table */}
           <ellipse cx="60" cy="113" rx="18" ry="5" fill="#020617" opacity="0.6" />
 
@@ -250,6 +287,7 @@ export function Bottle({ angle, isSpinning, skin = "classic", isDrunk = false }:
           </defs>
         </svg>
       </div>
+      )}
 
       {/* Spin glow ring */}
       {isSpinning && (

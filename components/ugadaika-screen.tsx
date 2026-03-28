@@ -452,7 +452,7 @@ export function UgadaikaScreen() {
 
   useEffect(() => {
     if (!reelJustStopped) return
-    const t = setTimeout(() => setReelJustStopped(false), 600)
+    const t = setTimeout(() => setReelJustStopped(false), 720)
     return () => clearTimeout(t)
   }, [reelJustStopped])
 

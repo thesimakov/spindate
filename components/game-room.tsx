@@ -31,6 +31,7 @@ import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, gener
 import { apiFetch } from "@/lib/api-fetch"
 import { assetUrl, BOTTLE_IMAGES, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
+import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
@@ -1036,6 +1037,7 @@ export function GameRoom() {
     { id: "frame_78" as const, name: "Бутылочка 78", img: assetUrl(BOTTLE_IMAGES.frame_78), cost: 5 },
     { id: "frame_79" as const, name: "Бутылочка 79", img: assetUrl(BOTTLE_IMAGES.frame_79), cost: 5 },
     { id: "frame_80" as const, name: "Бутылочка 80", img: assetUrl(BOTTLE_IMAGES.frame_80), cost: 5 },
+    { id: "fortune_wheel" as const, name: "Колесо фортуны", img: "", cost: 300 },
   ]
 
   const cooldownLeftMs = useMemo(() => {
@@ -4010,6 +4012,7 @@ export function GameRoom() {
               const ownedSet = new Set(ownedBottleSkins ?? ["classic"])
               const isClassicId = (id: typeof bottleSkins[number]["id"]) => id === "classic"
               const isVipId = (id: typeof bottleSkins[number]["id"]) => id === "vip"
+              const isPremiumFortuneId = (id: typeof bottleSkins[number]["id"]) => id === "fortune_wheel"
 
               const entries = bottleSkins.map((skin) => {
                 const owned = ownedSet.has(skin.id)
@@ -4064,7 +4067,11 @@ export function GameRoom() {
 
               const free = entries.filter((e) => isClassicId(e.skin.id))
               const vip = entries.filter((e) => isVipId(e.skin.id))
-              const rest = entries.filter((e) => !isClassicId(e.skin.id) && !isVipId(e.skin.id))
+              const premium = entries.filter((e) => isPremiumFortuneId(e.skin.id))
+              const rest = entries.filter(
+                (e) =>
+                  !isClassicId(e.skin.id) && !isVipId(e.skin.id) && !isPremiumFortuneId(e.skin.id),
+              )
 
               const Section = ({ title, items }: { title: string; items: typeof entries }) => (
                 <div className="px-5 pb-5 pt-4">
@@ -4106,13 +4113,20 @@ export function GameRoom() {
                             className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-xl"
                             style={{ background: "radial-gradient(circle at 50% 35%, rgba(251,191,36,0.10) 0%, transparent 60%)" }}
                           >
-                            <img
-                              src={e.skin.img}
-                              alt={e.skin.name}
-                              className="h-full w-full object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)] pointer-events-none select-none"
-                              loading="eager"
-                              draggable={false}
-                            />
+                            {e.skin.id === "fortune_wheel" ? (
+                              <FortuneWheelBottleVisual
+                                segmentCount={players.length > 0 ? players.length : 8}
+                                className="h-full w-full max-h-[96px] object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)] pointer-events-none select-none"
+                              />
+                            ) : (
+                              <img
+                                src={e.skin.img}
+                                alt={e.skin.name}
+                                className="h-full w-full object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,0.55)] pointer-events-none select-none"
+                                loading="eager"
+                                draggable={false}
+                              />
+                            )}
                           </div>
 
                           <div className="mt-2 w-full min-w-0">
@@ -4162,6 +4176,7 @@ export function GameRoom() {
                   <Section title="Бесплатно" items={free} />
                   <Section title="Доступно" items={rest} />
                   <Section title="VIP" items={vip} />
+                  <Section title="Премиум" items={premium} />
                 </div>
               )
             })()}
@@ -4708,6 +4723,7 @@ export function GameRoom() {
                 isSpinning={isSpinning}
                 skin={bottleSkin ?? "classic"}
                 isDrunk={isCurrentTurnDrunk}
+                fortuneSegmentCount={players.length > 0 ? players.length : 8}
               />
             </div>
           </div>

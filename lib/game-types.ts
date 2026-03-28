@@ -123,6 +123,7 @@ export type BottleSkin =
   | "frame_78"
   | "frame_79"
   | "frame_80"
+  | "fortune_wheel"
 
 /* ---- Prediction system ---- */
 export interface Prediction {
