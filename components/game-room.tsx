@@ -50,7 +50,7 @@ import {
   type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
-import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
+import { useIsMobile } from "@/lib/use-media-query"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -344,11 +344,7 @@ export function GameRoom() {
   const { state, dispatch: rawDispatch } = useGame()
   useTheme()
   const isMobile = useIsMobile()
-  const isTablet = useIsTablet()
-  const isDesktopUser = useIsDesktopUser()
-  /** В iframe VK на ПК ширина часто 768–1023px — иначе включалась «планшетная» сетка при окне на весь браузер */
-  const isTabletLayout = isTablet && !isDesktopUser
-  const isMobileOrTablet = isMobile || isTabletLayout
+  /** Планшет и ПК — одна вёрстка; компактный UI только на телефоне (isMobile) */
   const {
     players,
     currentTurnIndex,
@@ -977,8 +973,8 @@ export function GameRoom() {
 
   // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
   // чтобы аватарки с рамками не накладывались друг на друга.
-  const manyPlayersOnMobile = isMobileOrTablet && players.length > 6
-  const radius = manyPlayersOnMobile ? 32 : isMobile ? 26 : isTabletLayout ? 27 : 28
+  const manyPlayersOnMobile = isMobile && players.length > 6
+  const radius = manyPlayersOnMobile ? 32 : isMobile ? 26 : 28
   const radiusX = radius
   const radiusY = manyPlayersOnMobile ? 34 : isMobile ? 28 : Math.round(radius * (6 / 5))
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
@@ -2443,7 +2439,7 @@ export function GameRoom() {
     sidebarGiftMode && !!sidebarTargetPlayer
 
   const showMobileEmotionStrip =
-    isMobileOrTablet &&
+    isMobile &&
     Boolean(
       (sidebarGiftMode && sidebarTargetPlayer) ||
         (showResult &&
@@ -2459,17 +2455,17 @@ export function GameRoom() {
 
   const updateMobileOpenChatTop = useCallback(() => {
     if (typeof window === "undefined") return
-    if (!isMobileOrTablet || mobileChatCollapsed) return
+    if (!isMobile || mobileChatCollapsed) return
     const el = underBoardStatusRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     const gap = 6
     const navClearance = window.matchMedia("(max-width: 767px)").matches ? 100 : 72
     setMobileOpenChatTop(Math.max(navClearance, rect.bottom + gap))
-  }, [isMobileOrTablet, mobileChatCollapsed])
+  }, [isMobile, mobileChatCollapsed])
 
   useEffect(() => {
-    if (!isMobileOrTablet || mobileChatCollapsed) return
+    if (!isMobile || mobileChatCollapsed) return
     let raf = 0
     const schedule = () => {
       cancelAnimationFrame(raf)
@@ -2491,7 +2487,7 @@ export function GameRoom() {
       window.removeEventListener("resize", schedule)
     }
   }, [
-    isMobileOrTablet,
+    isMobile,
     mobileChatCollapsed,
     updateMobileOpenChatTop,
     showResult,
@@ -2980,7 +2976,7 @@ export function GameRoom() {
       {/* Top-left controls: музыка и звуки эмоций; на мобильной — компактная панель в ряд */}
       <div
         className={`fixed z-40 flex max-w-[calc(100vw-1rem)] gap-1.5 overflow-x-auto rounded-2xl border px-2 py-1.5 sm:px-2.5 sm:py-1 shadow-lg ${
-          isMobileOrTablet
+          isMobile
             ? "left-2 max-md:top-[calc(env(safe-area-inset-top)+4.35rem)] md:top-2 flex-row items-center"
             : "left-1 top-1 flex-col"
         }`}
@@ -2992,7 +2988,7 @@ export function GameRoom() {
       >
         <div
           className={
-            isMobileOrTablet
+            isMobile
               ? "max-md:hidden flex flex-row items-center gap-1.5 shrink-0"
               : "contents"
           }
@@ -3064,7 +3060,7 @@ export function GameRoom() {
           <span className="sm:hidden">{soundsEnabled === false ? "Звук выкл" : "Звук вкл"}</span>
         </button>
         </div>
-        {isMobileOrTablet && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
+        {isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
           <div
             className="flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold shadow-sm min-h-[32px]"
             style={{
@@ -4028,7 +4024,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${!isMobileOrTablet ? "w-full max-w-none" : ""}`}
+        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${!isMobile ? "w-full max-w-none" : ""}`}
         ref={boardRef}
       >
         {/* Анимация «вернулся к нам» после выхода из мини-игры Угадай-ка */}
@@ -4056,10 +4052,10 @@ export function GameRoom() {
           </div>
         )}
         {/* Инфо-статусы сверху: донор бутылки + таймер (таймер ниже статуса, без наложений) */}
-        {(bottleDonorName || (!isMobileOrTablet && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
+        {(bottleDonorName || (!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
           <div
             className={`left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2 ${
-              isMobileOrTablet
+              isMobile
                 ? "fixed max-md:top-[calc(env(safe-area-inset-top)+4.25rem)] md:top-[max(0.5rem,env(safe-area-inset-top))]"
                 : "absolute top-1 lg:top-5"
             }`}
@@ -4094,7 +4090,7 @@ export function GameRoom() {
             )}
 
             {/* Таймер хода для текущего пользователя */}
-            {!isMobileOrTablet && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
+            {!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
               <div
                 className="flex items-center gap-1.5 rounded-full px-3 py-1"
                 style={{
@@ -4114,7 +4110,7 @@ export function GameRoom() {
         )}
         {/* Обёртка: мобильная — слот эмоций сверху (поток), стол статично ниже; ПК — стол по центру колонки */}
         <div
-          className={`flex min-h-0 w-full flex-col ${isMobileOrTablet ? "shrink-0 items-stretch gap-1.5" : "items-center"}`}
+          className={`flex min-h-0 w-full flex-col ${isMobile ? "shrink-0 items-stretch gap-1.5" : "items-center"}`}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
         <div className="flex h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden px-0.5 md:hidden">
@@ -4258,13 +4254,13 @@ export function GameRoom() {
         {/* Прямоугольный стол: моб/планшет — фикс. max; десктоп — резина по центральной колонке, бока статичны */}
         <div
           className={
-            isMobileOrTablet
+            isMobile
               ? `relative flex w-full max-w-[95vw] shrink-0 items-center justify-center sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] mx-auto rounded-2xl`
               : `relative flex w-full min-w-0 max-w-full shrink-0 items-center justify-center border-2 sm:border-[3px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-[32px]`
           }
           style={{
-            aspectRatio: isMobileOrTablet ? "1 / 1" : "6 / 5",
-            ...(isMobileOrTablet
+            aspectRatio: isMobile ? "1 / 1" : "6 / 5",
+            ...(isMobile
               ? {
                   width: "min(92vw, 100%)",
                   maxWidth: "min(92vw, 420px)",
@@ -4278,7 +4274,7 @@ export function GameRoom() {
             borderColor: "rgba(56, 189, 248, 0.35)",
             background:
               "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",
-            boxShadow: isMobileOrTablet
+            boxShadow: isMobile
               ? "0 10px 36px rgba(0,0,0,0.52), 0 0 40px rgba(56,189,248,0.12), inset 0 1px 0 rgba(255,255,255,0.05)"
               : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1), inset 0 0 0 1px rgba(56,189,248,0.2), inset 0 0 60px rgba(0,0,0,0.65)",
           }}
@@ -4292,7 +4288,7 @@ export function GameRoom() {
           />
           {/* Внутренняя теплая золотая рамка */}
           <div
-            className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobileOrTablet ? "inset-2 sm:inset-4" : "inset-4"}`}
+            className={`pointer-events-none absolute rounded-xl sm:rounded-[24px] ${isMobile ? "inset-2 sm:inset-4" : "inset-4"}`}
             style={{
               border: "3px solid rgba(250, 204, 21, 0.88)",
               boxShadow: "0 0 28px rgba(250,204,21,0.45), inset 0 0 34px rgba(0,0,0,0.78)",
@@ -4300,7 +4296,7 @@ export function GameRoom() {
           />
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
-            className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobileOrTablet ? "inset-2" : "inset-3"}`}
+            className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobile ? "inset-2" : "inset-3"}`}
             style={{
               boxShadow: "inset 0 0 56px rgba(0,0,0,0.78)",
               background:
@@ -4333,7 +4329,7 @@ export function GameRoom() {
               ? [...getGiftsForPlayer(player.id), "rose" as const]
               : getGiftsForPlayer(player.id)
             const steamAvatarSize =
-              manyPlayersOnMobile ? 42 : isTabletLayout ? 76 : isMobile || manyPlayersOnMobile ? 52 : 70
+              manyPlayersOnMobile ? 42 : isMobile ? 52 : 70
             const steamBorder = steamAvatarSize <= 52 ? 3 : 4
             const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
             return (
@@ -4355,7 +4351,7 @@ export function GameRoom() {
                   <PlayerAvatar
                     player={player}
                     compact={isMobile || manyPlayersOnMobile}
-                    size={manyPlayersOnMobile ? 42 : isTabletLayout ? 76 : undefined}
+                    size={manyPlayersOnMobile ? 42 : isMobile ? 52 : undefined}
                     // Во время результата подсвечиваем только пару, а не крутящего
                     isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
                     isTarget={
@@ -4560,7 +4556,7 @@ export function GameRoom() {
           {/* ---- BOTTLE in the centre (на мобильной — крупнее) ---- */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
             <div
-              style={isMobile ? { transform: "scale(1.4)" } : isTabletLayout ? { transform: "scale(0.9)" } : undefined}
+              style={isMobile ? { transform: "scale(1.4)" } : undefined}
               className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
             >
               <Bottle
@@ -4730,36 +4726,32 @@ export function GameRoom() {
 
         </div>
 
-        {/* ---- Общий чат под столом (мобильная и планшет); на планшете — по ширине как игровое поле ---- */}
+        {/* ---- Общий чат под столом: фикс. снизу только на телефоне; md–lg без отдельной «планшетной» схемы ---- */}
         <div
           className={`w-full max-w-[95vw] sm:max-w-[min(90vw,720px)] px-1 sm:px-1 lg:hidden pb-0 ${
-            isTabletLayout ? "md:mx-auto" : ""
-          } ${
-            isMobileOrTablet
+            isMobile
               ? `fixed inset-x-0 bottom-0 z-[29] mx-auto shrink-0 flex flex-col ${!mobileChatCollapsed ? "min-h-0" : ""}`
               : "mt-2 sm:mt-1 shrink-0"
           }`}
           style={
-            isMobileOrTablet
+            isMobile
               ? {
-                  width: isTabletLayout ? "min(92vw, calc(100vh - 260px))" : "min(95vw, 720px)",
+                  width: "min(95vw, 720px)",
                   maxWidth: "720px",
                   marginLeft: "auto",
                   marginRight: "auto",
                   paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
                   ...(!mobileChatCollapsed ? { top: mobileOpenChatTop } : {}),
                 }
-              : (isTabletLayout
-                ? { width: "min(92vw, calc(100vh - 260px))", maxWidth: "720px", marginLeft: "auto", marginRight: "auto" }
-                : undefined)
+              : undefined
           }
         >
           <div
-            className={`overflow-hidden flex flex-col shrink-0 ${isMobileOrTablet ? "rounded-2xl" : "rounded-xl"} ${isMobileOrTablet && !mobileChatCollapsed ? "min-h-0 flex-1 flex flex-col h-full max-h-full" : ""}`}
+            className={`overflow-hidden flex flex-col shrink-0 ${isMobile ? "rounded-2xl" : "rounded-xl"} ${isMobile && !mobileChatCollapsed ? "min-h-0 flex-1 flex flex-col h-full max-h-full" : ""}`}
             style={{
               background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
               border: "1px solid rgba(71, 85, 105, 0.6)",
-              boxShadow: isMobileOrTablet ? "0 2px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 4px 20px rgba(0,0,0,0.35)",
+              boxShadow: isMobile ? "0 2px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)" : "0 4px 20px rgba(0,0,0,0.35)",
             }}
           >
             <button
@@ -4787,7 +4779,7 @@ export function GameRoom() {
             {!mobileChatCollapsed && (
             <>
             <div
-              className={`px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-y-auto overscroll-contain ${isMobileOrTablet ? "" : "max-h-[min(52vh,380px)]"}`}
+              className={`px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-y-auto overscroll-contain ${isMobile ? "" : "max-h-[min(52vh,380px)]"}`}
               style={{ WebkitOverflowScrolling: "touch" }}
             >
               {generalChatMessages.slice(-4).map((msg) => (

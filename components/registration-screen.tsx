@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import { vkBridge, initVkResilient, isVkMiniApp, ensureVkLaunchSearch } from "@/lib/vk-bridge"
-import { useIsMobile, useIsTablet, useIsDesktopUser } from "@/lib/use-media-query"
+import { useIsMobile } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
 import { AppLoader } from "@/components/app-loader"
@@ -15,13 +15,9 @@ import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 export function RegistrationScreen() {
   const { dispatch } = useGame()
   const isMobile = useIsMobile()
-  const isTablet = useIsTablet()
-  const isDesktopUser = useIsDesktopUser()
-  const isTabletLayout = isTablet && !isDesktopUser
-  const isMobileOrTablet = isMobile || isTabletLayout
-  /** Телефон — узкая карточка; ПК / VK в браузере — на всю ширину iframe (ограничение снаружи только у vk.com) */
-  const entryCardMax = isDesktopUser ? "max-w-none" : "max-w-sm"
-  const loginModalMax = isDesktopUser ? "max-w-xl" : "max-w-sm"
+  /** Планшет и ПК — одна ширина карточки; узкая только на телефоне */
+  const entryCardMax = !isMobile ? "max-w-none" : "max-w-sm"
+  const loginModalMax = !isMobile ? "max-w-xl" : "max-w-sm"
   const [gender, setGender] = useState<Gender>("male")
   const [age, setAge] = useState("25")
   const [login, setLogin] = useState("")
@@ -58,7 +54,7 @@ export function RegistrationScreen() {
   }) => {
     dispatch({ type: "SET_USER", user })
 
-    const desktopGame = isDesktopUser || !isMobileOrTablet
+    const desktopGame = !isMobile
     const maxTableSize = desktopGame ? 10 : 6
     const targetMales = desktopGame ? 5 : 3
     const targetFemales = desktopGame ? 5 : 3
@@ -644,7 +640,7 @@ export function RegistrationScreen() {
         <div className="flex flex-col gap-3">
           <div
             className={
-              isDesktopUser
+              !isMobile
                 ? "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4"
                 : "flex flex-col gap-3"
             }
@@ -652,7 +648,7 @@ export function RegistrationScreen() {
             <Button
               onClick={handleContinueVk}
               disabled={loading}
-              className={`w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2 ${isDesktopUser ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
+              className={`w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2 ${!isMobile ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
               size="lg"
               style={{
                 background: "#2787F5",
@@ -671,14 +667,14 @@ export function RegistrationScreen() {
               onClick={() => { setError(""); setLoginModalMode("login"); setShowLoginModal(true) }}
               disabled={loading}
               variant="outline"
-              className={`w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50 ${isDesktopUser ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
+              className={`w-full rounded-xl py-4 text-base font-semibold border-slate-500 text-slate-200 hover:bg-slate-700/50 ${!isMobile ? "sm:w-auto sm:min-w-[240px] sm:flex-1 sm:max-w-md" : ""}`}
             >
               {"Войти по логину"}
             </Button>
           </div>
 
           <p
-            className={`text-center text-xs text-slate-400 leading-relaxed mx-auto ${isDesktopUser ? "max-w-none sm:max-w-2xl mt-1" : "max-w-[85%] mt-3"}`}
+            className={`text-center text-xs text-slate-400 leading-relaxed mx-auto ${!isMobile ? "max-w-none sm:max-w-2xl mt-1" : "max-w-[85%] mt-3"}`}
           >
             Нажимая кнопку, вы соглашаетесь с{" "}
             <a
