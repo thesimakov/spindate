@@ -91,6 +91,13 @@ jobs:
             ecosystem.config.cjs \
             "$SERVER_USER@$SERVER_HOST:/var/www/spindate/"
           echo "Running npm ci and pm2 on server..."
+          # Иначе npm ci падает с ENOTEMPTY на node_modules/next/... — процесс держит файлы
           ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
-            "cd /var/www/spindate && npm ci && PORT=3001 pm2 start ecosystem.config.cjs --update-env && pm2 save"
+            "cd /var/www/spindate && \
+             pm2 stop spindate 2>/dev/null || true && \
+             sleep 2 && \
+             rm -rf node_modules && \
+             npm ci && \
+             (pm2 restart spindate --update-env 2>/dev/null || PORT=3001 pm2 start ecosystem.config.cjs --update-env) && \
+             pm2 save"
           echo "Deploy finished."
