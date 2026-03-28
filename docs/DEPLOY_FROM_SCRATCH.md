@@ -116,13 +116,13 @@ npm ci
 npm run build
 ```
 
-Проверка запуска вручную (порт 3000):
+Проверка запуска вручную (порт можно задать через `PORT=3001`; для PM2 см. `ecosystem.config.cjs`):
 
 ```bash
 npm start
 ```
 
-В браузере откройте `http://ВАШ_IP:3000`. Если страница открывается — остановите процесс (Ctrl+C) и переходите к запуску через PM2.
+По умолчанию `next start` слушает порт **3000**; для проверки откройте `http://ВАШ_IP:3000`. Если страница открывается — остановите процесс (Ctrl+C) и переходите к запуску через PM2 (в репозитории PM2 использует **3001** — см. `ecosystem.config.cjs`).
 
 ---
 
@@ -149,7 +149,7 @@ pm2 restart spindate
 pm2 stop spindate
 ```
 
-Приложение слушает порт **3000**. Чтобы изменить порт, в `ecosystem.config.cjs` в секции `env` добавьте, например: `PORT: 3001`.
+В `ecosystem.config.cjs` по умолчанию **`PORT: 3001`**. Nginx должен проксировать на **тот же** порт.
 
 ---
 
@@ -176,7 +176,7 @@ server {
     listen 80;
     server_name ваш-домен.ru;
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -252,7 +252,7 @@ bash deploy-on-server.sh
 | 6 | (Опционально) Создать `.env.local` с `NEXT_PUBLIC_APP_URL` |
 | 7 | `npm ci` → `npm run build` |
 | 8 | `pm2 start ecosystem.config.cjs` → `pm2 save` → `pm2 startup` |
-| 9 | Настроить Nginx на проксирование на порт 3000 |
+| 9 | Nginx: `proxy_pass` на порт из PM2 (в репозитории по умолчанию **3001**) |
 | 10 | (По желанию) Запустить `certbot --nginx` для HTTPS |
 
 После этого приложение доступно по вашему домену (или IP), картинки грузятся с `/assets/`, обновления делаются через `git pull` и пересборку с перезапуском PM2.

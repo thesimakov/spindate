@@ -1,5 +1,6 @@
 /** PM2: запуск Next.js на сервере. Использование: pm2 start ecosystem.config.cjs
- *  Nginx proxy_pass должен указывать на тот же PORT (ниже). */
+ *  Nginx: proxy_pass http://127.0.0.1:<PORT> — тот же PORT, что ниже (по умолчанию 3001).
+ *  Если в nginx оставить 3000, а здесь 3001 — стили и чанлы с /_next/static часто отдаются с 500/502. */
 module.exports = {
   apps: [
     {

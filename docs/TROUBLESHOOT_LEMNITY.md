@@ -4,6 +4,23 @@
 
 ---
 
+## 0. Стили «слетели», в Network — **500** на `*.css` / `*.js` из `/_next/static/`, а на GitHub Pages всё ок
+
+**Почему так:** [GitHub Pages](https://thesimakov.github.io/spindate/) отдаёт **готовые статические файлы** из `out/` (сборка с `BUILD_FOR_PAGES`). На VPS работает **`next start`** за **Nginx** — все запросы, включая `/_next/static/chunks/...`, должны попадать в **тот же процесс Node**, что слушает порт из **`ecosystem.config.cjs`**.
+
+Сейчас в репозитории PM2 по умолчанию слушает **`PORT=3001`**. Если в Nginx в `proxy_pass` указан **`127.0.0.1:3000`**, прокси смотрит **не туда**: часто получаются **502/500**, пустые ответы на чанки и «голый» HTML без стилей.
+
+**Что сделать на сервере:**
+
+1. Проверить порт приложения: `pm2 show spindate` → поле `PORT` или `cat /var/www/spindate/ecosystem.config.cjs | grep PORT`.
+2. В `/etc/nginx/sites-enabled/...` для `location /` выставить **`proxy_pass http://127.0.0.1:3001;`** (тот же порт, что у PM2).
+3. `sudo nginx -t && sudo systemctl reload nginx`.
+4. Локально на сервере: `curl -sI http://127.0.0.1:3001/_next/static/` — не должно быть обрыва соединения; затем снова открыть сайт в инкогнито.
+
+Если после правки всё ещё 500 — смотри **`pm2 logs spindate`** и **`sudo tail -80 /var/log/nginx/error.log`**.
+
+---
+
 ## 1. Проверка DNS (со своего компьютера)
 
 ```bash
@@ -53,18 +70,18 @@ pm2 logs spindate --lines 30
 
 ---
 
-## 4. Слушает ли Next.js порт 3000
+## 4. Слушает ли Next.js нужный порт (по умолчанию **3001**)
 
 На сервере:
 
 ```bash
-ss -tlnp | grep 3000
-# или
-curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000
+ss -tlnp | grep node
+# или явно порт из ecosystem.config.cjs:
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/
 ```
 
-- **Порт 3000 не слушается** — перезапусти приложение: `pm2 restart spindate`, снова проверь `pm2 logs spindate`.
-- **Порт 3000 слушается, curl возвращает 200** — приложение работает локально. Переходи к шагу 5.
+- **Порт не слушается** — перезапусти приложение: `pm2 restart spindate`, снова проверь `pm2 logs spindate`.
+- **curl на этот порт возвращает 200** — приложение работает локально. Переходи к шагу 5.
 
 ---
 
@@ -92,7 +109,7 @@ ls -la /etc/nginx/sites-enabled/
       listen 80;
       server_name spindate.lemnity.ru;
       location / {
-          proxy_pass http://127.0.0.1:3000;
+          proxy_pass http://127.0.0.1:3001;
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection 'upgrade';
@@ -156,12 +173,12 @@ sudo certbot certificates
 cd /var/www/spindate
 ls -la .next package.json ecosystem.config.cjs public/
 pm2 list
-curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/
 ```
 
 - Есть `.next`, `package.json`, `ecosystem.config.cjs`, папка `public/`.
 - PM2 показывает `spindate` в статусе `online`.
-- `curl` на 3000 возвращает `200`.
+- `curl` на порт из `ecosystem.config.cjs` (сейчас **3001**) возвращает `200`.
 
 Если всё так, но по домену всё равно не открывается — смотри логи Nginx: `sudo tail -50 /var/log/nginx/error.log`.
 
@@ -175,8 +192,8 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000
 | SSH не подключается | Проверить VPS, фаервол, IP |
 | Нет процесса spindate | `cd /var/www/spindate && pm2 start ecosystem.config.cjs` |
 | PM2 errored/stopped | `npm ci && npm run build && pm2 restart spindate` |
-| Порт 3000 не слушается | Проверить логи PM2, перезапустить приложение |
-| Nginx не установлен/не настроен | Установить nginx, конфиг для proxy на 3000, reload |
+| Порт Node не слушается | Проверить логи PM2, перезапустить приложение |
+| Nginx не установлен/не настроен | Установить nginx, `proxy_pass` на **тот же порт**, что PM2 (см. `ecosystem.config.cjs`, по умолчанию **3001**) |
 | Нет HTTPS | `sudo certbot --nginx -d spindate.lemnity.ru` |
 | Деплой через GitHub не срабатывает | Проверить Secrets (SERVER_SSH_KEY, SERVER_HOST, SERVER_USER) |
 
