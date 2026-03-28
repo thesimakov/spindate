@@ -2877,7 +2877,7 @@ export function GameRoom() {
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
-    <div className="cinematic-desktop relative flex h-dvh overflow-hidden game-bg-animated">
+    <div className="cinematic-desktop relative flex h-dvh w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
       {toast && <InlineToast toast={toast} />}
       <WelcomeGiftDialog
         open={showWelcomeGift}
@@ -3112,9 +3112,9 @@ export function GameRoom() {
         })}
       </div>
 
-      {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); md–lg: узкие иконки, по нажатию — полная панель ---- */}
+      {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); фикс. ширина, не сжимается при резине центра ---- */}
       <div
-        className={`relative z-20 hidden md:flex shrink-0 flex-col gap-1.5 overflow-y-auto max-h-[100dvh] p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out ${
+        className={`relative z-20 hidden md:flex shrink-0 flex-none flex-col gap-1.5 overflow-y-auto max-h-[100dvh] p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out ${
           leftSideMenuExpanded ? "w-[190px]" : "w-14 lg:w-[190px]"
         }`}
       >
@@ -4028,7 +4028,7 @@ export function GameRoom() {
 
       {/* ---- GAME BOARD CENTER ---- */}
       <div
-        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1`}
+        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1 overflow-y-auto pb-14 max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8 px-0.5 sm:px-1 ${!isMobileOrTablet ? "w-full max-w-none" : ""}`}
         ref={boardRef}
       >
         {/* Анимация «вернулся к нам» после выхода из мини-игры Угадай-ка */}
@@ -4255,11 +4255,13 @@ export function GameRoom() {
             </div>
           )}
         </div>
-        {/* Прямоугольный стол: на мобильном — статичный размер по ширине; на планшете ограничена высота */}
+        {/* Прямоугольный стол: моб/планшет — фикс. max; десктоп — резина по центральной колонке, бока статичны */}
         <div
-          className={`relative flex w-full max-w-[95vw] shrink-0 items-center justify-center sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] ${
-            isMobileOrTablet ? "mx-auto rounded-2xl" : "mx-auto mt-1 rounded-2xl sm:rounded-[32px]"
-          }`}
+          className={
+            isMobileOrTablet
+              ? `relative flex w-full max-w-[95vw] shrink-0 items-center justify-center sm:w-[min(90vw,720px)] sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 border-2 sm:border-[3px] mx-auto rounded-2xl`
+              : `relative flex w-full min-w-0 max-w-full shrink-0 items-center justify-center border-2 sm:border-[3px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-[32px]`
+          }
           style={{
             aspectRatio: isMobileOrTablet ? "1 / 1" : "6 / 5",
             ...(isMobileOrTablet
@@ -4269,7 +4271,10 @@ export function GameRoom() {
                   marginLeft: "auto",
                   marginRight: "auto",
                 }
-              : {}),
+              : {
+                  width: "100%",
+                  maxWidth: "100%",
+                }),
             borderColor: "rgba(56, 189, 248, 0.35)",
             background:
               "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",
@@ -4856,8 +4861,10 @@ export function GameRoom() {
 
       </div>
 
-      {/* ---- RIGHT PANEL: мини-игра + поклонники + чат — на ПК одно свёртываемое окно ---- */}
-      <div className="relative z-20 hidden md:flex min-h-0 shrink-0 flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65">
+      {/* ---- RIGHT PANEL: фикс. ширина; центр между левым меню и этим блоком — резина ---- */}
+      <div
+        className={`relative z-20 hidden md:flex min-h-0 shrink-0 flex-none flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65 ${rightPanelCollapsed ? "w-14" : "w-[230px]"}`}
+      >
         {rightPanelCollapsed ? (
           <button
             type="button"
@@ -4871,7 +4878,7 @@ export function GameRoom() {
             <ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" />
           </button>
         ) : (
-        <div className="flex min-h-0 w-[230px] flex-1 flex-col gap-3 pt-2 pb-3 pr-2 pl-1">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 pt-2 pb-3 pr-2 pl-1">
           {/* Заголовок панели с кнопкой свернуть */}
           <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 rounded-t-lg px-2 py-1.5" style={{ background: "rgba(15, 23, 42, 0.9)", borderBottom: "1px solid rgba(56, 189, 248, 0.35)" }}>
             <span className="text-xs font-bold truncate" style={{ color: "#e8c06a" }}>Свернуть</span>
