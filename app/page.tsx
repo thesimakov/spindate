@@ -2,11 +2,10 @@ import { GameProvider } from "@/lib/game-context"
 import { GameApp } from "@/components/game-app"
 
 /**
- * Главная не должна зависать в prerender-кэше между деплоями:
- * иначе браузер получает старый HTML со старыми хэшами /_next/static/*.
+ * Не задаём `dynamic = "force-dynamic"`: при `output: "export"` (GitHub Pages) сборка падает,
+ * а Next 16 не принимает условный `dynamic` (нужен литерал).
+ * Свежий HTML на проде после деплоя: `Cache-Control: no-store` для `/` в next.config.mjs + пересборка на сервере.
  */
-export const dynamic = "force-dynamic"
-
 export default function Page() {
   return (
     <GameProvider>
