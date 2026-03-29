@@ -1028,7 +1028,7 @@ export function GameRoom() {
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
   /** Планшет (md–lg): узкая колонка иконок; по нажатию — полная панель */
-  const [leftSideMenuExpanded, setLeftSideMenuExpanded] = useState(false)
+  const [leftSideMenuExpanded, setLeftSideMenuExpanded] = useState(true)
   const [sidebarTargetPlayer, setSidebarTargetPlayer] = useState<Player | null>(null)
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
