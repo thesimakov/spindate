@@ -554,14 +554,18 @@ export function GameRoom() {
           body: JSON.stringify({ tableId: tid, sinceRevision: since }),
         })
         const data = await res.json().catch(() => null)
-        if (!res.ok || !data?.ok || !data.snapshot) return
-        const snap = data.snapshot as TableAuthorityPayload
-        if (snap.revision > since) {
-          applyAuthoritySnapshot(snap)
+        if (res.ok && data?.ok && data.snapshot) {
+          const snap = data.snapshot as TableAuthorityPayload
+          if (snap.revision > since) {
+            applyAuthoritySnapshot(snap)
+          }
         }
-        setTableAuthorityReady(true)
+        // Всегда помечаем попытку завершённой: после /table/live сервер уже ensureTableAuthority;
+        // при временной ошибке сети/404 не держим лоадер бесконечно — опрос ниже подтянет снапшот.
       } catch {
         // ignore
+      } finally {
+        setTableAuthorityReady(true)
       }
     },
     [applyAuthoritySnapshot],
