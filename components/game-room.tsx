@@ -2493,14 +2493,10 @@ export function GameRoom() {
       return
     }
 
-    // Клик по аватарке на столе:
-    // На свою — открываем профиль; на чужую — боковой чат.
-    if (currentUser && player.id === currentUser.id) {
-      dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })
-    } else {
-      dispatch({ type: "OPEN_SIDE_CHAT", player })
-    }
-    setSidebarTargetPlayer(null)
+    // Обычный клик по аватарке на столе:
+    // открываем мини-меню под выбранной аватаркой.
+    const nextTarget = sidebarTargetPlayer?.id === player.id ? null : player
+    setSidebarTargetPlayer(nextTarget)
     setSidebarGiftMode(false)
     setGiftCatalogDrawerPlayer(null)
   }
@@ -5542,9 +5538,8 @@ export function GameRoom() {
                           timestamp: Date.now(),
                         },
                       })
-                      dispatch({ type: "ADD_ADMIRER", player: playerMenuTarget })
                       dispatch({ type: "CLOSE_PLAYER_MENU" })
-                      showToast("Добавлено в «Твои поклонники»", "success")
+                      showToast("Ухаживание отправлено!", "success")
                     }
                     const roseHandler = () => {
                       if (!currentUser) return

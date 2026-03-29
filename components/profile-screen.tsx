@@ -418,40 +418,37 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Твои поклонники</p>
           {admirersResolved.length === 0 ? (
             <p className="text-sm leading-relaxed text-slate-500">
-              Пока никого. Откройте игрока по аватарке за столом и нажмите «Стать поклонником» — он появится здесь.
+              Пока никого. Когда кто-то за вами поухаживает — он появится здесь.
             </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-wrap gap-2">
               {admirersResolved.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex min-w-0 items-center gap-2 rounded-xl border border-amber-500/35 bg-slate-900/60 py-1.5 pl-1.5 pr-2"
-                >
+                <li key={p.id} className="relative flex flex-col items-center">
                   <button
                     type="button"
-                    onClick={() => dispatch({ type: "OPEN_CHAT", player: p })}
-                    className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-90"
+                    onClick={() => dispatch({ type: "OPEN_SIDE_CHAT", player: p })}
+                    className="group flex flex-col items-center gap-1 rounded-xl border border-amber-500/35 bg-slate-900/60 px-2 py-2 transition-opacity hover:opacity-90"
                   >
                     {p.avatar ? (
                       <img
                         src={p.avatar}
                         alt=""
-                        className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-600/80"
+                        className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-600/80"
                       />
                     ) : (
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-slate-200 ring-1 ring-slate-600/80">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-slate-200 ring-1 ring-slate-600/80">
                         {(p.name || "?").slice(0, 1)}
                       </span>
                     )}
-                    <span className="min-w-0 truncate text-sm font-semibold text-slate-100">{p.name}</span>
+                    <span className="max-w-[56px] truncate text-[10px] font-semibold text-slate-100">{p.name}</span>
                   </button>
                   <button
                     type="button"
                     aria-label={`Убрать ${p.name} из поклонников`}
                     onClick={() => dispatch({ type: "REMOVE_ADMIRER", playerId: p.id })}
-                    className="shrink-0 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200"
+                    className="absolute -right-1 -top-1 rounded-full bg-slate-800 p-0.5 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3 w-3" />
                   </button>
                 </li>
               ))}

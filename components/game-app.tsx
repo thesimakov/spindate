@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, resizeVkWindowToViewport, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { getLayoutConstraintDebug } from "@/lib/use-media-query"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
+import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
 import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
 import { GameRoom } from "@/components/game-room"
@@ -16,6 +17,7 @@ import { UgadaikaScreen } from "@/components/ugadaika-screen"
 import { IntergameChatScreen } from "@/components/intergame-chat-screen"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { PlayerChatPanel } from "@/components/player-chat-panel"
+import { PmNotificationToasts } from "@/components/pm-notification-toast"
 import { RatingLeaderboardBody } from "@/components/rating-screen"
 
 /** Задержка после готовности стола, чтобы интерфейс успел стабилизироваться */
@@ -25,6 +27,19 @@ export function GameApp() {
   const { state, dispatch } = useGame()
   const [normalized, setNormalized] = useState(false)
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
+
+  const { notifications, dismiss } = usePmNotifications(state.currentUser?.id, state.admirers ?? [])
+
+  const handleOpenPmFromNotification = useCallback(
+    (peerId: number) => {
+      const peer = (state.admirers ?? []).find((a) => a.id === peerId) ?? state.players.find((p) => p.id === peerId)
+      if (!peer) return
+      if (state.currentUser) markChatRead(state.currentUser.id, peerId)
+      dismiss(peerId)
+      dispatch({ type: "OPEN_SIDE_CHAT", player: peer })
+    },
+    [state.admirers, state.players, state.currentUser, dispatch, dismiss],
+  )
 
   const tableReady =
     state.screen === "game" &&
@@ -136,6 +151,13 @@ export function GameApp() {
       return (
         <>
           <GameRoom />
+          {state.gameSidePanel !== "player-chat" && (
+            <PmNotificationToasts
+              notifications={notifications}
+              onOpen={handleOpenPmFromNotification}
+              onDismiss={dismiss}
+            />
+          )}
           {state.gameSidePanel === "profile" && (
             <ProfileScreen
               variant="panel"
@@ -166,7 +188,13 @@ export function GameApp() {
           {state.gameSidePanel === "player-chat" && state.chatPanelPlayer && (
             <PlayerChatPanel
               player={state.chatPanelPlayer}
-              onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+              onClose={() => {
+                if (state.currentUser && state.chatPanelPlayer) {
+                  markChatRead(state.currentUser.id, state.chatPanelPlayer.id)
+                  dismiss(state.chatPanelPlayer.id)
+                }
+                dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })
+              }}
               onOpenProfile={() => {
                 dispatch({ type: "OPEN_PLAYER_MENU", player: state.chatPanelPlayer! })
                 dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })

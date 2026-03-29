@@ -162,16 +162,12 @@ export function isVkMiniApp(): boolean {
 
 /** Максимальная высота iframe: в панели VK «Размер iframe» до 4500 px (см. dev.vk.com games → Отображение). */
 const VK_IFRAME_MAX_HEIGHT = 4500
-/** Максимальная ширина iframe VK для широкоформатного режима. */
-const VK_IFRAME_WIDESCREEN_WIDTH = 1920
 
 /** Размер видимой области для передачи в VKWebAppResizeWindow (вкладка / окно / visualViewport). */
 export function getViewportSizeForVk(): { width: number; height: number } {
-  if (typeof window === "undefined") return { width: VK_IFRAME_WIDESCREEN_WIDTH, height: 800 }
+  if (typeof window === "undefined") return { width: 800, height: 600 }
   const vv = window.visualViewport
-  const viewW = vv?.width ?? window.innerWidth
-  const screenW = window.screen?.availWidth ?? window.outerWidth ?? viewW
-  const w = Math.max(1, Math.round(Math.max(viewW, screenW, VK_IFRAME_WIDESCREEN_WIDTH)))
+  const w = Math.max(1, Math.round(vv?.width ?? window.innerWidth))
   const rawH = vv?.height ?? window.innerHeight
   const h = Math.max(1, Math.min(Math.round(rawH), VK_IFRAME_MAX_HEIGHT))
   return { width: w, height: h }
@@ -190,10 +186,7 @@ export async function resizeVkWindowToViewport(): Promise<boolean> {
   if (!b || !isVkMiniApp()) return false
   const { width, height } = getViewportSizeForVk()
   try {
-    await b.send("VKWebAppResizeWindow", {
-      width: Math.max(width, VK_IFRAME_WIDESCREEN_WIDTH),
-      height,
-    })
+    await b.send("VKWebAppResizeWindow", { width, height })
     return true
   } catch {
     return false

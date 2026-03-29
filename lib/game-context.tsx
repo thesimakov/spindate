@@ -619,9 +619,24 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
     case "ADD_LOG": {
       const nextLog = [...state.gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES), action.entry]
+      let nextAdmirers = state.admirers
+      // «Ухаживать»: если кто-то ухаживает за текущим пользователем — добавить в поклонники
+      if (
+        action.entry.type === "care" &&
+        action.entry.fromPlayer &&
+        action.entry.toPlayer &&
+        state.currentUser &&
+        action.entry.toPlayer.id === state.currentUser.id &&
+        action.entry.fromPlayer.id !== state.currentUser.id &&
+        !state.admirers.some((a) => a.id === action.entry.fromPlayer!.id)
+      ) {
+        nextAdmirers = [...state.admirers, action.entry.fromPlayer]
+        persistAdmirersList(state.currentUser.id, nextAdmirers)
+      }
       return {
         ...state,
         gameLog: nextLog,
+        admirers: nextAdmirers,
         emotionUseTodayByPlayer: bumpEmotionUseForLogEntry(state.emotionUseTodayByPlayer, action.entry),
       }
     }
@@ -886,11 +901,33 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "SYNC_TABLE_AUTHORITY": {
       const p = action.payload
-      // Мержим рамки: серверные + локальные (для ботов, которым клиент назначает рамки)
       const mergedFrames = { ...(state.avatarFrames ?? {}), ...(p.avatarFrames ?? {}) }
       const todayKey = dateKeyFromTimestamp(Date.now())
       const fromLog = rebuildTodayLimitedEmotionsFromLog(p.gameLog, todayKey)
       const emotionUseTodayByPlayer = mergeEmotionBucketsForSync(state.emotionUseTodayByPlayer, fromLog, todayKey)
+
+      // Подтянуть поклонников из лога: кто ухаживал за текущим пользователем
+      let syncAdmirers = state.admirers
+      if (state.currentUser) {
+        const uid = state.currentUser.id
+        const existingIds = new Set(syncAdmirers.map((a) => a.id))
+        for (const entry of p.gameLog) {
+          if (
+            entry.type === "care" &&
+            entry.toPlayer?.id === uid &&
+            entry.fromPlayer &&
+            entry.fromPlayer.id !== uid &&
+            !existingIds.has(entry.fromPlayer.id)
+          ) {
+            syncAdmirers = [...syncAdmirers, entry.fromPlayer]
+            existingIds.add(entry.fromPlayer.id)
+          }
+        }
+        if (syncAdmirers !== state.admirers) {
+          persistAdmirersList(uid, syncAdmirers)
+        }
+      }
+
       return {
         ...state,
         players: p.players,
@@ -916,6 +953,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         generalChatMessages: [...(p.generalChatMessages ?? [])],
         avatarFrames: mergedFrames,
         drunkUntil: { ...(state.drunkUntil ?? {}), ...(p.drunkUntil ?? {}) },
+        admirers: syncAdmirers,
         predictions: [],
         bets: [],
         pot: 0,

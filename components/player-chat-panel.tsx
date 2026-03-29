@@ -1,16 +1,19 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Send, Gift, X, User, Heart, Flower2, Frown } from "lucide-react"
 import { useGame, getBotResponse, generateMessageId } from "@/lib/game-context"
 import type { ChatMessage, Player } from "@/lib/game-types"
 import { PlayerAvatar } from "@/components/player-avatar"
+import { markChatRead } from "@/lib/use-pm-notifications"
 
 const GIFTS = [
   { name: "Цветок", icon: Flower2, price: 5, emoji: "flower" },
   { name: "Сердце", icon: Heart, price: 10, emoji: "heart" },
   { name: "Помидор", icon: Frown, price: 0, emoji: "tomato" },
 ]
+
+const POLL_INTERVAL = 2000
 
 type Props = {
   player: Player
@@ -20,17 +23,80 @@ type Props = {
 
 export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
   const { state, dispatch } = useGame()
-  const { chatMessages, currentUser, voiceBalance, avatarFrames } = state
+  const { currentUser, voiceBalance, avatarFrames } = state
   const [text, setText] = useState("")
   const [showGifts, setShowGifts] = useState(false)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const messages = chatMessages[player.id] || []
+  const lastPollTs = useRef(0)
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const scrollBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [])
+
+  const fetchMessages = useCallback(
+    async (since: number) => {
+      if (!currentUser) return
+      try {
+        const params = new URLSearchParams({
+          a: String(currentUser.id),
+          b: String(player.id),
+          since: String(since),
+        })
+        const res = await fetch(`/api/chat/private?${params}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!data.ok || !Array.isArray(data.messages)) return
+        const newMsgs = data.messages as ChatMessage[]
+        if (newMsgs.length === 0) return
+        setMessages((prev) => {
+          const existing = new Set(prev.map((m) => m.id))
+          const unique = newMsgs.filter((m) => !existing.has(m.id))
+          if (unique.length === 0) return prev
+          return [...prev, ...unique].sort((a, b) => a.timestamp - b.timestamp)
+        })
+        const maxTs = Math.max(...newMsgs.map((m) => m.timestamp))
+        if (maxTs > lastPollTs.current) lastPollTs.current = maxTs
+      } catch { /* ignore */ }
+    },
+    [currentUser, player.id],
+  )
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages.length])
+    if (currentUser) markChatRead(currentUser.id, player.id)
+    fetchMessages(0)
+    pollTimer.current = setInterval(() => {
+      fetchMessages(lastPollTs.current)
+    }, POLL_INTERVAL)
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current)
+      if (currentUser) markChatRead(currentUser.id, player.id)
+    }
+  }, [fetchMessages, currentUser, player.id])
+
+  useEffect(() => {
+    scrollBottom()
+  }, [messages.length, scrollBottom])
 
   if (!currentUser) return null
+
+  const sendToServer = async (msg: ChatMessage) => {
+    try {
+      await fetch("/api/chat/private", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: msg.id,
+          senderId: msg.senderId,
+          toId: player.id,
+          text: msg.text,
+          timestamp: msg.timestamp,
+          gift: msg.gift,
+        }),
+      })
+    } catch { /* ignore */ }
+  }
 
   const handleSend = () => {
     if (!text.trim()) return
@@ -40,6 +106,8 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
       text: text.trim(),
       timestamp: Date.now(),
     }
+    setMessages((prev) => [...prev, msg])
+    sendToServer(msg)
     dispatch({ type: "SEND_MESSAGE", toId: player.id, message: msg })
     setText("")
 
@@ -51,6 +119,8 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
           text: getBotResponse(),
           timestamp: Date.now(),
         }
+        setMessages((prev) => [...prev, botMsg])
+        sendToServer(botMsg)
         dispatch({ type: "SEND_MESSAGE", toId: player.id, message: botMsg })
       }, 800 + Math.random() * 1500)
     }
@@ -66,6 +136,8 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
       timestamp: Date.now(),
       gift: giftEmoji,
     }
+    setMessages((prev) => [...prev, msg])
+    sendToServer(msg)
     dispatch({ type: "SEND_MESSAGE", toId: player.id, message: msg })
     setShowGifts(false)
 
@@ -77,6 +149,8 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
           text: giftEmoji === "tomato" ? "Эй! За что?!" : "Спасибо за подарок!",
           timestamp: Date.now(),
         }
+        setMessages((prev) => [...prev, botMsg])
+        sendToServer(botMsg)
         dispatch({ type: "SEND_MESSAGE", toId: player.id, message: botMsg })
       }, 1000)
     }
