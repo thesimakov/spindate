@@ -564,7 +564,8 @@ export function GameRoom() {
         }
         setTableAuthorityReady(true)
       } catch {
-        // ignore
+        // Разрешаем вход даже при ошибке сети/сервера
+        setTableAuthorityReady(true)
       }
     },
     [applyAuthoritySnapshot],
@@ -657,6 +658,8 @@ export function GameRoom() {
         setTableLiveReady(true)
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
+        // Разрешаем вход даже при ошибке сети
+        setTableLiveReady(true)
         return null
       }
     },
@@ -664,12 +667,11 @@ export function GameRoom() {
   )
 
   /**
-   * Лоадер стола — запускается **один раз** при маунте GameRoom.
+   * Лоадер стола — запускается при маунте GameRoom и при смене пользователя.
    * НЕ перезапускается при смене tableId (серверная подстановка id после join
    * вызывала цикл перезагрузок). При явной смене стола через handleChangeTable
    * данные уже готовы — лоадер не нужен.
    */
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     tableLoadStartedAtRef.current = Date.now()
     setTableLoading(true)
@@ -678,7 +680,7 @@ export function GameRoom() {
     setTableLoaderProgress(0)
     scheduleLoaderStepTimers()
     return () => clearLoaderStepTimers()
-  }, []) // mount-only
+  }, [currentUser?.id, scheduleLoaderStepTimers])
 
   /** После 70% таймеры молчат — медленно двигаем %, пока ждём live + authority */
   useEffect(() => {
@@ -697,7 +699,9 @@ export function GameRoom() {
   useEffect(() => {
     if (!tableLoading) return
     const hasPlayers = players.length > 0
-    const allSignalsReady = hasPlayers && tableLiveReady && tableAuthorityReady
+    // Гарантируем что текущий пользователь точно есть в списке игроков
+    const hasCurrentUser = currentUser != null && players.some(p => p.id === currentUser.id)
+    const allSignalsReady = hasPlayers && hasCurrentUser && tableLiveReady && tableAuthorityReady
     if (!allSignalsReady) return
 
     const elapsed = Date.now() - tableLoadStartedAtRef.current

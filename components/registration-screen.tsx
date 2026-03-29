@@ -85,6 +85,30 @@ export function RegistrationScreen() {
         livePlayers = data.livePlayers
         tablesCount = typeof data.tablesCount === "number" ? data.tablesCount : tablesCount
       }
+      // Если сервер вернул только текущего пользователя - пробуем forceNew для нового стола
+      if (livePlayers.length <= 1) {
+        try {
+          const res2 = await apiFetch("/api/table/live", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              mode: "join",
+              user,
+              maxTableSize,
+              forceNew: true,
+            }),
+          })
+          const data2 = await res2.json().catch(() => null)
+          if (res2.ok && data2?.ok && Array.isArray(data2.livePlayers) && data2.livePlayers.length > livePlayers.length) {
+            tableId = typeof data2.tableId === "number" ? data2.tableId : tableId
+            livePlayers = data2.livePlayers
+            tablesCount = typeof data2.tablesCount === "number" ? data2.tablesCount : tablesCount
+          }
+        } catch {
+          // ignore retry error
+        }
+      }
     } catch {
       // если сервер недоступен, оставляем локальный стол
     }

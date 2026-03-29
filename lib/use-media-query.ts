@@ -7,16 +7,25 @@ import { useState, useEffect } from "react"
  */
 function readVkPlatformFromLocation(): string | null {
   if (typeof window === "undefined") return null
+  // Проверяем search (редко, но бывает)
   const fromSearch = new URLSearchParams(window.location.search).get("vk_platform")
   if (fromSearch) return fromSearch
+  
+  // Проверяем hash (основной способ VK)
   const hash = window.location.hash
   const qi = hash.indexOf("?")
   if (qi >= 0) {
     const v = new URLSearchParams(hash.slice(qi + 1)).get("vk_platform")
     if (v) return v
   }
+  // Прямое совпадение в hash без ?
   const m = hash.match(/[#&]vk_platform=([^&]+)/)
-  return m ? decodeURIComponent(m[1]) : null
+  if (m) return decodeURIComponent(m[1])
+  
+  // Проверяем location.search ещё раз для случаев когда VK передает весь hash как search
+  const fullSearch = window.location.search + window.location.hash
+  const match2 = fullSearch.match(/[?&#]vk_platform=([^&#]+)/)
+  return match2 ? decodeURIComponent(match2[1]) : null
 }
 
 function isLikelyRealMobileDevice(): boolean {
@@ -41,13 +50,24 @@ function computeIsDesktopUser(): boolean {
   if (typeof window === "undefined") return false
 
   const vkPlatform = readVkPlatformFromLocation()
+  
+  // Явный desktop_web - всегда десктоп
   if (vkPlatform === "desktop_web") {
     return true
   }
+  // Любой desktop_ префикс
   if (vkPlatform && /^desktop_/i.test(vkPlatform)) {
     return true
   }
-  if (vkPlatform && /^(mobile_|android_|iphone_|ipad_)/i.test(vkPlatform)) {
+  
+  // Явный mobile или tablet - проверяем реальное устройство
+  if (vkPlatform && /^(mobile_|android_|iphone_|ipad_|tablet_)/i.test(vkPlatform)) {
+    // Если это реальное мобильное устройство - не десктоп
+    const realMobile = isLikelyRealMobileDevice()
+    if (realMobile) return false
+    // Если открыто в iframe VK на ПК - это десктоп (VK просто передаёт mobile_web по умолчанию)
+    if (window.self !== window.top) return true
+    // Иначе верим VK
     return false
   }
 
