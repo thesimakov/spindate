@@ -554,18 +554,14 @@ export function GameRoom() {
           body: JSON.stringify({ tableId: tid, sinceRevision: since }),
         })
         const data = await res.json().catch(() => null)
-        if (res.ok && data?.ok && data.snapshot) {
-          const snap = data.snapshot as TableAuthorityPayload
-          if (snap.revision > since) {
-            applyAuthoritySnapshot(snap)
-          }
+        if (!res.ok || !data?.ok || !data.snapshot) return
+        const snap = data.snapshot as TableAuthorityPayload
+        if (snap.revision > since) {
+          applyAuthoritySnapshot(snap)
         }
-        // Всегда помечаем попытку завершённой: после /table/live сервер уже ensureTableAuthority;
-        // при временной ошибке сети/404 не держим лоадер бесконечно — опрос ниже подтянет снапшот.
+        setTableAuthorityReady(true)
       } catch {
         // ignore
-      } finally {
-        setTableAuthorityReady(true)
       }
     },
     [applyAuthoritySnapshot],
@@ -660,15 +656,8 @@ export function GameRoom() {
       .map(({ pct, at }) =>
       setTimeout(() => setTableLoaderProgress(pct), at),
     )
-    // Fail-safe, чтобы не зависнуть бесконечно при плохой сети/API.
-    const done = setTimeout(() => {
-      setTableLoaderProgress(100)
-      setTableLoading(false)
-      setTableLoaderProgress(0)
-    }, Math.max(TABLE_LOADER_DURATION_MS + 6500, 9000))
     return () => {
       stepTimers.forEach(clearTimeout)
-      clearTimeout(done)
     }
   }, [tableId])
 
