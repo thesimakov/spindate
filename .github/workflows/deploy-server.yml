@@ -77,7 +77,12 @@ jobs:
           ssh -o BatchMode=yes $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "echo ok"
           echo "Preparing directories on server..."
           # Временные файлы rsync на приёмнике — в /tmp (иначе mkstemp в /var/www/... даёт Permission denied, если каталог не принадлежит SERVER_USER)
-          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "mkdir -p /var/www/spindate /tmp/rsync-spindate && chmod 1777 /tmp/rsync-spindate"
+          # ВАЖНО: сначала останавливаем процесс и очищаем .next, чтобы не было смеси старых/новых чанков.
+          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
+            "mkdir -p /var/www/spindate /tmp/rsync-spindate && \
+             chmod 1777 /tmp/rsync-spindate && \
+             pm2 stop spindate 2>/dev/null || true && \
+             rm -rf /var/www/spindate/.next"
           echo "Syncing files..."
           # Без -a и без -t: не трогаем mtime (иначе Operation not permitted на приёмнике).
           # Без -o/-g: не пытаемся сохранить uid/gid с раннера GitHub на вашем сервере.
@@ -102,10 +107,10 @@ jobs:
           # Иначе npm ci падает с ENOTEMPTY на node_modules/next/... — процесс держит файлы
           ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
             "cd /var/www/spindate && \
-             pm2 stop spindate 2>/dev/null || true && \
              sleep 2 && \
              rm -rf node_modules && \
              npm ci && \
-             (pm2 restart spindate --update-env 2>/dev/null || PORT=3002 pm2 start ecosystem.config.cjs --update-env) && \
+             pm2 delete spindate 2>/dev/null || true && \
+             PORT=3002 pm2 start ecosystem.config.cjs --update-env && \
              pm2 save"
           echo "Deploy finished."
