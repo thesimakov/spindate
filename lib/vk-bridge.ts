@@ -193,6 +193,22 @@ export async function resizeVkWindowToViewport(): Promise<boolean> {
   }
 }
 
+/**
+ * Просим ВК развернуть мини-приложение до максимально доступной области.
+ * В части клиентов помогает убрать боковые поля/ограничения контейнера.
+ * @see https://dev.vk.com/bridge/VKWebAppExpand
+ */
+export async function requestVkExpand(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    await b.send("VKWebAppExpand", {})
+    return true
+  } catch {
+    return false
+  }
+}
+
 const RESIZE_DEBOUNCE_MS = 120
 
 /**
@@ -203,6 +219,7 @@ export function subscribeVkViewportResize(): () => void {
   if (typeof window === "undefined") return () => {}
   let timer: ReturnType<typeof setTimeout> | null = null
   const run = () => {
+    void requestVkExpand()
     void resizeVkWindowToViewport()
   }
   const schedule = () => {
@@ -253,7 +270,9 @@ export async function initVk(): Promise<void> {
   } catch {
     // вне VK или старая версия клиента
   }
+  await requestVkExpand()
   await requestVkWidescreen()
+  await resizeVkWindowToViewport()
 }
 
 const VK_INIT_TIMEOUT_MS = 8000
@@ -387,5 +406,6 @@ export const vkBridge = {
   getViewportSizeForVk,
   resizeVkWindowToViewport,
   subscribeVkViewportResize,
+  requestVkExpand,
   VK_ITEM_IDS,
 }
