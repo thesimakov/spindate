@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   await ensureTableAuthority(tableId)
   const snapshot = await getTableAuthoritySnapshot(tableId)
   if (!snapshot) {
-    return NextResponse.json({ ok: false, error: "Стол не найден" }, { status: 404 })
+    return NextResponse.json({ ok: false, error: "Стол не найден" }, { status: 404, headers: NO_CACHE })
   }
 
   const changed = snapshot.revision > sinceRevision

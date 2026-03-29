@@ -19,23 +19,23 @@ function parsePlayer(raw: unknown): Player | null {
   if (!raw || typeof raw !== "object") return null
   const p = raw as Record<string, unknown>
   const id = Number(p.id)
-  const name = typeof p.name === "string" ? p.name : ""
-  const avatar = typeof p.avatar === "string" ? p.avatar : ""
+  const name = typeof p.name === "string" && p.name.trim() ? p.name.trim() : ""
+  const avatar = typeof p.avatar === "string" ? p.avatar.trim() : ""
   const gender = p.gender === "female" ? "female" : p.gender === "male" ? "male" : null
-  const age = Number(p.age)
+  const ageRaw = Number(p.age)
+  const age = Number.isFinite(ageRaw) ? Math.min(120, Math.max(18, Math.floor(ageRaw))) : 18
   const purpose = p.purpose === "relationships" || p.purpose === "communication" || p.purpose === "love"
     ? p.purpose
-    : null
+    : "communication"
   if (!Number.isInteger(id) || id <= 0) return null
-  if (!name || !avatar || !gender || !purpose) return null
-  if (!Number.isFinite(age) || age < 18 || age > 120) return null
+  if (!gender) return null
 
   return {
     id,
-    name,
+    name: name || `Игрок ${id}`,
     avatar,
     gender,
-    age: Math.floor(age),
+    age,
     purpose,
     lookingFor: p.lookingFor === "male" || p.lookingFor === "female" ? p.lookingFor : undefined,
     authProvider: p.authProvider === "vk" || p.authProvider === "login" ? p.authProvider : undefined,
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
   const player = parsePlayer(body?.user)
   if (!player) {
-    return NextResponse.json({ ok: false, error: "Некорректный пользователь" }, { status: 400 })
+    return NextResponse.json({ ok: false, error: "Некорректный пользователь" }, { status: 400, headers: NO_CACHE })
   }
 
   const maxTableSizeRaw = Number(body?.maxTableSize)
