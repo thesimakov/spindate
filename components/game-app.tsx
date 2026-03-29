@@ -143,7 +143,9 @@ export function GameApp() {
     return () => clearTimeout(t)
   }, [state.screen, tableReady])
 
-  const showEntryLoader = state.screen === "game" && (!tableReady || !normalized)
+  // Лоадер с цитатой находится внутри GameRoom (tableLoading), поэтому
+  // общий AppLoader показываем только до появления пользователя.
+  const showEntryLoader = state.screen === "game" && !state.currentUser
   const showLayoutDebugOverlay = layoutDebugEnabled && !!layoutDebugSnapshot
 
   if (state.screen === "game" && state.currentUser && blockStatus) {

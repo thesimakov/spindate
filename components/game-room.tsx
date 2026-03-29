@@ -128,6 +128,7 @@ const GIFT_CATALOG_FREE: GiftCatalogDef[] = []
 
 /** Лоадер стола: шаги прогресса (мс от старта) */
 const TABLE_LOADER_DURATION_MS = 2400
+const TABLE_LOADER_MIN_VISIBLE_MS = 1800
 const TABLE_LOADER_PROGRESS_STEPS: readonly { pct: number; at: number }[] = [
   { pct: 10, at: 200 },
   { pct: 25, at: 500 },
@@ -566,14 +567,13 @@ export function GameRoom() {
     [applyAuthoritySnapshot],
   )
 
-  // Локальный лоадер при входе/смене стола: ждём реальной готовности live-состава и authority.
-  // Если стол уже сформирован при монтировании (из регистрации) — пропускаем лоадер.
-  const hasInitialPlayers = players.length > 0
-  const [tableLoading, setTableLoading] = useState(!hasInitialPlayers)
+  // Локальный лоадер при входе/смене стола: обязателен до реальной готовности
+  // live-состава и authority (даже если есть локальный/кэшированный список игроков).
+  const [tableLoading, setTableLoading] = useState(true)
   const [tableLoaderProgress, setTableLoaderProgress] = useState(0)
   const lastTableIdRef = useRef<number | null>(null)
-  const [tableLiveReady, setTableLiveReady] = useState(hasInitialPlayers)
-  const [tableAuthorityReady, setTableAuthorityReady] = useState(hasInitialPlayers)
+  const [tableLiveReady, setTableLiveReady] = useState(false)
+  const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
   const tableLoadStartedAtRef = useRef<number>(Date.now())
   const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
 
@@ -645,8 +645,8 @@ export function GameRoom() {
       lastTableIdRef.current = tableId
     } else if (lastTableIdRef.current !== tableId) {
       lastTableIdRef.current = tableId
-      setTableLoading(true)
     }
+    setTableLoading(true)
     tableLoadStartedAtRef.current = Date.now()
     setTableLiveReady(false)
     setTableAuthorityReady(false)
@@ -671,7 +671,7 @@ export function GameRoom() {
   useEffect(() => {
     if (!tableLoading) return
     const hasPlayers = players.length > 0
-    const minDurationPassed = Date.now() - tableLoadStartedAtRef.current >= 1200
+    const minDurationPassed = Date.now() - tableLoadStartedAtRef.current >= TABLE_LOADER_MIN_VISIBLE_MS
     const ready = hasPlayers && tableLiveReady && tableAuthorityReady && minDurationPassed
     if (!ready) return
 
@@ -687,6 +687,10 @@ export function GameRoom() {
   // Первый вызов — "join" (сервер подберёт или создаст стол).
   // Дальнейшие — "sync" (heartbeat + обновление состава).
   const initialJoinDoneRef = useRef(false)
+  useEffect(() => {
+    initialJoinDoneRef.current = false
+  }, [currentUser?.id, tableId])
+
   useEffect(() => {
     if (!currentUser || tablePaused) return
     let cancelled = false
