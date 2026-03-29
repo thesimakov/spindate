@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import {
-  ArrowLeft,
   ArrowRightLeft,
   CalendarDays,
   Crown,
@@ -10,7 +9,6 @@ import {
   Gem,
   Heart,
   Sparkles,
-  Users,
   type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -229,22 +227,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
     dispatch({ type: "PAY_VOICES", amount: -amount })
     showToast(`Баланс пополнен на ${amount} ❤`, "success")
-  }
-
-  const handleInviteFriends = async () => {
-    const ok = await vkBridge.inviteFriends()
-    if (ok) {
-      // Можно добавить бонус за приглашение (например, +50 сердец)
-      // dispatch({ type: "PAY_VOICES", amount: -50 })
-      showToast("Приглашение отправлено", "info")
-    } else {
-      showToast("Не удалось отправить приглашение", "error")
-    }
-  }
-
-  const backToTable = () => {
-    if (isPanel && onClose) onClose()
-    else dispatch({ type: "SET_SCREEN", screen: "game" })
   }
 
   const shopInnerCard = (
@@ -908,37 +890,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         </div>
         </div>
 
-        {/* Добавить друзей */}
-        <div className="space-y-2">
-          <p className={`${sectionLabelClass} px-0.5`}>Сообщество</p>
-        <div
-          className={`rounded-2xl px-4 py-4 ${sectionCardClass} ${
-            layoutDense ? "flex flex-col items-stretch gap-4" : "flex items-center justify-between gap-4"
-          }`}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-600/80 to-slate-800/90 ring-1 ring-white/10"
-              aria-hidden
-            >
-              <Users className="h-5 w-5 text-slate-200" strokeWidth={mdIconStroke} />
-            </div>
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-semibold text-slate-100">Добавить друзей</span>
-              <span className={subtleTextClass}>Пригласите в игру — веселее вместе</span>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className={`${ctaSecondaryClass} h-10 shrink-0 px-5 ${layoutDense ? "w-full" : ""}`}
-            onClick={handleInviteFriends}
-          >
-            Пригласить
-          </Button>
-        </div>
-        </div>
-
         <footer className="rounded-2xl border border-slate-700/40 bg-slate-950/50 px-4 py-3 text-center sm:text-left">
           <p className="text-[11px] leading-relaxed text-slate-500 sm:text-xs">
             Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. П. 2.3.8{" "}
@@ -953,17 +904,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             .
           </p>
         </footer>
-
-        <div className="flex flex-col gap-2 pt-1">
-          <Button
-            variant="outline"
-            className={`${ctaSecondaryClass} inline-flex items-center justify-center gap-2`}
-            onClick={backToTable}
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0 opacity-80" strokeWidth={mdIconStroke} aria-hidden />
-            Назад к столу
-          </Button>
-        </div>
     </div>
   )
 

@@ -20,7 +20,7 @@ export function FavoritesScreen({ variant = "page", onClose }: FavoritesScreenPr
   }
 
   const handleChat = (player: (typeof favorites)[0]) => {
-    dispatch({ type: "OPEN_CHAT", player })
+    dispatch({ type: "OPEN_SIDE_CHAT", player })
   }
 
   const listBody =

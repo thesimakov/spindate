@@ -232,6 +232,22 @@
   }
 }
 
+/* ── Side panel slide-in / fade ── */
+@keyframes sidePanelSlideIn {
+  from { transform: translateX(100%); opacity: 0.5; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes sidePanelOverlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.side-panel-slide-in {
+  animation: sidePanelSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.side-panel-overlay-fade-in {
+  animation: sidePanelOverlayFadeIn 0.22s ease-out both;
+}
+
 /* Flying emoji: траектория в % от стола (как у аватарок), центр эмодзи = центр точки; финал поверх аватарки */
 @keyframes flyEmoji {
   0% {
@@ -1218,7 +1234,7 @@
 /* Окно профиля игрока: красивое появление и лёгкое свечение */
 .player-menu-backdrop {
   backdrop-filter: blur(10px);
-  animation: playerMenuBackdropIn 0.25s ease-out;
+  animation: sidePanelOverlayFadeIn 0.22s ease-out both;
 }
 /* Каталог подарков: без затемнения фона; панель выезжает справа */
 .gift-catalog-backdrop {
@@ -1230,53 +1246,15 @@
     -6px 0 56px -14px rgba(251, 191, 36, 0.12);
 }
 .gift-catalog-panel.gift-catalog-drawer {
-  animation: giftCatalogDrawerIn 0.52s cubic-bezier(0.22, 1, 0.28, 1) forwards;
-}
-@keyframes giftCatalogDrawerIn {
-  0% {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  70% {
-    opacity: 1;
-    transform: translateX(-6px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-@keyframes playerMenuBackdropIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  animation: sidePanelSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .player-menu-modal {
-  animation: playerMenuModalIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: sidePanelSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.15), 0 25px 50px -12px rgba(0, 0, 0, 0.55), 0 0 60px -20px rgba(251, 191, 36, 0.12);
 }
 .player-menu-modal.player-menu-modal-drawer {
-  animation: playerMenuDrawerIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: sidePanelSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   box-shadow: -12px 0 40px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(251, 191, 36, 0.2), -4px 0 48px -12px rgba(251, 191, 36, 0.14);
-}
-@keyframes playerMenuModalIn {
-  from {
-    opacity: 0;
-    transform: scale(0.94) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-@keyframes playerMenuDrawerIn {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 .player-menu-modal-glow {
   animation: playerMenuGlow 3s ease-in-out infinite;

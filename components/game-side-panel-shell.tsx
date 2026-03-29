@@ -16,7 +16,7 @@ export function GameSidePanelShell({ title, subtitle, onClose, children, headerR
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]"
+        className="side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]"
         onClick={onClose}
         aria-label="Закрыть"
       />
@@ -24,7 +24,7 @@ export function GameSidePanelShell({ title, subtitle, onClose, children, headerR
         role="dialog"
         aria-modal
         aria-labelledby="game-side-panel-title"
-        className="fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
+        className="side-panel-slide-in fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-cyan-500/15 px-4 py-3">
           <div className="min-w-0">

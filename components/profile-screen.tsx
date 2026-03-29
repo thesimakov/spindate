@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Flower2, Heart, Sparkles, Trophy, Volume2, VolumeX, X } from "lucide-react"
+import { Flower2, Heart, Sparkles, Trophy, Users, Volume2, VolumeX, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
@@ -10,6 +10,7 @@ import { PAIR_ACTIONS } from "@/lib/game-types"
 import { assetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
+import { vkBridge } from "@/lib/vk-bridge"
 
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
@@ -208,6 +209,12 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const closePanel = () => {
     if (isPanel && onClose) onClose()
     else dispatch({ type: "SET_SCREEN", screen: "game" })
+  }
+
+  const handleInviteFriends = async () => {
+    const ok = await vkBridge.inviteFriends()
+    if (ok) showToast("Приглашение отправлено", "info")
+    else showToast("Не удалось отправить приглашение", "error")
   }
 
   const renderProfileFields = () => (
@@ -454,6 +461,33 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               ))}
             </ul>
           )}
+        </div>
+
+        {/* Приглашение друзей в игру (VK) */}
+        <div className={`${sectionCardClass} space-y-3`}>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Сообщество</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-600/80 to-slate-800/90 ring-1 ring-white/10"
+                aria-hidden
+              >
+                <Users className="h-5 w-5 text-slate-200" strokeWidth={2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-100">Добавить друзей</p>
+                <p className="text-xs leading-relaxed text-slate-400">Пригласите в игру — веселее вместе</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className={`shrink-0 px-5 ${secondaryBtnClass}`}
+              onClick={handleInviteFriends}
+            >
+              Пригласить
+            </Button>
+          </div>
         </div>
 
         {/* Быстрые настройки */}
