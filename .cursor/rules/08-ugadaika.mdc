@@ -1,0 +1,43 @@
+---
+description: Мини-игра Угадай-ка — вход, выход, награды, дружба профилями
+globs: components/ugadaika-screen.tsx,lib/game-context.tsx,lib/game-types.ts
+alwaysApply: false
+---
+
+# Мини-игра «Угадай-ка»
+
+## Вход
+
+1. `dispatch({ type: "SET_SCREEN", screen: "ugadaika" })`
+2. Reducer: `playerInUgadaika = currentUser.id`, `gameSidePanel = null`
+3. На столе ход этого игрока автоматически пропускается (цикл while в NEXT_TURN)
+4. На аватарке отображается значок «в игре»
+
+## Выход (возврат к столу)
+
+1. `dispatch({ type: "SET_SCREEN", screen: "game" })`
+2. Reducer: `playerInUgadaika = null`, `showReturnedFromUgadaika = true`
+3. В GameRoom: через 3200ms после showReturnedFromUgadaika:
+   - Если ход был у вернувшегося → лог "пропускает ход" + NEXT_TURN
+   - `CLEAR_RETURNED_FROM_UGADAIKA`
+
+## Награды за выигранный раунд (UGADAIKA_ADD_ROUND_WON)
+
+1. `ugadaikaRoundsWon++`
+2. `ugadaikaRoundsByPlayer[currentUser.id]++`
+3. `voiceBalance += 10` (10 ❤ за раунд)
+4. Каждые 10 раундов: бонусная роза в инвентарь
+5. Если передан `pairPartnerId`:
+   - `ugadaikaPairMatchCount[key]++` (key = sorted ids joined by "_")
+   - Если count ≥ 5: `ugadaikaFriendUnlocked[key] = true`
+
+## Данные в GameState
+
+| Поле | Описание |
+|------|----------|
+| playerInUgadaika | id игрока в мини-игре (или null) |
+| ugadaikaRoundsWon | Всего выигранных раундов |
+| ugadaikaRoundsByPlayer | По игрокам (для рейтинга Top 10) |
+| ugadaikaPairMatchCount | Счётчик совпадений пар ("id1_id2") |
+| ugadaikaFriendUnlocked | Разблокирована ли дружба ("id1_id2") |
+| showReturnedFromUgadaika | Флаг анимации возврата |

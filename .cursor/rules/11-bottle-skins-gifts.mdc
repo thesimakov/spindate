@@ -1,0 +1,42 @@
+---
+description: Скины бутылки, подарки стола, донор бутылочки, cooldown
+globs: components/game-room.tsx,components/bottle-catalog-modal.tsx,lib/game-types.ts,lib/game-context.tsx
+alwaysApply: false
+---
+
+# Скины бутылки и подарки стола
+
+## Скины бутылки (BottleSkin)
+
+Доступные: classic, ruby, neon, frost, baby, vip, milk, frame_69–80, fortune_wheel.
+
+## SET_BOTTLE_SKIN
+
+1. `bottleSkin = action.skin`
+2. `ownedBottleSkins = Set([...existing, action.skin])` — добавить в коллекцию
+3. Синхронизируется со столом (в списке isTableSyncedAction)
+
+## Покупка бутылочки для стола
+
+1. Игрок выбирает скин в `BottleCatalogModal`
+2. Оплата: `PAY_VOICES`
+3. `SET_BOTTLE_SKIN { skin }`
+4. `SET_BOTTLE_DONOR { playerId, playerName }` — баннер "Спасибо" на столе
+5. `SET_BOTTLE_COOLDOWN_UNTIL { ts }` — cooldown перед следующей покупкой
+
+## Донор бутылочки
+
+- `bottleDonorId`, `bottleDonorName` — отображаются на столе
+- Другие игроки видят летящее облачко "Спасибо" (bottle_thanks в логе)
+
+## Extra Turn (дополнительный ход)
+
+- `REQUEST_EXTRA_TURN { playerId }` → `extraTurnPlayerId = playerId`
+- При NEXT_TURN: `nextIndex` устанавливается на позицию этого игрока
+- После использования: `extraTurnPlayerId = undefined`
+
+## "Пьяное" состояние (ADD_DRUNK_TIME)
+
+- `drunkUntil[playerId] = max(now, current) + ms`
+- Визуальный эффект пара/тумана на аватарке
+- Связано с действием "banya"

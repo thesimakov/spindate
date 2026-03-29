@@ -1,0 +1,54 @@
+---
+description: Навигация между экранами и боковые панели
+globs: components/game-app.tsx,lib/game-context.tsx,lib/game-types.ts
+alwaysApply: false
+---
+
+# Навигация по экранам
+
+## Экраны (state.screen)
+
+| screen | Компонент | Описание |
+|--------|-----------|----------|
+| registration | RegistrationScreen | Вход / регистрация |
+| game | GameRoom + панели | Основной стол |
+| chat | ChatScreen | Личный чат (legacy) |
+| favorites | FavoritesScreen | → перенаправление в панель |
+| shop | ShopScreen | → перенаправление в панель |
+| ugadaika | UgadaikaScreen | Мини-игра |
+| intergame-chat | IntergameChatScreen | Глобальный чат |
+
+## SET_SCREEN — перенаправления в reducer
+
+Некоторые экраны **перенаправляются в боковые панели** вместо отдельной страницы:
+
+- `"profile"` → `{ screen: "game", gameSidePanel: "profile" }`
+- `"shop"` → `{ screen: "game", gameSidePanel: "shop" }`
+- `"favorites"` → `{ screen: "game", gameSidePanel: "favorites" }`
+- `"ugadaika"` → `{ screen: "ugadaika", playerInUgadaika: currentUser.id }`
+- Возврат из ugadaika: `"game"` + `playerInUgadaika = null` + `showReturnedFromUgadaika = true`
+
+## Боковые панели (gameSidePanel)
+
+| panel id | Компонент | Описание |
+|----------|-----------|----------|
+| profile | ProfileScreen variant="panel" | Профиль пользователя |
+| shop | ShopScreen variant="panel" | Магазин |
+| favorites | FavoritesScreen variant="panel" | Избранное |
+| rating | RatingLeaderboardBody | Рейтинг (7 дней) |
+| player-chat | PlayerChatPanel | Чат с игроком |
+| null | — | Панель закрыта |
+
+## SET_GAME_SIDE_PANEL
+
+- Устанавливает `gameSidePanel = panel`
+- Если panel ≠ "player-chat" → `chatPanelPlayer = null`
+
+## OPEN_SIDE_CHAT
+
+- `gameSidePanel = "player-chat"`, `chatPanelPlayer = player`
+
+## GameApp switch
+
+В `GameApp` для `screen = "game"` рендерится `<GameRoom />` плюс условные панели.
+Для остальных экранов — прямой рендер соответствующего компонента.

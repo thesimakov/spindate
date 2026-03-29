@@ -1,0 +1,41 @@
+---
+description: Ежедневные задания, подарки роз, рейтинг симпатии, приветственный подарок
+globs: lib/game-context.tsx,lib/game-types.ts,components/game-room.tsx,components/shop-screen.tsx
+alwaysApply: false
+---
+
+# Ежедневные задания и розы
+
+## Daily Quests
+
+1. `dailyQuests = { dateKey: "YYYY-MM-DD", claimed: [false x5] }`
+2. `CLAIM_DAILY_QUEST { questIndex: 0-4, dateKey }`:
+   - Если dateKey не совпадает с текущим → сброс claimed на [false x5]
+   - Если quest уже claimed → ничего
+   - Иначе → `claimed[idx] = true`
+3. Награда: 1 роза за каждый квест (макс. 5 роз в день)
+
+## Подарить розу (GIVE_ROSE)
+
+1. **Стоимость:** 50 ❤
+2. Проверка `voiceBalance >= 50`
+3. `voiceBalance -= 50`
+4. Запись `rosesGiven.push({ fromPlayerId, toPlayerId, timestamp })`
+5. Используется для рейтинга симпатии и ачивки «Настоящие чувства» (10 роз одному)
+
+## Приветственный подарок (CLAIM_WELCOME_GIFT)
+
+- +150 ❤ при первом заходе
+- Показывается через `WelcomeGiftDialog`
+
+## Поклонники (admirers)
+
+1. **Автодобавление:** при `ADD_LOG` с `type="care"`, если toPlayer = currentUser → добавить fromPlayer в admirers
+2. **Персистентность:** `localStorage spindate_admirers_v1_{userId}`
+3. При `SET_USER` → загрузка из localStorage
+4. При `SYNC_TABLE_AUTHORITY` → мерж из gameLog (записи типа "care")
+
+## Избранное (favorites)
+
+- `ADD_FAVORITE` → добавить игрока (без дублей по id)
+- Только локальное хранение в state, нет серверной персистентности

@@ -1,0 +1,51 @@
+---
+description: Регистрация, вход, сессия — VK и логин/пароль
+globs: components/registration-screen.tsx,lib/api-fetch.ts,lib/vk-bridge.ts,app/api/auth/**/*.ts
+alwaysApply: false
+---
+
+# Регистрация и вход
+
+## Два провайдера входа
+
+### VK Mini App
+1. `initVkResilient()` при монтировании GameApp
+2. Получение launch params из VK Bridge
+3. Автологин: POST /api/auth/vk → сессия + токен
+4. `setClientSessionToken(token)` в sessionStorage
+
+### Логин/пароль
+1. Экран регистрации: ввод login, password, displayName, gender, age
+2. **Регистрация:** POST /api/auth/register
+3. **Вход:** POST /api/auth/login
+4. Токен → `setClientSessionToken(token)` в sessionStorage
+
+## После входа — buildTableAndEnter
+
+1. `dispatch({ type: "SET_USER", user })` — загружает admirers из localStorage
+2. Подготовка стола:
+   - Мобильный: `maxTableSize=6`, 3M + 3F
+   - Десктоп: `maxTableSize=10`, 5M + 5F
+3. POST /api/table/live `{ mode: "join", user, maxTableSize }`
+4. Получить `livePlayers`, `tableId`, `tablesCount`
+5. Добавить ботов через `composeTablePlayers()`
+6. `dispatch({ type: "SET_TABLE", players, tableId })`
+7. `dispatch({ type: "SET_SCREEN", screen: "game" })`
+8. Восстановить баланс: GET /api/user/state → `RESTORE_GAME_STATE`
+
+## Сессия — apiFetch
+
+- Обёртка над `fetch` с `credentials: "include"` (httpOnly cookie)
+- Резерв: заголовок `X-Session-Token` из `sessionStorage` (для VK WebView без cookie)
+- Токен устанавливается `setClientSessionToken(token)` при логине
+- Очищается `setClientSessionToken(null)` при logout
+
+## userIdToNumber
+
+Конвертирует UUID в число для Player.id через hash. Гарантирует id ≥ 10000 (боты 1000-1999).
+
+## Блокировки
+
+В `GameApp` после входа проверяются:
+- `isUserBlocked(id)` → показать "Вы заблокированы"
+- `isUserBanned(id)` → показать "Забанены до {date}"

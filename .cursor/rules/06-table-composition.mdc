@@ -1,0 +1,43 @@
+---
+description: Формирование состава стола — живые игроки + боты, вход/выход
+globs: lib/table-composition.ts,hooks/use-sync-engine.ts,lib/game-context.tsx,lib/bots.ts
+alwaysApply: false
+---
+
+# Формирование стола
+
+## Константы
+
+- `MAX_TABLE_SIZE = 10` (десктоп) / `6` (мобильный, при регистрации)
+- `TARGET_MALES = 5`, `TARGET_FEMALES = 5` (десктоп)
+- Мобильный: 3M + 3F
+
+## composeTablePlayers — алгоритм
+
+Вызывается в `useSyncEngine.composePlayersFromLive`:
+1. Входные данные: `currentUser`, `livePlayers[]`, `existingPlayers[]`, `botPool[]`
+2. Живые игроки добавляются с `isBot: false`
+3. Боты из пула заполняют оставшиеся места до `maxTableSize`
+4. Баланс по полу: стремится к `targetMales / targetFemales`
+
+## SET_TABLE (вход за стол / смена стола)
+
+1. Случайный `spinnerIdx` среди новых игроков
+2. Случайная пара `target1` + `target2` из остальных
+3. Расчёт `bottleAngle` по позиции цели
+4. Если ≥3 игрока: `showResult = true`, лог "Выпала пара"
+5. Бот-рамки: случайная рамка через `randomAvatarFrame()`
+6. `spinSkips` обнуляется для всех игроков
+7. `roundNumber = 5 + random(25)` (не с 1, чтобы имитировать уже идущую игру)
+
+## SET_PLAYERS (обновление состава)
+
+1. Если `isSpinning || showResult`: **порядок не меняется** — только обновление данных существующих, удаление ушедших, новички в конец
+2. Если текущий пользователь отсутствует в incoming — добавить первым
+3. `currentTurnIndex` пересчитывается: ищем текущего ходящего в новом массиве
+
+## Выход со стола
+
+- `beforeunload` / unmount → `sendBeacon("/api/table/live", { mode: "leave" })`
+- Сервер удаляет игрока из live table
+- Другие клиенты увидят изменение при следующем live poll (3 сек)

@@ -1,0 +1,63 @@
+---
+description: Механика хода — порядок кручения бутылочки, таймеры, пропуск хода, AFK
+globs: components/game-room.tsx,hooks/use-game-timers.ts,hooks/use-sync-engine.ts,lib/game-context.tsx
+alwaysApply: false
+---
+
+# Механика хода (Turn Flow)
+
+## Порядок хода — пошагово
+
+1. **Определение текущего игрока:**
+   - `currentTurnIndex` указывает на индекс в массиве `players[]`
+   - Если у игрока `playerInUgadaika` совпадает с id — его ход пропускается (цикл while в NEXT_TURN)
+   - Если выставлен `extraTurnPlayerId` — следующий ход принудительно переходит к этому игроку
+
+2. **Таймер хода (только для живых игроков, свой ход):**
+   - `TURN_MS = 15_000` (15 секунд)
+   - Тикает каждые `TURN_TICK_MS = 250ms`
+   - По истечении → лог `"{name} пропускает ход"` + `dispatch({ type: "NEXT_TURN" })`
+   - Таймер не запускается если: бот, кручение, результат, countdown активен
+
+3. **AFK-пропуск чужого хода:**
+   - `AFK_SKIP_MS = 18_000` (18 секунд)
+   - Только если текущий игрок — живой, НЕ бот, НЕ текущий пользователь
+   - Пропуск инициирует игрок с **наименьшим id** среди живых (liveIds[0])
+
+4. **Бот auto-spin:**
+   - Бот крутит автоматически через `setTimeout(handleSpin, 2500)` после начала хода
+
+## handleSpin — начало кручения
+
+1. `dispatch({ type: "END_PREDICTION_PHASE" })` (если не CASUAL_MODE)
+2. `dispatch({ type: "START_COUNTDOWN" })` → `countdown = 3`
+3. Каждые 800ms: `TICK_COUNTDOWN` → уменьшает countdown
+4. Когда countdown → 0: вызывается `startSpin()`
+
+## startSpin — вращение бутылки
+
+1. Выбор цели: случайный игрок из `others` (все кроме крутящего)
+2. Расчёт угла: `360 * 5 + targetDeg + 90` (5 полных оборотов + угол цели)
+3. `dispatch({ type: "START_SPIN", angle, target, target2: spinner })`
+   - `target` = на кого указывает горлышко
+   - `target2` = крутящий (spinner, на кого указывает дно)
+   - `spinSkips[spinnerId]` сбрасывается в 0
+   - `currentTurnDidSpin = true`
+4. Через **6000ms** (анимация вращения):
+   - Бот → `STOP_SPIN` + автоматический лог действия
+   - Живой → `STOP_SPIN` с action="skip", ждёт ручного выбора
+
+## Показ результата
+
+1. `showResult = true` после STOP_SPIN
+2. **Auto-advance:** через `RESULT_AUTO_ADVANCE_MS = 8000` → `NEXT_TURN`
+3. Игрок может нажать действие раньше (handlePerformAction / handleResponseEmotion)
+
+## NEXT_TURN — переход хода
+
+1. `nextIndex = (currentTurnIndex + 1) % players.length`
+2. Если `extraTurnPlayerId` — перезаписать nextIndex на его позицию
+3. Пропуск игрока в Угадай-ке (while loop)
+4. Если `currentTurnDidSpin = false` — инкремент `spinSkips[playerId]`
+5. Сброс: `showResult, targetPlayer, targetPlayer2, resultAction, predictions, bets, pot`
+6. `roundNumber++`, `extraTurnPlayerId = undefined`

@@ -1,0 +1,49 @@
+---
+description: Система прогнозов и ставок перед кручением бутылки
+globs: components/game-room.tsx,lib/game-types.ts,lib/game-context.tsx
+alwaysApply: false
+---
+
+# Прогнозы и ставки
+
+**Примечание:** система активна только если `CASUAL_MODE = false`.
+
+## Фаза прогнозов
+
+1. При новом ходе (если нет spin/result/countdown) → `START_PREDICTION_PHASE`
+2. Таймер: `PREDICTION_DURATION = 10` секунд (тикает каждую секунду)
+3. Когда таймер → 0 → автоматически вызывается `handleSpin()`
+4. Игрок может сделать прогноз ИЛИ нажать "Крутить" раньше
+
+## Прогноз — пошагово
+
+1. Выбрать двух игроков из пикера (predictionTarget + predictionTarget2)
+2. `ADD_PREDICTION { playerId, playerName, targetPair: sortPair(id1, id2) }`
+3. Одна запись на игрока за раунд (фильтр по playerId)
+4. Лог: "{name} сделал(а) прогноз"
+
+## Ставка — пошагово
+
+1. Выбрать пару + сумму (betAmount ≤ voiceBalance, > 0)
+2. `PLACE_BET { playerId, playerName, targetPair, amount }`
+3. `pot += amount`, `voiceBalance -= amount`
+4. Лог: "{name} ставит {amount}❤"
+
+## Оценка после спина (в startSpin, через 6000ms)
+
+### Прогнозы
+1. `actualPair = sortPair(target.id, spinner.id)`
+2. Для каждого прогноза:
+   - Угадал → `ADD_BONUS +10`, роза в инвентарь, лог
+   - Не угадал → `ADD_BONUS -10`
+3. Совпадение прогнозов (≥2 игрока одинаковый прогноз) → +5 бонусов каждому
+
+### Ставки
+1. `winningBets = bets.filter(pairsMatch)`
+2. `totalWinningStakes = sum(winningBets.amount)`
+3. Каждому победителю: `floor((bet.amount / totalWinningStakes) * pot)` сердец
+4. `PAY_VOICES { amount: -winAmount }` (отрицательное = добавление)
+
+## Очистка
+
+При `NEXT_TURN`: `predictions=[], bets=[], pot=0, predictionPhase=false`.

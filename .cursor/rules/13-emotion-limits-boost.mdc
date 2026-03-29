@@ -1,0 +1,55 @@
+---
+description: Дневные лимиты эмоций, покупка доп. лимитов, подсчёт использований
+globs: components/game-room.tsx,lib/game-context.tsx,lib/game-types.ts
+alwaysApply: false
+---
+
+# Дневные лимиты эмоций
+
+## Лимитируемые типы
+
+Только три типа подпадают под дневной лимит: **kiss**, **beer**, **cocktail**.
+Остальные действия (flowers, diamond, tools, lipstick, skip) — без лимита.
+
+## Базовый лимит
+
+`DAILY_EMOTION_LIMIT = 50` использований в день на каждый тип.
+
+## Расчёт итогового лимита
+
+```
+limit = DAILY_EMOTION_LIMIT (50)
+      + emotionDailyBoost.extraPerType (legacy покупки)
+      + emotionDailyBoost.extraByType[actionId] (точечные покупки)
+```
+
+Функция: `getDailyEmotionLimitForActionId(actionId, boost)`
+
+## Подсчёт использований
+
+- `emotionUseTodayByPlayer[playerId] = { dateKey, kiss, beer, cocktail }`
+- Инкрементируется при `ADD_LOG` через `bumpEmotionUseForLogEntry()`
+- Условие: `entry.type ∈ {kiss, beer, cocktail}` И текст НЕ начинается с "Выпала пара:"
+
+## Покупка лимита (BUY_EMOTION_QUOTA_SELECTION)
+
+1. Выбрать типы: чекбоксы kiss/beer/cocktail
+2. Стоимость: `EMOTION_QUOTA_COST_PER_TYPE_HEARTS = 10` ❤ за тип
+3. Добавка: `EMOTION_QUOTA_PURCHASE_AMOUNT = 50` использований
+4. Reducer:
+   - Проверка: `voiceBalance >= totalCost`, `selectedTypes.length > 0`
+   - `voiceBalance -= totalCost`
+   - `extraByType[type] += extraPerPurchase` для каждого выбранного типа
+   - Legacy `extraPerType` сохраняется
+
+## Устаревший формат (BUY_EMOTION_PACK)
+
+- Увеличивает `extraPerType` (общая добавка ко ВСЕМ трём типам)
+- Используется для обратной совместимости
+
+## Синхронизация при смене стола
+
+При `SYNC_TABLE_AUTHORITY`:
+1. `rebuildTodayLimitedEmotionsFromLog()` — пересчёт из лога сервера
+2. `mergeEmotionBucketsForSync()` — `max(local, fromLog)` по каждому типу
+3. Это гарантирует: смена стола НЕ сбрасывает счётчики

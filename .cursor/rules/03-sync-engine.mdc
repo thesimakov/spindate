@@ -1,0 +1,59 @@
+---
+description: Синхронизация стола — live polling, authority polling, push actions, debounce
+globs: hooks/use-sync-engine.ts,lib/game-context.tsx,app/api/table/**/*.ts
+alwaysApply: false
+---
+
+# Sync Engine — синхронизация стола
+
+## Синхронизируемые действия
+
+Только эти действия отправляются на сервер через `pushTableAction`:
+- START_COUNTDOWN, TICK_COUNTDOWN
+- START_SPIN, STOP_SPIN
+- NEXT_TURN, REQUEST_EXTRA_TURN
+- ADD_LOG, SEND_GENERAL_CHAT
+- SET_AVATAR_FRAME, ADD_DRUNK_TIME
+- SET_BOTTLE_SKIN, SET_BOTTLE_DONOR
+- RESET_ROUND, SET_BOTTLE_COOLDOWN_UNTIL
+
+**НЕ синхронизируются:** PAY_VOICES, ADD_VOICES, SET_SCREEN, ADD_FAVORITE, ADD_ADMIRER и др.
+
+## Обёрнутый dispatch — пошагово
+
+1. `rawDispatch(action)` — применить локально
+2. Если `remoteActionRef.current = true` → это действие пришло с сервера, НЕ отправлять обратно
+3. Если действие в списке `isTableSyncedAction` → `pushTableAction` (POST /api/table/events)
+
+## Live Polling (состав стола)
+
+- Интервал: `LIVE_POLL_MS = 3000` (3 секунды)
+- Первый вызов: `mode: "join"` → регистрация на столе
+- Далее: `mode: "sync"` → обновление списка живых игроков
+- Дополнительно опрос при `focus` и `visibilitychange`
+- Ответ: `livePlayers[]`, `tableId`, `tablesCount`
+- Из livePlayers + ботов формируется полный состав через `composeTablePlayers`
+
+## Authority Polling (состояние стола)
+
+- Интервал: `AUTHORITY_POLL_MS = 800` (800ms)
+- POST `/api/table/state` с `{ tableId, sinceRevision }`
+- Если `snapshot.revision > sinceRevision` → применить `SYNC_TABLE_AUTHORITY`
+- **Debounce:** `SYNC_DEBOUNCE_MS = 500` — не применять чаще чем раз в 500ms
+
+## SYNC_TABLE_AUTHORITY (reducer)
+
+Перезаписывает: players, currentTurnIndex, isSpinning, countdown, bottleAngle,
+bottleSkin, targetPlayer, targetPlayer2, showResult, resultAction, roundNumber,
+predictionPhase, currentTurnDidSpin, extraTurnPlayerId, spinSkips, gameLog,
+generalChatMessages, avatarFrames, drunkUntil.
+
+Мержит: emotionUseTodayByPlayer (max локального и серверного), admirers (из лога care).
+
+## Уход со стола
+
+При `beforeunload` или unmount → `navigator.sendBeacon("/api/table/live", { mode: "leave", userId })`.
+
+## Пауза стола
+
+Если `tablePaused = true` — polling останавливается (useEffect возвращает cleanup без запуска).

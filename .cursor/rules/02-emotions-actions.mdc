@@ -1,0 +1,56 @@
+---
+description: Механика действий/эмоций при кручении — типы, стоимость, лимиты, гендерные комбо
+globs: components/game-room.tsx,lib/game-types.ts,lib/game-context.tsx
+alwaysApply: false
+---
+
+# Действия и эмоции (Pair Actions)
+
+## Доступные действия (PAIR_ACTIONS)
+
+| id | label | cost (❤) | combo |
+|----|-------|----------|-------|
+| kiss | Поцеловать | 1 | MF |
+| flowers | Цветы | 1 | MF, FF |
+| diamond | Бриллианты | 3 | MF |
+| beer | Выпить пива | 1 | MM |
+| banya | Банька | 1 | MM |
+| tools | Инструменты | 2 | MM |
+| lipstick | Губная помада | 1 | FF |
+| cocktail | Коктейль | 1 | FF |
+| skip | Пропустить | 0 | MM, MF, FF |
+
+Комбо определяется функцией `getPairGenderCombo(target, target2)`:
+- `MF` = мальчик + девочка
+- `MM` = мальчик + мальчик
+- `FF` = девочка + девочка
+
+## handlePerformAction — пошагово
+
+1. Звук эмоции (`playEmotionSound`)
+2. Найти определение действия в `PAIR_ACTIONS`
+3. **Проверка дневного лимита** (kiss/beer/cocktail):
+   - Базовый лимит: `DAILY_EMOTION_LIMIT = 50`
+   - Плюс покупки: `emotionDailyBoost.extraPerType + extraByType[actionId]`
+   - Если исчерпан → тост "Лимит на сегодня: N", выход
+4. **Проверка баланса** (если cost > 0):
+   - `voiceBalance < actionCost` → тост "Недостаточно сердец", выход
+   - Иначе `dispatch({ type: "PAY_VOICES", amount: actionCost })`
+5. Запуск летящего эмодзи (launchEmoji)
+6. Для "banya": дополнительно launchSteam (пар на аватарке цели) + `ADD_DRUNK_TIME`
+7. `dispatch({ type: "ADD_LOG", entry })` — лог действия
+
+## handleResponseEmotion — ответная эмоция
+
+Вызывается **вторым участником пары** (не крутившим). Те же проверки лимитов и баланса.
+Адресат: если крутил другой — ему; если крутил сам — второму участнику пары.
+
+## Дневной лимит эмоций
+
+- Счётчик `emotionUseTodayByPlayer[playerId]` хранит {dateKey, kiss, beer, cocktail}
+- Инкрементируется в `bumpEmotionUseForLogEntry()` при ADD_LOG
+- При синхронизации стола (SYNC_TABLE_AUTHORITY): мерж `max(local, fromLog)` — чтобы не терять счётчики
+
+## Стоимость для ботов
+
+Боты НЕ списывают сердца с баланса игрока. Проверка `if (!currentTurnPlayer.isBot)` перед PAY_VOICES.

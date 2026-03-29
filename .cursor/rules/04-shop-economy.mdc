@@ -1,0 +1,56 @@
+---
+description: Экономика — сердца, розы, VIP, покупки в магазине, обмен валют
+globs: components/shop-screen.tsx,components/game-room.tsx,lib/game-context.tsx,lib/heart-shop-pricing.ts
+alwaysApply: false
+---
+
+# Экономика и магазин
+
+## Валюты
+
+| Валюта | Хранение | Описание |
+|--------|----------|----------|
+| Сердца (❤, voiceBalance) | GameState.voiceBalance | Основная валюта для действий и покупок |
+| Розы (🌹) | GameState.inventory (type="rose") | Редкая валюта, конвертируется в сердца |
+| Бонусы (bonusBalance) | GameState.bonusBalance | Начисляются за предсказания |
+
+## Получение сердец
+
+1. **Приветственный подарок:** `CLAIM_WELCOME_GIFT` → +150 ❤ (одноразово)
+2. **Покупка за VK голоса:** пакеты 5/50/150/500/1000/5000 ❤
+   - Курс: ~15 ❤ = 1 голос
+   - Фиксированные цены: 5❤=1гол, 50❤=3гол, 150❤=9гол, 500❤=30гол, 1000❤=50гол, 5000❤=270гол
+3. **Обмен роз:** `EXCHANGE_ROSES_FOR_VOICES` → 1 роза = 5 ❤
+4. **Выигрыш в Угадай-ке:** +10 ❤ за раунд
+5. **Выигрыш ставки:** доля банка пропорционально ставке
+
+## Траты сердец
+
+1. **Действия (эмоции):** стоимость по PAIR_ACTIONS (1-3 ❤)
+2. **VIP:** 20 ❤ / 7 дней, 70 ❤ / 30 дней
+3. **Покупка роз:** `EXCHANGE_VOICES_FOR_ROSES` → 5 ❤ = 1 роза
+4. **Подарить розу:** `GIVE_ROSE` → 50 ❤ (плюс запись в rosesGiven)
+5. **Покупка лимита эмоций:** `BUY_EMOTION_QUOTA_SELECTION` → 10 ❤ за тип × N типов
+
+## VIP-статус
+
+1. `SET_VIP_STATUS` — устанавливает `isVip=true`, `vipUntilTs` (ms timestamp)
+2. Обновляет и в `players[]`, и в `currentUser`
+3. Проверка активности: `isVip && (vipUntilTs == null || vipUntilTs > now)`
+
+## Подарки (inventory items)
+
+- **Типы:** rose, flowers, song, diamond, toy_bear, toy_car, toy_ball, souvenir_magnet, souvenir_keychain, plush_heart, chocolate_box
+- **Премиум подарки (game-room):** 3-10 ❤ (toy_bear=10, plush_heart=8, ...)
+- `ADD_INVENTORY_ITEM` добавляет в inventory
+- Инвентарь сохраняется на сервере через PUT /api/user/state каждые 1500ms при изменении
+
+## Обмен роз ↔ сердец
+
+- **Розы → сердца:** 1 роза = 5 ❤ (EXCHANGE_ROSES_FOR_VOICES)
+- **Сердца → розы:** 5 ❤ = 1 роза (EXCHANGE_VOICES_FOR_ROSES)
+- `REMOVE_INVENTORY_ROSES` — снятие роз без конвертации (напр., вход в Угадай-ку)
+
+## Серверная персистентность
+
+`GameProvider` эффект: при изменении `voiceBalance` или `inventory` → debounce 1500ms → PUT /api/user/state с JSON {voiceBalance, inventory}.
