@@ -140,9 +140,9 @@
    */
   html {
     height: 100%;
-    width: 100vw;
-    min-width: 100vw;
-    max-width: none;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     -webkit-text-size-adjust: 100%;
@@ -150,9 +150,9 @@
     overflow-x: hidden;
   }
   body {
-    width: 100vw;
-    min-width: 100vw;
-    max-width: none;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 100vh;
     min-height: 100dvh;
     min-height: -webkit-fill-available;
@@ -505,6 +505,30 @@
 .app-loader-shimmer {
   animation: app-loader-shimmer 1.5s ease-in-out infinite;
 }
+
+@keyframes loaderFadeOut {
+  0% { opacity: 1; transform: scale(1); }
+  60% { opacity: 0.4; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1.06); pointer-events: none; }
+}
+.loader-fade-out {
+  animation: loaderFadeOut 0.8s ease-in forwards;
+}
+
+@keyframes loaderParticleBurst {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--px, 40px), var(--py, -60px)) scale(0.2); }
+}
+.loader-particle {
+  --px: 0px;
+  --py: 0px;
+  opacity: 0;
+  animation: loaderParticleBurst 0.9s ease-out forwards;
+}
+.loader-particle:nth-child(odd)  { --px:  60px; --py: -80px; }
+.loader-particle:nth-child(even) { --px: -50px; --py:  70px; }
+.loader-particle:nth-child(3n)   { --px:  90px; --py:  40px; }
+.loader-particle:nth-child(3n+1) { --px: -70px; --py: -50px; }
 
 /* Карусель подарков у аватарки: плавное появление смены слота */
 @keyframes giftRotateSlotIn {

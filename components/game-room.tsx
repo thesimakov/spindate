@@ -48,7 +48,13 @@ import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { composeTablePlayers } from "@/lib/table-composition"
-import { getDailyLoveQuote } from "@/lib/love-quotes"
+import { useSyncEngine } from "@/hooks/use-sync-engine"
+import { useGameTimers } from "@/hooks/use-game-timers"
+import { TableLoaderOverlay } from "@/components/table-loader-overlay"
+import { FlyingEmojisLayer } from "@/components/flying-emojis-layer"
+import { BottleCenter } from "@/components/bottle-center"
+import { TurnTimerDisplay } from "@/components/turn-timer-display"
+import { GameBoardPlayers } from "@/components/game-board-players"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -57,7 +63,6 @@ import {
   type GameLogEntry,
   type PairGenderCombo,
   type InventoryItem,
-  type TableAuthorityPayload,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
@@ -126,19 +131,7 @@ type GiftCatalogDef = {
 /** Бесплатные — добавляйте записи; новые `id` согласуйте с `InventoryItem` в game-types */
 const GIFT_CATALOG_FREE: GiftCatalogDef[] = []
 
-/** Лоадер стола: шаги прогресса (мс от старта) */
-const TABLE_LOADER_DURATION_MS = 2400
-/** Минимум на экране — короче ощущается «вечным», но без мгновенного мигания */
-const TABLE_LOADER_MIN_VISIBLE_MS = 1200
-const TABLE_LOADER_PROGRESS_STEPS: readonly { pct: number; at: number }[] = [
-  { pct: 10, at: 200 },
-  { pct: 25, at: 500 },
-  { pct: 50, at: 1000 },
-  { pct: 70, at: 1550 },
-  { pct: 100, at: 2100 },
-]
-/** Пока ждём сервер после 70%, ползунок медленно ползёт до этого % (не мешает финальным 100%) */
-const TABLE_LOADER_FAKE_MAX_BEFORE_READY = 94
+// Table loader constants moved to components/table-loader-overlay.tsx
 
 const GIFT_CATALOG_PREMIUM: GiftCatalogDef[] = [
   { id: "toy_bear", name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
@@ -405,33 +398,13 @@ const MOBILE_EMOTION_STRIP_SCROLL =
 const MOBILE_EMOTION_STRIP_BTN =
   "flex h-8 shrink-0 flex-row items-center gap-1 rounded-full px-2 py-0 pr-2.5 text-left text-[10px] font-bold leading-none transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
 
-function isTableSyncedAction(action: GameAction): boolean {
-  switch (action.type) {
-    case "START_COUNTDOWN":
-    case "TICK_COUNTDOWN":
-    case "START_SPIN":
-    case "STOP_SPIN":
-    case "NEXT_TURN":
-    case "REQUEST_EXTRA_TURN":
-    case "ADD_LOG":
-    case "SEND_GENERAL_CHAT":
-    case "SET_AVATAR_FRAME":
-    case "ADD_DRUNK_TIME":
-    case "SET_BOTTLE_SKIN":
-    case "SET_BOTTLE_DONOR":
-    case "RESET_ROUND":
-    case "SET_BOTTLE_COOLDOWN_UNTIL":
-      return true
-    default:
-      return false
-  }
-}
+// isTableSyncedAction moved to hooks/use-sync-engine.ts
 
 
 const GAME_ROOM_DUST_SEED = 0x51ab1e
 
 export function GameRoom() {
-  const { state, dispatch: rawDispatch } = useGame()
+  const { state } = useGame()
   useTheme()
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Только два режима: телефон (`isMobile`) и ПК (`isPcLayout`), без отдельного «планшетного» слоя по max-md/md/lg. */
@@ -487,346 +460,13 @@ export function GameRoom() {
     [],
   )
 
-  const remoteActionRef = useRef(false)
+  const { dispatch, syncLiveTable, fetchTableAuthority, tableLiveReady, tableAuthorityReady } = useSyncEngine()
   const playersRef = useRef(players)
   useEffect(() => { playersRef.current = players }, [players])
-  const lastAuthorityRevisionRef = useRef(0)
-  const syncMetaRef = useRef<{ tableId: number; userId: number | null }>({
-    tableId,
-    userId: currentUser?.id ?? null,
-  })
 
-  useEffect(() => {
-    syncMetaRef.current = { tableId, userId: currentUser?.id ?? null }
-  }, [tableId, currentUser?.id])
-
-  useEffect(() => {
-    lastAuthorityRevisionRef.current = 0
-  }, [tableId])
-
-  const pushTableAction = useCallback(async (action: GameAction) => {
-    const current = syncMetaRef.current
-    if (!current.userId || !current.tableId) return
-    try {
-      await apiFetch("/api/table/events", {
-        method: "POST",
-        cache: "no-store" as RequestCache,
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          mode: "push",
-          tableId: current.tableId,
-          senderId: current.userId,
-          action,
-        }),
-      })
-    } catch {
-      // ignore network hiccups; state will converge on next events
-    }
-  }, [])
-
-  const dispatch = useCallback((action: GameAction) => {
-    rawDispatch(action)
-    if (remoteActionRef.current) return
-    if (!isTableSyncedAction(action)) return
-    void pushTableAction(action)
-  }, [rawDispatch, pushTableAction])
-
-  const applyAuthoritySnapshot = useCallback(
-    (payload: TableAuthorityPayload) => {
-      lastAuthorityRevisionRef.current = payload.revision
-      remoteActionRef.current = true
-      try {
-        rawDispatch({ type: "SYNC_TABLE_AUTHORITY", payload })
-      } finally {
-        remoteActionRef.current = false
-      }
-    },
-    [rawDispatch],
-  )
-
-  const fetchTableAuthority = useCallback(
-    async (tid: number) => {
-      const since = lastAuthorityRevisionRef.current
-      try {
-        const res = await apiFetch("/api/table/state", {
-          method: "POST",
-          cache: "no-store" as RequestCache,
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ tableId: tid, sinceRevision: since }),
-        })
-        const data = await res.json().catch(() => null)
-        if (!res.ok || !data?.ok || !data.snapshot) return
-        const snap = data.snapshot as TableAuthorityPayload
-        if (snap.revision > since) {
-          applyAuthoritySnapshot(snap)
-        }
-        setTableAuthorityReady(true)
-      } catch {
-        // Разрешаем вход даже при ошибке сети/сервера
-        setTableAuthorityReady(true)
-      }
-    },
-    [applyAuthoritySnapshot],
-  )
-
-  // Локальный лоадер при входе/смене стола: обязателен до реальной готовности
-  // live-состава и authority (даже если есть локальный/кэшированный список игроков).
   const [tableLoading, setTableLoading] = useState(true)
-  const [tableLoaderProgress, setTableLoaderProgress] = useState(0)
-  const loaderStepTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
-  const [tableLiveReady, setTableLiveReady] = useState(false)
-  const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
-  const tableLoadStartedAtRef = useRef<number>(Date.now())
-  const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
-
-  const clearLoaderStepTimers = useCallback(() => {
-    loaderStepTimeoutsRef.current.forEach(clearTimeout)
-    loaderStepTimeoutsRef.current = []
-  }, [])
-
-  const scheduleLoaderStepTimers = useCallback(() => {
-    clearLoaderStepTimers()
-    for (const { pct, at } of TABLE_LOADER_PROGRESS_STEPS) {
-      if (pct >= 100) continue
-      loaderStepTimeoutsRef.current.push(setTimeout(() => setTableLoaderProgress(pct), at))
-    }
-  }, [clearLoaderStepTimers])
 
   const { toast, showToast } = useInlineToast(2000)
-  const maxTableSize = 10
-  const targetMales = 5
-  const targetFemales = 5
-
-  const composePlayersFromLive = useCallback(
-    (livePlayers: Player[]) => {
-      if (!currentUser) return playersRef.current
-      const bots = generateBots(220, currentUser.gender)
-      return composeTablePlayers({
-        currentUser: { ...currentUser, isBot: false },
-        livePlayers: livePlayers.map((p) => ({ ...p, isBot: false })),
-        existingPlayers: playersRef.current,
-        maxTableSize,
-        targetMales,
-        targetFemales,
-        botPool: bots,
-      })
-    },
-    [currentUser, maxTableSize, targetMales, targetFemales],
-  )
-
-  /** Ref для актуального tableId — позволяет syncLiveTable читать свежее значение
-   *  без пересоздания callback'а (что перезапускало бы sync-loop). */
-  const tableIdRef = useRef(tableId)
-  useEffect(() => { tableIdRef.current = tableId }, [tableId])
-
-  const syncLiveTable = useCallback(
-    async (mode: "join" | "sync", forceNew = false) => {
-      if (!currentUser) return null
-      const currentTableId = tableIdRef.current
-      try {
-        const res = await apiFetch("/api/table/live", {
-          method: "POST",
-          cache: "no-store" as RequestCache,
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            mode,
-            forceNew,
-            user: currentUser,
-            tableId: currentTableId,
-            maxTableSize,
-          }),
-        })
-        const data = await res.json().catch(() => null)
-        if (!res.ok || !data?.ok || !Array.isArray(data.livePlayers)) return null
-        const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
-        const nextPlayers = composePlayersFromLive(livePlayers)
-        const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
-        const tableActuallyChanged = nextTableId !== currentTableId
-        if (tableActuallyChanged || forceNew) {
-          dispatch({ type: "SET_TABLE", players: nextPlayers, tableId: nextTableId })
-          lastAuthorityRevisionRef.current = 0
-        } else {
-          dispatch({ type: "SET_PLAYERS", players: nextPlayers })
-        }
-        if (typeof data.tablesCount === "number") {
-          dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
-        }
-        await fetchTableAuthority(nextTableId)
-        setTableLiveReady(true)
-        return { tableId: nextTableId, liveCount: livePlayers.length }
-      } catch {
-        // Разрешаем вход даже при ошибке сети
-        setTableLiveReady(true)
-        return null
-      }
-    },
-    [currentUser, maxTableSize, composePlayersFromLive, dispatch, fetchTableAuthority],
-  )
-
-  /**
-   * Лоадер стола — запускается при маунте GameRoom и при смене пользователя.
-   * НЕ перезапускается при смене tableId (серверная подстановка id после join
-   * вызывала цикл перезагрузок). При явной смене стола через handleChangeTable
-   * данные уже готовы — лоадер не нужен.
-   */
-  useEffect(() => {
-    tableLoadStartedAtRef.current = Date.now()
-    setTableLoading(true)
-    setTableLiveReady(false)
-    setTableAuthorityReady(false)
-    setTableLoaderProgress(0)
-    scheduleLoaderStepTimers()
-    return () => clearLoaderStepTimers()
-  }, [currentUser?.id, scheduleLoaderStepTimers])
-
-  /** После 70% таймеры молчат — медленно двигаем %, пока ждём live + authority */
-  useEffect(() => {
-    if (!tableLoading) return
-    const id = window.setInterval(() => {
-      setTableLoaderProgress((p) => {
-        if (p < 70 || p >= 100) return p
-        if (p >= TABLE_LOADER_FAKE_MAX_BEFORE_READY) return p
-        return p + 1
-      })
-    }, 420)
-    return () => clearInterval(id)
-  }, [tableLoading])
-
-  /** Завершение лоадера: все сигналы готовы + минимальное время видимости */
-  useEffect(() => {
-    if (!tableLoading) return
-    const hasPlayers = players.length > 0
-    // Гарантируем что текущий пользователь точно есть в списке игроков
-    const hasCurrentUser = currentUser != null && players.some(p => p.id === currentUser.id)
-    const allSignalsReady = hasPlayers && hasCurrentUser && tableLiveReady && tableAuthorityReady
-    if (!allSignalsReady) return
-
-    const elapsed = Date.now() - tableLoadStartedAtRef.current
-    const remainingMinVisible = TABLE_LOADER_MIN_VISIBLE_MS - elapsed
-
-    if (remainingMinVisible > 0) {
-      let doneAfterMin: ReturnType<typeof setTimeout> | null = null
-      const waitMin = setTimeout(() => {
-        setTableLoaderProgress(100)
-        doneAfterMin = setTimeout(() => {
-          setTableLoading(false)
-          setTableLoaderProgress(0)
-        }, 250)
-      }, remainingMinVisible)
-      return () => {
-        clearTimeout(waitMin)
-        if (doneAfterMin) clearTimeout(doneAfterMin)
-      }
-    }
-
-    setTableLoaderProgress(100)
-    const done = setTimeout(() => {
-      setTableLoading(false)
-      setTableLoaderProgress(0)
-    }, 250)
-    return () => clearTimeout(done)
-  }, [tableLoading, players.length, tableLiveReady, tableAuthorityReady])
-
-  // Синхронизация живых игроков за столом.
-  // Первый вызов — "join" (сервер подберёт или создаст стол).
-  // Дальнейшие — "sync" (heartbeat + обновление состава).
-  const initialJoinDoneRef = useRef(false)
-  useEffect(() => {
-    initialJoinDoneRef.current = false
-  }, [currentUser?.id])
-
-  useEffect(() => {
-    if (!currentUser || tablePaused) return
-    let cancelled = false
-
-    const tick = async () => {
-      if (cancelled) return
-      if (!initialJoinDoneRef.current) {
-        initialJoinDoneRef.current = true
-        await syncLiveTable("join")
-      } else {
-        await syncLiveTable("sync")
-      }
-    }
-
-    void tick()
-    const interval = setInterval(() => {
-      void tick()
-    }, 3000)
-
-    const onFocus = () => { void tick() }
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void tick()
-    }
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
-    }
-  }, [currentUser, syncLiveTable, tablePaused])
-
-  // Авторитетное состояние стола с сервера (фаза раунда, спин, очередь, лог, общий чат).
-  useEffect(() => {
-    if (!currentUser || tablePaused) return
-    let cancelled = false
-
-    const poll = async () => {
-      if (cancelled) return
-      await fetchTableAuthority(tableId)
-    }
-
-    void poll()
-    const interval = setInterval(() => {
-      void poll()
-    }, 800)
-
-    const onFocus = () => { void poll() }
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void poll()
-    }
-    window.addEventListener("focus", onFocus)
-    document.addEventListener("visibilitychange", onVisibility)
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-      window.removeEventListener("focus", onFocus)
-      document.removeEventListener("visibilitychange", onVisibility)
-    }
-  }, [currentUser, tableId, fetchTableAuthority, tablePaused])
-
-  // Освобождаем место за столом при выходе из комнаты/приложения.
-  useEffect(() => {
-    if (!currentUser) return
-    const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
-    const leave = () => {
-      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-        navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
-      } else {
-        void apiFetch("/api/table/live", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          keepalive: true,
-          body: payload,
-        }).catch(() => {})
-      }
-    }
-
-    const onBeforeUnload = () => leave()
-    window.addEventListener("beforeunload", onBeforeUnload)
-
-    return () => {
-      window.removeEventListener("beforeunload", onBeforeUnload)
-      leave()
-    }
-  }, [currentUser])
 
   // Рандомный бот периодически меняет себе рамку
   useEffect(() => {
@@ -1081,15 +721,7 @@ export function GameRoom() {
   })
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
-  const [avatarSteamFog, setAvatarSteamFog] = useState<Record<string, AvatarSteamFog>>({})
-  /** Тик для перерисовки запотевания и снятия истёкших слоёв */
-  const [steamFogTick, setSteamFogTick] = useState(0)
-  const [, setResultTimer] = useState<number | null>(null)
-  const [turnTimer, setTurnTimer] = useState<number | null>(null)
   const [chatInput, setChatInput] = useState("")
-  const resultTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const underBoardStatusRef = useRef<HTMLDivElement>(null)
@@ -1100,8 +732,6 @@ export function GameRoom() {
   const [showPredictionPicker, setShowPredictionPicker] = useState(false)
   const [predictionMade, setPredictionMade] = useState(false)
   const [predictionResult, setPredictionResult] = useState<"correct" | "wrong" | null>(null)
-  const [predictionTimer, setPredictionTimer] = useState<number>(10)
-  const predictionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Bet state
   const [betAmount, setBetAmount] = useState(10)
@@ -1315,17 +945,39 @@ export function GameRoom() {
     setBetWinnings(null)
     setBetTarget1(null)
     setBetTarget2(null)
-    setPredictionTimer(10)
-    if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
   }, [roundNumber])
 
   const handleSpin = useCallback(() => {
-    if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
     if (!CASUAL_MODE) {
       dispatch({ type: "END_PREDICTION_PHASE" })
     }
     dispatch({ type: "START_COUNTDOWN" })
   }, [dispatch])
+
+  const {
+    turnTimer,
+    predictionTimer,
+    steamFogTick,
+    avatarSteamFog,
+    setAvatarSteamFog,
+    resultTimerRef,
+    autoAdvanceRef,
+    clearResultTimers,
+  } = useGameTimers({
+    tableId,
+    roundNumber,
+    currentTurnIndex,
+    currentTurnPlayer,
+    currentUser,
+    isSpinning,
+    showResult,
+    countdown,
+    predictionPhase,
+    dispatch,
+    handleSpin,
+    playersRef: playersRef as React.RefObject<Player[]>,
+    casualMode: CASUAL_MODE,
+  })
 
   /* ---- auto-scroll log ---- */
   useEffect(() => {
@@ -1340,67 +992,6 @@ export function GameRoom() {
     }
    
   }, [currentTurnIndex, isSpinning, showResult, countdown])
-
-  /* ---- 10-second prediction countdown timer ---- */
-  useEffect(() => {
-    if (CASUAL_MODE) return
-    if (!predictionPhase || isSpinning || showResult) {
-      if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
-      return
-    }
-
-    setPredictionTimer(10)
-    predictionTimerRef.current = setInterval(() => {
-      setPredictionTimer((prev) => {
-        if (prev <= 1) {
-          // Time is up - auto-spin
-          if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => {
-      if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
-    }
-  }, [predictionPhase, isSpinning, showResult])
-
-  /* ---- Auto-spin when prediction timer hits 0 ---- */
-  useEffect(() => {
-    if (CASUAL_MODE) return
-    if (predictionTimer === 0 && predictionPhase && !isSpinning && !showResult && countdown === null) {
-      handleSpin()
-    }
-   
-  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin])
-
-  /* ---- 8-second auto-advance timer when result is showing ---- */
-  useEffect(() => {
-    if (!showResult) {
-      setResultTimer(null)
-      if (resultTimerRef.current) clearInterval(resultTimerRef.current)
-      if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
-      return
-    }
-
-    setResultTimer(8)
-    resultTimerRef.current = setInterval(() => {
-      setResultTimer((prev) => {
-        if (prev !== null && prev > 1) return prev - 1
-        return 0
-      })
-    }, 1000)
-
-    autoAdvanceRef.current = setTimeout(() => {
-      dispatch({ type: "NEXT_TURN" })
-    }, 8000)
-
-    return () => {
-      if (resultTimerRef.current) clearInterval(resultTimerRef.current)
-      if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
-    }
-  }, [showResult, dispatch])
 
   /* ---- bot auto-spin (delayed to let prediction phase happen) ---- */
   useEffect(() => {
@@ -1432,117 +1023,7 @@ export function GameRoom() {
     return () => clearTimeout(t)
   }, [showReturnedFromUgadaika, currentTurnPlayer?.id, currentUser?.id, dispatch])
 
-  /* ---- turn timer + auto-skip (15s) for current live user ----
-     Важно: список игроков регулярно пересинхронизируется (новые object references),
-     поэтому привязываемся к "ключу хода" (tableId/round/index/playerId), а не к объекту Player.
-  ---- */
-  const turnGuardRef = useRef<{
-    key: string | null
-    deadlineTs: number
-    skipTimeout: ReturnType<typeof setTimeout> | null
-  }>({ key: null, deadlineTs: 0, skipTimeout: null })
-
-  useEffect(() => {
-    const isEligible =
-      !!currentTurnPlayer &&
-      !currentTurnPlayer.isBot &&
-      currentUser?.id === currentTurnPlayer.id &&
-      !isSpinning &&
-      !showResult &&
-      countdown === null
-
-    const key =
-      isEligible && currentTurnPlayer
-        ? `${tableId}:${roundNumber}:${currentTurnIndex}:${currentTurnPlayer.id}`
-        : null
-
-    // Cleanup timers if we are not eligible anymore or turn changed
-    const prevKey = turnGuardRef.current.key
-    if (!key || (prevKey && key !== prevKey)) {
-      if (turnTimerRef.current) {
-        clearInterval(turnTimerRef.current)
-        turnTimerRef.current = null
-      }
-      if (turnGuardRef.current.skipTimeout) {
-        clearTimeout(turnGuardRef.current.skipTimeout)
-        turnGuardRef.current.skipTimeout = null
-      }
-      turnGuardRef.current.key = key
-      turnGuardRef.current.deadlineTs = 0
-      setTurnTimer(null)
-    }
-
-    if (!key) return
-
-    // If we're still on the same turn key, don't restart the countdown at "15"
-    if (turnGuardRef.current.key === key && turnGuardRef.current.deadlineTs > 0) return
-
-    const TURN_MS = 15_000
-    const deadlineTs = Date.now() + TURN_MS
-    turnGuardRef.current.key = key
-    turnGuardRef.current.deadlineTs = deadlineTs
-
-    // Visual timer
-    if (turnTimerRef.current) clearInterval(turnTimerRef.current)
-    const tick = () => {
-      const leftMs = Math.max(0, deadlineTs - Date.now())
-      const leftSec = Math.ceil(leftMs / 1000)
-      setTurnTimer(leftSec)
-      if (leftSec <= 0 && turnTimerRef.current) {
-        clearInterval(turnTimerRef.current)
-        turnTimerRef.current = null
-      }
-    }
-    tick()
-    turnTimerRef.current = setInterval(tick, 250)
-
-    // Auto-skip at deadline
-    if (turnGuardRef.current.skipTimeout) clearTimeout(turnGuardRef.current.skipTimeout)
-    turnGuardRef.current.skipTimeout = setTimeout(() => {
-      // Ensure we're still on the same turn
-      if (turnGuardRef.current.key !== key) return
-      if (!currentTurnPlayer) return
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentTurnPlayer,
-          text: `${currentTurnPlayer.name} пропускает ход`,
-          timestamp: Date.now(),
-        },
-      })
-      dispatch({ type: "NEXT_TURN" })
-    }, TURN_MS + 25)
-
-    return () => {}
-  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch])
-
-  /* ---- auto-skip for OTHER live players who went AFK or disconnected ---- */
-  useEffect(() => {
-    if (!currentTurnPlayer || currentTurnPlayer.isBot) return
-    if (!currentUser || currentUser.id === currentTurnPlayer.id) return
-    if (isSpinning || showResult || countdown !== null) return
-
-    const timeout = setTimeout(() => {
-      const liveIds = playersRef.current.filter(p => !p.isBot).map(p => p.id).sort((a, b) => a - b)
-      if (!currentUser || liveIds[0] !== currentUser.id) return
-
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentTurnPlayer,
-          text: `${currentTurnPlayer.name} пропускает ход`,
-          timestamp: Date.now(),
-        },
-      })
-      dispatch({ type: "NEXT_TURN" })
-    }, 18000)
-
-    return () => clearTimeout(timeout)
-  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch])
+  // Turn timer, AFK skip, result timer, prediction timer, steam fog — all managed by useGameTimers hook
 
   /* ---- countdown tick ---- */
   useEffect(() => {
@@ -1642,24 +1123,7 @@ export function GameRoom() {
     [positions, players],
   )
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setSteamFogTick((t) => t + 1)
-      setAvatarSteamFog((prev) => {
-        const now = Date.now()
-        let changed = false
-        const next = { ...prev }
-        for (const key of Object.keys(next)) {
-          if (next[key].until <= now) {
-            delete next[key]
-            changed = true
-          }
-        }
-        return changed ? next : prev
-      })
-    }, 400)
-    return () => window.clearInterval(id)
-  }, [])
+  // Steam fog tick managed by useGameTimers hook
 
   /* ---- replay remote emotions as flying emojis ---- */
   const processedLogIdsRef = useRef<Set<string>>(new Set())
@@ -2248,8 +1712,7 @@ export function GameRoom() {
 
   /* ---- skip / advance turn ---- */
   const handleSkipTurn = () => {
-    if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
-    if (resultTimerRef.current) clearInterval(resultTimerRef.current)
+    clearResultTimers()
     dispatch({ type: "NEXT_TURN" })
   }
 
@@ -3012,9 +2475,9 @@ export function GameRoom() {
       currentUser: { ...currentUser, isBot: false },
       livePlayers: [{ ...currentUser, isBot: false }],
       existingPlayers: players,
-      maxTableSize,
-      targetMales,
-      targetFemales,
+      maxTableSize: 10,
+      targetMales: 5,
+      targetFemales: 5,
       botPool: localBots,
     }).sort(() => Math.random() - 0.5)
     dispatch({ type: "SET_TABLE", players: localPlayers, tableId: 7000 + Math.floor(Math.random() * 1000) })
@@ -3035,109 +2498,15 @@ export function GameRoom() {
         onClaim={handleClaimWelcomeGift}
       />
 
-      {/* Лоадер стола: выше всего UI стола (эмодзи z-90, модалки z-50+), плотный фон — не просвечивает стол */}
-      {tableLoading && (
-        <div
-          className="fixed inset-0 z-[200] isolate flex flex-col overflow-y-auto bg-slate-950 px-4 py-8 backdrop-blur-sm"
-          role="progressbar"
-          aria-valuenow={tableLoaderProgress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-busy="true"
-          aria-label="Загрузка стола"
-        >
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1">
-            <div
-              className={cn(
-                "table-loader-quote-card player-menu-quote relative w-full overflow-hidden rounded-3xl border text-left shadow-[0_24px_60px_-12px_rgba(0,0,0,0.55),0_0_0_1px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.08)]",
-                isPcLayout ? "max-w-2xl" : "max-w-md",
-              )}
-              style={{
-                background:
-                  "linear-gradient(155deg, rgba(30,41,59,0.72) 0%, rgba(15,23,42,0.88) 45%, rgba(15,23,42,0.92) 100%)",
-                borderColor: "rgba(251, 191, 36, 0.28)",
-                backdropFilter: "blur(18px)",
-                WebkitBackdropFilter: "blur(18px)",
-              }}
-            >
-              <div
-                className="pointer-events-none absolute -right-6 -top-10 h-40 w-40 rounded-full bg-amber-400/15 blur-3xl"
-                aria-hidden
-              />
-              <div
-                className="pointer-events-none absolute -bottom-8 -left-10 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl"
-                aria-hidden
-              />
-              <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/35 to-transparent"
-                aria-hidden
-              />
-              <div className="relative z-10 px-5 py-6 sm:px-8 sm:py-8">
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-100 shadow-[0_0_20px_rgba(251,191,36,0.15)] sm:text-[11px]">
-                    Цитата дня
-                  </span>
-                  <span className="hidden h-px w-12 bg-gradient-to-r from-amber-400/50 to-transparent sm:block" aria-hidden />
-                </div>
-                <blockquote className="relative m-0">
-                  <span
-                    className="pointer-events-none absolute -left-0.5 -top-6 font-serif text-[4.5rem] leading-none text-amber-400/[0.18] sm:text-[5.5rem] sm:text-amber-400/20"
-                    aria-hidden
-                  >
-                    &ldquo;
-                  </span>
-                  <p className="relative z-[1] text-[1.05rem] font-medium leading-[1.65] text-slate-50 sm:text-xl sm:leading-[1.7]">
-                    <span className="bg-gradient-to-br from-white via-slate-100 to-slate-300/90 bg-clip-text italic text-transparent">
-                      {tableLoaderQuote.text}
-                    </span>
-                  </p>
-                </blockquote>
-                <footer className="mt-5 flex items-center gap-2 border-t border-white/[0.08] pt-4">
-                  <span className="h-px w-8 shrink-0 bg-gradient-to-r from-amber-400/60 to-transparent" aria-hidden />
-                  <p className="text-[0.9375rem] font-medium tracking-wide text-slate-400/95 sm:text-base">
-                    <span className="text-amber-200/95">—</span>{" "}
-                    <span className="text-slate-300">{tableLoaderQuote.author}</span>
-                  </p>
-                </footer>
-              </div>
-            </div>
-          </div>
-          <div className="mx-auto mt-4 w-full max-w-md shrink-0 pb-2 sm:mt-6 sm:pb-4">
-            <div className="mb-1.5 flex justify-between px-0.5 font-mono text-[9px] font-semibold tabular-nums text-slate-500 sm:text-[10px]">
-              {[10, 25, 50, 70, 100].map((n) => (
-                <span
-                  key={n}
-                  className={
-                    tableLoaderProgress >= n ? "text-amber-400/90" : "text-slate-600"
-                  }
-                >
-                  {n}%
-                </span>
-              ))}
-            </div>
-            <div className="relative h-2.5 overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-slate-600/50 sm:h-3">
-              <div
-                className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-300 ease-out"
-                style={{ width: `${tableLoaderProgress}%` }}
-              >
-                {tableLoaderProgress >= 70 && tableLoaderProgress < 100 && (
-                  <div
-                    className="pointer-events-none absolute inset-y-0 left-0 w-[min(40%,8rem)] bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-90 app-loader-shimmer"
-                    aria-hidden
-                  />
-                )}
-              </div>
-            </div>
-            <p className="mt-2 flex items-center justify-center gap-2 text-center text-[11px] font-semibold tabular-nums text-slate-400 sm:text-xs">
-              <span
-                className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500/20 border-t-amber-400"
-                aria-hidden
-              />
-              Подбираем стол… {tableLoaderProgress}%
-            </p>
-          </div>
-        </div>
-      )}
+      <TableLoaderOverlay
+        visible={tableLoading}
+        liveReady={tableLiveReady}
+        authorityReady={tableAuthorityReady}
+        hasPlayers={players.length > 0}
+        hasCurrentUser={currentUser != null && players.some(p => p.id === currentUser.id)}
+        isPcLayout={isPcLayout}
+        onDone={() => setTableLoading(false)}
+      />
 
       {/* Пауза: пользователь вышел из live-стола */}
       {tablePaused && currentUser && (

@@ -185,12 +185,8 @@ export async function resizeVkWindowToViewport(): Promise<boolean> {
   const b = await getBridgeAsync()
   if (!b || !isVkMiniApp()) return false
   const { width, height } = getViewportSizeForVk()
-  // VK позволяет установить width до 1000px (или 100% в широкоформатном режиме)
-  // Запрашиваем максимально возможную ширину чтобы избежать "планшетного" сжатия
-  const MAX_VK_WIDTH = 1000
-  const targetWidth = Math.max(width, MAX_VK_WIDTH)
   try {
-    await b.send("VKWebAppResizeWindow", { width: targetWidth, height })
+    await b.send("VKWebAppResizeWindow", { width, height })
     return true
   } catch {
     return false

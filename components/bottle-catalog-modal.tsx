@@ -114,7 +114,8 @@ export function BottleCatalogModal({
       const cooldownActive = cooldownLeftMs > 0
       const purchaseLocked = cooldownActive && !owned && !isClassicId(skin.id)
       const notEnough = !owned && !isClassicId(skin.id) && voiceBalance < skin.cost
-      const disabled = purchaseLocked || notEnough
+      const vipLocked = isVipId(skin.id) && !owned && !currentUser?.isVip
+      const disabled = purchaseLocked || notEnough || vipLocked
 
       const status = owned
         ? selected
@@ -122,13 +123,19 @@ export function BottleCatalogModal({
           : "Куплено"
         : isClassicId(skin.id)
           ? "Бесплатно"
-          : purchaseLocked
-            ? `Через ${formatCooldown(cooldownLeftMs)}`
-            : `${skin.cost} ❤`
+          : vipLocked
+            ? "Только VIP"
+            : purchaseLocked
+              ? `Через ${formatCooldown(cooldownLeftMs)}`
+              : `${skin.cost} ❤`
 
       const handleClick = () => {
         if (owned || isClassicId(skin.id)) {
           dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
+          return
+        }
+        if (vipLocked) {
+          showToast("Доступно только игрокам со статусом VIP", "info")
           return
         }
         if (purchaseLocked) {
@@ -158,7 +165,7 @@ export function BottleCatalogModal({
         showToast("Бутылочка куплена", "success")
       }
 
-      return { skin, owned, selected, disabled, notEnough, purchaseLocked, status, handleClick }
+      return { skin, owned, selected, disabled, notEnough, purchaseLocked, vipLocked, status, handleClick }
     })
   }, [
     ownedSet,
@@ -194,19 +201,23 @@ export function BottleCatalogModal({
             ? { background: "rgba(34,197,94,0.16)", border: "1px solid rgba(34,197,94,0.28)", color: "#86efac" }
             : e.owned
               ? { background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.22)", color: "#bae6fd" }
-              : e.purchaseLocked
-                ? { background: "rgba(148,163,184,0.10)", border: "1px solid rgba(148,163,184,0.18)", color: "#cbd5e1" }
-                : e.notEnough
-                  ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
-                  : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
+              : e.vipLocked
+                ? { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.30)", color: "#fde68a" }
+                : e.purchaseLocked
+                  ? { background: "rgba(148,163,184,0.10)", border: "1px solid rgba(148,163,184,0.18)", color: "#cbd5e1" }
+                  : e.notEnough
+                    ? { background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.22)", color: "#fecaca" }
+                    : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
 
           const ctaLabel = e.selected
             ? "На столу"
-            : e.purchaseLocked
-              ? `Подать через ${formatCooldown(cooldownLeftMs)}`
-              : e.notEnough
-                ? "Недостаточно ❤"
-                : "Подать на стол"
+            : e.vipLocked
+              ? "Купите VIP в магазине"
+              : e.purchaseLocked
+                ? `Подать через ${formatCooldown(cooldownLeftMs)}`
+                : e.notEnough
+                  ? "Недостаточно ❤"
+                  : "Подать на стол"
 
           return (
             <div

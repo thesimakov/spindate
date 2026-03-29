@@ -72,9 +72,21 @@ export function Bottle({
     setImgError(false)
   }, [skin, imgSrc])
 
+  const [wasSpinning, setWasSpinning] = useState(false)
+  useEffect(() => {
+    if (isSpinning) {
+      setWasSpinning(true)
+    } else if (wasSpinning) {
+      const t = setTimeout(() => setWasSpinning(false), 900)
+      return () => clearTimeout(t)
+    }
+  }, [isSpinning, wasSpinning])
+
   const spinTransition = isSpinning
     ? "transform 6s cubic-bezier(0.17, 0.67, 0.12, 0.99)"
-    : "none"
+    : wasSpinning
+      ? "transform 0.8s ease-out"
+      : "none"
   const bottleShadow = isSpinning
     ? "drop-shadow(0 0 12px rgba(74, 154, 53, 0.6))"
     : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
@@ -103,8 +115,9 @@ export function Bottle({
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
             style={{
               transform: `rotate(${angle}deg)`,
-              transition: spinTransition,
-            }}
+        transition: spinTransition,
+        willChange: "transform",
+      }}
           >
             <FortuneWheelArrow className="h-full w-full object-contain" />
           </div>

@@ -538,7 +538,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         nextSpinSkips[playerWhoHadTurnId] = (state.spinSkips?.[playerWhoHadTurnId] ?? 0) + 1
       }
 
-      const normAngle = state.bottleAngle % 360
       return {
         ...state,
         spinSkips: nextSpinSkips,
@@ -548,7 +547,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         targetPlayer: null,
         targetPlayer2: null,
         resultAction: null,
-        bottleAngle: normAngle,
+        bottleAngle: state.bottleAngle,
         predictions: [],
         bets: [],
         pot: 0,
@@ -928,13 +927,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
+      const keepLocalAngle = state.isSpinning && !p.isSpinning
       return {
         ...state,
         players: p.players,
         currentTurnIndex: p.currentTurnIndex,
         isSpinning: p.isSpinning,
         countdown: p.countdown,
-        bottleAngle: p.bottleAngle,
+        bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,
         bottleSkin: p.bottleSkin ?? "classic",
         bottleDonorId: p.bottleDonorId,
         bottleDonorName: p.bottleDonorName,
