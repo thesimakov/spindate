@@ -62,7 +62,7 @@ export function AppLoader({ title = "Загрузка...", subtitle, hint, class
       </div>
 
       {/* Полоска прогресса (бесконечная анимация) */}
-      <div className="w-48 h-1 rounded-full bg-slate-700/80 overflow-hidden">
+      <div className="h-1 w-full max-w-[14rem] rounded-full bg-slate-700/80 overflow-hidden">
         <div className="app-loader-shimmer h-full w-1/2 rounded-full bg-gradient-to-r from-amber-500/40 to-amber-400" />
       </div>
     </div>

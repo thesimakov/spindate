@@ -1005,8 +1005,11 @@ export function GameRoom() {
   }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin, tableLoading])
 
   /* ---- при возврате из мини-игры: анимация «вернулся к нам», пропуск хода если ход был у вернувшегося ---- */
+  /* Важно: ждём tableLoading=false и перезапускаемся при его смене — иначе при возврате во время
+     оверлея загрузки стола таймер не ставился, showReturnedFromUgadaika зависал навсегда. */
   useEffect(() => {
-    if (tableLoading || !showReturnedFromUgadaika) return
+    if (!showReturnedFromUgadaika) return
+    if (tableLoading) return
     const t = setTimeout(() => {
       if (currentTurnPlayer?.id === currentUser?.id) {
         dispatch({
@@ -1024,7 +1027,7 @@ export function GameRoom() {
       dispatch({ type: "CLEAR_RETURNED_FROM_UGADAIKA" })
     }, 3200)
     return () => clearTimeout(t)
-  }, [showReturnedFromUgadaika, currentTurnPlayer?.id, currentUser?.id, dispatch])
+  }, [showReturnedFromUgadaika, tableLoading, currentTurnPlayer?.id, currentUser?.id, dispatch])
 
   // Turn timer, AFK skip, result timer, prediction timer, steam fog — all managed by useGameTimers hook
 

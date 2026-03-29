@@ -665,18 +665,21 @@ export function UgadaikaScreen() {
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-[100] ugadaika-bg-animated">
+      <div className="fixed inset-0 z-[100] flex h-[100dvh] min-h-0 w-full min-w-0 flex-col items-center justify-center p-4 sm:p-6">
+        {/* Фон отдельно: .ugadaika-bg-animated даёт position:relative и ломает fixed, если вешать на ту же ноду */}
+        <div className="ugadaika-bg-animated pointer-events-none !absolute inset-0 z-0" aria-hidden />
         <AppLoader
           title="Подготовка игры..."
           subtitle="Загружаем участников и настройки"
           hint="Угадай-ка"
+          className="relative z-10 !min-h-0 w-full max-w-[min(100%,36rem)] justify-center rounded-2xl border border-amber-500/20 bg-slate-900/94 px-6 py-10 shadow-2xl backdrop-blur-md sm:max-w-[min(100%,42rem)] sm:px-10 sm:py-14"
         />
       </div>
     )
   }
 
   return (
-    <div className="relative flex h-app min-h-app max-h-app flex-col overflow-hidden text-slate-100 pb-[env(safe-area-inset-bottom)] ugadaika-bg-animated">
+    <div className="relative flex h-app min-h-app max-h-app w-full min-w-0 flex-col overflow-hidden text-slate-100 pb-[env(safe-area-inset-bottom)] ugadaika-bg-animated">
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {bgDots.map((d, idx) => {
           const anim = d.rev ? `particleChaosRev${d.chaos + 1}` : `particleChaos${d.chaos + 1}`
@@ -770,9 +773,9 @@ export function UgadaikaScreen() {
         </button>
       </div>
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 w-full max-w-full flex-row overflow-x-visible overflow-y-hidden">
-        {/* Топ 10 по Угадай-ка — слева, шире и с крупными ячейками */}
-        <aside className="absolute left-0 top-0 bottom-0 z-10 hidden w-[280px] md:max-[1161px]:w-[200px] flex-col border-r border-slate-700 bg-slate-900/50 p-4 md:max-[1161px]:p-3 overflow-hidden md:flex">
+      <div className="relative flex min-h-0 min-w-0 flex-1 w-full max-w-full flex-row overflow-x-hidden overflow-y-hidden">
+        {/* Топ 10 — колонка в потоке (не absolute), иначе main с w-full наезжает на сайдбар */}
+        <aside className="hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-slate-700/90 bg-slate-950/60 backdrop-blur-sm md:flex md:w-[200px] min-[1162px]:w-[280px] md:p-3 min-[1162px]:p-4">
           <div className="flex items-center gap-2 mb-3 shrink-0 max-[1161px]:mb-2">
             <Trophy className="h-5 w-5 max-[1161px]:h-4 max-[1161px]:w-4 shrink-0 text-amber-400" />
             <span className="text-sm font-bold text-amber-200 max-[1161px]:text-xs">Топ 10</span>
@@ -832,7 +835,6 @@ export function UgadaikaScreen() {
                       }}
                     >
                       {item.player.avatar ? (
-                         
                         <img src={item.player.avatar} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <span className="flex h-full w-full items-center justify-center bg-slate-700 text-xs text-slate-400">?</span>
@@ -854,7 +856,7 @@ export function UgadaikaScreen() {
           </div>
         </aside>
 
-        <main className="ugadaika-main-scroll flex min-h-0 w-full min-w-0 flex-1 flex-col md:ml-[200px] min-[1162px]:ml-[280px]">
+        <main className="ugadaika-main-scroll flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 flex-col overflow-x-visible overflow-y-auto overscroll-contain pb-2 md:pb-0" style={{ WebkitOverflowScrolling: "touch" }}>
       {phase === "idle" && (
         <div className="flex min-h-full flex-1 flex-col items-center justify-center px-4 py-8">
@@ -926,14 +928,14 @@ export function UgadaikaScreen() {
             <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_90%_60%_at_50%_0%,rgba(251,191,36,0.08)_0%,transparent_55%)]" aria-hidden />
             <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(ellipse_70%_80%_at_50%_100%,rgba(30,41,59,0.6)_0%,transparent_60%)]" aria-hidden />
 
-            {/* Раскладка: на мобильной — сверху претенденты, центр барабан, снизу игроки; на десктопе — слева претенденты, центр барабан, справа игроки; на ПК резиново по высоте */}
-            <div className="relative flex w-full min-w-0 shrink-0 flex-col items-stretch justify-center gap-2 sm:gap-3 max-[1161px]:gap-1.5 max-[1161px]:my-0 my-0.5 sm:my-1 min-h-0 lg:flex-row lg:flex-nowrap lg:justify-between lg:gap-2 xl:gap-3 lg:items-center">
-              {/* Претенденты: на мобильной — сверху, в ряд; на десктопе — слева, колонка */}
-              <div className="ugadaika-side-column flex flex-col items-center gap-1 sm:gap-1.5 shrink-0 order-1 lg:flex-col lg:order-none">
-                <span className="text-[11px] sm:text-xs font-black text-amber-200 tracking-wide w-full lg:w-auto text-center drop-shadow-[0_0_8px_rgba(251,191,36,0.2)]">
+            {/* Десктоп: сетка 1fr | авто | 1fr — боковины симметричны, центр по вертикали по высоте ряда; мобильная: колонка */}
+            <div className="relative grid w-full min-w-0 shrink-0 grid-cols-1 items-start gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-stretch lg:gap-x-3 xl:gap-x-5 lg:min-h-0">
+              {/* Претенденты */}
+              <div className="ugadaika-side-rail order-1 flex min-h-0 min-w-0 flex-col items-center gap-2 lg:order-none lg:h-full lg:justify-center lg:rounded-2xl lg:border lg:border-amber-500/25 lg:bg-gradient-to-b lg:from-slate-900/55 lg:to-slate-950/40 lg:p-2 lg:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-200/95 w-full border-b border-amber-500/20 pb-1.5 text-center drop-shadow-[0_0_8px_rgba(251,191,36,0.15)] lg:max-w-[9rem]">
                   {currentUser?.gender === "female" ? "Претенденты" : "Претендентки"}
                 </span>
-                <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-2.5 lg:flex-col lg:flex-nowrap max-w-full overflow-visible">
+                <div className="flex max-w-full flex-row flex-wrap items-center justify-center gap-2 sm:gap-2.5 lg:flex lg:h-full lg:min-h-0 lg:w-full lg:flex-col lg:flex-nowrap lg:justify-center lg:gap-2 lg:overflow-visible lg:py-1">
                 {oppositeIndices.map((idx) => {
                   const p = participantsInRound[idx]
                   if (!p) return null
@@ -982,8 +984,8 @@ export function UgadaikaScreen() {
                 </div>
               </div>
 
-              {/* Центр: рамка слот-машины — барабан (на мобильной — по центру между претендентами и игроками) */}
-            <div className="ugadaika-slot-casing flex flex-col items-stretch justify-center shrink-0 my-0 mx-0.5 sm:mx-2 max-[1161px]:mx-1 order-2 lg:order-none">
+              {/* Центр — слот */}
+              <div className="ugadaika-slot-casing order-2 flex shrink-0 flex-col items-stretch justify-center justify-self-center my-0 mx-auto w-full max-w-[min(100%,22rem)] sm:max-w-none sm:mx-2 lg:order-none lg:mx-0 lg:h-full lg:max-w-none lg:self-center">
               {/* Верхняя полоса с лампочками — по верхнему краю, поднята */}
               <div className="ugadaika-slot-band ugadaika-slot-band-top flex items-center justify-center gap-0.5 px-1.5 sm:px-2 py-1 sm:py-1.5 w-full mb-1 sm:mb-2">
                 {Array.from({ length: 10 }, (_, i) => (
@@ -1067,12 +1069,13 @@ export function UgadaikaScreen() {
                   <span key={i} className="ugadaika-slot-bulb" aria-hidden />
                 ))}
               </div>
-            </div>
+              </div>
 
-              {/* Игроки: на мобильной — снизу, в ряд; на десктопе — справа, колонка */}
-              <div className="ugadaika-side-column flex flex-col items-center gap-1 sm:gap-1.5 shrink-0 order-3 lg:flex-col lg:order-none">
-                <span className="text-[11px] sm:text-xs font-black text-amber-200 tracking-wide w-full lg:w-auto text-center drop-shadow-[0_0_8px_rgba(251,191,36,0.2)]">Игроки</span>
-                <div className="flex flex-row flex-wrap items-center justify-center gap-2 sm:gap-2.5 lg:flex-col lg:flex-nowrap max-w-full overflow-visible">
+              <div className="ugadaika-side-rail order-3 flex min-h-0 min-w-0 flex-col items-center gap-2 lg:order-none lg:h-full lg:justify-center lg:rounded-2xl lg:border lg:border-amber-500/25 lg:bg-gradient-to-b lg:from-slate-900/55 lg:to-slate-950/40 lg:p-2 lg:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-amber-200/95 w-full border-b border-amber-500/20 pb-1.5 text-center drop-shadow-[0_0_8px_rgba(251,191,36,0.15)] lg:max-w-[9rem]">
+                  Игроки
+                </span>
+                <div className="flex max-w-full flex-row flex-wrap items-center justify-center gap-2 sm:gap-2.5 lg:flex lg:h-full lg:min-h-0 lg:w-full lg:flex-col lg:flex-nowrap lg:justify-center lg:gap-2 lg:overflow-visible lg:py-1">
                 {sameIndices.map((idx) => {
                   const p = participantsInRound[idx]
                   if (!p) return null
@@ -1103,53 +1106,50 @@ export function UgadaikaScreen() {
               </div>
             </div>
 
-            {phase === "playing" && selectedIds.length === 0 && (
-              <p
-                className="ugadaika-hint-card shrink-0 text-center text-xs font-medium my-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/50 border border-amber-500/20 text-amber-100/90 max-w-md mx-auto leading-snug"
-                style={{ textShadow: "0 0 12px rgba(251,191,36,0.15), 0 1px 2px rgba(0,0,0,0.3)" }}
-              >
-                <span className="inline lg:hidden">Нажми на претендента выше — выбери пару</span>
-                <span className="hidden lg:inline">Нажми на претендента слева — выбери пару</span>
-              </p>
-            )}
-
             {phase === "playing" && selectedIds.length === 1 && guessedWhoChoseMe !== null && (
-              <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border-2 border-amber-400/60 bg-gradient-to-r from-amber-500/15 to-amber-500/10 px-3 py-1.5 shadow-[0_0_20px_rgba(251,191,36,0.15)]">
-                <span className="text-xs font-semibold text-amber-200">На кого остановилось:</span>
-                <span className="text-xs font-bold text-amber-100">
-                  {participantsInRound[guessedWhoChoseMe].name}
-                </span>
+              <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/12 to-amber-600/8 px-3 py-1.5 text-xs shadow-[0_0_16px_rgba(251,191,36,0.1)]">
+                <span className="font-semibold text-amber-200/95">На кого остановилось:</span>
+                <span className="font-bold text-amber-50">{participantsInRound[guessedWhoChoseMe].name}</span>
               </div>
             )}
 
             {phase === "reveal" && guessedWhoChoseMe !== null && (
               <div
-                className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-amber-500/25 bg-gradient-to-r from-slate-800/90 to-slate-800/70 px-3 py-1.5"
-                style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 0 16px rgba(251,191,36,0.06)" }}
+                className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-gradient-to-r from-emerald-950/40 to-slate-900/60 px-3 py-1.5 text-xs"
+                style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
               >
-                <span className="text-xs text-amber-200/80 font-medium">Твоя пара:</span>
-                <span className="text-xs font-bold text-amber-100">{participantsInRound[guessedWhoChoseMe].name}</span>
+                <span className="font-medium text-emerald-200/90">Твоя пара:</span>
+                <span className="font-bold text-amber-100">{participantsInRound[guessedWhoChoseMe].name}</span>
               </div>
             )}
 
-            <div
-              className="ugadaika-status-card shrink-0 mt-2 flex items-center justify-between gap-2 rounded-xl border border-amber-500/20 bg-gradient-to-r from-slate-800/90 via-slate-800/85 to-slate-900/90 px-2.5 py-1.5 sm:px-3 sm:py-2"
-              style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 0 20px rgba(251,191,36,0.06), 0 4px 12px rgba(0,0,0,0.2)" }}
-            >
-              <span className="text-[11px] sm:text-xs text-slate-200 font-medium leading-snug min-w-0 flex-1">
-                {phase === "playing"
-                  ? (selectedIds.length === 1 ? "Пара выбрана. Ждём результат." : "Выбери одного — нажми на претендента выше.")
-                  : isRevealNoChoice
-                    ? "Не расстраивайся — это игра! Вот тебе 1 роза 🌹"
-                    : isRevealWin
-                      ? "Пара совпала! Вы остаётесь в игре."
-                      : isRevealLose
-                        ? "Пара не совпала — выходишь из игры."
-                        : "Пара не совпала — вылетаешь из игры."}
-              </span>
-              <span className="text-[11px] sm:text-xs font-bold text-amber-200/90 shrink-0 tabular-nums whitespace-nowrap">
-                Рейтинг: {totalRoundsWon}
-              </span>
+            <div className="ugadaika-game-footer mt-3 shrink-0 overflow-hidden rounded-2xl border border-amber-500/35 bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_8px_24px_rgba(0,0,0,0.25)]">
+              <div className="flex flex-col gap-2.5 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-3 sm:pl-4 sm:pr-3">
+                <p className="min-w-0 flex-1 text-left text-[11px] leading-snug text-slate-200 sm:text-xs">
+                  {phase === "playing" && selectedIds.length === 0 && (
+                    <>
+                      <span className="text-amber-100/95 lg:hidden">Нажми на претендента выше — выбери пару.</span>
+                      <span className="hidden text-amber-100/95 lg:inline">Нажми на претендента слева — выбери пару.</span>
+                    </>
+                  )}
+                  {phase === "playing" && selectedIds.length === 1 && "Пара выбрана. Ждём результат."}
+                  {phase === "reveal" &&
+                    (isRevealNoChoice
+                      ? "Никто не выбрал тебя — не расстраивайся! Роза уже в инвентаре 🌹"
+                      : isRevealWin
+                        ? "Пара совпала — вы остаётесь в игре."
+                        : isRevealLose
+                          ? "Пара не совпала — выход из раунда."
+                          : "Пара не совпала.")}
+                </p>
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-amber-500/15 pt-2 sm:border-t-0 sm:pt-0 sm:pl-3 sm:ml-0 sm:border-l sm:border-amber-500/20">
+                  <span className="hidden text-[10px] font-semibold uppercase tracking-wider text-amber-200/70 sm:inline">Туры</span>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-gradient-to-b from-amber-500/25 to-amber-700/20 px-3 py-1.5 shadow-[0_0_14px_rgba(251,191,36,0.18)]">
+                    <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
+                    <span className="text-sm font-black tabular-nums text-amber-50">{totalRoundsWon}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
