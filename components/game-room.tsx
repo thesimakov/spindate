@@ -977,6 +977,7 @@ export function GameRoom() {
     handleSpin,
     playersRef: playersRef as React.RefObject<Player[]>,
     casualMode: CASUAL_MODE,
+    tableLoading,
   })
 
   /* ---- auto-scroll log ---- */
@@ -987,23 +988,25 @@ export function GameRoom() {
   /* ---- Start prediction phase when it's a new turn and nobody is spinning ---- */
   useEffect(() => {
     if (CASUAL_MODE) return
+    if (tableLoading) return
     if (!isSpinning && !showResult && countdown === null && !predictionPhase && currentTurnPlayer && !predictionMade) {
       dispatch({ type: "START_PREDICTION_PHASE" })
     }
    
-  }, [currentTurnIndex, isSpinning, showResult, countdown])
+  }, [currentTurnIndex, isSpinning, showResult, countdown, tableLoading])
 
   /* ---- bot auto-spin (delayed to let prediction phase happen) ---- */
   useEffect(() => {
+    if (tableLoading) return
     if (!currentTurnPlayer?.isBot || isSpinning || countdown !== null || showResult) return
     const timer = setTimeout(() => handleSpin(), 2500)
     return () => clearTimeout(timer)
      
-  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin])
+  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin, tableLoading])
 
   /* ---- при возврате из мини-игры: анимация «вернулся к нам», пропуск хода если ход был у вернувшегося ---- */
   useEffect(() => {
-    if (!showReturnedFromUgadaika) return
+    if (tableLoading || !showReturnedFromUgadaika) return
     const t = setTimeout(() => {
       if (currentTurnPlayer?.id === currentUser?.id) {
         dispatch({
@@ -1027,6 +1030,7 @@ export function GameRoom() {
 
   /* ---- countdown tick ---- */
   useEffect(() => {
+    if (tableLoading) return
     if (countdown === null || countdown <= 0) return
     const timer = setTimeout(() => {
       if (countdown > 1) {
@@ -1038,7 +1042,7 @@ export function GameRoom() {
     }, 800)
     return () => clearTimeout(timer)
      
-  }, [countdown, dispatch])
+  }, [countdown, dispatch, tableLoading])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
   const playEmotionSound = useCallback((actionId: string) => {
@@ -1129,13 +1133,24 @@ export function GameRoom() {
   const processedLogIdsRef = useRef<Set<string>>(new Set())
   const remoteEmotionInitRef = useRef(false)
   const remoteEmotionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const prevTableLoadingRef = useRef(tableLoading)
 
   useEffect(() => {
-    if (!currentUser || players.length === 0) return
+    if (prevTableLoadingRef.current && !tableLoading) {
+      remoteEmotionInitRef.current = false
+      remoteEmotionTimersRef.current.forEach(clearTimeout)
+      remoteEmotionTimersRef.current = []
+      setFlyingEmojis([])
+      setSteamPuffs([])
+    }
+    prevTableLoadingRef.current = tableLoading
+  }, [tableLoading])
+
+  useEffect(() => {
+    if (tableLoading || !currentUser || players.length === 0) return
 
     const seen = processedLogIdsRef.current
 
-    // First run: seed the set with all existing entries so we don't replay history
     if (!remoteEmotionInitRef.current) {
       remoteEmotionInitRef.current = true
       for (const entry of gameLog) seen.add(entry.id)

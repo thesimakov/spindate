@@ -31,6 +31,8 @@ export interface UseGameTimersParams {
   handleSpin: () => void
   playersRef: React.RefObject<Player[]>
   casualMode: boolean
+  /** Пока true — все таймеры заблокированы (стол ещё загружается). */
+  tableLoading?: boolean
 }
 
 export interface UseGameTimersResult {
@@ -58,6 +60,7 @@ export function useGameTimers({
   handleSpin,
   playersRef,
   casualMode,
+  tableLoading = false,
 }: UseGameTimersParams): UseGameTimersResult {
   // --- Turn timer ---
   const [turnTimer, setTurnTimer] = useState<number | null>(null)
@@ -70,6 +73,7 @@ export function useGameTimers({
 
   useEffect(() => {
     const isEligible =
+      !tableLoading &&
       !!currentTurnPlayer &&
       !currentTurnPlayer.isBot &&
       currentUser?.id === currentTurnPlayer.id &&
@@ -136,10 +140,11 @@ export function useGameTimers({
     }, TURN_MS + 25)
 
     return () => {}
-  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch])
+  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading])
 
   // --- Auto-skip for OTHER live players who went AFK ---
   useEffect(() => {
+    if (tableLoading) return
     if (!currentTurnPlayer || currentTurnPlayer.isBot) return
     if (!currentUser || currentUser.id === currentTurnPlayer.id) return
     if (isSpinning || showResult || countdown !== null) return
@@ -162,7 +167,7 @@ export function useGameTimers({
     }, AFK_SKIP_MS)
 
     return () => clearTimeout(timeout)
-  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef])
+  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading])
 
   // --- Result timer + auto-advance ---
   const resultTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -174,7 +179,7 @@ export function useGameTimers({
   }, [])
 
   useEffect(() => {
-    if (!showResult) {
+    if (!showResult || tableLoading) {
       clearResultTimers()
       return
     }
@@ -188,7 +193,7 @@ export function useGameTimers({
     }, RESULT_AUTO_ADVANCE_MS)
 
     return clearResultTimers
-  }, [showResult, dispatch, clearResultTimers])
+  }, [showResult, dispatch, clearResultTimers, tableLoading])
 
   // --- Prediction timer ---
   const [predictionTimer, setPredictionTimer] = useState<number>(PREDICTION_DURATION)
@@ -201,7 +206,7 @@ export function useGameTimers({
   }, [roundNumber, casualMode])
 
   useEffect(() => {
-    if (casualMode) return
+    if (casualMode || tableLoading) return
     if (!predictionPhase || isSpinning || showResult) {
       if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
       return
@@ -221,14 +226,14 @@ export function useGameTimers({
     return () => {
       if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
     }
-  }, [predictionPhase, isSpinning, showResult, casualMode])
+  }, [predictionPhase, isSpinning, showResult, casualMode, tableLoading])
 
   useEffect(() => {
-    if (casualMode) return
+    if (casualMode || tableLoading) return
     if (predictionTimer === 0 && predictionPhase && !isSpinning && !showResult && countdown === null) {
       handleSpin()
     }
-  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin, casualMode])
+  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin, casualMode, tableLoading])
 
   // --- Steam fog tick ---
   const [steamFogTick, setSteamFogTick] = useState(0)

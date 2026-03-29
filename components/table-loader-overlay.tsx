@@ -84,8 +84,14 @@ function TableLoaderOverlayInner({
     return () => clearInterval(id)
   }, [visible, fadingOut])
 
+  const doneFiredRef = useRef(false)
+
   useEffect(() => {
-    if (!visible || fadingOut) return
+    if (!visible) {
+      doneFiredRef.current = false
+      return
+    }
+    if (fadingOut) return
     const allReady = hasPlayers && hasCurrentUser && liveReady && authorityReady
     if (!allReady) return
 
@@ -93,6 +99,10 @@ function TableLoaderOverlayInner({
     const remaining = TABLE_LOADER_MIN_VISIBLE_MS - elapsed
 
     const startFade = () => {
+      if (!doneFiredRef.current) {
+        doneFiredRef.current = true
+        onDone()
+      }
       setProgress(100)
       setFadingOut(true)
     }
@@ -102,7 +112,7 @@ function TableLoaderOverlayInner({
       return () => clearTimeout(t)
     }
     startFade()
-  }, [visible, fadingOut, hasPlayers, hasCurrentUser, liveReady, authorityReady])
+  }, [visible, fadingOut, hasPlayers, hasCurrentUser, liveReady, authorityReady, onDone])
 
   if (!visible && !fadingOut) return null
 
@@ -116,7 +126,6 @@ function TableLoaderOverlayInner({
         if (fadingOut) {
           setFadingOut(false)
           setProgress(0)
-          onDone()
         }
       }}
       role="progressbar"

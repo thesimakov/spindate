@@ -519,11 +519,11 @@
 
 @keyframes loaderFadeOut {
   0% { opacity: 1; transform: scale(1); }
-  60% { opacity: 0.4; transform: scale(1.02); }
-  100% { opacity: 0; transform: scale(1.06); pointer-events: none; }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.02); pointer-events: none; }
 }
 .loader-fade-out {
-  animation: loaderFadeOut 0.8s ease-in forwards;
+  animation: loaderFadeOut 0.6s ease-out forwards;
 }
 
 @keyframes loaderParticleBurst {
@@ -746,10 +746,10 @@
   z-index: 2;
 }
 
-/* Плавное медленное кручение барабана до выбора игрока (один цикл по 4 участника = 448px при 112px на слот) */
+/* Плавное медленное кручение барабана до выбора игрока (один цикл по 4 участника = 352px при 88px на слот) */
 @keyframes ugadaika-reel-idle {
   0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(0, -448px, 0); }
+  100% { transform: translate3d(0, -352px, 0); }
 }
 .ugadaika-reel-idle {
   animation: ugadaika-reel-idle 8s linear infinite;
@@ -1328,9 +1328,10 @@
 
 /* Контейнер игрового поля Угадай-ка: ограничение высоты для скролла (мобильная и ПК) */
 .ugadaika-main-scroll {
-  overflow-x: hidden;
+  overflow-x: visible;
   overflow-y: hidden;
   min-height: 0;
+  min-width: 0;
   flex: 1 1 0%;
 }
 .player-menu-left {
@@ -1394,6 +1395,105 @@
     linear-gradient(180deg, #020617 0%, #020617 40%, #020617 100%);
   background-size: 100% 100%;
   background-repeat: no-repeat;
+}
+
+/* Мини-игра «Угадай-ка» — анимированный фон (золото / роза / глубина) */
+.ugadaika-bg-animated {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: #070510;
+  background-image: linear-gradient(
+    165deg,
+    #0c0618 0%,
+    #0a0716 28%,
+    #10081c 55%,
+    #080612 100%
+  );
+}
+
+.ugadaika-bg-animated > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ugadaika-bg-animated::before {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 85% 65% at 18% 12%, rgba(251, 191, 36, 0.22), transparent 52%),
+    radial-gradient(ellipse 75% 55% at 88% 18%, rgba(244, 63, 94, 0.16), transparent 48%),
+    radial-gradient(ellipse 55% 75% at 48% 95%, rgba(139, 92, 246, 0.12), transparent 58%),
+    radial-gradient(ellipse 50% 40% at 70% 65%, rgba(56, 189, 248, 0.08), transparent 45%);
+  animation: ugadaika-bg-drift 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+.ugadaika-bg-animated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    radial-gradient(ellipse 130% 90% at 50% -15%, rgba(253, 224, 71, 0.07), transparent 42%),
+    radial-gradient(ellipse 90% 70% at 105% 85%, rgba(236, 72, 153, 0.08), transparent 48%),
+    linear-gradient(
+      125deg,
+      transparent 0%,
+      rgba(251, 191, 36, 0.04) 35%,
+      transparent 55%,
+      rgba(244, 114, 182, 0.05) 78%,
+      transparent 100%
+    );
+  background-size: 200% 200%;
+  animation: ugadaika-bg-shimmer 14s ease-in-out infinite alternate;
+}
+
+@keyframes ugadaika-bg-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  28% {
+    transform: translate(4%, 3%) rotate(2.5deg) scale(1.06);
+  }
+  55% {
+    transform: translate(-3%, 2%) rotate(-1.8deg) scale(0.97);
+  }
+  78% {
+    transform: translate(2%, -2%) rotate(1deg) scale(1.03);
+  }
+}
+
+@keyframes ugadaika-bg-shimmer {
+  0% {
+    background-position: 0% 40%;
+    opacity: 0.42;
+  }
+  50% {
+    background-position: 100% 60%;
+    opacity: 0.62;
+  }
+  100% {
+    background-position: 30% 0%;
+    opacity: 0.48;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ugadaika-bg-animated::before,
+  .ugadaika-bg-animated::after {
+    animation: none;
+  }
+
+  .ugadaika-bg-animated::after {
+    opacity: 0.5;
+  }
 }
 
 /* Desktop-only cinematic polish: чуть глубже свет/контраст, без мобильной нагрузки */
@@ -2046,6 +2146,216 @@
   transition: transform 0.2s ease-out;
 }
 
+/* ====== Ugadaika casino-grade animations ====== */
+
+/* Timer urgency pulse — glows red when <=3 seconds */
+@keyframes ugadaika-timer-urgent {
+  0%, 100% { 
+    transform: scale(1); 
+    box-shadow: 0 0 0 2px rgba(239,68,68,0.5), 0 0 20px rgba(239,68,68,0.3); 
+    border-color: rgba(239,68,68,0.7);
+  }
+  50% { 
+    transform: scale(1.06); 
+    box-shadow: 0 0 0 4px rgba(239,68,68,0.7), 0 0 36px rgba(239,68,68,0.5), 0 0 60px rgba(239,68,68,0.2); 
+    border-color: rgba(252,165,165,0.9);
+  }
+}
+.ugadaika-timer-urgent {
+  animation: ugadaika-timer-urgent 0.6s ease-in-out infinite !important;
+  border-color: rgba(239,68,68,0.7) !important;
+}
+
+/* Win confetti burst */
+@keyframes ugadaika-confetti-burst {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(0);
+    opacity: 1;
+  }
+  15% {
+    transform: translate(calc(var(--cx) * 0.4), calc(var(--cy) * 0.4)) rotate(180deg) scale(1.2);
+    opacity: 1;
+  }
+  60% {
+    transform: translate(var(--cx), var(--cy)) rotate(540deg) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc(var(--cx) * 1.15), calc(var(--cy) * 1.15 + 30px)) rotate(720deg) scale(0.3);
+    opacity: 0;
+  }
+}
+.ugadaika-confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  animation: ugadaika-confetti-burst var(--burst-dur, 1.6s) var(--burst-delay, 0s) cubic-bezier(0.22, 0.68, 0.35, 1) forwards;
+  pointer-events: none;
+  z-index: 50;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* Lose shake */
+@keyframes ugadaika-shake {
+  0%, 100% { transform: translateX(0); }
+  10% { transform: translateX(-6px) rotate(-0.5deg); }
+  20% { transform: translateX(5px) rotate(0.5deg); }
+  30% { transform: translateX(-4px) rotate(-0.3deg); }
+  40% { transform: translateX(3px) rotate(0.3deg); }
+  50% { transform: translateX(-2px); }
+  60% { transform: translateX(1px); }
+}
+.ugadaika-shake {
+  animation: ugadaika-shake 0.6s ease-out;
+}
+
+/* Result popup entrance — scale + fade from below */
+@keyframes ugadaika-result-enter {
+  0% { opacity: 0; transform: translateY(40px) scale(0.92); }
+  60% { opacity: 1; transform: translateY(-6px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.ugadaika-result-popup-box {
+  animation: ugadaika-result-enter 0.5s cubic-bezier(0.16, 1.1, 0.3, 1) both;
+}
+
+/* Backdrop entrance */
+@keyframes ugadaika-backdrop-in {
+  0% { opacity: 0; backdrop-filter: blur(0px); }
+  100% { opacity: 1; backdrop-filter: blur(8px); }
+}
+.ugadaika-result-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+  background: rgba(2, 6, 23, 0.7);
+  animation: ugadaika-backdrop-in 0.35s ease-out both;
+}
+
+/* Jackpot cell glow — constant soft pulse for the left/right slot cells */
+@keyframes ugadaika-jackpot-glow {
+  0%, 100% { 
+    box-shadow: inset 0 2px 12px rgba(0,0,0,0.5), 0 0 20px rgba(251,191,36,0.15); 
+    background: linear-gradient(180deg, rgba(30,25,15,0.95) 0%, rgba(15,10,10,0.98) 100%);
+  }
+  50% { 
+    box-shadow: inset 0 2px 12px rgba(0,0,0,0.4), 0 0 30px rgba(251,191,36,0.25), 0 0 60px rgba(251,191,36,0.08); 
+    background: linear-gradient(180deg, rgba(40,32,15,0.95) 0%, rgba(20,14,10,0.98) 100%);
+  }
+}
+.ugadaika-jackpot-left,
+.ugadaika-jackpot-right {
+  border: 2px solid rgba(251,191,36,0.35);
+  border-radius: 0.75rem;
+  animation: ugadaika-jackpot-glow 3s ease-in-out infinite;
+}
+.ugadaika-jackpot-right {
+  animation-delay: 1.5s;
+}
+
+/* Corner decorative dots inside jackpot cells */
+.ugadaika-jackpot-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+  box-shadow: 0 0 6px currentColor;
+  animation: ugadaika-bulb-glow 2s ease-in-out infinite;
+}
+
+/* Avatar cell inner glow variants */
+.ugadaika-avatar-cell {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s ease;
+}
+.ugadaika-avatar-cell-gold:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 24px rgba(251,191,36,0.7), 0 0 48px rgba(245,158,11,0.3), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+}
+.ugadaika-avatar-cell-rose:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 24px rgba(244,63,94,0.6), 0 0 48px rgba(225,29,72,0.2), inset 0 1px 0 rgba(255,255,255,0.25) !important;
+}
+
+/* Reel landing bounce — applied when reel stops */
+@keyframes ugadaika-reel-bounce {
+  0% { transform: translateY(0); }
+  30% { transform: translateY(-8px); }
+  50% { transform: translateY(3px); }
+  70% { transform: translateY(-2px); }
+  100% { transform: translateY(0); }
+}
+.ugadaika-reel-landing {
+  animation: ugadaika-reel-bounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Reel highlight line — center marker */
+.ugadaika-reel-window::after {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.6) 20%, rgba(251,191,36,0.8) 50%, rgba(251,191,36,0.6) 80%, transparent 100%);
+  box-shadow: 0 0 12px rgba(251,191,36,0.5), 0 0 24px rgba(251,191,36,0.2);
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Reel edges — smoother gradient masks */
+.ugadaika-reel-edge-top {
+  background: linear-gradient(to bottom, rgba(20,15,25,0.98) 0%, rgba(20,15,25,0.6) 50%, transparent 100%);
+}
+.ugadaika-reel-edge-bottom {
+  background: linear-gradient(to top, rgba(20,15,25,0.98) 0%, rgba(20,15,25,0.6) 50%, transparent 100%);
+}
+
+/* Leaderboard row update flash */
+@keyframes ugadaika-row-flash {
+  0% { background: rgba(251,191,36,0.25); }
+  100% { background: transparent; }
+}
+.ugadaika-top10-row-updated {
+  animation: ugadaika-row-flash 0.6s ease-out both;
+}
+
+/* Leaderboard place change slide */
+@keyframes ugadaika-place-slide {
+  0% { transform: translateY(-4px); opacity: 0.7; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.ugadaika-top10-place-changed {
+  animation: ugadaika-place-slide 0.4s ease-out both;
+}
+
+/* Win glow on selected avatar card */
+@keyframes ugadaika-win-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(52,211,153,0.4), 0 0 32px rgba(34,197,94,0.2); }
+  50% { box-shadow: 0 0 28px rgba(52,211,153,0.7), 0 0 56px rgba(34,197,94,0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ugadaika-timer-urgent { animation: none !important; }
+  .ugadaika-confetti-piece { animation: none !important; opacity: 0 !important; }
+  .ugadaika-shake { animation: none !important; }
+  .ugadaika-result-popup-box { animation: none !important; }
+  .ugadaika-reel-landing { animation: none !important; }
+  .ugadaika-jackpot-left,
+  .ugadaika-jackpot-right { animation: none !important; }
+}
 
 /* Рамка «Сердечки» — сердечки вокруг аватарки */
 @keyframes frameHeartsOrbit {
