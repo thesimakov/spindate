@@ -82,6 +82,9 @@ function circlePositions(count: number, radiusX: number, radiusY: number) {
   })
 }
 
+/** Ширина/высота стола (как в CSS aspect-ratio). Для окружности в пикселях при не-квадратном столе: radiusY = radiusX * TABLE_ASPECT_WH. */
+const TABLE_ASPECT_WH = 60 / 50
+
 const DAILY_EMOTION_LIMIT = 50
 /** Покупка доп. лимита по выбранным типам: +50 использований за 10 ❤ на тип. */
 const EMOTION_QUOTA_PURCHASE_AMOUNT = 50
@@ -751,26 +754,19 @@ export function GameRoom() {
     typeof drunkUntil[currentTurnPlayer.id] === "number" &&
     drunkUntil[currentTurnPlayer.id] > nowTs
 
-  // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
-  // чтобы аватарки с рамками не накладывались друг на друга.
-  // На десктопе кольцо — окружность (radiusX === radiusY), стол квадратный.
+  // Игровой круг: при 10 игроках на мобильном viewport — больший базовый радиус (manyPlayersOnMobile).
+  // Стол 60:50: одинаковый r в % по x и y даёт эллипс в пикселях; для окружности — radiusY = radiusX * (W/H).
   const playerSlots = Math.min(players.length, 10)
   const manyPlayersOnMobile = isMobile && playerSlots > 6
   const crowdedRing = playerSlots >= 7
   const desktopRadiusByCount =
-    playerSlots >= 10 ? 37 :
-    playerSlots === 9 ? 35 :
-    playerSlots === 8 ? 33 :
-    playerSlots === 7 ? 31 : 28
-  const radius = manyPlayersOnMobile ? 33 : isMobile ? (crowdedRing ? 29 : 26) : desktopRadiusByCount
+    playerSlots >= 10 ? 30 :
+    playerSlots === 9 ? 28 :
+    playerSlots === 8 ? 26 :
+    playerSlots === 7 ? 24 : 22
+  const radius = manyPlayersOnMobile ? 26 : isMobile ? (crowdedRing ? 22 : 20) : desktopRadiusByCount
   const radiusX = radius
-  const radiusY = manyPlayersOnMobile
-    ? 34
-    : isMobile
-      ? crowdedRing
-        ? 29
-        : 28
-      : radius
+  const radiusY = radius * TABLE_ASPECT_WH
   const positions = circlePositions(playerSlots, radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -3764,24 +3760,25 @@ export function GameRoom() {
             </div>
           )}
         </div>
-        {/* Стол 1:1: моб — 90% / max 420px; ПК — квадрат: сторона min(90% колонки, высота вьюпорта), не растягивается в ширину */}
+        {/* Стол ~60:50 (ширина/высота): моб — 90% / max 420px; ПК — вписать в min(72vh,78dvh) по высоте */}
         <div
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative flex aspect-square min-w-0 shrink-0 items-center justify-center mx-auto mt-1 rounded-2xl sm:rounded-3xl`
+              : `relative flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto mt-1 rounded-2xl sm:rounded-3xl`
           }
           style={{
-            aspectRatio: "1 / 1",
             ...(isMobile
               ? {
+                  aspectRatio: "60 / 50",
                   width: "min(90vw, 100%)",
                   maxWidth: "min(90vw, 420px)",
                   marginLeft: "auto",
                   marginRight: "auto",
                 }
               : {
-                  width: "min(90%, min(72vh, 78dvh))",
+                  aspectRatio: "60 / 50",
+                  width: "min(90%, min(100%, calc(min(72vh, 78dvh) * 60 / 50)))",
                   maxWidth: "100%",
                 }),
             background:
@@ -3802,11 +3799,11 @@ export function GameRoom() {
           />
           {/* Центральный софт-спот под бутылкой */}
           <div
-            className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-[50%]"
             style={{
-              width: isMobile ? 130 : 190,
+              width: isMobile ? 130 : 228,
               height: isMobile ? 130 : 190,
-              background: "radial-gradient(circle, rgba(56,189,248,0.16) 0%, rgba(56,189,248,0.05) 45%, transparent 75%)",
+              background: "radial-gradient(ellipse at center, rgba(56,189,248,0.16) 0%, rgba(56,189,248,0.05) 45%, transparent 75%)",
               filter: "blur(1px)",
             }}
           />
