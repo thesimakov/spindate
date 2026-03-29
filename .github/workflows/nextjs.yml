@@ -5,10 +5,10 @@
 name: Deploy Next.js site to Pages
 
 on:
-  # Pages деплоим только из отдельной ветки превью,
-  # чтобы не расходился с прод-сервером на main.
+  # Раньше только pages-preview — из-за этого github.io оставался на старой сборке после push в main.
+  # Сборка для Pages (static export) всё равно отличается от next start на VPS, но клиент подтягивается с main.
   push:
-    branches: ["pages-preview"]
+    branches: ["main", "pages-preview"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
