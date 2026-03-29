@@ -27,6 +27,8 @@ export function GameApp() {
   const { state, dispatch } = useGame()
   const [normalized, setNormalized] = useState(false)
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
+  const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
+  const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)
 
   const { notifications, dismiss } = usePmNotifications(state.currentUser?.id, state.admirers ?? [])
 
@@ -73,6 +75,47 @@ export function GameApp() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+    const readFlag = () => {
+      const fromSearch = /(^|[?&])layout_debug=1(&|$)/.test(window.location.search)
+      const hash = window.location.hash
+      const fromHash =
+        /([#?&])layout_debug=1(&|$)/.test(hash) ||
+        /([#?&])layout_debug=1(&|$)/.test(hash.includes("?") ? hash.slice(hash.indexOf("?")) : "")
+      const fromStorage = window.localStorage.getItem("spindate_layout_debug") === "1"
+      return fromSearch || fromHash || fromStorage
+    }
+    const enabled = readFlag()
+    setLayoutDebugEnabled(enabled)
+  }, [])
+
+  useEffect(() => {
+    if (!layoutDebugEnabled || typeof window === "undefined") return
+    const update = () => setLayoutDebugSnapshot(getLayoutConstraintDebug())
+    update()
+
+    const onResize = () => update()
+    window.addEventListener("resize", onResize)
+    window.visualViewport?.addEventListener("resize", onResize)
+    window.visualViewport?.addEventListener("scroll", onResize)
+    const intervalId = window.setInterval(update, 1000)
+
+    return () => {
+      window.removeEventListener("resize", onResize)
+      window.visualViewport?.removeEventListener("resize", onResize)
+      window.visualViewport?.removeEventListener("scroll", onResize)
+      window.clearInterval(intervalId)
+    }
+  }, [layoutDebugEnabled])
+
+  const handleHideLayoutDebug = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("spindate_layout_debug")
+    }
+    setLayoutDebugEnabled(false)
+  }, [])
+
+  useEffect(() => {
     if (state.screen !== "game" || !state.currentUser) {
       setBlockStatus(null)
       return
@@ -101,6 +144,7 @@ export function GameApp() {
   }, [state.screen, tableReady])
 
   const showEntryLoader = state.screen === "game" && (!tableReady || !normalized)
+  const showLayoutDebugOverlay = layoutDebugEnabled && !!layoutDebugSnapshot
 
   if (state.screen === "game" && state.currentUser && blockStatus) {
     const isBlocked = blockStatus === "blocked"
@@ -151,6 +195,27 @@ export function GameApp() {
       return (
         <>
           <GameRoom />
+          {showLayoutDebugOverlay && layoutDebugSnapshot && (
+            <div className="fixed bottom-2 left-2 z-[110] w-[min(92vw,26rem)] rounded-xl border border-cyan-300/50 bg-slate-950/90 p-2 font-mono text-[11px] leading-tight text-cyan-100 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="font-bold text-cyan-200">Layout debug</span>
+                <button
+                  type="button"
+                  onClick={handleHideLayoutDebug}
+                  className="rounded border border-cyan-300/40 px-1.5 py-0.5 text-[10px] text-cyan-100 hover:bg-cyan-300/10"
+                >
+                  скрыть
+                </button>
+              </div>
+              <div>{`innerWidth: ${layoutDebugSnapshot.innerWidth ?? "-"}`}</div>
+              <div>{`visualViewport: ${layoutDebugSnapshot.visualViewportWidth ?? "-"}`}</div>
+              <div>{`screen: ${layoutDebugSnapshot.screenWidth ?? "-"}`}</div>
+              <div>{`inIframe: ${String(layoutDebugSnapshot.inIframe ?? "-")}`}</div>
+              <div>{`vk_platform: ${String(layoutDebugSnapshot.vk_platform ?? "-")}`}</div>
+              <div>{`desktopUser: ${String(layoutDebugSnapshot.computeIsDesktopUser ?? "-")}`}</div>
+              <div className="mt-1 text-[10px] text-cyan-300/90">?layout_debug=1 или localStorage spindate_layout_debug=1</div>
+            </div>
+          )}
           {state.gameSidePanel !== "player-chat" && (
             <PmNotificationToasts
               notifications={notifications}
