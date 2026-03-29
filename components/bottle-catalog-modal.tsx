@@ -25,7 +25,7 @@ const BOTTLE_CATALOG_SKINS: Array<{
   { id: "neon", name: "Виски", img: assetUrl(BOTTLE_IMAGES.neon), cost: 5 },
   { id: "frost", name: "Шампанское", img: assetUrl(BOTTLE_IMAGES.frost), cost: 5 },
   { id: "baby", name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby), cost: 5 },
-  { id: "vip", name: "VIP-бутылка", img: assetUrl(BOTTLE_IMAGES.vip), cost: 5 },
+  { id: "vip", name: "VIP-бутылка", img: assetUrl(BOTTLE_IMAGES.vip), cost: 200 },
   { id: "milk", name: "Молочная", img: assetUrl(BOTTLE_IMAGES.milk), cost: 5 },
   { id: "frame_69", name: "Бутылочка 69", img: assetUrl(BOTTLE_IMAGES.frame_69), cost: 5 },
   { id: "frame_70", name: "Бутылочка 70", img: assetUrl(BOTTLE_IMAGES.frame_70), cost: 5 },

@@ -211,12 +211,23 @@
     }
   }
   .heart-price--compact {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     font-weight: 800;
   }
   @media (min-width: 640px) {
     .heart-price--compact {
-      font-size: 1.05rem;
+      font-size: 0.85rem;
+    }
+  }
+  /* Мелкий бейдж цены в кнопках эмоций / меню */
+  .heart-price--badge {
+    font-size: 0.625rem;
+    font-weight: 900;
+    gap: 0.125rem;
+  }
+  @media (min-width: 640px) {
+    .heart-price--badge {
+      font-size: 0.6875rem;
     }
   }
   .heart-price__icon {

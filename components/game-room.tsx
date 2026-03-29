@@ -2878,9 +2878,9 @@ export function GameRoom() {
                   {renderActionIcon(action)}
                   <span className="flex-1 truncate text-left">{action.label}</span>
                   {shouldShowActionCostBadge(action.id, actionCost) && (
-                    <span className="heart-price heart-price--compact flex shrink-0 items-center gap-0.5 opacity-95">
+                    <span className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95">
                       {actionCost}
-                      <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
+                      <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
                     </span>
                   )}
                 </button>
@@ -3652,11 +3652,11 @@ export function GameRoom() {
                       <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
                       {shouldShowActionCostBadge(action.id, actionCost) && (
                         <span
-                          className="heart-price flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[10px] font-black opacity-95"
+                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
                           style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                         >
                           {actionCost}
-                          <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
+                          <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
                         </span>
                       )}
                     </button>
@@ -3688,11 +3688,11 @@ export function GameRoom() {
                       <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
                       {shouldShowActionCostBadge(action.id, actionCost) && (
                         <span
-                          className="heart-price flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[10px] font-black opacity-95"
+                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
                           style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                         >
                           {actionCost}
-                          <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
+                          <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
                         </span>
                       )}
                     </button>
@@ -3730,11 +3730,11 @@ export function GameRoom() {
                         <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
                         {shouldShowActionCostBadge(action.id, actionCost) && (
                           <span
-                            className="heart-price flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[10px] font-black opacity-95"
+                            className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
                             style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                           >
                             {actionCost}
-                            <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
+                            <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
                           </span>
                         )}
                       </button>
