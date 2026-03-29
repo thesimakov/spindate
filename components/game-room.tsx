@@ -1081,19 +1081,18 @@ export function GameRoom() {
 
   // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
   // чтобы аватарки с рамками не накладывались друг на друга.
-  // При 7+ игроках на десктопе чуть увеличиваем эллипс — подписи вынесены из потока (tableRingLayout).
+  // На десктопе кольцо — окружность (radiusX === radiusY), стол квадратный.
   const manyPlayersOnMobile = isMobile && players.length > 6
   const crowdedRing = players.length >= 7
   const radius = manyPlayersOnMobile ? 32 : isMobile ? (crowdedRing ? 28 : 26) : crowdedRing ? 30 : 28
   const radiusX = radius
-  // Десктоп: кольцо чуть вытянуто по вертикали (не 6:5 — стол квадратнее); мобильный людный стол — как раньше.
   const radiusY = manyPlayersOnMobile
     ? 34
     : isMobile
       ? crowdedRing
         ? 29
         : 28
-      : Math.round(radius * (crowdedRing ? 11 / 10 : 21 / 20))
+      : radius
   const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
@@ -4286,12 +4285,12 @@ export function GameRoom() {
             </div>
           )}
         </div>
-        {/* Стол 1:1: ширина 90% колонки — по 5% поля с каждой стороны */}
+        {/* Стол 1:1: моб — 90% / max 420px; ПК — квадрат: сторона min(90% колонки, высота вьюпорта), не растягивается в ширину */}
         <div
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative flex w-[90%] min-w-0 max-w-full shrink-0 items-center justify-center md:max-h-[40vh] lg:max-h-[min(72vh,78dvh)] min-h-0 mx-auto mt-1 rounded-2xl sm:rounded-3xl`
+              : `relative flex aspect-square min-w-0 shrink-0 items-center justify-center mx-auto mt-1 rounded-2xl sm:rounded-3xl`
           }
           style={{
             aspectRatio: "1 / 1",
@@ -4302,7 +4301,10 @@ export function GameRoom() {
                   marginLeft: "auto",
                   marginRight: "auto",
                 }
-              : {}),
+              : {
+                  width: "min(90%, min(72vh, 78dvh))",
+                  maxWidth: "100%",
+                }),
             background:
               "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",
             boxShadow: isMobile
