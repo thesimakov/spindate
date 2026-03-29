@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { getRedis } from "@/lib/redis"
 
+export const dynamic = "force-dynamic"
+
+const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
+
 interface StoredMessage {
   id: string
   senderId: number
@@ -87,7 +91,7 @@ export async function POST(req: Request) {
     store.set(key, bucket)
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true }, { headers: NO_CACHE })
 }
 
 /** GET — получить сообщения: ?a=ID1&b=ID2&since=TIMESTAMP */
@@ -113,5 +117,5 @@ export async function GET(req: Request) {
 
   const messages = since > 0 ? bucket.messages.filter((m) => m.timestamp > since) : bucket.messages
 
-  return NextResponse.json({ ok: true, messages })
+  return NextResponse.json({ ok: true, messages }, { headers: NO_CACHE })
 }

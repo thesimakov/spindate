@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import type { GameAction } from "@/lib/game-types"
 import { pullTableEvents, pushTableEvent } from "@/lib/live-table-events-server"
 
+export const dynamic = "force-dynamic"
+
+const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
+
 function parseIntSafe(raw: unknown, fallback = 0): number {
   const n = Number(raw)
   if (!Number.isFinite(n)) return fallback
@@ -34,10 +38,10 @@ export async function POST(req: Request) {
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: "Событие отклонено" }, { status: 400 })
     }
-    return NextResponse.json({ ok: true, seq: result.seq })
+    return NextResponse.json({ ok: true, seq: result.seq }, { headers: NO_CACHE })
   }
 
   const sinceSeq = parseIntSafe(body?.sinceSeq, 0)
   const result = await pullTableEvents({ tableId, sinceSeq })
-  return NextResponse.json(result)
+  return NextResponse.json(result, { headers: NO_CACHE })
 }

@@ -61,7 +61,7 @@ export function usePmNotifications(
         peers: peerIds.join(","),
         since: String(minSince),
       })
-      const res = await fetch(`/api/chat/unread?${params}`)
+      const res = await fetch(`/api/chat/unread?${params}`, { cache: "no-store" })
       if (!res.ok) return
       const data = await res.json()
       if (!data.ok) return

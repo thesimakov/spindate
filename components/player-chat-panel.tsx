@@ -44,7 +44,7 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
           b: String(player.id),
           since: String(since),
         })
-        const res = await fetch(`/api/chat/private?${params}`)
+        const res = await fetch(`/api/chat/private?${params}`, { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         if (!data.ok || !Array.isArray(data.messages)) return
@@ -85,6 +85,7 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
     try {
       await fetch("/api/chat/private", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: msg.id,

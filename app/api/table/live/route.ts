@@ -3,6 +3,10 @@ import type { Player } from "@/lib/game-types"
 import { joinOrSyncLiveTable, leaveLiveTable } from "@/lib/live-tables-server"
 import { ensureTableAuthority } from "@/lib/table-authority-server"
 
+export const dynamic = "force-dynamic"
+
+const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
+
 type Mode = "join" | "sync" | "leave"
 
 function parseMode(raw: unknown): Mode {
@@ -52,7 +56,7 @@ export async function POST(req: Request) {
     if (Number.isInteger(userId) && userId > 0) {
       await leaveLiveTable(userId)
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true }, { headers: NO_CACHE })
   }
 
   const player = parsePlayer(body?.user)
@@ -80,5 +84,5 @@ export async function POST(req: Request) {
     tableId: result.tableId,
     livePlayers: result.livePlayers.map((p) => ({ ...p, isBot: false })),
     tablesCount: result.tablesCount,
-  })
+  }, { headers: NO_CACHE })
 }

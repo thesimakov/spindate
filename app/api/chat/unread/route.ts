@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { getRedis } from "@/lib/redis"
 
+export const dynamic = "force-dynamic"
+
+const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
+
 interface StoredMessage {
   id: string
   senderId: number
@@ -45,7 +49,7 @@ export async function GET(req: Request) {
     .filter((n) => Number.isInteger(n) && n > 0 && n !== userId)
 
   if (peerIds.length === 0) {
-    return NextResponse.json({ ok: true, unread: {} })
+    return NextResponse.json({ ok: true, unread: {} }, { headers: NO_CACHE })
   }
 
   const redis = getRedis()
@@ -73,5 +77,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, unread })
+  return NextResponse.json({ ok: true, unread }, { headers: NO_CACHE })
 }

@@ -506,6 +506,7 @@ export function GameRoom() {
     try {
       await apiFetch("/api/table/events", {
         method: "POST",
+        cache: "no-store" as RequestCache,
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
@@ -546,6 +547,7 @@ export function GameRoom() {
       try {
         const res = await apiFetch("/api/table/state", {
           method: "POST",
+          cache: "no-store" as RequestCache,
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ tableId: tid, sinceRevision: since }),
@@ -603,6 +605,7 @@ export function GameRoom() {
       try {
         const res = await apiFetch("/api/table/live", {
           method: "POST",
+          cache: "no-store" as RequestCache,
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
@@ -680,22 +683,28 @@ export function GameRoom() {
     return () => clearTimeout(done)
   }, [tableLoading, players.length, tableLiveReady, tableAuthorityReady])
 
-  // Синхронизация живых игроков за столом: если кто-то подключился,
-  // добавляем его в список и убираем лишнего бота.
-  // При возврате фокуса синхронизируемся немедленно (setInterval ненадёжен в фоновых вкладках).
+  // Синхронизация живых игроков за столом.
+  // Первый вызов — "join" (сервер подберёт или создаст стол).
+  // Дальнейшие — "sync" (heartbeat + обновление состава).
+  const initialJoinDoneRef = useRef(false)
   useEffect(() => {
     if (!currentUser || tablePaused) return
     let cancelled = false
 
     const tick = async () => {
       if (cancelled) return
-      await syncLiveTable("sync")
+      if (!initialJoinDoneRef.current) {
+        initialJoinDoneRef.current = true
+        await syncLiveTable("join")
+      } else {
+        await syncLiveTable("sync")
+      }
     }
 
     void tick()
     const interval = setInterval(() => {
       void tick()
-    }, 5000)
+    }, 3000)
 
     const onFocus = () => { void tick() }
     const onVisibility = () => {
