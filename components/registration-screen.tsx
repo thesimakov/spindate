@@ -16,6 +16,7 @@ import { useGameLayoutMode } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { composeTablePlayers } from "@/lib/table-composition"
 import { AppLoader } from "@/components/app-loader"
+import { Spinner } from "@/components/ui/spinner"
 import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 
 export function RegistrationScreen() {
@@ -681,19 +682,24 @@ export function RegistrationScreen() {
             <Button
               onClick={handleContinueVk}
               disabled={loading}
-              className="w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2"
+              aria-busy={loading}
+              className="w-full rounded-xl py-4 text-base font-semibold flex items-center justify-center gap-2 transition-opacity disabled:opacity-95"
               size="lg"
               style={{
                 background: "#2787F5",
               }}
             >
-              <span
-                className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
-                style={{ backgroundColor: "#ffffff", color: "#2787F5" }}
-              >
-                {"VK"}
-              </span>
-              <span>{loading ? "Авторизация..." : "Войти через VK"}</span>
+              {loading ? (
+                <Spinner className="size-5 shrink-0 text-white" aria-hidden />
+              ) : (
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  style={{ backgroundColor: "#ffffff", color: "#2787F5" }}
+                >
+                  {"VK"}
+                </span>
+              )}
+              <span>{loading ? "Вход…" : "Войти через VK"}</span>
             </Button>
 
             <Button
