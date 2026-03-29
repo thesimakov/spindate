@@ -19,6 +19,24 @@ function readVkPlatformFromLocation(): string | null {
   return m ? decodeURIComponent(m[1]) : null
 }
 
+function isLikelyRealMobileDevice(): boolean {
+  if (typeof window === "undefined") return false
+  const ua = navigator.userAgent || ""
+  const uaMobile =
+    /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+  const coarsePointer =
+    typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches
+  const maxTouchPoints = typeof navigator.maxTouchPoints === "number" ? navigator.maxTouchPoints : 0
+  const screenW = Math.max(window.screen?.width ?? 0, window.screen?.availWidth ?? 0)
+  const screenH = Math.max(window.screen?.height ?? 0, window.screen?.availHeight ?? 0)
+  const shortestSide = Math.min(screenW || 0, screenH || 0)
+
+  // Реальные телефоны/планшеты: mobile UA или touch+coarse на сравнительно небольшом экране.
+  if (uaMobile) return true
+  if (coarsePointer && maxTouchPoints > 0 && shortestSide > 0 && shortestSide <= 1100) return true
+  return false
+}
+
 function computeIsDesktopUser(): boolean {
   if (typeof window === "undefined") return false
 
@@ -29,12 +47,15 @@ function computeIsDesktopUser(): boolean {
   if (vkPlatform && /^desktop_/i.test(vkPlatform)) {
     return true
   }
+  if (vkPlatform && /^(mobile_|android_|iphone_|ipad_)/i.test(vkPlatform)) {
+    return false
+  }
+
+  const realMobile = isLikelyRealMobileDevice()
 
   if (window.self !== window.top) {
+    if (!realMobile) return true
     const ua = navigator.userAgent
-    const isMobileUA =
-      /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
-    if (!isMobileUA) return true
     // WebView клиента ВК на Windows/macOS/Linux иногда содержит «Mobile», но это не телефон
     if (
       /Mobile/i.test(ua) &&
@@ -46,8 +67,9 @@ function computeIsDesktopUser(): boolean {
   }
 
   if (window.self === window.top) {
-    const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
-    if (!isMobileUA && window.innerWidth >= 1024) return true
+    // Внешний браузер VK (top-level): если это не реальное мобильное устройство,
+    // всегда считаем десктопом, даже при узком viewport.
+    if (!realMobile) return true
   }
 
   return false
@@ -62,6 +84,11 @@ export function getLayoutConstraintDebug(): Record<string, string | number | boo
     innerWidth: window.innerWidth,
     visualViewportWidth: window.visualViewport?.width ?? null,
     outerWidth: window.outerWidth,
+    screenWidth: window.screen?.width ?? null,
+    screenAvailWidth: window.screen?.availWidth ?? null,
+    pointerCoarse:
+      typeof window.matchMedia === "function" ? window.matchMedia("(pointer: coarse)").matches : null,
+    maxTouchPoints: typeof navigator.maxTouchPoints === "number" ? navigator.maxTouchPoints : null,
     inIframe: window.self !== window.top,
     vk_platform: readVkPlatformFromLocation(),
     uaLooksMobile:

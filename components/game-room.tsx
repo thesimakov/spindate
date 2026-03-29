@@ -1082,9 +1082,15 @@ export function GameRoom() {
   // Игровой круг: при 10 игроках на мобильном viewport растягиваем радиус,
   // чтобы аватарки с рамками не накладывались друг на друга.
   // На десктопе кольцо — окружность (radiusX === radiusY), стол квадратный.
-  const manyPlayersOnMobile = isMobile && players.length > 6
-  const crowdedRing = players.length >= 7
-  const radius = manyPlayersOnMobile ? 32 : isMobile ? (crowdedRing ? 28 : 26) : crowdedRing ? 30 : 28
+  const playerSlots = Math.min(players.length, 10)
+  const manyPlayersOnMobile = isMobile && playerSlots > 6
+  const crowdedRing = playerSlots >= 7
+  const desktopRadiusByCount =
+    playerSlots >= 10 ? 37 :
+    playerSlots === 9 ? 35 :
+    playerSlots === 8 ? 33 :
+    playerSlots === 7 ? 31 : 28
+  const radius = manyPlayersOnMobile ? 33 : isMobile ? (crowdedRing ? 29 : 26) : desktopRadiusByCount
   const radiusX = radius
   const radiusY = manyPlayersOnMobile
     ? 34
@@ -1093,7 +1099,7 @@ export function GameRoom() {
         ? 29
         : 28
       : radius
-  const positions = circlePositions(Math.min(players.length, 10), radiusX, radiusY)
+  const positions = circlePositions(playerSlots, radiusX, radiusY)
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
   // на targetPlayer / targetPlayer2 из состояния — это именно
