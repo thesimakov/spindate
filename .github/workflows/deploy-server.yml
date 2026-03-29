@@ -37,7 +37,7 @@ jobs:
           # Форк: поменяй здесь или задай репозиторную переменную NEXT_PUBLIC_APP_URL (и подставь через vars).
           NEXT_PUBLIC_APP_URL: https://spindate.lemnity.ru
           # Публичный ID мини-приложения VK — вшивается в клиентскую сборку (как в .env.example).
-          NEXT_PUBLIC_VK_APP_ID: "54483214"
+          NEXT_PUBLIC_VK_APP_ID: "54511363"
         run: npm run build
 
       # Кэш webpack/swc не нужен для `next start`, только раздувает rsync и провоцирует Broken pipe

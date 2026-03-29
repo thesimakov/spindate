@@ -18,7 +18,7 @@
 3. **Переменные окружения**  
    Скопируйте `.env.example` в `.env.local` и задайте:
    ```bash
-   NEXT_PUBLIC_VK_APP_ID=54483214
+   NEXT_PUBLIC_VK_APP_ID=54511363
    ```
    ID приложения берётся в настройках приложения ВК (раздел «Настройки»). Для этого проекта уже задан в `.env.example`.
 
@@ -98,7 +98,7 @@
 
 ```bash
 # Обязательно для оплат в VK
-NEXT_PUBLIC_VK_APP_ID=54483214
+NEXT_PUBLIC_VK_APP_ID=54511363
 
 # При появлении бэкенда
 DATABASE_URL=postgresql://...

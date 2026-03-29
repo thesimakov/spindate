@@ -315,6 +315,18 @@ export async function getUserInfo(): Promise<VkUserInfo> {
   }
 }
 
+/** App ID из env — используется для оплаты и других bridge-вызовов, требующих app_id */
+function getVkAppId(): number | undefined {
+  try {
+    const raw = typeof process !== "undefined" ? process.env?.NEXT_PUBLIC_VK_APP_ID : undefined
+    if (raw) {
+      const n = Number(raw)
+      return Number.isFinite(n) && n > 0 ? n : undefined
+    }
+  } catch { /* ignore */ }
+  return undefined
+}
+
 /** Идентификаторы товаров для VK Pay (должны совпадать с app/api/vk/payments). */
 export const VK_ITEM_IDS = {
   hearts_5: "hearts_5",
@@ -327,17 +339,15 @@ export const VK_ITEM_IDS = {
   vip_30d: "vip_30d",
 } as const
 
-/** Показать форму оплаты VK. amount — сумма (по курсу VK: 1 голос = 1 сердце); itemId — для платёжных уведомлений (get_item, order_status_change). */
+/**
+ * Показать форму оплаты VK Pay.
+ * @param amount — сумма в голосах VK
+ * @param itemId — идентификатор товара (для уведомлений get_item / order_status_change)
+ * @see https://dev.vk.com/bridge/VKWebAppOpenPayForm
+ */
 export async function showPaymentWall(amount: number, itemId?: string): Promise<boolean> {
   const b = await getBridgeAsync()
-  let appId: number | undefined
-  try {
-    appId = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_VK_APP_ID
-      ? Number(process.env.NEXT_PUBLIC_VK_APP_ID)
-      : undefined
-  } catch {
-    appId = undefined
-  }
+  const appId = getVkAppId()
   if (b && isVkMiniApp() && appId) {
     try {
       const params: Record<string, string> = {
@@ -350,8 +360,8 @@ export async function showPaymentWall(amount: number, itemId?: string): Promise<
         action: "pay-to-service",
         params,
       })
-      const r = res as { result?: { success?: boolean }; success?: boolean }
-      return r?.result?.success === true || r?.success === true
+      const r = res as { result?: { success?: boolean; status?: boolean }; success?: boolean; status?: boolean }
+      return r?.result?.success === true || r?.success === true || r?.result?.status === true || r?.status === true
     } catch (e) {
       console.warn("VKWebAppOpenPayForm failed", e)
       return false
@@ -375,13 +385,17 @@ export async function buyVip(): Promise<boolean> {
   return showPaymentWall(70, VK_ITEM_IDS.vip_30d)
 }
 
-/** Показать диалог приглашения друзей в приложение. */
+/**
+ * Показать диалог приглашения друзей в приложение.
+ * @see https://dev.vk.com/bridge/VKWebAppShowInviteBox
+ */
 export async function inviteFriends(): Promise<boolean> {
   const b = await getBridgeAsync()
   if (b && isVkMiniApp()) {
     try {
-      await b.send("VKWebAppShowInviteBox", {})
-      return true
+      const res = await b.send("VKWebAppShowInviteBox", {})
+      const r = res as { success?: boolean; result?: boolean }
+      return r?.success === true || r?.result === true || res != null
     } catch (e) {
       console.warn("VKWebAppShowInviteBox failed", e)
       return false
