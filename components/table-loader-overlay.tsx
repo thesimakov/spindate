@@ -157,54 +157,56 @@ function TableLoaderOverlayInner({
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1">
         <div
           className={cn(
-            "table-loader-quote-card player-menu-quote relative w-full overflow-hidden rounded-3xl border text-left shadow-[0_24px_60px_-12px_rgba(0,0,0,0.55),0_0_0_1px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.08)]",
-            isPcLayout ? "max-w-2xl" : "max-w-md",
+            "table-loader-quote-card player-menu-quote relative w-full overflow-hidden rounded-[1.75rem] border text-left shadow-[0_28px_64px_-16px_rgba(0,0,0,0.6),0_0_0_1px_rgba(251,191,36,0.18),inset_0_1px_0_rgba(255,255,255,0.09)]",
+            isPcLayout ? "max-w-3xl" : "max-w-lg",
           )}
           style={{
             background:
-              "linear-gradient(155deg, rgba(30,41,59,0.72) 0%, rgba(15,23,42,0.88) 45%, rgba(15,23,42,0.92) 100%)",
-            borderColor: "rgba(251, 191, 36, 0.28)",
-            backdropFilter: "blur(18px)",
-            WebkitBackdropFilter: "blur(18px)",
+              "linear-gradient(160deg, rgba(30,41,59,0.78) 0%, rgba(15,23,42,0.92) 48%, rgba(12,18,32,0.96) 100%)",
+            borderColor: "rgba(251, 191, 36, 0.35)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
           }}
         >
           <div
-            className="pointer-events-none absolute -right-6 -top-10 h-40 w-40 rounded-full bg-amber-400/15 blur-3xl"
+            className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-amber-400/12 blur-3xl"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute -bottom-8 -left-10 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl"
+            className="pointer-events-none absolute -bottom-10 -left-12 h-40 w-40 rounded-full bg-violet-500/8 blur-3xl"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/35 to-transparent"
+            className="pointer-events-none absolute bottom-4 right-2 font-serif text-[6.5rem] leading-none text-amber-500/[0.06] sm:right-6 sm:text-[8rem]"
+            aria-hidden
+          >
+            &ldquo;
+          </div>
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/40 to-transparent"
             aria-hidden
           />
-          <div className="relative z-10 px-5 py-6 sm:px-8 sm:py-8">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-100 shadow-[0_0_20px_rgba(251,191,36,0.15)] sm:text-[11px]">
+          <div className="relative z-10 mx-auto max-w-prose px-6 py-8 sm:px-10 sm:py-10 md:py-11">
+            <header className="mb-7 sm:mb-9">
+              <span className="inline-flex items-center rounded-full border border-amber-400/45 bg-gradient-to-r from-amber-500/25 to-amber-950/30 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.28em] text-amber-50/95 shadow-[0_0_24px_rgba(251,191,36,0.12)] sm:px-4 sm:text-xs">
                 Цитата дня
               </span>
-              <span className="hidden h-px w-12 bg-gradient-to-r from-amber-400/50 to-transparent sm:block" aria-hidden />
-            </div>
-            <blockquote className="relative m-0">
-              <span
-                className="pointer-events-none absolute -left-0.5 -top-6 font-serif text-[4.5rem] leading-none text-amber-400/[0.18] sm:text-[5.5rem] sm:text-amber-400/20"
+            </header>
+            <div className="relative flex gap-4 sm:gap-5">
+              <div
+                className="mt-1 w-1 shrink-0 self-stretch rounded-full bg-gradient-to-b from-amber-300 via-amber-500/75 to-amber-700/35 shadow-[0_0_14px_rgba(251,191,36,0.28)]"
                 aria-hidden
-              >
-                &ldquo;
-              </span>
-              <p className="relative z-[1] text-[1.05rem] font-medium leading-[1.65] text-slate-50 sm:text-xl sm:leading-[1.7]">
-                <span className="bg-gradient-to-br from-white via-slate-100 to-slate-300/90 bg-clip-text italic text-transparent">
-                  {quote.text}
-                </span>
-              </p>
-            </blockquote>
-            <footer className="mt-5 flex items-center gap-2 border-t border-white/[0.08] pt-4">
-              <span className="h-px w-8 shrink-0 bg-gradient-to-r from-amber-400/60 to-transparent" aria-hidden />
-              <p className="text-[0.9375rem] font-medium tracking-wide text-slate-400/95 sm:text-base">
-                <span className="text-amber-200/95">—</span>{" "}
-                <span className="text-slate-300">{quote.author}</span>
+              />
+              <blockquote className="m-0 min-w-0 flex-1">
+                <p className="text-[1.125rem] font-medium leading-[1.75] text-slate-50 sm:text-xl sm:leading-[1.72] md:text-2xl md:leading-[1.65] [text-wrap:balance]">
+                  <span className="italic text-slate-100">{quote.text}</span>
+                </p>
+              </blockquote>
+            </div>
+            <footer className="mt-9 border-t border-white/12 pt-7 sm:mt-10 sm:pt-8">
+              <p className="text-[0.9375rem] leading-snug text-slate-400 sm:text-lg">
+                <span className="font-medium text-amber-200/90">—</span>{" "}
+                <span className="font-medium text-slate-200">{quote.author}</span>
               </p>
             </footer>
           </div>

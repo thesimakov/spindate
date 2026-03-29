@@ -746,10 +746,10 @@
   z-index: 2;
 }
 
-/* Плавное медленное кручение барабана до выбора игрока (один цикл по 4 участника = 352px при 88px на слот) */
+/* Плавное медленное кручение барабана до выбора игрока (один цикл по 4 участника = 448px при 112px на слот) */
 @keyframes ugadaika-reel-idle {
   0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(0, -352px, 0); }
+  100% { transform: translate3d(0, -448px, 0); }
 }
 .ugadaika-reel-idle {
   animation: ugadaika-reel-idle 8s linear infinite;
@@ -853,16 +853,7 @@
   }
 }
 
-@keyframes ugadaika-desktop-parallax {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  50% { transform: translate3d(0, -3px, 0); }
-}
-
-@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
-  .ugadaika-game-field {
-    animation: ugadaika-desktop-parallax 8s ease-in-out infinite;
-  }
-}
+/* Параллакс поля Угадай-ка убран — сетка остаётся визуально стабильной */
 
 /* Окно джекпота — общая глубина и затемнение */
 .ugadaika-slot-window {
@@ -882,7 +873,7 @@
     rgba(120, 80, 20, 0.55) 85%,
     rgba(180, 120, 30, 0.4) 100%);
   border: 3px solid transparent;
-  border-radius: 1rem;
+  border-radius: 10px;
   background-clip: padding-box;
   box-shadow:
     inset 0 2px 0 rgba(253, 224, 71, 0.4),
@@ -917,7 +908,7 @@
   content: "";
   position: absolute;
   inset: -8px;
-  border-radius: calc(1rem + 8px);
+  border-radius: calc(10px + 8px);
   pointer-events: none;
   border: 1px solid rgba(56, 189, 248, 0.25);
   box-shadow:
@@ -937,7 +928,7 @@
     rgba(180, 130, 50, 0.85) 50%,
     rgba(80, 55, 25, 0.9) 80%,
     rgba(30, 25, 15, 0.95) 100%);
-  border-radius: 0.5rem;
+  border-radius: 10px;
   box-shadow:
     inset 0 2px 4px rgba(253, 224, 71, 0.2),
     inset 0 -2px 4px rgba(0, 0, 0, 0.4),
@@ -1101,7 +1092,7 @@
     rgba(30, 25, 15, 0.98) 40%,
     rgba(60, 45, 20, 0.95) 100%);
   border: 3px solid transparent;
-  border-radius: 1rem;
+  border-radius: 10px;
   background-clip: padding-box;
   box-shadow:
     0 0 0 3px rgba(251, 191, 36, 0.75),
@@ -1119,7 +1110,7 @@
   content: "";
   position: absolute;
   inset: -3px;
-  border-radius: 1rem;
+  border-radius: 10px;
   padding: 3px;
   background: linear-gradient(135deg, #fef08a, #fde047 25%, #facc15 50%, #eab308 75%, #fcd34d);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1136,7 +1127,7 @@
     rgba(25, 15, 25, 0.98) 40%,
     rgba(60, 25, 45, 0.95) 100%);
   border: 3px solid transparent;
-  border-radius: 1rem;
+  border-radius: 10px;
   background-clip: padding-box;
   box-shadow:
     0 0 0 3px rgba(244, 63, 94, 0.7),
@@ -1154,7 +1145,7 @@
   content: "";
   position: absolute;
   inset: -3px;
-  border-radius: 1rem;
+  border-radius: 10px;
   padding: 3px;
   background: linear-gradient(135deg, #fecdd3, #fda4af 25%, #fb7185 50%, #f43f5e 75%, #e11d48);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -2106,40 +2097,31 @@
   width: 100%;
 }
 
-/* Топ 10 Угадай-ка: анимация при изменении очков и места */
-@keyframes ugadaikaScorePulse {
-  0% {
-    transform: scale(1);
-    background-color: transparent;
-  }
-  30% {
-    transform: scale(1.08);
-    background-color: rgba(34, 197, 94, 0.25);
-  }
-  70% {
-    background-color: rgba(34, 197, 94, 0.12);
-  }
+/* Топ 10 Угадай-ка: без смены background у строк — иначе перебивается inline-градиент и остаётся «грязный» фон */
+@keyframes ugadaika-top10-score-pulse {
+  0%,
   100% {
     transform: scale(1);
-    background-color: transparent;
+  }
+  40% {
+    transform: scale(1.03);
   }
 }
-
-@keyframes ugadaikaPlaceChange {
+@keyframes ugadaika-top10-place-nudge {
   0% {
-    background-color: rgba(251, 191, 36, 0.35);
+    transform: translateY(-3px);
+    opacity: 0.88;
   }
   100% {
-    background-color: transparent;
+    transform: translateY(0);
+    opacity: 1;
   }
 }
-
 .ugadaika-top10-row-updated {
-  animation: ugadaikaScorePulse 0.6s ease-out forwards;
+  animation: ugadaika-top10-score-pulse 0.65s ease-out both;
 }
-
 .ugadaika-top10-place-changed {
-  animation: ugadaikaPlaceChange 0.8s ease-out forwards;
+  animation: ugadaika-top10-place-nudge 0.5s ease-out both;
 }
 
 .ugadaika-top10-score-up {
@@ -2323,24 +2305,6 @@
   background: linear-gradient(to top, rgba(20,15,25,0.98) 0%, rgba(20,15,25,0.6) 50%, transparent 100%);
 }
 
-/* Leaderboard row update flash */
-@keyframes ugadaika-row-flash {
-  0% { background: rgba(251,191,36,0.25); }
-  100% { background: transparent; }
-}
-.ugadaika-top10-row-updated {
-  animation: ugadaika-row-flash 0.6s ease-out both;
-}
-
-/* Leaderboard place change slide */
-@keyframes ugadaika-place-slide {
-  0% { transform: translateY(-4px); opacity: 0.7; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-.ugadaika-top10-place-changed {
-  animation: ugadaika-place-slide 0.4s ease-out both;
-}
-
 /* Win glow on selected avatar card */
 @keyframes ugadaika-win-glow {
   0%, 100% { box-shadow: 0 0 16px rgba(52,211,153,0.4), 0 0 32px rgba(34,197,94,0.2); }
@@ -2355,6 +2319,10 @@
   .ugadaika-reel-landing { animation: none !important; }
   .ugadaika-jackpot-left,
   .ugadaika-jackpot-right { animation: none !important; }
+  .ugadaika-top10-row-updated,
+  .ugadaika-top10-place-changed {
+    animation: none !important;
+  }
 }
 
 /* Рамка «Сердечки» — сердечки вокруг аватарки */
