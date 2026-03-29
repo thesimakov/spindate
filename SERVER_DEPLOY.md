@@ -20,7 +20,7 @@ pm2 startup
 # Выполнить команду, которую выведет pm2 startup
 ```
 
-Приложение слушает порт из **`ecosystem.config.cjs`** (по умолчанию **3001**). Проверка: `http://IP:3001`. Nginx должен проксировать на **тот же** порт.
+Приложение слушает порт из **`ecosystem.config.cjs`** (по умолчанию **3002**, на одном VPS с другим Next — **rps-vk-game** обычно **3001**). Проверка: `http://IP:3002`. Nginx должен проксировать на **тот же** порт.
 
 ## 3. Nginx и HTTPS
 
@@ -33,7 +33,7 @@ pm2 startup
 Проверка с сервера:
 
 ```bash
-curl -sI http://127.0.0.1:3001/assets/b_standart_v2.webp | head -1
+curl -sI http://127.0.0.1:3002/assets/b_standart_v2.webp | head -1
 # ожидается: HTTP/1.1 200 OK
 ```
 

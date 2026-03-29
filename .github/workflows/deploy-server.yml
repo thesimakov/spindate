@@ -106,6 +106,6 @@ jobs:
              sleep 2 && \
              rm -rf node_modules && \
              npm ci && \
-             (pm2 restart spindate --update-env 2>/dev/null || PORT=3001 pm2 start ecosystem.config.cjs --update-env) && \
+             (pm2 restart spindate --update-env 2>/dev/null || PORT=3002 pm2 start ecosystem.config.cjs --update-env) && \
              pm2 save"
           echo "Deploy finished."
