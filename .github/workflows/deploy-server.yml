@@ -53,9 +53,9 @@ jobs:
         run: |
           set -euo pipefail
           if { [ -z "${SERVER_SSH_KEY:-}" ] && [ -z "${SERVER_SSH_KEY_B64:-}" ]; } || [ -z "${SERVER_HOST:-}" ] || [ -z "${SERVER_USER:-}" ]; then
-            echo "SERVER_SSH_KEY(_B64), SERVER_HOST or SERVER_USER not set — skipping deploy."
+            echo "::error::SERVER_SSH_KEY(_B64), SERVER_HOST или SERVER_USER не заданы — deploy прерван."
             echo "Add secrets in repo Settings → Secrets and variables → Actions."
-            exit 0
+            exit 1
           fi
           mkdir -p ~/.ssh
           # Ключ лучше хранить как base64 (одна строка), чтобы GitHub не ломал переносы.

@@ -5,9 +5,10 @@
 name: Deploy Next.js site to Pages
 
 on:
-  # Runs on pushes targeting the default branch
+  # Pages деплоим только из отдельной ветки превью,
+  # чтобы не расходился с прод-сервером на main.
   push:
-    branches: ["main"]
+    branches: ["pages-preview"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -35,6 +36,8 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       BUILD_FOR_PAGES: "true"
+      # Для сверки версии в HTML (data-build на body)
+      NEXT_PUBLIC_BUILD_ID: ${{ github.sha }}
       # Путь приложения на GitHub Pages (https://user.github.io/REPO_NAME/) — без этого картинки из public/ не грузятся
       NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
       # Публичный URL мини-сайта (metadata, OG) — должен совпадать с доменом Pages
