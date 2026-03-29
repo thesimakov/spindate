@@ -677,7 +677,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             disabled={voiceBalance < 50}
             onClick={() => setShowGiveRoseModal(true)}
           >
-            {"Подарить розу — 50 ❤"}
+            Подарить розу — <span className="heart-price heart-price--compact text-amber-100">50 ❤</span>
           </Button>
         </div>
         {hasTrueFeelingsAchievement && (
@@ -926,7 +926,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
             <p className="relative mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: "#fcd34d" }}>
               <span>Премиум</span>
-              <span className="text-xs font-semibold normal-case opacity-90">5 ❤ за рамку</span>
+              <span className="text-sm font-extrabold normal-case text-rose-200 opacity-95">5 ❤ за рамку</span>
             </p>
             <div className="relative grid grid-cols-3 gap-3">
               {PREMIUM_FRAMES.map((f) => {
@@ -972,7 +972,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       )}
                     </div>
                     <span className="text-xs font-medium text-slate-200 leading-tight text-center">{f.label}</span>
-                    <span className="text-xs font-bold text-amber-300">{f.cost} ❤</span>
+                    <span className="heart-price heart-price--compact text-amber-200">{f.cost} ❤</span>
                   </button>
                 )
               })}
@@ -1006,7 +1006,9 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-2 text-base font-bold text-slate-100">Подарить розу (50 ❤)</h3>
+            <h3 className="mb-2 text-base font-bold text-slate-100">
+              Подарить розу (<span className="heart-price heart-price--compact text-rose-200">50 ❤</span>)
+            </h3>
             <p className="mb-3 text-sm text-slate-400">Повышает рейтинг симпатии. За 10 роз одному игроку — ачивка «Настоящие чувства».</p>
             <ul className="max-h-48 overflow-y-auto space-y-1">
               {players

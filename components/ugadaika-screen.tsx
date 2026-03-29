@@ -1318,8 +1318,8 @@ export function UgadaikaScreen() {
                         <p className="text-xl font-black text-center text-emerald-300 tracking-tight" style={{ textShadow: "0 0 20px rgba(52, 211, 153, 0.3)" }}>
                           Верно! Остаёшься в игре.
                         </p>
-                        <p className="mt-3 flex items-center justify-center gap-2 text-sm font-semibold text-rose-200">
-                          <Heart className="h-5 w-5 text-rose-400 fill-current shrink-0" />
+                        <p className="heart-price heart-price--bright mt-3 justify-center gap-2 text-lg text-rose-100 sm:text-xl">
+                          <Heart className="heart-price__icon h-7 w-7 text-rose-200 fill-current shrink-0" />
                           +10 сердец
                         </p>
                         {showTenWinsRoseHint && (

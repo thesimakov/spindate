@@ -128,7 +128,8 @@ const GIFT_CATALOG_FREE: GiftCatalogDef[] = []
 
 /** Лоадер стола: шаги прогресса (мс от старта) */
 const TABLE_LOADER_DURATION_MS = 2400
-const TABLE_LOADER_MIN_VISIBLE_MS = 1800
+/** Минимум на экране — короче ощущается «вечным», но без мгновенного мигания */
+const TABLE_LOADER_MIN_VISIBLE_MS = 1200
 const TABLE_LOADER_PROGRESS_STEPS: readonly { pct: number; at: number }[] = [
   { pct: 10, at: 200 },
   { pct: 25, at: 500 },
@@ -136,6 +137,8 @@ const TABLE_LOADER_PROGRESS_STEPS: readonly { pct: number; at: number }[] = [
   { pct: 70, at: 1550 },
   { pct: 100, at: 2100 },
 ]
+/** Пока ждём сервер после 70%, ползунок медленно ползёт до этого % (не мешает финальным 100%) */
+const TABLE_LOADER_FAKE_MAX_BEFORE_READY = 94
 
 const GIFT_CATALOG_PREMIUM: GiftCatalogDef[] = [
   { id: "toy_bear", name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
@@ -571,11 +574,24 @@ export function GameRoom() {
   // live-состава и authority (даже если есть локальный/кэшированный список игроков).
   const [tableLoading, setTableLoading] = useState(true)
   const [tableLoaderProgress, setTableLoaderProgress] = useState(0)
-  const lastTableIdRef = useRef<number | null>(null)
+  const loaderStepTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const [tableLiveReady, setTableLiveReady] = useState(false)
   const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
   const tableLoadStartedAtRef = useRef<number>(Date.now())
   const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
+
+  const clearLoaderStepTimers = useCallback(() => {
+    loaderStepTimeoutsRef.current.forEach(clearTimeout)
+    loaderStepTimeoutsRef.current = []
+  }, [])
+
+  const scheduleLoaderStepTimers = useCallback(() => {
+    clearLoaderStepTimers()
+    for (const { pct, at } of TABLE_LOADER_PROGRESS_STEPS) {
+      if (pct >= 100) continue
+      loaderStepTimeoutsRef.current.push(setTimeout(() => setTableLoaderProgress(pct), at))
+    }
+  }, [clearLoaderStepTimers])
 
   const { toast, showToast } = useInlineToast(2000)
   const maxTableSize = 10
@@ -599,9 +615,15 @@ export function GameRoom() {
     [currentUser, maxTableSize, targetMales, targetFemales],
   )
 
+  /** Ref для актуального tableId — позволяет syncLiveTable читать свежее значение
+   *  без пересоздания callback'а (что перезапускало бы sync-loop). */
+  const tableIdRef = useRef(tableId)
+  useEffect(() => { tableIdRef.current = tableId }, [tableId])
+
   const syncLiveTable = useCallback(
     async (mode: "join" | "sync", forceNew = false) => {
       if (!currentUser) return null
+      const currentTableId = tableIdRef.current
       try {
         const res = await apiFetch("/api/table/live", {
           method: "POST",
@@ -612,7 +634,7 @@ export function GameRoom() {
             mode,
             forceNew,
             user: currentUser,
-            tableId,
+            tableId: currentTableId,
             maxTableSize,
           }),
         })
@@ -620,8 +642,9 @@ export function GameRoom() {
         if (!res.ok || !data?.ok || !Array.isArray(data.livePlayers)) return null
         const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
         const nextPlayers = composePlayersFromLive(livePlayers)
-        const nextTableId = typeof data.tableId === "number" ? data.tableId : tableId
-        if (mode === "join" || nextTableId !== tableId) {
+        const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
+        const tableActuallyChanged = nextTableId !== currentTableId
+        if (tableActuallyChanged || forceNew) {
           dispatch({ type: "SET_TABLE", players: nextPlayers, tableId: nextTableId })
           lastAuthorityRevisionRef.current = 0
         } else {
@@ -637,36 +660,63 @@ export function GameRoom() {
         return null
       }
     },
-    [currentUser, tableId, maxTableSize, composePlayersFromLive, dispatch, fetchTableAuthority],
+    [currentUser, maxTableSize, composePlayersFromLive, dispatch, fetchTableAuthority],
   )
 
+  /**
+   * Лоадер стола — запускается **один раз** при маунте GameRoom.
+   * НЕ перезапускается при смене tableId (серверная подстановка id после join
+   * вызывала цикл перезагрузок). При явной смене стола через handleChangeTable
+   * данные уже готовы — лоадер не нужен.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (lastTableIdRef.current === null) {
-      lastTableIdRef.current = tableId
-    } else if (lastTableIdRef.current !== tableId) {
-      lastTableIdRef.current = tableId
-    }
-    setTableLoading(true)
     tableLoadStartedAtRef.current = Date.now()
+    setTableLoading(true)
     setTableLiveReady(false)
     setTableAuthorityReady(false)
     setTableLoaderProgress(0)
-    const stepTimers = TABLE_LOADER_PROGRESS_STEPS
-      .filter((s) => s.pct < 100)
-      .map(({ pct, at }) =>
-      setTimeout(() => setTableLoaderProgress(pct), at),
-    )
-    return () => {
-      stepTimers.forEach(clearTimeout)
-    }
-  }, [tableId])
+    scheduleLoaderStepTimers()
+    return () => clearLoaderStepTimers()
+  }, []) // mount-only
 
+  /** После 70% таймеры молчат — медленно двигаем %, пока ждём live + authority */
+  useEffect(() => {
+    if (!tableLoading) return
+    const id = window.setInterval(() => {
+      setTableLoaderProgress((p) => {
+        if (p < 70 || p >= 100) return p
+        if (p >= TABLE_LOADER_FAKE_MAX_BEFORE_READY) return p
+        return p + 1
+      })
+    }, 420)
+    return () => clearInterval(id)
+  }, [tableLoading])
+
+  /** Завершение лоадера: все сигналы готовы + минимальное время видимости */
   useEffect(() => {
     if (!tableLoading) return
     const hasPlayers = players.length > 0
-    const minDurationPassed = Date.now() - tableLoadStartedAtRef.current >= TABLE_LOADER_MIN_VISIBLE_MS
-    const ready = hasPlayers && tableLiveReady && tableAuthorityReady && minDurationPassed
-    if (!ready) return
+    const allSignalsReady = hasPlayers && tableLiveReady && tableAuthorityReady
+    if (!allSignalsReady) return
+
+    const elapsed = Date.now() - tableLoadStartedAtRef.current
+    const remainingMinVisible = TABLE_LOADER_MIN_VISIBLE_MS - elapsed
+
+    if (remainingMinVisible > 0) {
+      let doneAfterMin: ReturnType<typeof setTimeout> | null = null
+      const waitMin = setTimeout(() => {
+        setTableLoaderProgress(100)
+        doneAfterMin = setTimeout(() => {
+          setTableLoading(false)
+          setTableLoaderProgress(0)
+        }, 250)
+      }, remainingMinVisible)
+      return () => {
+        clearTimeout(waitMin)
+        if (doneAfterMin) clearTimeout(doneAfterMin)
+      }
+    }
 
     setTableLoaderProgress(100)
     const done = setTimeout(() => {
@@ -682,7 +732,7 @@ export function GameRoom() {
   const initialJoinDoneRef = useRef(false)
   useEffect(() => {
     initialJoinDoneRef.current = false
-  }, [currentUser?.id, tableId])
+  }, [currentUser?.id])
 
   useEffect(() => {
     if (!currentUser || tablePaused) return
@@ -716,16 +766,7 @@ export function GameRoom() {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [currentUser, tableId, syncLiveTable, tablePaused])
-
-  // Повторная подтяжка списка живых игроков в середине лоадера — меньше расхождения между клиентами.
-  useEffect(() => {
-    if (!tableLoading || !currentUser || tablePaused) return
-    const t = setTimeout(() => {
-      void syncLiveTable("sync")
-    }, 1200)
-    return () => clearTimeout(t)
-  }, [tableLoading, currentUser, syncLiveTable, tablePaused])
+  }, [currentUser, syncLiveTable, tablePaused])
 
   // Авторитетное состояние стола с сервера (фаза раунда, спин, очередь, лог, общий чат).
   useEffect(() => {
@@ -2990,10 +3031,10 @@ export function GameRoom() {
         onClaim={handleClaimWelcomeGift}
       />
 
-      {/* Лоадер стола: весь экран с blur, без звуков (музыка/эмоции отключены в эффектах выше) */}
+      {/* Лоадер стола: выше всего UI стола (эмодзи z-90, модалки z-50+), плотный фон — не просвечивает стол */}
       {tableLoading && (
         <div
-          className="fixed inset-0 z-[45] flex flex-col overflow-y-auto bg-slate-950/50 px-4 py-8 backdrop-blur-xl supports-[backdrop-filter]:bg-slate-950/35"
+          className="fixed inset-0 z-[200] isolate flex flex-col overflow-y-auto bg-slate-950 px-4 py-8 backdrop-blur-sm"
           role="progressbar"
           aria-valuenow={tableLoaderProgress}
           aria-valuemin={0}
@@ -3001,27 +3042,60 @@ export function GameRoom() {
           aria-busy="true"
           aria-label="Загрузка стола"
         >
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1">
             <div
               className={cn(
-                "player-menu-quote w-full rounded-2xl px-4 py-5 text-left sm:px-6 sm:py-6",
+                "table-loader-quote-card player-menu-quote relative w-full overflow-hidden rounded-3xl border text-left shadow-[0_24px_60px_-12px_rgba(0,0,0,0.55),0_0_0_1px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.08)]",
                 isPcLayout ? "max-w-2xl" : "max-w-md",
               )}
               style={{
-                background: "linear-gradient(135deg, rgba(51,65,85,0.55) 0%, rgba(30,41,59,0.65) 100%)",
-                border: "1px solid rgba(251, 191, 36, 0.22)",
-                borderLeftWidth: "4px",
-                borderLeftColor: "rgba(251, 191, 36, 0.55)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                background:
+                  "linear-gradient(155deg, rgba(30,41,59,0.72) 0%, rgba(15,23,42,0.88) 45%, rgba(15,23,42,0.92) 100%)",
+                borderColor: "rgba(251, 191, 36, 0.28)",
+                backdropFilter: "blur(18px)",
+                WebkitBackdropFilter: "blur(18px)",
               }}
             >
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-amber-400 sm:text-xs">
-                Цитата дня
-              </p>
-              <p className="text-base italic leading-relaxed text-slate-100 sm:text-lg sm:leading-relaxed">
-                &quot;{tableLoaderQuote.text}&quot;
-              </p>
-              <p className="mt-3 text-sm text-slate-400 sm:text-base">— {tableLoaderQuote.author}</p>
+              <div
+                className="pointer-events-none absolute -right-6 -top-10 h-40 w-40 rounded-full bg-amber-400/15 blur-3xl"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute -bottom-8 -left-10 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/35 to-transparent"
+                aria-hidden
+              />
+              <div className="relative z-10 px-5 py-6 sm:px-8 sm:py-8">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-amber-600/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-100 shadow-[0_0_20px_rgba(251,191,36,0.15)] sm:text-[11px]">
+                    Цитата дня
+                  </span>
+                  <span className="hidden h-px w-12 bg-gradient-to-r from-amber-400/50 to-transparent sm:block" aria-hidden />
+                </div>
+                <blockquote className="relative m-0">
+                  <span
+                    className="pointer-events-none absolute -left-0.5 -top-6 font-serif text-[4.5rem] leading-none text-amber-400/[0.18] sm:text-[5.5rem] sm:text-amber-400/20"
+                    aria-hidden
+                  >
+                    &ldquo;
+                  </span>
+                  <p className="relative z-[1] text-[1.05rem] font-medium leading-[1.65] text-slate-50 sm:text-xl sm:leading-[1.7]">
+                    <span className="bg-gradient-to-br from-white via-slate-100 to-slate-300/90 bg-clip-text italic text-transparent">
+                      {tableLoaderQuote.text}
+                    </span>
+                  </p>
+                </blockquote>
+                <footer className="mt-5 flex items-center gap-2 border-t border-white/[0.08] pt-4">
+                  <span className="h-px w-8 shrink-0 bg-gradient-to-r from-amber-400/60 to-transparent" aria-hidden />
+                  <p className="text-[0.9375rem] font-medium tracking-wide text-slate-400/95 sm:text-base">
+                    <span className="text-amber-200/95">—</span>{" "}
+                    <span className="text-slate-300">{tableLoaderQuote.author}</span>
+                  </p>
+                </footer>
+              </div>
             </div>
           </div>
           <div className="mx-auto mt-4 w-full max-w-md shrink-0 pb-2 sm:mt-6 sm:pb-4">
@@ -3039,11 +3113,22 @@ export function GameRoom() {
             </div>
             <div className="relative h-2.5 overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-slate-600/50 sm:h-3">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-500 ease-out"
+                className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-300 ease-out"
                 style={{ width: `${tableLoaderProgress}%` }}
-              />
+              >
+                {tableLoaderProgress >= 70 && tableLoaderProgress < 100 && (
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[min(40%,8rem)] bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-90 app-loader-shimmer"
+                    aria-hidden
+                  />
+                )}
+              </div>
             </div>
-            <p className="mt-2 text-center text-[11px] font-semibold tabular-nums text-slate-400 sm:text-xs">
+            <p className="mt-2 flex items-center justify-center gap-2 text-center text-[11px] font-semibold tabular-nums text-slate-400 sm:text-xs">
+              <span
+                className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500/20 border-t-amber-400"
+                aria-hidden
+              />
               Подбираем стол… {tableLoaderProgress}%
             </p>
           </div>
@@ -3102,7 +3187,7 @@ export function GameRoom() {
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
               +{EMOTION_QUOTA_PURCHASE_AMOUNT} использований к каждому выбранному типу до конца суток. Цена —{" "}
-              <span className="font-semibold text-slate-200">{EMOTION_QUOTA_COST_PER_TYPE_HEARTS} ❤</span> за тип.
+              <span className="heart-price heart-price--compact text-rose-200">{EMOTION_QUOTA_COST_PER_TYPE_HEARTS} ❤</span> за тип.
             </p>
             <div className="mt-4 space-y-2">
               {(
@@ -3134,7 +3219,7 @@ export function GameRoom() {
             </div>
             <p className="mt-4 flex items-center justify-between border-t border-slate-700/80 pt-3 text-sm text-slate-300">
               <span>К оплате</span>
-              <span className="font-bold tabular-nums text-amber-200">
+              <span className="heart-price heart-price--compact text-amber-200">
                 {(
                   (emotionPurchasePick.kiss ? 1 : 0) +
                   (emotionPurchasePick.beer ? 1 : 0) +
@@ -3420,9 +3505,9 @@ export function GameRoom() {
                   {renderActionIcon(action)}
                   <span className="flex-1 truncate text-left">{action.label}</span>
                   {shouldShowActionCostBadge(action.id, actionCost) && (
-                    <span className="flex shrink-0 items-center gap-0.5 text-[11px] opacity-90">
+                    <span className="heart-price heart-price--compact flex shrink-0 items-center gap-0.5 opacity-95">
                       {actionCost}
-                      <Heart className="h-3 w-3" fill="currentColor" />
+                      <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
                     </span>
                   )}
                 </button>
@@ -3724,8 +3809,8 @@ export function GameRoom() {
                 (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")
               }
             >
-              <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
-              <span className="text-[13px] font-bold leading-none shrink-0" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+              <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
+              <span className="text-[15px] font-black tabular-nums leading-none shrink-0 sm:text-base" style={{ color: "#fff" }}>{voiceBalance}</span>
               <span
                 className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
                 style={{ color: "#cbd5e1" }}
@@ -4194,11 +4279,11 @@ export function GameRoom() {
                       <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
                       {shouldShowActionCostBadge(action.id, actionCost) && (
                         <span
-                          className="flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[9px] font-bold opacity-95"
-                          style={{ background: "rgba(0,0,0,0.12)", color: style.text }}
+                          className="heart-price flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[10px] font-black opacity-95"
+                          style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                         >
                           {actionCost}
-                          <Heart className="h-2.5 w-2.5" fill="currentColor" />
+                          <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
                         </span>
                       )}
                     </button>
@@ -4230,11 +4315,11 @@ export function GameRoom() {
                       <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
                       {shouldShowActionCostBadge(action.id, actionCost) && (
                         <span
-                          className="flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[9px] font-bold opacity-95"
-                          style={{ background: "rgba(0,0,0,0.12)", color: style.text }}
+                          className="heart-price flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[10px] font-black opacity-95"
+                          style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                         >
                           {actionCost}
-                          <Heart className="h-2.5 w-2.5" fill="currentColor" />
+                          <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
                         </span>
                       )}
                     </button>
@@ -4272,11 +4357,11 @@ export function GameRoom() {
                         <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
                         {shouldShowActionCostBadge(action.id, actionCost) && (
                           <span
-                            className="flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[9px] font-bold opacity-95"
-                            style={{ background: "rgba(0,0,0,0.12)", color: style.text }}
+                            className="heart-price flex shrink-0 items-center gap-0.5 rounded-full px-1 py-px text-[10px] font-black opacity-95"
+                            style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                           >
                             {actionCost}
-                            <Heart className="h-2.5 w-2.5" fill="currentColor" />
+                            <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
                           </span>
                         )}
                       </button>
@@ -4956,8 +5041,8 @@ export function GameRoom() {
                   }}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <Heart className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} fill="currentColor" />
-                    <span className="text-sm font-bold shrink-0" style={{ color: "#f0e0c8" }}>{voiceBalance}</span>
+                    <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
+                    <span className="text-base font-black tabular-nums shrink-0 text-white">{voiceBalance}</span>
                     <span className="min-w-0 truncate text-xs" style={{ color: "#cbd5e1" }}>
                       Ваш банк
                     </span>

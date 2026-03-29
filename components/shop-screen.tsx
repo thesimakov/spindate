@@ -435,15 +435,15 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
 
                   <div className="mt-auto flex w-full flex-col items-center justify-end pb-0.5 text-center">
                     <div
-                      className={`flex items-center justify-center gap-0.5 font-black tabular-nums tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.4)] sm:gap-1 ${
-                        layoutDense ? "text-base sm:text-lg" : "text-lg sm:text-2xl"
+                      className={`heart-price heart-price--bright ${
+                        layoutDense ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"
                       }`}
                     >
                       <span>{offer.hearts}</span>
                       <Heart
-                        className="h-[1em] w-[1em] shrink-0 text-rose-400"
+                        className="heart-price__icon h-[1.15em] w-[1.15em] shrink-0 text-rose-200"
                         strokeWidth={mdIconStroke}
-                        fill="none"
+                        fill="currentColor"
                         aria-hidden
                       />
                     </div>
@@ -587,14 +587,14 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 {isVip ? (
                   "Уже VIP"
                 ) : voiceBalance < 20 ? (
-                  <span className="inline-flex items-center justify-center gap-1.5">
+                  <span className="heart-price heart-price--cta gap-1.5">
                     Не хватает 20
-                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 ) : (
-                  <span className="inline-flex items-center justify-center gap-1.5 tabular-nums">
+                  <span className="heart-price heart-price--cta gap-1">
                     20
-                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 )}
               </Button>
@@ -636,14 +636,14 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 {isVip ? (
                   "Уже VIP"
                 ) : voiceBalance < 70 ? (
-                  <span className="inline-flex items-center justify-center gap-1.5">
+                  <span className="heart-price heart-price--cta gap-1.5">
                     Не хватает 70
-                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 ) : (
-                  <span className="inline-flex items-center justify-center gap-1.5 tabular-nums">
+                  <span className="heart-price heart-price--cta gap-1">
                     70
-                    <Heart className="h-4 w-4 shrink-0 text-rose-400" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 )}
               </Button>
@@ -685,10 +685,10 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   : "ml-auto flex shrink-0 flex-nowrap items-center gap-2"
               }
             >
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-slate-900/90 px-2.5 py-1 text-[11px] font-semibold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] sm:px-3 sm:py-1.5 sm:text-xs">
-                <span className="tabular-nums text-cyan-200">5</span>
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/30 sm:h-6 sm:w-6">
-                  <Heart className="h-3 w-3 text-cyan-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-slate-900/90 px-2.5 py-1 text-[12px] font-extrabold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] sm:px-3 sm:py-1.5 sm:text-sm">
+                <span className="tabular-nums text-base text-cyan-100 sm:text-lg">5</span>
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/30 sm:h-7 sm:w-7">
+                  <Heart className="h-4 w-4 text-rose-300 sm:h-[18px] sm:w-[18px]" strokeWidth={2} fill="currentColor" aria-hidden />
                 </span>
                 <span className="text-slate-500">=</span>
                 <span className="tabular-nums text-fuchsia-100">1</span>
@@ -696,15 +696,15 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   <Flower2 className="h-3 w-3 text-fuchsia-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} aria-hidden />
                 </span>
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/55 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:px-3 sm:py-1.5 sm:text-xs">
-                <span className="tabular-nums">1</span>
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-fuchsia-500/20 ring-1 ring-fuchsia-400/30 sm:h-6 sm:w-6">
-                  <Flower2 className="h-3 w-3 text-fuchsia-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} aria-hidden />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/55 bg-slate-900/80 px-2.5 py-1 text-[12px] font-extrabold text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:px-3 sm:py-1.5 sm:text-sm">
+                <span className="tabular-nums text-base sm:text-lg">1</span>
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-fuchsia-500/20 ring-1 ring-fuchsia-400/30 sm:h-7 sm:w-7">
+                  <Flower2 className="h-3.5 w-3.5 text-fuchsia-200 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
                 </span>
                 <span className="text-slate-500">=</span>
-                <span className="tabular-nums text-slate-200">5</span>
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/25 sm:h-6 sm:w-6">
-                  <Heart className="h-3 w-3 text-cyan-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                <span className="tabular-nums text-base text-slate-100 sm:text-lg">5</span>
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/25 sm:h-7 sm:w-7">
+                  <Heart className="h-4 w-4 text-rose-300 sm:h-[18px] sm:w-[18px]" strokeWidth={2} fill="currentColor" aria-hidden />
                 </span>
               </span>
             </div>
@@ -713,8 +713,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           <div className="space-y-4 px-4 py-4">
             <div className="space-y-2">
               <p className="text-[11px] leading-snug text-slate-400 sm:text-xs">
-                Курс: <span className="tabular-nums text-cyan-300">5 ❤</span> ↔{" "}
-                <span className="tabular-nums text-fuchsia-300">1 🌹</span>. Выберите вкладку и сумму.
+                Курс:{" "}
+                <span className="tabular-nums text-base font-extrabold text-cyan-100 sm:text-lg">5 ❤</span> ↔{" "}
+                <span className="tabular-nums text-base font-extrabold text-fuchsia-200 sm:text-lg">1 🌹</span>. Выберите вкладку и сумму.
               </p>
               <div
                 role="tablist"
@@ -736,9 +737,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   }`}
                 >
                   <Heart
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-cyan-400"}`}
-                    strokeWidth={mdIconStroke}
-                    fill="none"
+                    className={`h-5 w-5 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-cyan-400"}`}
+                    strokeWidth={2}
+                    fill={exchangeTab === "voices-to-roses" ? "currentColor" : "none"}
                     aria-hidden
                   />
                   <span className="min-w-0 truncate text-center text-[10px] font-bold leading-tight sm:text-sm">
@@ -789,9 +790,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-600/45 bg-slate-950/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Баланс</span>
                   <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-100">
-                    <span className="tabular-nums text-lg">{voiceBalance}</span>
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/15 ring-1 ring-cyan-400/30">
-                      <Heart className="h-4 w-4 text-cyan-200" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <span className="tabular-nums text-xl font-black text-white sm:text-2xl">{voiceBalance}</span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/15 ring-1 ring-cyan-400/30">
+                      <Heart className="h-5 w-5 text-rose-200" strokeWidth={2} fill="currentColor" aria-hidden />
                     </span>
                   </span>
                 </div>
@@ -821,9 +822,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                         </span>
                         <span className="text-lg font-black tabular-nums tracking-tight text-fuchsia-100">+{roses}</span>
                       </span>
-                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
-                        <span className="tabular-nums text-slate-200">{cost}</span>
-                        <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                      <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-slate-200 ring-1 ring-slate-600/50">
+                        <span className="tabular-nums">{cost}</span>
+                        <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
                       </span>
                     </Button>
                   ))}
@@ -858,9 +859,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                       </span>
                       <span className="text-sm font-black text-fuchsia-100">1 роза</span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
-                      <span className="tabular-nums text-cyan-200">+5</span>
-                      <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-cyan-100 ring-1 ring-slate-600/50">
+                      <span className="tabular-nums">+5</span>
+                      <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
                     </span>
                   </Button>
                   <Button
@@ -876,9 +877,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                       </span>
                       <span className="text-sm font-black text-fuchsia-100">5 роз</span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
-                      <span className="tabular-nums text-cyan-200">+25</span>
-                      <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-cyan-100 ring-1 ring-slate-600/50">
+                      <span className="tabular-nums">+25</span>
+                      <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
                     </span>
                   </Button>
                   <Button
@@ -894,9 +895,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                       </span>
                       <span className="text-sm font-black text-violet-100">Все розы</span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1 text-[11px] font-bold text-slate-400 ring-1 ring-slate-600/50">
-                      <span className="tabular-nums text-cyan-200">+{rosesCount * 5}</span>
-                      <Heart className="h-3.5 w-3.5 text-cyan-300" strokeWidth={mdIconStroke} fill="none" aria-hidden />
+                    <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-cyan-100 ring-1 ring-slate-600/50">
+                      <span className="tabular-nums">+{rosesCount * 5}</span>
+                      <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
                     </span>
                   </Button>
                 </div>

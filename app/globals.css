@@ -181,6 +181,50 @@
   }
 }
 
+/* Цены в сердечках — единый заметный стиль (число + иконка) */
+@layer components {
+  .heart-price {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .heart-price--bright {
+    color: #fff;
+    text-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.45),
+      0 2px 8px rgba(0, 0, 0, 0.45),
+      0 0 18px rgba(244, 63, 94, 0.42);
+  }
+  .heart-price--cta {
+    color: #0f172a;
+    font-size: 1.125rem;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+  @media (min-width: 640px) {
+    .heart-price--cta {
+      font-size: 1.3rem;
+    }
+  }
+  .heart-price--compact {
+    font-size: 0.95rem;
+    font-weight: 800;
+  }
+  @media (min-width: 640px) {
+    .heart-price--compact {
+      font-size: 1.05rem;
+    }
+  }
+  .heart-price__icon {
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  }
+}
+
 /* Мобильная адаптация: touch-friendly и предотвращение переполнения */
 @media (max-width: 768px) {
   body {

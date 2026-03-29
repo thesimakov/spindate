@@ -240,7 +240,7 @@ export function BottleCatalogModal({
               <div className="mt-2 w-full min-w-0">
                 <p className="truncate text-center text-[12px] font-extrabold text-amber-100 sm:text-[13px]">{e.skin.name}</p>
                 <div className="mt-1 flex items-center justify-center">
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={badgeTone}>
+                  <span className="rounded-full px-2.5 py-1 text-xs font-extrabold tracking-tight sm:text-sm" style={badgeTone}>
                     {e.status}
                   </span>
                 </div>

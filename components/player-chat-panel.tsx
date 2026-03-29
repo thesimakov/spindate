@@ -265,7 +265,13 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
                 >
                   <g.icon className={`h-7 w-7 ${g.emoji === "tomato" ? "text-red-400" : "text-cyan-400"}`} />
                   <span className="text-[10px] font-medium text-slate-200">{g.name}</span>
-                  <span className="text-[10px] text-slate-500">
+                  <span
+                    className={
+                      g.price > 0
+                        ? "heart-price heart-price--compact text-rose-200"
+                        : "text-[11px] font-semibold text-slate-400"
+                    }
+                  >
                     {g.price > 0 ? `${g.price} ❤` : "Бесплатно"}
                   </span>
                 </button>
