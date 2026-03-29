@@ -134,6 +134,17 @@ export function applyTableAuthorityAction(
         bottleDonorId: action.playerId,
         bottleDonorName: action.playerName,
       }
+    case "RESET_ROUND":
+      return {
+        ...snapshot,
+        showResult: false,
+        targetPlayer: null,
+        targetPlayer2: null,
+        resultAction: null,
+        isSpinning: false,
+      }
+    case "SET_BOTTLE_COOLDOWN_UNTIL":
+      return snapshot
     default:
       return null
   }

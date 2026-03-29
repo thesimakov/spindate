@@ -9,11 +9,11 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://spindate.lemnity.ru"
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
-  title: 'Целуй и знакомься — Игра в бутылочку',
-  description: 'Онлайн-игра в бутылочку для знакомств в VK Mini App',
+  title: 'Крути и знакомься — Игра в бутылочку',
+  description: 'Онлайн-игра «Крути и знакомься» — бутылочка для знакомств в VK Mini App',
   openGraph: {
     url: appUrl,
-    siteName: 'Spindate',
+    siteName: 'Крути и знакомься',
   },
 }
 

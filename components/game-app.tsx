@@ -15,10 +15,11 @@ import { ProfileScreen } from "@/components/profile-screen"
 import { UgadaikaScreen } from "@/components/ugadaika-screen"
 import { IntergameChatScreen } from "@/components/intergame-chat-screen"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { PlayerChatPanel } from "@/components/player-chat-panel"
 import { RatingLeaderboardBody } from "@/components/rating-screen"
 
 /** Задержка после готовности стола, чтобы интерфейс успел стабилизироваться */
-const NORMALIZE_DELAY_MS = 500
+const NORMALIZE_DELAY_MS = 200
 
 export function GameApp() {
   const { state, dispatch } = useGame()
@@ -161,6 +162,16 @@ export function GameApp() {
             >
               <RatingLeaderboardBody />
             </GameSidePanelShell>
+          )}
+          {state.gameSidePanel === "player-chat" && state.chatPanelPlayer && (
+            <PlayerChatPanel
+              player={state.chatPanelPlayer}
+              onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+              onOpenProfile={() => {
+                dispatch({ type: "OPEN_PLAYER_MENU", player: state.chatPanelPlayer! })
+                dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })
+              }}
+            />
           )}
         </>
       )

@@ -188,7 +188,7 @@ export const PAIR_ACTIONS: PairAction[] = [
   { id: "skip",    label: "Пропустить",         icon: "skip",     cost: 0,  combo: ["MM", "MF", "FF"] },
 ]
 
-export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily"
+export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily" | "player-chat"
 
 /** Сколько последних записей лога стола храним на клиенте (эмоции с дневным лимитом считаются отдельно). */
 export const GAME_TABLE_LOG_MAX_ENTRIES = 400
@@ -290,6 +290,8 @@ export interface GameState {
   tablePaused?: boolean
   /** Боковая панель поверх стола: профиль, магазин, избранное, рейтинг, ежедневные задачи. */
   gameSidePanel: GameSidePanelId | null
+  /** Игрок, с которым открыт боковой чат (panel = "player-chat") */
+  chatPanelPlayer: Player | null
 }
 
 export type GameAction =
@@ -376,5 +378,7 @@ export type GameAction =
       costPerType: number
     }
   | { type: "SET_TABLE_PAUSED"; paused: boolean }
+  /** Открыть боковой чат с игроком (панель player-chat) */
+  | { type: "OPEN_SIDE_CHAT"; player: Player }
   /** Подтянуть состояние стола с сервера (не отправляется на сервер) */
   | { type: "SYNC_TABLE_AUTHORITY"; payload: TableAuthorityPayload }

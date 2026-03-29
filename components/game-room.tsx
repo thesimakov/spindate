@@ -415,6 +415,8 @@ function isTableSyncedAction(action: GameAction): boolean {
     case "ADD_DRUNK_TIME":
     case "SET_BOTTLE_SKIN":
     case "SET_BOTTLE_DONOR":
+    case "RESET_ROUND":
+    case "SET_BOTTLE_COOLDOWN_UNTIL":
       return true
     default:
       return false
@@ -563,11 +565,13 @@ export function GameRoom() {
   )
 
   // Локальный лоадер при входе/смене стола: ждём реальной готовности live-состава и authority.
-  const [tableLoading, setTableLoading] = useState(true)
+  // Если стол уже сформирован при монтировании (из регистрации) — пропускаем лоадер.
+  const hasInitialPlayers = players.length > 0
+  const [tableLoading, setTableLoading] = useState(!hasInitialPlayers)
   const [tableLoaderProgress, setTableLoaderProgress] = useState(0)
   const lastTableIdRef = useRef<number | null>(null)
-  const [tableLiveReady, setTableLiveReady] = useState(false)
-  const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
+  const [tableLiveReady, setTableLiveReady] = useState(hasInitialPlayers)
+  const [tableAuthorityReady, setTableAuthorityReady] = useState(hasInitialPlayers)
   const tableLoadStartedAtRef = useRef<number>(Date.now())
   const tableLoaderQuote = useMemo(() => getDailyLoveQuote(new Date()), [])
 
@@ -730,10 +734,20 @@ export function GameRoom() {
     void poll()
     const interval = setInterval(() => {
       void poll()
-    }, 1200)
+    }, 800)
+
+    const onFocus = () => { void poll() }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll()
+    }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+
     return () => {
       cancelled = true
       clearInterval(interval)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [currentUser, tableId, fetchTableAuthority, tablePaused])
 
@@ -2479,10 +2493,14 @@ export function GameRoom() {
       return
     }
 
-    // Обычный клик по аватарке на столе:
-    // открываем мини-меню под выбранной аватаркой.
-    const nextTarget = sidebarTargetPlayer?.id === player.id ? null : player
-    setSidebarTargetPlayer(nextTarget)
+    // Клик по аватарке на столе:
+    // На свою — открываем профиль; на чужую — боковой чат.
+    if (currentUser && player.id === currentUser.id) {
+      dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })
+    } else {
+      dispatch({ type: "OPEN_SIDE_CHAT", player })
+    }
+    setSidebarTargetPlayer(null)
     setSidebarGiftMode(false)
     setGiftCatalogDrawerPlayer(null)
   }
@@ -5524,9 +5542,9 @@ export function GameRoom() {
                           timestamp: Date.now(),
                         },
                       })
-                      dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
+                      dispatch({ type: "ADD_ADMIRER", player: playerMenuTarget })
                       dispatch({ type: "CLOSE_PLAYER_MENU" })
-                      showToast("Приватный чат открыт", "success")
+                      showToast("Добавлено в «Твои поклонники»", "success")
                     }
                     const roseHandler = () => {
                       if (!currentUser) return

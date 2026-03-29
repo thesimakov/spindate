@@ -162,12 +162,16 @@ export function isVkMiniApp(): boolean {
 
 /** Максимальная высота iframe: в панели VK «Размер iframe» до 4500 px (см. dev.vk.com games → Отображение). */
 const VK_IFRAME_MAX_HEIGHT = 4500
+/** Максимальная ширина iframe VK для широкоформатного режима. */
+const VK_IFRAME_WIDESCREEN_WIDTH = 1920
 
 /** Размер видимой области для передачи в VKWebAppResizeWindow (вкладка / окно / visualViewport). */
 export function getViewportSizeForVk(): { width: number; height: number } {
-  if (typeof window === "undefined") return { width: 800, height: 600 }
+  if (typeof window === "undefined") return { width: VK_IFRAME_WIDESCREEN_WIDTH, height: 800 }
   const vv = window.visualViewport
-  const w = Math.max(1, Math.round(vv?.width ?? window.innerWidth))
+  const viewW = vv?.width ?? window.innerWidth
+  const screenW = window.screen?.availWidth ?? window.outerWidth ?? viewW
+  const w = Math.max(1, Math.round(Math.max(viewW, screenW, VK_IFRAME_WIDESCREEN_WIDTH)))
   const rawH = vv?.height ?? window.innerHeight
   const h = Math.max(1, Math.min(Math.round(rawH), VK_IFRAME_MAX_HEIGHT))
   return { width: w, height: h }
@@ -186,7 +190,10 @@ export async function resizeVkWindowToViewport(): Promise<boolean> {
   if (!b || !isVkMiniApp()) return false
   const { width, height } = getViewportSizeForVk()
   try {
-    await b.send("VKWebAppResizeWindow", { width, height })
+    await b.send("VKWebAppResizeWindow", {
+      width: Math.max(width, VK_IFRAME_WIDESCREEN_WIDTH),
+      height,
+    })
     return true
   } catch {
     return false
@@ -225,6 +232,25 @@ export function subscribeVkViewportResize(): () => void {
   }
 }
 
+/**
+ * Запрос широкоформатного режима через VKWebAppSetViewSettings.
+ * Устанавливает status_bar_style для максимальной ширины iframe.
+ */
+export async function requestVkWidescreen(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    await b.send("VKWebAppSetViewSettings", {
+      status_bar_style: "dark",
+      action_bar_color: "#0f172a",
+      navigation_bar_color: "#0f172a",
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Инициализация VK Mini App (вызвать при загрузке в VK). */
 export async function initVk(): Promise<void> {
   const b = await getBridgeAsync()
@@ -234,6 +260,7 @@ export async function initVk(): Promise<void> {
   } catch {
     // вне VK или старая версия клиента
   }
+  await requestVkWidescreen()
 }
 
 const VK_INIT_TIMEOUT_MS = 8000

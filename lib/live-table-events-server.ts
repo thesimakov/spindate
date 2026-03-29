@@ -65,6 +65,8 @@ function isActionAllowed(action: GameAction): boolean {
     case "ADD_DRUNK_TIME":
     case "SET_BOTTLE_SKIN":
     case "SET_BOTTLE_DONOR":
+    case "RESET_ROUND":
+    case "SET_BOTTLE_COOLDOWN_UNTIL":
       return true
     default:
       return false

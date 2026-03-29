@@ -87,6 +87,7 @@ const initialState: GameState = {
   emotionUseTodayByPlayer: {},
   tablePaused: false,
   gameSidePanel: null,
+  chatPanelPlayer: null,
 }
 
 const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
@@ -219,7 +220,13 @@ function bumpEmotionUseForLogEntry(
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "SET_GAME_SIDE_PANEL":
-      return { ...state, gameSidePanel: action.panel }
+      return {
+        ...state,
+        gameSidePanel: action.panel,
+        chatPanelPlayer: action.panel === "player-chat" ? state.chatPanelPlayer : null,
+      }
+    case "OPEN_SIDE_CHAT":
+      return { ...state, gameSidePanel: "player-chat", chatPanelPlayer: action.player }
     case "SET_SCREEN": {
       if (action.screen === "profile") {
         return { ...state, screen: "game", gameSidePanel: "profile" }
