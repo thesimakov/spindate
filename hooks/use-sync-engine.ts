@@ -22,6 +22,7 @@ function isTableSyncedAction(action: GameAction): boolean {
     case "SET_BOTTLE_DONOR":
     case "RESET_ROUND":
     case "SET_BOTTLE_COOLDOWN_UNTIL":
+    case "SET_CLIENT_TAB_AWAY":
       return true
     default:
       return false

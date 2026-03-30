@@ -67,10 +67,18 @@ function isActionAllowed(action: GameAction): boolean {
     case "SET_BOTTLE_DONOR":
     case "RESET_ROUND":
     case "SET_BOTTLE_COOLDOWN_UNTIL":
+    case "SET_CLIENT_TAB_AWAY":
       return true
     default:
       return false
   }
+}
+
+function senderMatchesAction(senderId: number, action: GameAction): boolean {
+  if (action.type === "SET_CLIENT_TAB_AWAY") {
+    return senderId === action.playerId
+  }
+  return true
 }
 
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
@@ -79,6 +87,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   if (!Number.isInteger(tableId) || tableId <= 0) return { ok: false as const }
   if (!Number.isInteger(args.senderId) || args.senderId <= 0) return { ok: false as const }
   if (!isActionAllowed(args.action)) return { ok: false as const }
+  if (!senderMatchesAction(args.senderId, args.action)) return { ok: false as const }
 
   const redis = getRedis()
   if (redis) {

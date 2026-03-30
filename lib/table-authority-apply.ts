@@ -145,6 +145,15 @@ export function applyTableAuthorityAction(
       }
     case "SET_BOTTLE_COOLDOWN_UNTIL":
       return snapshot
+    case "SET_CLIENT_TAB_AWAY": {
+      const next = { ...(snapshot.clientTabAway ?? {}) }
+      if (action.away) {
+        next[action.playerId] = true
+      } else {
+        delete next[action.playerId]
+      }
+      return { ...snapshot, clientTabAway: next }
+    }
     default:
       return null
   }

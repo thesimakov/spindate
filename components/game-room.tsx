@@ -50,6 +50,7 @@ import { useInlineToast } from "@/hooks/use-inline-toast"
 import { composeTablePlayers } from "@/lib/table-composition"
 import { useSyncEngine } from "@/hooks/use-sync-engine"
 import { useGameTimers } from "@/hooks/use-game-timers"
+import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FlyingEmojisLayer } from "@/components/flying-emojis-layer"
 import { BottleCenter } from "@/components/bottle-center"
@@ -454,6 +455,7 @@ export function GameRoom() {
     emotionDailyBoost,
     emotionUseTodayByPlayer,
     tablePaused,
+    clientTabAway,
     gameSidePanel,
     admirers,
   } = state
@@ -468,6 +470,17 @@ export function GameRoom() {
   useEffect(() => { playersRef.current = players }, [players])
 
   const [tableLoading, setTableLoading] = useState(true)
+
+  const isClientTabAway =
+    currentUser != null && clientTabAway?.[currentUser.id] === true
+  const { returnFromAway } = useClientTabAwayPresence({
+    enabled: true,
+    userId: currentUser?.id,
+    isAway: isClientTabAway,
+    tablePaused,
+    tableLoading,
+    dispatch,
+  })
 
   const { toast, showToast } = useInlineToast(2000)
 
@@ -905,15 +918,12 @@ export function GameRoom() {
         "plush_heart",
         "chocolate_box",
       ]
-      return inventory
-        .filter(
-          (item) =>
-            item.toPlayerId === playerId && bigTypes.includes(item.type as BigGiftType),
-        )
+      return gameLog
+        .filter((e) => bigTypes.includes(e.type as BigGiftType) && e.toPlayer?.id === playerId)
         .sort((a, b) => a.timestamp - b.timestamp)
-        .map((item) => item.type as BigGiftType)
+        .map((e) => e.type as BigGiftType)
     },
-    [inventory],
+    [gameLog],
   )
 
   // Сколько сердечек игрок потратил на платные подарки (по логам и PAIR_ACTIONS)
@@ -2556,6 +2566,57 @@ export function GameRoom() {
         </div>
       )}
 
+      {/* Временный уход со вкладки: стол и синхронизация не останавливаются */}
+      {currentUser && isClientTabAway && !tablePaused && (
+        <div className="fixed inset-0 z-[46] flex items-center justify-center bg-black/25 p-5 backdrop-blur-[10px]">
+          <div
+            className="w-full max-w-md rounded-2xl border px-5 py-5 text-center shadow-2xl"
+            style={{
+              background: "linear-gradient(180deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.96) 100%)",
+              borderColor: "rgba(148,163,184,0.28)",
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-tab-away-title"
+          >
+            <p id="client-tab-away-title" className="text-lg font-extrabold text-slate-100">
+              Вы временно вышли из игры
+            </p>
+            <p className="mt-2 text-sm text-slate-400">
+              За столом вы отображаетесь как отошедший. Игра продолжается — после возврата вы увидите актуальное состояние.
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => returnFromAway()}
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-bold text-slate-950 transition-all hover:brightness-110 active:scale-[0.99] sm:w-auto sm:min-w-[10rem]"
+                style={{
+                  background: "linear-gradient(135deg, #22d3ee 0%, #6366f1 100%)",
+                  border: "1px solid rgba(125,211,252,0.6)",
+                  boxShadow: "0 2px 0 rgba(15,23,42,0.85)",
+                }}
+              >
+                Вернуться
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  returnFromAway()
+                  void handleChangeTable()
+                }}
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl border text-sm font-bold text-slate-100 transition-all hover:brightness-110 active:scale-[0.99] sm:w-auto sm:min-w-[10rem]"
+                style={{
+                  borderColor: "rgba(148,163,184,0.35)",
+                  background: "rgba(15,23,42,0.6)",
+                }}
+              >
+                Сменить стол
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Покупка доп. лимита эмоций (+50 к типу за 10 ❤) */}
       {emotionPurchaseOpen && currentUser && (
         <div className="fixed inset-0 z-[47] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -3862,7 +3923,9 @@ export function GameRoom() {
                     bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
                     frameId={avatarFrames?.[player.id]}
                     inGame={playerInUgadaika != null && player.id === playerInUgadaika}
-                    showAsleep={(spinSkips?.[player.id] ?? 0) >= 3}
+                    showAsleep={
+                      (spinSkips?.[player.id] ?? 0) >= 3 || clientTabAway?.[player.id] === true
+                    }
                   />
                   {(() => {
                     void steamFogTick
@@ -4925,8 +4988,20 @@ export function GameRoom() {
                         <button
                           type="button"
                           onClick={() => {
-                            dispatch({ type: "ADD_ADMIRER", player: playerMenuTarget })
-                            showToast("Добавлено в «Твои поклонники» в профиле", "success")
+                            if (!currentUser) return
+                            // Поклонники синхронизируются через gameLog (type="care")
+                            dispatch({
+                              type: "ADD_LOG",
+                              entry: {
+                                id: generateLogId(),
+                                type: "care",
+                                fromPlayer: currentUser,
+                                toPlayer: playerMenuTarget,
+                                text: `${currentUser.name} стал(а) поклонником игрока ${playerMenuTarget.name}`,
+                                timestamp: Date.now(),
+                              } as GameLogEntry,
+                            })
+                            showToast("Отправлено — игрок увидит вас в списке поклонников", "success")
                           }}
                           className="w-full rounded-xl px-3 py-2.5 text-center text-xs font-extrabold text-[#0f172a] shadow-md transition-all hover:brightness-110 active:scale-[0.99] sm:text-sm"
                           style={{
@@ -5502,7 +5577,7 @@ export function GameRoom() {
                                   type: "ADD_LOG",
                                   entry: {
                                     id: generateLogId(),
-                                    type: "system",
+                                    type: gift.id as GameLogEntry["type"],
                                     fromPlayer: currentUser,
                                     toPlayer: giftCatalogDrawerPlayer,
                                     text: `${currentUser.name} дарит подарок «${gift.name}» игроку ${giftCatalogDrawerPlayer.name}`,

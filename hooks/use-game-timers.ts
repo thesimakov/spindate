@@ -62,6 +62,40 @@ export function useGameTimers({
   casualMode,
   tableLoading = false,
 }: UseGameTimersParams): UseGameTimersResult {
+  const currentTurnPlayerRef = useRef(currentTurnPlayer)
+  const currentUserRef = useRef(currentUser)
+  const showResultRef = useRef(showResult)
+  const predictionPhaseRef = useRef(predictionPhase)
+  const isSpinningRef = useRef(isSpinning)
+  const countdownRef = useRef(countdown)
+  useEffect(() => {
+    currentTurnPlayerRef.current = currentTurnPlayer
+  }, [currentTurnPlayer])
+  useEffect(() => {
+    currentUserRef.current = currentUser
+  }, [currentUser])
+  useEffect(() => {
+    showResultRef.current = showResult
+  }, [showResult])
+  useEffect(() => {
+    predictionPhaseRef.current = predictionPhase
+  }, [predictionPhase])
+  useEffect(() => {
+    isSpinningRef.current = isSpinning
+  }, [isSpinning])
+  useEffect(() => {
+    countdownRef.current = countdown
+  }, [countdown])
+
+  const afkGuardRef = useRef<{ key: string | null; startedAt: number }>({ key: null, startedAt: 0 })
+  const afkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const resultGuardRef = useRef<{ key: string | null; startedAt: number }>({ key: null, startedAt: 0 })
+  const predGuardRef = useRef<{ key: string | null; startedAt: number }>({ key: null, startedAt: 0 })
+  const handleSpinRef = useRef(handleSpin)
+  useEffect(() => {
+    handleSpinRef.current = handleSpin
+  }, [handleSpin])
+
   // --- Turn timer ---
   const [turnTimer, setTurnTimer] = useState<number | null>(null)
   const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -149,7 +183,12 @@ export function useGameTimers({
     if (!currentUser || currentUser.id === currentTurnPlayer.id) return
     if (isSpinning || showResult || countdown !== null) return
 
-    const timeout = setTimeout(() => {
+    const afkKey = `${currentTurnPlayer.id}:${roundNumber}:${currentTurnIndex}`
+    afkGuardRef.current = { key: afkKey, startedAt: Date.now() }
+
+    if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current)
+    afkTimeoutRef.current = setTimeout(() => {
+      afkTimeoutRef.current = null
       const liveIds = playersRef.current.filter(p => !p.isBot).map(p => p.id).sort((a, b) => a - b)
       if (!currentUser || liveIds[0] !== currentUser.id) return
 
@@ -166,8 +205,13 @@ export function useGameTimers({
       dispatch({ type: "NEXT_TURN" })
     }, AFK_SKIP_MS)
 
-    return () => clearTimeout(timeout)
-  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading])
+    return () => {
+      if (afkTimeoutRef.current) {
+        clearTimeout(afkTimeoutRef.current)
+        afkTimeoutRef.current = null
+      }
+    }
+  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading, roundNumber, currentTurnIndex])
 
   // --- Result timer + auto-advance ---
   const resultTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -184,6 +228,11 @@ export function useGameTimers({
       return
     }
 
+    resultGuardRef.current = {
+      key: `${roundNumber}:${currentTurnIndex}:result`,
+      startedAt: Date.now(),
+    }
+
     resultTimerRef.current = setInterval(() => {
       // Drives re-render only for the result display
     }, RESULT_TICK_MS)
@@ -193,7 +242,7 @@ export function useGameTimers({
     }, RESULT_AUTO_ADVANCE_MS)
 
     return clearResultTimers
-  }, [showResult, dispatch, clearResultTimers, tableLoading])
+  }, [showResult, dispatch, clearResultTimers, tableLoading, roundNumber, currentTurnIndex])
 
   // --- Prediction timer ---
   const [predictionTimer, setPredictionTimer] = useState<number>(PREDICTION_DURATION)
@@ -213,6 +262,10 @@ export function useGameTimers({
     }
 
     setPredictionTimer(PREDICTION_DURATION)
+    predGuardRef.current = {
+      key: `${roundNumber}:${currentTurnIndex}:pred`,
+      startedAt: Date.now(),
+    }
     predictionTimerRef.current = setInterval(() => {
       setPredictionTimer((prev) => {
         if (prev <= 1) {
@@ -226,7 +279,7 @@ export function useGameTimers({
     return () => {
       if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
     }
-  }, [predictionPhase, isSpinning, showResult, casualMode, tableLoading])
+  }, [predictionPhase, isSpinning, showResult, casualMode, tableLoading, roundNumber, currentTurnIndex])
 
   useEffect(() => {
     if (casualMode || tableLoading) return
@@ -234,6 +287,113 @@ export function useGameTimers({
       handleSpin()
     }
   }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin, casualMode, tableLoading])
+
+  // --- Фоновые вкладки тормозят setTimeout: при возврате догоняем просроченные ходы ---
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState !== "visible" || tableLoading) return
+
+      const g = turnGuardRef.current
+      const tp = currentTurnPlayerRef.current
+      const cu = currentUserRef.current
+      if (g.key && g.deadlineTs > 0 && Date.now() > g.deadlineTs + 30) {
+        if (
+          tp &&
+          !tp.isBot &&
+          cu &&
+          cu.id === tp.id &&
+          !isSpinningRef.current &&
+          !showResultRef.current &&
+          countdownRef.current === null
+        ) {
+          if (g.skipTimeout) {
+            clearTimeout(g.skipTimeout)
+            g.skipTimeout = null
+          }
+          if (turnTimerRef.current) {
+            clearInterval(turnTimerRef.current)
+            turnTimerRef.current = null
+          }
+          dispatch({
+            type: "ADD_LOG",
+            entry: {
+              id: generateLogId(),
+              type: "system",
+              fromPlayer: tp,
+              text: `${tp.name} пропускает ход`,
+              timestamp: Date.now(),
+            },
+          })
+          dispatch({ type: "NEXT_TURN" })
+        }
+      }
+
+      const ag = afkGuardRef.current
+      if (ag.key && Date.now() - ag.startedAt >= AFK_SKIP_MS) {
+        const ctp = currentTurnPlayerRef.current
+        const curUser = currentUserRef.current
+        if (
+          ctp &&
+          !ctp.isBot &&
+          curUser &&
+          curUser.id !== ctp.id &&
+          !isSpinningRef.current &&
+          !showResultRef.current &&
+          countdownRef.current === null
+        ) {
+          const liveIds = playersRef.current.filter((p) => !p.isBot).map((p) => p.id).sort((a, b) => a - b)
+          if (curUser && liveIds[0] === curUser.id) {
+            if (afkTimeoutRef.current) {
+              clearTimeout(afkTimeoutRef.current)
+              afkTimeoutRef.current = null
+            }
+            dispatch({
+              type: "ADD_LOG",
+              entry: {
+                id: generateLogId(),
+                type: "system",
+                fromPlayer: ctp,
+                text: `${ctp.name} пропускает ход`,
+                timestamp: Date.now(),
+              },
+            })
+            dispatch({ type: "NEXT_TURN" })
+          }
+        }
+      }
+
+      if (
+        showResultRef.current &&
+        resultGuardRef.current.key &&
+        Date.now() - resultGuardRef.current.startedAt >= RESULT_AUTO_ADVANCE_MS + 50
+      ) {
+        if (autoAdvanceRef.current) {
+          clearTimeout(autoAdvanceRef.current)
+          autoAdvanceRef.current = null
+        }
+        dispatch({ type: "NEXT_TURN" })
+      }
+
+      const pg = predGuardRef.current
+      if (
+        !casualMode &&
+        predictionPhaseRef.current &&
+        !isSpinningRef.current &&
+        !showResultRef.current &&
+        countdownRef.current === null &&
+        pg.key &&
+        Date.now() - pg.startedAt >= PREDICTION_DURATION * 1000
+      ) {
+        handleSpinRef.current()
+      }
+    }
+    document.addEventListener("visibilitychange", flush)
+    window.addEventListener("focus", flush)
+    return () => {
+      document.removeEventListener("visibilitychange", flush)
+      window.removeEventListener("focus", flush)
+    }
+  }, [tableLoading, dispatch, playersRef, casualMode])
 
   // --- Steam fog tick ---
   const [steamFogTick, setSteamFogTick] = useState(0)

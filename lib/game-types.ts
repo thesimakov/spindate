@@ -57,6 +57,13 @@ export interface GameLogEntry {
     | "rose"
     | "diamond"
     | "gift_voice"
+    | "toy_bear"
+    | "toy_car"
+    | "toy_ball"
+    | "souvenir_magnet"
+    | "souvenir_keychain"
+    | "plush_heart"
+    | "chocolate_box"
     | "banya"
     | "tools"
     | "lipstick"
@@ -101,6 +108,8 @@ export interface TableAuthorityPayload {
   generalChatMessages: GeneralChatMessage[]
   avatarFrames?: Record<number, string>
   drunkUntil?: Record<number, number>
+  /** Игрок свернул вкладку / долго неактивен — для остальных как «zzz»; синхронизируется. */
+  clientTabAway?: Record<number, boolean>
 }
 
 export type BottleSkin =
@@ -288,6 +297,8 @@ export interface GameState {
   emotionUseTodayByPlayer?: Record<number, EmotionUseTodayBucket>
   /** Если true — пользователь поставил «паузу»: вышел из live-стола и не синхронизируется, пока не возобновит. */
   tablePaused?: boolean
+  /** Временный уход со вкладки (см. TableAuthorityPayload.clientTabAway). */
+  clientTabAway?: Record<number, boolean>
   /** Боковая панель поверх стола: профиль, магазин, избранное, рейтинг, ежедневные задачи. */
   gameSidePanel: GameSidePanelId | null
   /** Игрок, с которым открыт боковой чат (panel = "player-chat") */
@@ -378,6 +389,8 @@ export type GameAction =
       costPerType: number
     }
   | { type: "SET_TABLE_PAUSED"; paused: boolean }
+  /** Отметить «ушёл со вкладки» (долгая неактивность / свёрнутая вкладка). Только свой playerId. */
+  | { type: "SET_CLIENT_TAB_AWAY"; playerId: number; away: boolean }
   /** Открыть боковой чат с игроком (панель player-chat) */
   | { type: "OPEN_SIDE_CHAT"; player: Player }
   /** Подтянуть состояние стола с сервера (не отправляется на сервер) */

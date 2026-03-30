@@ -401,7 +401,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         showToast("Фото обновлено", "success")
                       }}
                       disabled={!canChangeAvatar}
-                      className="h-10 shrink-0 rounded-xl px-4 text-sm font-bold disabled:opacity-45"
+                      className="h-10 w-full shrink-0 rounded-xl px-4 text-sm font-bold disabled:opacity-45 sm:w-auto"
                       style={{
                         background: canChangeAvatar ? "linear-gradient(135deg,#38bdf8,#a78bfa)" : "rgba(51,65,85,0.6)",
                         color: "#0b1220",

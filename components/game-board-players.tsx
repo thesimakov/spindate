@@ -38,6 +38,8 @@ interface GameBoardPlayersProps {
   avatarFrames: Record<string, string> | undefined
   rosesGiven: { toPlayerId: number }[] | undefined
   spinSkips: Record<string, number> | undefined
+  /** Временный уход со вкладки (синхронизируется) — zzz как при spinSkips */
+  clientTabAway?: Record<number, boolean>
   playerInUgadaika: number | null | undefined
   steamFogTick: number
   avatarSteamFog: Record<string, AvatarSteamFog>
@@ -72,6 +74,7 @@ function GameBoardPlayersInner({
   avatarFrames,
   rosesGiven,
   spinSkips,
+  clientTabAway,
   playerInUgadaika,
   steamFogTick,
   avatarSteamFog,
@@ -139,7 +142,9 @@ function GameBoardPlayersInner({
                 bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
                 frameId={avatarFrames?.[player.id]}
                 inGame={playerInUgadaika != null && player.id === playerInUgadaika}
-                showAsleep={(spinSkips?.[player.id] ?? 0) >= 3}
+                showAsleep={
+                  (spinSkips?.[player.id] ?? 0) >= 3 || clientTabAway?.[player.id] === true
+                }
               />
               {(() => {
                 void steamFogTick

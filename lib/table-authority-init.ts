@@ -98,6 +98,7 @@ export function buildInitialAuthoritySnapshot(players: Player[], tableId: number
     gameLog: gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES),
     avatarFrames: {},
     drunkUntil: {},
+    clientTabAway: {},
   }
   return snapshot
 }

@@ -86,6 +86,7 @@ const initialState: GameState = {
   },
   emotionUseTodayByPlayer: {},
   tablePaused: false,
+  clientTabAway: {},
   gameSidePanel: null,
   chatPanelPlayer: null,
 }
@@ -468,6 +469,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         roundNumber: 5 + Math.floor(Math.random() * 25),
         gameLog: seedLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES),
         avatarFrames: nextFrames,
+        clientTabAway: {},
         }
       }
     case "SET_TABLES_COUNT":
@@ -702,6 +704,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "SET_TABLE_PAUSED":
       return { ...state, tablePaused: action.paused }
+
+    case "SET_CLIENT_TAB_AWAY": {
+      const next = { ...(state.clientTabAway ?? {}) }
+      if (action.away) {
+        next[action.playerId] = true
+      } else {
+        delete next[action.playerId]
+      }
+      return { ...state, clientTabAway: next }
+    }
 
     // ---- Daily quests ----
     case "CLAIM_DAILY_QUEST": {
@@ -954,6 +966,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         avatarFrames: mergedFrames,
         drunkUntil: { ...(state.drunkUntil ?? {}), ...(p.drunkUntil ?? {}) },
         admirers: syncAdmirers,
+        clientTabAway: { ...(p.clientTabAway ?? {}) },
         predictions: [],
         bets: [],
         pot: 0,
