@@ -21,6 +21,7 @@ export function DevScreen() {
   const [serverError, setServerError] = useState("")
   const [users, setUsers] = useState<Array<{
     userId: string
+    isDbUser?: boolean
     username: string
     vkUserId?: number
     displayName: string
@@ -257,6 +258,7 @@ export function DevScreen() {
                 const isBlocked = blockedUntil != null && blockedUntil > now
                 const isBanned = bannedUntil != null && bannedUntil > now
                 const isDeleted = u.flags?.deleted === true
+                const canModerate = u.isDbUser !== false
                 return (
                   <tr key={u.userId} className="border-b border-slate-700/80 hover:bg-slate-700/30">
                     <td className="px-3 py-2.5 font-mono text-slate-400">{u.vkUserId ?? u.userId.slice(0, 8)}</td>
@@ -300,7 +302,7 @@ export function DevScreen() {
                             <button
                               type="button"
                               onClick={() => void doAdminAction(u, isBlocked ? "clear_block" : "block_1w")}
-                              disabled={busyUserId === u.userId}
+                              disabled={busyUserId === u.userId || !canModerate}
                               className={`rounded border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
                                 isBlocked
                                   ? "border-amber-500/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
@@ -312,7 +314,7 @@ export function DevScreen() {
                             <button
                               type="button"
                               onClick={() => void doAdminAction(u, isBanned ? "clear_ban" : "ban_2h")}
-                              disabled={busyUserId === u.userId}
+                              disabled={busyUserId === u.userId || !canModerate}
                               className={`rounded border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
                                 isBanned
                                   ? "border-slate-500 bg-slate-600/50 text-slate-300 hover:bg-slate-500/50"
@@ -326,7 +328,7 @@ export function DevScreen() {
                         <button
                           type="button"
                           onClick={() => void doAdminAction(u, "delete_forever")}
-                          disabled={busyUserId === u.userId || isDeleted}
+                          disabled={busyUserId === u.userId || isDeleted || !canModerate}
                           className="rounded border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-1 text-xs font-medium text-fuchsia-200 hover:bg-fuchsia-500/25 disabled:opacity-50"
                           title="Удалить навсегда + выкинуть из live"
                         >

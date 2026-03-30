@@ -58,6 +58,7 @@ export async function GET(req: Request) {
       const live = liveByUserKey.get(key) ?? null
       return {
         userId: r.user_id,
+        isDbUser: true,
         username: r.username,
         vkUserId: r.vk_user_id ?? undefined,
         displayName: r.display_name ?? r.username,
@@ -70,6 +71,33 @@ export async function GET(req: Request) {
         live,
       }
     })
+
+    // Добавить live-only игроков (тестовые, офлайн-VK, и т.п.), которых нет в users таблице
+    const knownKeys = new Set<string>()
+    for (const r of rows) {
+      knownKeys.add(r.vk_user_id != null ? `vk:${r.vk_user_id}` : `u:${r.user_id}`)
+    }
+    for (const [key, live] of liveByUserKey.entries()) {
+      if (knownKeys.has(key)) continue
+      out.push({
+        userId: `live:${key}`, // синтетический id, только для отображения
+        isDbUser: false,
+        username: "—",
+        vkUserId: key.startsWith("vk:") ? Number(key.slice(3)) : undefined,
+        displayName: (() => {
+          const pid = live.playerId
+          const pres = state.playersById.get(pid as any)
+          return pres?.player?.name ? pres.player.name : `Live игрок (${key})`
+        })(),
+        avatarUrl: undefined,
+        gender: undefined,
+        age: undefined,
+        purpose: undefined,
+        voiceBalance: 0,
+        flags: null,
+        live,
+      })
+    }
 
     // Stats by live table (lightweight: counts from gameLog)
     const tables = new Map<number, Awaited<ReturnType<typeof getTableAuthoritySnapshot>>>()
