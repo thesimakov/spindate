@@ -61,6 +61,7 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_vk_user_id_unique ON users(vk_user_id);
 
     CREATE TABLE IF NOT EXISTS user_admin_flags (
       user_id TEXT PRIMARY KEY,
@@ -76,7 +77,9 @@ function migrate(database: Database.Database) {
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
   if (!userCols.some((c) => c.name === "vk_user_id")) {
-    database.exec(`ALTER TABLE users ADD COLUMN vk_user_id INTEGER UNIQUE`)
+    // SQLite не позволяет ADD COLUMN ... UNIQUE. Добавляем колонку отдельно,
+    // а уникальность обеспечиваем индексом idx_users_vk_user_id_unique выше.
+    database.exec(`ALTER TABLE users ADD COLUMN vk_user_id INTEGER`)
   }
 }
 
