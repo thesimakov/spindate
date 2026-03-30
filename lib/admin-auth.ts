@@ -7,7 +7,12 @@ function expectedToken(): string {
 }
 
 export function requireAdmin(req: Request): NextResponse | null {
-  const token = req.headers.get("x-admin-token") ?? ""
+  const url = new URL(req.url)
+  const token =
+    req.headers.get("x-admin-token") ??
+    req.headers.get("x-admin-token".toUpperCase()) ??
+    url.searchParams.get("admin_token") ??
+    ""
   // На некоторых серверах может быть задан ADMIN_LEMNITY_TOKEN — тогда fallback-пароль не совпадает.
   // Принимаем либо env-token, либо fallback (который вводят в UI как пароль).
   const ok = token && (token === expectedToken() || token === FALLBACK_TOKEN)

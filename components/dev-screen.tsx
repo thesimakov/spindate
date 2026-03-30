@@ -67,9 +67,12 @@ export function DevScreen() {
   const refresh = useCallback(async () => {
     setServerError("")
     try {
-      const res = await fetch("/api/admin/users", {
+      const token = getAdminToken()
+      const url = token ? `/api/admin/users?admin_token=${encodeURIComponent(token)}` : "/api/admin/users"
+      const res = await fetch(url, {
         method: "GET",
-        headers: { "X-Admin-Token": getAdminToken() },
+        // иногда прокси режут кастомные headers — дублируем токен в query
+        headers: { "X-Admin-Token": token },
         cache: "no-store",
       })
       const data = await res.json().catch(() => null)
