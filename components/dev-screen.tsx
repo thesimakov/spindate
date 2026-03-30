@@ -202,10 +202,10 @@ export function DevScreen() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-600 bg-slate-800/40">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-600 bg-slate-800/80">
+        <div className="max-h-[78dvh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-600 bg-slate-800/40">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-600 bg-slate-800/90 backdrop-blur">
                 <th className="px-3 py-3 font-semibold text-slate-300">ID</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">Имя</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">VK имя</th>
