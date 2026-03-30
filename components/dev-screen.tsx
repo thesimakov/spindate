@@ -30,6 +30,7 @@ export function DevScreen() {
   const [users, setUsers] = useState<DevUserEntry[]>([])
   const [blockedIds, setBlockedIds] = useState<number[]>([])
   const [bannedList, setBannedList] = useState<{ userId: number; until: number }[]>([])
+  const [kickBusyId, setKickBusyId] = useState<number | null>(null)
 
   useEffect(() => {
     setAuthenticated(getAdminAuthenticated())
@@ -140,6 +141,27 @@ export function DevScreen() {
     refresh()
   }
 
+  const handleKickFromGame = async (id: number) => {
+    if (kickBusyId != null) return
+    const ok = typeof window !== "undefined" && window.confirm(`Удалить игрока ${id} из игры (выкинуть со стола)?`)
+    if (!ok) return
+    try {
+      setKickBusyId(id)
+      await fetch("/api/table/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "leave", userId: id }),
+        // чтобы работало при закрытии/прокси и не упиралось в cache
+        cache: "no-store",
+        credentials: "include",
+      })
+    } catch {
+      // ignore
+    } finally {
+      setKickBusyId(null)
+    }
+  }
+
   return (
     <div
       className="min-h-app overflow-auto p-4 pb-12"
@@ -186,6 +208,7 @@ export function DevScreen() {
               <tr className="border-b border-slate-600 bg-slate-800/80">
                 <th className="px-3 py-3 font-semibold text-slate-300">ID</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">Имя</th>
+                <th className="px-3 py-3 font-semibold text-slate-300">VK имя</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">Возраст</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">Город</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">На чём играют</th>
@@ -197,7 +220,7 @@ export function DevScreen() {
             <tbody>
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                  <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
                     Пока ни один пользователь не заходил. Регистрации появятся здесь после входа.
                   </td>
                 </tr>
@@ -209,6 +232,21 @@ export function DevScreen() {
                   <tr key={u.id} className="border-b border-slate-700/80 hover:bg-slate-700/30">
                     <td className="px-3 py-2.5 font-mono text-slate-400">{u.id}</td>
                     <td className="px-3 py-2.5 font-medium text-slate-100">{u.name}</td>
+                    <td className="px-3 py-2.5 text-slate-300">
+                      {u.authProvider === "vk" ? (
+                        <a
+                          href={`https://vk.com/id${u.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sky-300/90 hover:text-sky-200 underline underline-offset-2"
+                          title="Открыть профиль VK"
+                        >
+                          {u.vkName ?? u.name}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-3 py-2.5 text-slate-300">{u.age}</td>
                     <td className="px-3 py-2.5 text-slate-300">{u.city ?? "—"}</td>
                     <td className="px-3 py-2.5 text-slate-300">{u.platform}</td>
@@ -263,6 +301,15 @@ export function DevScreen() {
                             Забанить на сутки
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => void handleKickFromGame(u.id)}
+                          disabled={kickBusyId === u.id}
+                          className="rounded border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-1 text-xs font-medium text-fuchsia-200 hover:bg-fuchsia-500/25 disabled:opacity-50"
+                          title="Выкинуть игрока из live-стола (как закрытие вкладки)"
+                        >
+                          {kickBusyId === u.id ? "Удаляю…" : "Удалить"}
+                        </button>
                       </div>
                       {blocked && (
                         <p className="mt-1 text-xs text-red-400/90">Заблокирован — при входе видит сообщение</p>

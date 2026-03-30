@@ -10,6 +10,8 @@ const BANNED_KEY = "spindate_dev_banned"
 export interface DevUserEntry {
   id: number
   name: string
+  /** Имя из VK (если вход через VK). */
+  vkName?: string
   age: number
   city?: string
   authProvider?: "vk" | "login"
@@ -57,6 +59,7 @@ export function addToDevRegistry(
   registry[user.id] = {
     id: user.id,
     name: user.name,
+    vkName: user.authProvider === "vk" ? user.name : undefined,
     age: user.age,
     city: user.city,
     authProvider: user.authProvider,
