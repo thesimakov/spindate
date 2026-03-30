@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { verifyPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
+import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
@@ -20,6 +21,12 @@ export async function POST(req: Request) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Неверный логин или пароль" }, { status: 401 })
   }
+
+  const flags = getAdminFlagsForUserId(user.id)
+  const r = isRestricted(flags)
+  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
+  if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
+  if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
   const ok = await verifyPassword(password, user.password_salt, user.password_hash)
   if (!ok) {

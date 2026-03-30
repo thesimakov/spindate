@@ -10,6 +10,10 @@ import {
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import type Redis from "ioredis"
 
+export async function getLiveTablesRawRedis(redis: Redis): Promise<string | null> {
+  return redis.get(LIVE_TABLES_REDIS_KEY)
+}
+
 export async function joinOrSyncLiveTableRedis(
   redis: Redis,
   args: {

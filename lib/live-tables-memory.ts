@@ -5,6 +5,7 @@ import {
   joinOrSyncLiveTableOnState,
   leaveLiveTableOnState,
   getTableInfoFromState,
+  serializeLiveTablesState,
 } from "@/lib/live-tables-core"
 
 declare global {
@@ -16,6 +17,10 @@ function getMemoryState(): LiveTablesState {
     globalThis.__spindateLiveTablesMemory = createEmptyLiveTablesState()
   }
   return globalThis.__spindateLiveTablesMemory
+}
+
+export async function getLiveTablesRawMemory(): Promise<string> {
+  return serializeLiveTablesState(getMemoryState())
 }
 
 export async function joinOrSyncLiveTableMemory(args: {

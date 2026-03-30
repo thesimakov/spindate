@@ -13,6 +13,10 @@ export interface Player {
   isBot?: boolean
   online?: boolean
   isVip?: boolean
+  /** server users.id (uuid) для входа login; нужен для админки/банов */
+  authUserId?: string
+  /** vk_user_id для входа через VK (дублирует id, но полезно для админки) */
+  vkUserId?: number
   /** VIP активен до этого времени (ms). Если не задано, то как бессрочный флаг. */
   vipUntilTs?: number
   authProvider?: "vk" | "login"

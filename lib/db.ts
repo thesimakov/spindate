@@ -61,6 +61,17 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
+
+    CREATE TABLE IF NOT EXISTS user_admin_flags (
+      user_id TEXT PRIMARY KEY,
+      blocked_until INTEGER,
+      banned_until INTEGER,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_admin_flags_blocked_until ON user_admin_flags(blocked_until);
+    CREATE INDEX IF NOT EXISTS idx_user_admin_flags_banned_until ON user_admin_flags(banned_until);
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]

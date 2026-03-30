@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
+import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 
 export async function GET(req: Request) {
   const token = getSessionTokenFromRequest(req)
@@ -30,6 +31,12 @@ export async function GET(req: Request) {
   if (!userRow) {
     return NextResponse.json({ ok: false, error: "Пользователь не найден" }, { status: 401 })
   }
+
+  const flags = getAdminFlagsForUserId(userRow.id)
+  const r = isRestricted(flags)
+  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
+  if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
+  if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
   const profile = db
     .prepare(

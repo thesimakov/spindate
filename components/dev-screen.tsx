@@ -2,18 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import {
-  getDevRegistryUsers,
-  getBlockedUserIds,
-  getBannedList,
-  blockUser,
-  unblockUser,
-  banUser24h,
-  unbanUser,
-  type DevUserEntry,
-} from "@/lib/dev-registry"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
+const ADMIN_TOKEN_KEY = "admin_lemnity_token"
 const ADMIN_LOGIN = "admin"
 const ADMIN_PASSWORD = "date_admin_2026_super_secret_1"
 
@@ -27,10 +18,18 @@ export function DevScreen() {
   const [login, setLogin] = useState("")
   const [password, setPassword] = useState("")
   const [authError, setAuthError] = useState("")
-  const [users, setUsers] = useState<DevUserEntry[]>([])
-  const [blockedIds, setBlockedIds] = useState<number[]>([])
-  const [bannedList, setBannedList] = useState<{ userId: number; until: number }[]>([])
-  const [kickBusyId, setKickBusyId] = useState<number | null>(null)
+  const [users, setUsers] = useState<Array<{
+    userId: string
+    username: string
+    vkUserId?: number
+    displayName: string
+    age?: number
+    voiceBalance: number
+    flags?: { blockedUntil: number | null; bannedUntil: number | null; deleted: boolean } | null
+    live?: { tableId: number; updatedAt: number; playerId: number } | null
+    stats?: { totalActions: number; counts: Record<string, number> } | null
+  }>>([])
+  const [busyUserId, setBusyUserId] = useState<string | null>(null)
 
   useEffect(() => {
     setAuthenticated(getAdminAuthenticated())
@@ -40,7 +39,10 @@ export function DevScreen() {
     e.preventDefault()
     setAuthError("")
     if (login === ADMIN_LOGIN && password === ADMIN_PASSWORD) {
-      if (typeof window !== "undefined") window.sessionStorage.setItem(ADMIN_SESSION_KEY, "1")
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(ADMIN_SESSION_KEY, "1")
+        window.sessionStorage.setItem(ADMIN_TOKEN_KEY, password)
+      }
       setAuthenticated(true)
       setPassword("")
     } else {
@@ -49,17 +51,31 @@ export function DevScreen() {
   }
 
   const handleLogout = () => {
-    if (typeof window !== "undefined") window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY)
+      window.sessionStorage.removeItem(ADMIN_TOKEN_KEY)
+    }
     setAuthenticated(false)
     setLogin("")
     setPassword("")
     setAuthError("")
   }
 
-  const refresh = useCallback(() => {
-    setUsers(getDevRegistryUsers())
-    setBlockedIds(getBlockedUserIds())
-    setBannedList(getBannedList())
+  const getAdminToken = () => (typeof window !== "undefined" ? window.sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "" : "")
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "GET",
+        headers: { "X-Admin-Token": getAdminToken() },
+        cache: "no-store",
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok || !Array.isArray(data.users)) return
+      setUsers(data.users)
+    } catch {
+      // ignore
+    }
   }, [])
 
   useEffect(() => {
@@ -118,47 +134,41 @@ export function DevScreen() {
     )
   }
 
-  const now = Date.now()
-  const bannedMap = new Map(bannedList.filter((b) => b.until > now).map((b) => [b.userId, b.until]))
-
-  const handleBlock = (id: number) => {
-    blockUser(id)
-    refresh()
-  }
-
-  const handleUnblock = (id: number) => {
-    unblockUser(id)
-    refresh()
-  }
-
-  const handleBan24h = (id: number) => {
-    banUser24h(id)
-    refresh()
-  }
-
-  const handleUnban = (id: number) => {
-    unbanUser(id)
-    refresh()
-  }
-
-  const handleKickFromGame = async (id: number) => {
-    if (kickBusyId != null) return
-    const ok = typeof window !== "undefined" && window.confirm(`Удалить игрока ${id} из игры (выкинуть со стола)?`)
+  const doAdminAction = async (
+    u: {
+      userId: string
+      vkUserId?: number
+      displayName: string
+      live?: { playerId: number } | null
+    },
+    action: string,
+  ) => {
+    if (busyUserId != null) return
+    const ok =
+      typeof window === "undefined"
+        ? true
+        : action === "delete_forever"
+          ? window.confirm(`Удалить НАВСЕГДА пользователя ${u.displayName ?? u.userId}?`)
+          : true
     if (!ok) return
     try {
-      setKickBusyId(id)
-      await fetch("/api/table/live", {
+      setBusyUserId(u.userId)
+      await fetch("/api/admin/user", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "leave", userId: id }),
-        // чтобы работало при закрытии/прокси и не упиралось в cache
+        headers: { "Content-Type": "application/json", "X-Admin-Token": getAdminToken() },
         cache: "no-store",
-        credentials: "include",
+        body: JSON.stringify({
+          userId: u.userId,
+          vkUserId: u.vkUserId,
+          playerId: u.live?.playerId ?? null,
+          action,
+        }),
       })
     } catch {
       // ignore
     } finally {
-      setKickBusyId(null)
+      setBusyUserId(null)
+      await refresh()
     }
   }
 
@@ -175,7 +185,7 @@ export function DevScreen() {
           <div>
             <h1 className="text-xl font-bold text-amber-400">Панель разработчика</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Список игроков, блокировка и бан на сутки. Доступ: /admin-lemnity
+              Серверная админка: блок/бан/удаление + live-столы. Доступ: /admin-lemnity
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -210,10 +220,9 @@ export function DevScreen() {
                 <th className="px-3 py-3 font-semibold text-slate-300">Имя</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">VK имя</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">Возраст</th>
-                <th className="px-3 py-3 font-semibold text-slate-300">Город</th>
-                <th className="px-3 py-3 font-semibold text-slate-300">На чём играют</th>
-                <th className="px-3 py-3 font-semibold text-slate-300">Вход</th>
-                <th className="px-3 py-3 font-semibold text-slate-300">Логин / пароль</th>
+                <th className="px-3 py-3 font-semibold text-slate-300">❤</th>
+                <th className="px-3 py-3 font-semibold text-slate-300">Live</th>
+                <th className="px-3 py-3 font-semibold text-slate-300">Статистика</th>
                 <th className="px-3 py-3 font-semibold text-slate-300">Действия</th>
               </tr>
             </thead>
@@ -226,40 +235,43 @@ export function DevScreen() {
                 </tr>
               )}
               {users.map((u) => {
-                const blocked = blockedIds.includes(u.id)
-                const banUntil = bannedMap.get(u.id)
+                const now = Date.now()
+                const blockedUntil = u.flags?.blockedUntil ?? null
+                const bannedUntil = u.flags?.bannedUntil ?? null
+                const isBlocked = blockedUntil != null && blockedUntil > now
+                const isBanned = bannedUntil != null && bannedUntil > now
+                const isDeleted = u.flags?.deleted === true
                 return (
-                  <tr key={u.id} className="border-b border-slate-700/80 hover:bg-slate-700/30">
-                    <td className="px-3 py-2.5 font-mono text-slate-400">{u.id}</td>
-                    <td className="px-3 py-2.5 font-medium text-slate-100">{u.name}</td>
+                  <tr key={u.userId} className="border-b border-slate-700/80 hover:bg-slate-700/30">
+                    <td className="px-3 py-2.5 font-mono text-slate-400">{u.vkUserId ?? u.userId.slice(0, 8)}</td>
+                    <td className="px-3 py-2.5 font-medium text-slate-100">{u.displayName}</td>
                     <td className="px-3 py-2.5 text-slate-300">
-                      {u.authProvider === "vk" ? (
+                      {u.vkUserId ? (
                         <a
-                          href={`https://vk.com/id${u.id}`}
+                          href={`https://vk.com/id${u.vkUserId}`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-sky-300/90 hover:text-sky-200 underline underline-offset-2"
                           title="Открыть профиль VK"
                         >
-                          {u.vkName ?? u.name}
+                          {u.displayName}
                         </a>
                       ) : (
                         "—"
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-300">{u.age}</td>
-                    <td className="px-3 py-2.5 text-slate-300">{u.city ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-slate-300">{u.platform}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="rounded bg-slate-600/80 px-2 py-0.5 text-xs">
-                        {u.authProvider === "login" ? "логин" : u.authProvider === "vk" ? "VK" : "—"}
-                      </span>
+                    <td className="px-3 py-2.5 text-slate-300">{u.age ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-slate-300 tabular-nums">{u.voiceBalance}</td>
+                    <td className="px-3 py-2.5 text-slate-300">
+                      {u.live ? <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-200">#{u.live.tableId}</span> : "—"}
                     </td>
                     <td className="px-3 py-2.5 text-slate-300">
-                      {u.authProvider === "login" ? (
-                        <span>
-                          <span className="font-mono text-amber-300/90">{u.login ?? "—"}</span>
-                          <span className="ml-1 text-xs text-slate-500">/ {u.passwordNote}</span>
+                      {u.stats ? (
+                        <span className="text-xs tabular-nums text-slate-300">
+                          {u.stats.totalActions} ·{" "}
+                          <span className="text-slate-400">
+                            care {(u.stats.counts["care"] ?? 0)}, gifts {(u.stats.counts["rose"] ?? 0) + (u.stats.counts["flowers"] ?? 0) + (u.stats.counts["diamond"] ?? 0)}
+                          </span>
                         </span>
                       ) : (
                         "—"
@@ -267,56 +279,52 @@ export function DevScreen() {
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-1.5">
-                        {blocked ? (
-                          <button
-                            type="button"
-                            onClick={() => handleUnblock(u.id)}
-                            className="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-xs font-medium text-amber-200 hover:bg-amber-500/30"
-                          >
-                            Разблокировать
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleBlock(u.id)}
-                            className="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-xs font-medium text-red-200 hover:bg-red-500/30"
-                          >
-                            Заблокировать
-                          </button>
-                        )}
-                        {banUntil ? (
-                          <button
-                            type="button"
-                            onClick={() => handleUnban(u.id)}
-                            className="rounded border border-slate-500 bg-slate-600/50 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-500/50"
-                          >
-                            Снять бан
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleBan24h(u.id)}
-                            className="rounded border border-orange-500/50 bg-orange-500/20 px-2 py-1 text-xs font-medium text-orange-200 hover:bg-orange-500/30"
-                          >
-                            Забанить на сутки
-                          </button>
+                        {!isDeleted && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void doAdminAction(u, isBlocked ? "clear_block" : "block_1w")}
+                              disabled={busyUserId === u.userId}
+                              className={`rounded border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                                isBlocked
+                                  ? "border-amber-500/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
+                                  : "border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30"
+                              }`}
+                            >
+                              {isBlocked ? "Разблок (1н)" : "Блок (1н)"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void doAdminAction(u, isBanned ? "clear_ban" : "ban_2h")}
+                              disabled={busyUserId === u.userId}
+                              className={`rounded border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                                isBanned
+                                  ? "border-slate-500 bg-slate-600/50 text-slate-300 hover:bg-slate-500/50"
+                                  : "border-orange-500/50 bg-orange-500/20 text-orange-200 hover:bg-orange-500/30"
+                              }`}
+                            >
+                              {isBanned ? "Снять бан" : "Бан 2ч"}
+                            </button>
+                          </>
                         )}
                         <button
                           type="button"
-                          onClick={() => void handleKickFromGame(u.id)}
-                          disabled={kickBusyId === u.id}
+                          onClick={() => void doAdminAction(u, "delete_forever")}
+                          disabled={busyUserId === u.userId || isDeleted}
                           className="rounded border border-fuchsia-500/40 bg-fuchsia-500/15 px-2 py-1 text-xs font-medium text-fuchsia-200 hover:bg-fuchsia-500/25 disabled:opacity-50"
-                          title="Выкинуть игрока из live-стола (как закрытие вкладки)"
+                          title="Удалить навсегда + выкинуть из live"
                         >
-                          {kickBusyId === u.id ? "Удаляю…" : "Удалить"}
+                          {isDeleted ? "Удалён" : busyUserId === u.userId ? "Удаляю…" : "Удалить навсегда"}
                         </button>
                       </div>
-                      {blocked && (
-                        <p className="mt-1 text-xs text-red-400/90">Заблокирован — при входе видит сообщение</p>
+                      {isBlocked && blockedUntil && (
+                        <p className="mt-1 text-xs text-red-400/90">
+                          Блок до {new Date(blockedUntil).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+                        </p>
                       )}
-                      {banUntil && (
+                      {isBanned && bannedUntil && (
                         <p className="mt-1 text-xs text-orange-400/90">
-                          Бан до {new Date(banUntil).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+                          Бан до {new Date(bannedUntil).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
                         </p>
                       )}
                     </td>

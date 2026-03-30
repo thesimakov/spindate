@@ -159,6 +159,7 @@ export function RegistrationScreen() {
       age: ageNum,
       purpose: defaultPurpose,
       authProvider: "vk" as const,
+      vkUserId: vkUser.id,
     }
     try {
       const res = await apiFetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
@@ -224,6 +225,8 @@ export function RegistrationScreen() {
           ? u.purpose
           : defaultPurpose) as Purpose,
         authProvider: (typeof u.vkUserId === "number" ? "vk" : "login") as "vk" | "login",
+        authUserId: typeof u.vkUserId === "number" ? undefined : u.id,
+        vkUserId: typeof u.vkUserId === "number" ? u.vkUserId : undefined,
       }
       const stRes = await apiFetch("/api/user/state", { credentials: "include" })
       const stData = await stRes.json().catch(() => null)
@@ -485,6 +488,7 @@ export function RegistrationScreen() {
           age: u.age ?? 25,
           purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
           authProvider: "login" as const,
+          authUserId: u.id,
         }
         const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
         const inventory = Array.isArray(data.inventory) ? data.inventory : []
@@ -548,6 +552,7 @@ export function RegistrationScreen() {
           age: u.age ?? ageNum,
           purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
           authProvider: "login" as const,
+          authUserId: u.id,
         }
         const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
         const inventory = Array.isArray(data.inventory) ? data.inventory : []

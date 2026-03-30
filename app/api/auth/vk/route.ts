@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db"
 import { generateSalt, hashPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { parseVkAppIdFromLaunchSearch, parseVkUserIdFromLaunchSearch, verifyVkLaunchParams } from "@/lib/vk-launch-params"
+import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 
 const VALID_GENDERS = ["male", "female"] as const
 const VALID_PURPOSES = ["relationships", "communication", "love"] as const
@@ -176,6 +177,13 @@ export async function POST(req: Request) {
        WHERE user_id = ?`,
     ).run(nextName, nextAvatar || "", gender, ageNum, now, userRow.id)
   }
+
+  // restrictions
+  const flags = getAdminFlagsForUserId(userRow.id)
+  const r = isRestricted(flags)
+  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
+  if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
+  if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
   const token = newSessionToken()
   const tokenHash = sha256Base64(token)

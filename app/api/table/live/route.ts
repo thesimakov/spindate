@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import type { Player } from "@/lib/game-types"
 import { joinOrSyncLiveTable, leaveLiveTable } from "@/lib/live-tables-server"
 import { ensureTableAuthority } from "@/lib/table-authority-server"
+import { getDb } from "@/lib/db"
+import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +29,9 @@ function parsePlayer(raw: unknown): Player | null {
   const purpose = p.purpose === "relationships" || p.purpose === "communication" || p.purpose === "love"
     ? p.purpose
     : "communication"
+  const authUserId = typeof p.authUserId === "string" && p.authUserId.trim() ? p.authUserId.trim() : undefined
+  const vkUserIdRaw = Number(p.vkUserId)
+  const vkUserId = Number.isInteger(vkUserIdRaw) && vkUserIdRaw > 0 ? vkUserIdRaw : undefined
   if (!Number.isInteger(id) || id <= 0) return null
   if (!gender) return null
 
@@ -43,6 +48,8 @@ function parsePlayer(raw: unknown): Player | null {
     interests: typeof p.interests === "string" ? p.interests : undefined,
     zodiac: typeof p.zodiac === "string" ? p.zodiac : undefined,
     isVip: typeof p.isVip === "boolean" ? p.isVip : undefined,
+    authUserId,
+    vkUserId,
     isBot: false,
   }
 }
@@ -62,6 +69,33 @@ export async function POST(req: Request) {
   const player = parsePlayer(body?.user)
   if (!player) {
     return NextResponse.json({ ok: false, error: "Некорректный пользователь" }, { status: 400, headers: NO_CACHE })
+  }
+
+  // server-side restrictions (админка)
+  try {
+    let userId: string | null = null
+    if (player.authUserId) {
+      userId = player.authUserId
+    } else if (player.vkUserId) {
+      const db = getDb()
+      const row = db.prepare(`SELECT id FROM users WHERE vk_user_id = ?`).get(player.vkUserId) as { id: string } | undefined
+      userId = row?.id ?? null
+    }
+    if (userId) {
+      const flags = getAdminFlagsForUserId(userId)
+      const r = isRestricted(flags)
+      if (r.deleted) {
+        return NextResponse.json({ ok: false, error: "Удалён администратором" }, { status: 403, headers: NO_CACHE })
+      }
+      if (r.blocked) {
+        return NextResponse.json({ ok: false, error: "Заблокирован администратором" }, { status: 403, headers: NO_CACHE })
+      }
+      if (r.banned) {
+        return NextResponse.json({ ok: false, error: "Временный бан" }, { status: 403, headers: NO_CACHE })
+      }
+    }
+  } catch {
+    // ignore restriction errors
   }
 
   const maxTableSizeRaw = Number(body?.maxTableSize)
