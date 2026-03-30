@@ -18,6 +18,7 @@ export function DevScreen() {
   const [login, setLogin] = useState("")
   const [password, setPassword] = useState("")
   const [authError, setAuthError] = useState("")
+  const [serverError, setServerError] = useState("")
   const [users, setUsers] = useState<Array<{
     userId: string
     username: string
@@ -64,6 +65,7 @@ export function DevScreen() {
   const getAdminToken = () => (typeof window !== "undefined" ? window.sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "" : "")
 
   const refresh = useCallback(async () => {
+    setServerError("")
     try {
       const res = await fetch("/api/admin/users", {
         method: "GET",
@@ -71,10 +73,15 @@ export function DevScreen() {
         cache: "no-store",
       })
       const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.ok || !Array.isArray(data.users)) return
+      if (!res.ok || !data?.ok || !Array.isArray(data.users)) {
+        setServerError(
+          `Сервер не отдал список пользователей: ${res.status} ${(data?.error as string) ?? ""}`.trim(),
+        )
+        return
+      }
       setUsers(data.users)
     } catch {
-      // ignore
+      setServerError("Ошибка сети при запросе списка пользователей")
     }
   }, [])
 
@@ -211,6 +218,12 @@ export function DevScreen() {
             </Link>
           </div>
         </div>
+
+        {serverError && (
+          <div className="mb-4 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {serverError}
+          </div>
+        )}
 
         <div className="max-h-[78dvh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-600 bg-slate-800/40">
           <table className="w-full min-w-[760px] text-left text-sm">

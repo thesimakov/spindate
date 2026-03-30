@@ -43,6 +43,16 @@ const nextConfig = {
         ],
       },
       {
+        source: "/admin-lemnity/(.*)",
+        headers: [
+          csp,
+          {
+            key: "Cache-Control",
+            value: "private, no-store, must-revalidate",
+          },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [csp],
       },
