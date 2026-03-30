@@ -55,6 +55,13 @@ export function useClientTabAwayPresence({
       if (document.hidden) {
         if (hiddenSinceRef.current == null) hiddenSinceRef.current = Date.now()
       } else {
+        // Если вкладка была скрыта >= 5 минут, в фоне таймеры могли не сработать.
+        // Гарантируем, что при возвращении статус "ушёл" выставится и синхронизируется,
+        // а игрок сам нажмёт "Вернуться" (чтобы снять его).
+        const hiddenAt = hiddenSinceRef.current
+        if (!isAway && hiddenAt != null && Date.now() - hiddenAt >= AWAY_AFTER_MS) {
+          dispatch({ type: "SET_CLIENT_TAB_AWAY", playerId: userId, away: true })
+        }
         hiddenSinceRef.current = null
         bumpActivity()
       }
@@ -62,7 +69,7 @@ export function useClientTabAwayPresence({
     document.addEventListener("visibilitychange", onVis)
     onVis()
     return () => document.removeEventListener("visibilitychange", onVis)
-  }, [userId, enabled, tablePaused, tableLoading, bumpActivity])
+  }, [userId, enabled, tablePaused, tableLoading, bumpActivity, dispatch, isAway])
 
   useEffect(() => {
     if (!userId || !enabled || tablePaused || tableLoading) return

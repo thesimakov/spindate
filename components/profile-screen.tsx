@@ -11,6 +11,7 @@ import { assetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
+import { apiFetch } from "@/lib/api-fetch"
 
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
@@ -42,6 +43,8 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const {
     currentUser,
     players,
+    tableId,
+    tablePaused,
     voiceBalance,
     bonusBalance,
     inventory,
@@ -53,6 +56,29 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     soundsEnabled,
     admirers,
   } = state
+
+  const pushAvatarFrameToTable = async (frameId: string) => {
+    if (!currentUser) return
+    if (tablePaused) return
+    // ProfileScreen использует обычный dispatch (без sync-engine), поэтому событие не улетало на сервер.
+    // Для синхронизации рамки вручную пушим table-event.
+    try {
+      await apiFetch("/api/table/events", {
+        method: "POST",
+        cache: "no-store" as RequestCache,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "push",
+          tableId,
+          senderId: currentUser.id,
+          action: { type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId },
+        }),
+      })
+    } catch {
+      // ignore: стейт догонится на следующем authority poll у других
+    }
+  }
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
   const FREE_FRAMES = [
@@ -927,6 +953,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                     onPointerEnter={() => setFrameHoverPreviewId(f.id)}
                     onClick={() => {
                       currentUser && dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
+                      void pushAvatarFrameToTable(f.id)
                       setShowFramesModal(false)
                       showToast("Рамка применена", "success")
                     }}
@@ -980,6 +1007,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       }
                       if (f.cost > 0) dispatch({ type: "PAY_VOICES", amount: f.cost })
                       dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
+                      void pushAvatarFrameToTable(f.id)
                       setShowFramesModal(false)
                       showToast("Рамка применена", "success")
                     }}
