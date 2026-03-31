@@ -71,7 +71,10 @@ export function ChatScreen() {
     if (giftPrice > 0 && voiceBalance < giftPrice) return
 
     if (giftPrice > 0) {
-      const success = await vkBridge.showPaymentWall(giftPrice)
+      const success = await vkBridge.showPaymentWall(giftPrice, undefined, {
+        userId: String(currentUser.id),
+        description: `Подарок в чате: ${giftName}`,
+      })
       if (!success) return
       dispatch({ type: "PAY_VOICES", amount: giftPrice })
     }

@@ -209,7 +209,7 @@ export function BottleCatalogModal({
                     : { background: "rgba(244,63,94,0.10)", border: "1px solid rgba(244,63,94,0.20)", color: "#fda4af" }
 
           const ctaLabel = e.selected
-            ? "На столу"
+            ? "На столе"
             : e.vipLocked
               ? "Купите VIP в магазине"
               : e.purchaseLocked
@@ -248,9 +248,11 @@ export function BottleCatalogModal({
               </div>
 
               <div className="mt-2 w-full min-w-0">
-                <p className="truncate text-center text-[12px] font-extrabold text-amber-100 sm:text-[13px]">{e.skin.name}</p>
-                <div className="mt-1 flex items-center justify-center">
-                  <span className="rounded-full px-2.5 py-1 text-xs font-extrabold tracking-tight sm:text-sm" style={badgeTone}>
+                <div className="flex items-center justify-center">
+                  <span
+                    className="rounded-full px-3 py-1.5 text-base font-extrabold tracking-tight sm:text-lg"
+                    style={badgeTone}
+                  >
                     {e.status}
                   </span>
                 </div>

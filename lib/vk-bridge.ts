@@ -1,6 +1,7 @@
 "use client"
 
 import { payVotesForPack } from "@/lib/heart-shop-pricing"
+import { appPath } from "@/lib/app-path"
 
 /**
  * Обёртка над VK Bridge для мини-приложения ВКонтакте.
@@ -339,35 +340,121 @@ export const VK_ITEM_IDS = {
   vip_30d: "vip_30d",
 } as const
 
-/**
- * Показать форму оплаты VK Pay.
- * @param amount — сумма в голосах VK
- * @param itemId — идентификатор товара (для уведомлений get_item / order_status_change)
- * @see https://dev.vk.com/bridge/VKWebAppOpenPayForm
- */
-export async function showPaymentWall(amount: number, itemId?: string): Promise<boolean> {
-  const b = await getBridgeAsync()
-  const appId = getVkAppId()
-  if (b && isVkMiniApp() && appId) {
-    try {
-      const params: Record<string, string> = {
-        amount: String(amount),
-        description: "Пополнение сердечек",
-      }
-      if (itemId) params.item = itemId
-      const res = await b.send("VKWebAppOpenPayForm", {
-        app_id: appId,
-        action: "pay-to-service",
-        params,
-      })
-      const r = res as { result?: { success?: boolean; status?: boolean }; success?: boolean; status?: boolean }
-      return r?.result?.success === true || r?.success === true || r?.result?.status === true || r?.status === true
-    } catch (e) {
-      console.warn("VKWebAppOpenPayForm failed", e)
-      return false
+export type ShowPaymentWallOptions = {
+  /** id пользователя ВК (строка) — для подписи заказа на сервере */
+  userId?: string
+  description?: string
+}
+
+function vkPayResultOk(res: unknown): boolean {
+  if (typeof res === "boolean") return res
+  if (res && typeof res === "object") {
+    const o = res as { success?: boolean; result?: unknown }
+    if (o.success === true) return true
+    const inner = o.result
+    if (inner && typeof inner === "object") {
+      const r = inner as { success?: boolean; status?: boolean }
+      if (r.success === true || r.status === true) return true
     }
   }
-  return new Promise((resolve) => setTimeout(() => resolve(true), 500))
+  return false
+}
+
+/**
+ * Оплата голосами VK: сначала {@link https://dev.vk.com/bridge/VKWebAppShowOrderBox виртуальный товар},
+ * затем при необходимости — {@link https://dev.vk.com/bridge/VKWebAppOpenPayForm pay-to-service} с подписью `/api/payment/sign` (как в rps-vk-game).
+ *
+ * @param amount — сумма в голосах VK
+ * @param itemId — id товара в каталоге приложения (get_item)
+ */
+export async function showPaymentWall(
+  amount: number,
+  itemId?: string,
+  options?: ShowPaymentWallOptions,
+): Promise<boolean> {
+  if (typeof window === "undefined") return false
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return new Promise((resolve) => setTimeout(() => resolve(true), 300))
+  }
+
+  const b = await getBridgeAsync()
+  const description = options?.description ?? "Пополнение сердечек"
+  const userId = options?.userId ?? ""
+
+  if (!b || !isVkMiniApp()) {
+    return new Promise((resolve) => setTimeout(() => resolve(true), 500))
+  }
+
+  try {
+    await b.send("VKWebAppInit", {})
+  } catch {
+    /* ignore */
+  }
+
+  if (itemId) {
+    try {
+      const result = await b.send("VKWebAppShowOrderBox", {
+        type: "item",
+        item: itemId,
+      })
+      if (vkPayResultOk(result)) return true
+      if (typeof result === "boolean" && result) return true
+    } catch (e) {
+      console.warn("[VK] VKWebAppShowOrderBox", e)
+    }
+  }
+
+  const appId = getVkAppId()
+  if (!appId) {
+    console.warn("[VK] NEXT_PUBLIC_VK_APP_ID не задан — оплата голосами недоступна")
+    return false
+  }
+
+  try {
+    const signRes = await fetch(appPath("/api/payment/sign"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount,
+        userId,
+        description,
+        currency: "votes",
+      }),
+    })
+    if (!signRes.ok) {
+      console.warn("[VK] /api/payment/sign", signRes.status)
+      return false
+    }
+    const signData = (await signRes.json()) as {
+      ok?: boolean
+      app_id?: number
+      order_id?: string
+      sign?: string
+    }
+    if (!signData.ok || !signData.app_id || !signData.order_id || !signData.sign) {
+      console.warn("[VK] неверный ответ подписи", signData)
+      return false
+    }
+
+    const payFormResult = await b.send("VKWebAppOpenPayForm" as never, {
+      app_id: signData.app_id,
+      action: "pay-to-service",
+      params: {
+        amount,
+        description,
+        order_id: signData.order_id,
+        currency: "votes",
+        data: itemId ?? "",
+        sign: signData.sign,
+      },
+    } as never)
+
+    if (typeof payFormResult === "boolean") return payFormResult
+    return vkPayResultOk(payFormResult)
+  } catch (e) {
+    console.warn("[VK] VKWebAppOpenPayForm", e)
+    return false
+  }
 }
 
 /** Покупка пака сердец (500). Для уведомлений VK вызывает get_item/order_status_change на сервер. */

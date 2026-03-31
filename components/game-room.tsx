@@ -398,7 +398,7 @@ const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow:
   kiss:      { bg: "linear-gradient(180deg, #e74c3c 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
   flowers:   { bg: "linear-gradient(180deg, #ffb347 0%, #ff7e00 100%)", border: "#e67e22", shadow: "#a04000", text: "#111827" },
   diamond:   { bg: "linear-gradient(180deg, #78d6ff 0%, #1ea5ff 100%)", border: "#0a6bd1", shadow: "#063f7a", text: "#0b1120" },
-  beer:      { bg: "linear-gradient(180deg, #f39c12 0%, #e67e22 100%)", border: "#d35400", shadow: "#a04000", text: "#111827" },
+  beer:      { bg: "linear-gradient(180deg, #5d4037 0%, #3e2723 100%)", border: "#4e342e", shadow: "#2d1b0e", text: "#efebe9" },
   banya:     { bg: "linear-gradient(180deg, #34d399 0%, #16a34a 100%)", border: "#166534", shadow: "#0f3d22", text: "#052e16" },
   tools:     { bg: "linear-gradient(180deg, #bdc3c7 0%, #7f8c8d 100%)", border: "#4e5c5f", shadow: "#2c3e50", text: "#111827" },
   gift_voice:{ bg: "linear-gradient(180deg, #f1c40f 0%, #f39c12 100%)", border: "#d68910", shadow: "#9a6408", text: "#111827" },
@@ -3701,12 +3701,12 @@ export function GameRoom() {
       <div
         className={cn(
           "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1",
-          /* ПК: без overflow-y на колонке — иначе сетка 1fr/auto/1fr растягивается по контенту и стол «прилипает» к верху */
+          /* ПК: без overflow-y на колонке — иначе flex-центрирование растягивается по контенту и стол «прилипает» к верху */
           isPcLayout ? "max-h-full min-w-0 flex-1 overflow-hidden" : "overflow-y-auto",
           !isPcLayout && "pb-14 px-0.5 sm:px-1",
           isPcLayout
             ? "h-full w-full max-w-none min-h-0 self-stretch"
-            : "max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2 lg:justify-center lg:pt-8",
+            : "max-md:items-stretch max-md:pt-[calc(env(safe-area-inset-top)+4.25rem)] md:pt-1 md:px-2 lg:px-3 lg:pb-2",
         )}
         ref={boardRef}
       >
@@ -3791,21 +3791,12 @@ export function GameRoom() {
             )}
           </div>
         )}
-        {/* ПК: резина по высоте — равные «поля» сверху/снизу через grid 1fr / auto / 1fr */}
+        {/* Блок стола: по центру колонки по вертикали и горизонтали; при переполнении — прокрутка */}
         <div
           className={cn(
-            isPcLayout
-              ? "grid h-full min-h-0 w-full min-w-0 flex-1 grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] px-2 lg:px-3"
-              : "contents",
-          )}
-        >
-          {isPcLayout && <div className="min-h-0 min-w-0" aria-hidden />}
-        {/* Обёртка: мобильная — слот эмоций сверху (поток), стол статично ниже; ПК — стол по центру колонки */}
-        <div
-          className={cn(
-            "flex min-h-0 w-full min-w-0 flex-col",
-            isMobile ? "shrink-0 items-stretch gap-1.5" : "items-center",
-            isPcLayout && "mx-auto max-h-full w-full min-w-0 max-w-full overflow-y-auto overflow-x-hidden",
+            "flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center",
+            isMobile ? "items-stretch gap-1.5" : "items-center",
+            isPcLayout && "mx-auto max-h-full overflow-y-auto overflow-x-hidden px-2 lg:px-3",
           )}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
@@ -3952,23 +3943,12 @@ export function GameRoom() {
             </div>
           )}
         </div>
-        {/* ПК: невидимые боковые поля flex-1 тянутся к краям центральной колонки; стол — без изменений размеров */}
-        <div
-          className={
-            isPcLayout
-              ? "flex w-full min-h-0 shrink-0 flex-row items-center justify-center"
-              : "contents"
-          }
-        >
-          {isPcLayout && (
-            <div className="min-h-0 min-w-0 flex-1 basis-0 shrink" aria-hidden />
-          )}
         {/* Стол ~60:50 (ширина/высота): моб — 90% / max 420px; ПК — вписать в min(72vh,78dvh) по высоте */}
         <div
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mt-1 rounded-2xl sm:rounded-3xl`
+              : `relative flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto rounded-2xl sm:rounded-3xl`
           }
           style={{
             ...(isMobile
@@ -4404,10 +4384,6 @@ export function GameRoom() {
             </div>
           )}
         </div>
-          {isPcLayout && (
-            <div className="min-h-0 min-w-0 flex-1 basis-0 shrink" aria-hidden />
-          )}
-        </div>
 
         {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) + кнопка «Крутить вне очереди»; на мобильной — ниже и крупнее ---- */}
         <div
@@ -4496,8 +4472,6 @@ export function GameRoom() {
           />
         )}
 
-        </div>
-          {isPcLayout && <div className="min-h-0" aria-hidden />}
         </div>
 
       </div>
@@ -6022,7 +5996,7 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
   const isOwn = entry.fromPlayer?.id === currentUserId
   const colorMap: Record<string, string> = {
     kiss: "#e74c3c",
-    beer: "#f39c12",
+    beer: "#5d4037",
     skip: "#94a3b8",
     invite: "#e8c06a",
     join: "#2ecc71",

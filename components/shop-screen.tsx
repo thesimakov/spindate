@@ -18,6 +18,7 @@ import { apiFetch } from "@/lib/api-fetch"
 import { vkBridge } from "@/lib/vk-bridge"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
+import type { InventoryItem } from "@/lib/game-types"
 
 type ShopScreenProps = {
   variant?: "page" | "panel"
@@ -289,6 +290,28 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
   }
 
+  /** Подтянуть баланс с сервера после оплаты VK (PUT в game-context дебаунсится ~1.5 с). */
+  const syncVoiceFromServer = useCallback(async () => {
+    if (!currentUser) return
+    const endpoint =
+      currentUser.authProvider === "vk"
+        ? `/api/user/state?vk_user_id=${encodeURIComponent(String(currentUser.id))}`
+        : "/api/user/state"
+    try {
+      const res = await apiFetch(endpoint, { credentials: "include" })
+      const data = (await res.json()) as { ok?: boolean; voiceBalance?: number; inventory?: unknown[] }
+      if (data.ok && typeof data.voiceBalance === "number") {
+        dispatch({
+          type: "RESTORE_GAME_STATE",
+          voiceBalance: data.voiceBalance,
+          inventory: Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
+        })
+      }
+    } catch {
+      // ignore
+    }
+  }, [currentUser, dispatch])
+
   const handleActivateVip = async ({
     days,
     cost,
@@ -328,7 +351,10 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
 
     if (cost > 0) {
       const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
-      const ok = await vkBridge.showPaymentWall(cost, itemId)
+      const ok = await vkBridge.showPaymentWall(cost, itemId, {
+        userId: String(currentUser.id),
+        description: `VIP ${days} дн.`,
+      })
       stopKeepAlive()
       if (!ok) {
         showToast("Активация VIP отменена", "error")
@@ -360,12 +386,16 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
     setVipLevel((prev) => (prev >= targetLevel ? prev : targetLevel))
     showToast(`VIP активирован на ${days} дн.`, "success")
+    window.setTimeout(() => void syncVoiceFromServer(), 2500)
   }
 
   const handleTopUp = async (amount: number, votes: number, itemId: string) => {
     if (!currentUser) return
     const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
-    const ok = await vkBridge.showPaymentWall(votes, itemId)
+    const ok = await vkBridge.showPaymentWall(votes, itemId, {
+      userId: String(currentUser.id),
+      description: `Пакет ${amount} сердец`,
+    })
     stopKeepAlive()
     if (!ok) {
       showToast("Пополнение отменено", "error")
@@ -373,6 +403,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
     dispatch({ type: "PAY_VOICES", amount: -amount })
     showToast(`Баланс пополнен на ${amount} ❤`, "success")
+    window.setTimeout(() => void syncVoiceFromServer(), 2500)
   }
 
   if (!currentUser) return null
