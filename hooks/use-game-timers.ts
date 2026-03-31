@@ -86,6 +86,15 @@ export function useGameTimers({
   useEffect(() => {
     countdownRef.current = countdown
   }, [countdown])
+  const isRoundDriver = useCallback(() => {
+    const me = currentUserRef.current
+    if (!me) return false
+    const liveIds = playersRef.current
+      .filter((p) => !p.isBot)
+      .map((p) => p.id)
+      .sort((a, b) => a - b)
+    return liveIds.length > 0 && liveIds[0] === me.id
+  }, [playersRef])
 
   const afkGuardRef = useRef<{ key: string | null; startedAt: number }>({ key: null, startedAt: 0 })
   const afkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -158,6 +167,7 @@ export function useGameTimers({
 
     if (turnGuardRef.current.skipTimeout) clearTimeout(turnGuardRef.current.skipTimeout)
     turnGuardRef.current.skipTimeout = setTimeout(() => {
+      if (!isRoundDriver()) return
       if (turnGuardRef.current.key !== key) return
       if (!currentTurnPlayer) return
       dispatch({
@@ -238,6 +248,7 @@ export function useGameTimers({
     }, RESULT_TICK_MS)
 
     autoAdvanceRef.current = setTimeout(() => {
+      if (!isRoundDriver()) return
       dispatch({ type: "NEXT_TURN" })
     }, RESULT_AUTO_ADVANCE_MS)
 
@@ -314,6 +325,7 @@ export function useGameTimers({
             clearInterval(turnTimerRef.current)
             turnTimerRef.current = null
           }
+          if (!isRoundDriver()) return
           dispatch({
             type: "ADD_LOG",
             entry: {
@@ -371,6 +383,7 @@ export function useGameTimers({
           clearTimeout(autoAdvanceRef.current)
           autoAdvanceRef.current = null
         }
+        if (!isRoundDriver()) return
         dispatch({ type: "NEXT_TURN" })
       }
 
@@ -393,7 +406,7 @@ export function useGameTimers({
       document.removeEventListener("visibilitychange", flush)
       window.removeEventListener("focus", flush)
     }
-  }, [tableLoading, dispatch, playersRef, casualMode])
+  }, [tableLoading, dispatch, playersRef, casualMode, isRoundDriver])
 
   // --- Steam fog tick ---
   const [steamFogTick, setSteamFogTick] = useState(0)

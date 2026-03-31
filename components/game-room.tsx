@@ -486,6 +486,14 @@ export function GameRoom() {
   useEffect(() => { playersRef.current = players }, [players])
 
   const [tableLoading, setTableLoading] = useState(true)
+  const isRoundDriver = useMemo(() => {
+    if (!currentUser) return false
+    const liveIds = players
+      .filter((p) => !p.isBot)
+      .map((p) => p.id)
+      .sort((a, b) => a - b)
+    return liveIds.length > 0 && liveIds[0] === currentUser.id
+  }, [players, currentUser?.id])
 
   const isClientTabAway =
     currentUser != null && clientTabAway?.[currentUser.id] === true
@@ -1045,11 +1053,13 @@ export function GameRoom() {
   }, [roundNumber])
 
   const handleSpin = useCallback(() => {
+    // Раунд запускает только один клиент-ведущий, чтобы не было гонки событий.
+    if (!isRoundDriver) return
     if (!CASUAL_MODE) {
       dispatch({ type: "END_PREDICTION_PHASE" })
     }
     dispatch({ type: "START_COUNTDOWN" })
-  }, [dispatch])
+  }, [dispatch, isRoundDriver])
 
   const {
     turnTimer,
@@ -1095,11 +1105,12 @@ export function GameRoom() {
   /* ---- bot auto-spin (delayed to let prediction phase happen) ---- */
   useEffect(() => {
     if (tableLoading) return
+    if (!isRoundDriver) return
     if (!currentTurnPlayer?.isBot || isSpinning || countdown !== null || showResult) return
     const timer = setTimeout(() => handleSpin(), 2500)
     return () => clearTimeout(timer)
      
-  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin, tableLoading])
+  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin, tableLoading, isRoundDriver])
 
   /* ---- при возврате из мини-игры: анимация «вернулся к нам», пропуск хода если ход был у вернувшегося ---- */
   /* Важно: ждём tableLoading=false и перезапускаемся при его смене — иначе при возврате во время
@@ -1131,6 +1142,7 @@ export function GameRoom() {
   /* ---- countdown tick ---- */
   useEffect(() => {
     if (tableLoading) return
+    if (!isRoundDriver) return
     if (countdown === null || countdown <= 0) return
     const timer = setTimeout(() => {
       if (countdown > 1) {
@@ -1142,7 +1154,7 @@ export function GameRoom() {
     }, 800)
     return () => clearTimeout(timer)
      
-  }, [countdown, dispatch, tableLoading])
+  }, [countdown, dispatch, tableLoading, isRoundDriver])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
   const playEmotionSound = useCallback((actionId: string) => {
