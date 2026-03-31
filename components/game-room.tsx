@@ -16,7 +16,6 @@ import {
   MessageCircle,
   Star,
   RotateCw,
-  Beer,
   X,
   Coins,
   Send,
@@ -35,6 +34,12 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
@@ -57,9 +62,6 @@ import { useSyncEngine } from "@/hooks/use-sync-engine"
 import { useGameTimers } from "@/hooks/use-game-timers"
 import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
-import { FlyingEmojisLayer } from "@/components/flying-emojis-layer"
-import { BottleCenter } from "@/components/bottle-center"
-import { TurnTimerDisplay } from "@/components/turn-timer-display"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
@@ -67,7 +69,6 @@ import {
   PAIR_ACTIONS,
   type PairAction,
   type Player,
-  type GameAction,
   type GameLogEntry,
   type PairGenderCombo,
   type InventoryItem,
@@ -319,13 +320,6 @@ interface SteamPuff {
   spreadY: number
 }
 
-/** Запотевание аватарки после бани: до 1 мин с момента последнего пара, сила растёт с объёмом пара */
-interface AvatarSteamFog {
-  until: number
-  /** 0…1 накопленная «влажность» (чем больше пуфов / чаще баня — тем выше) */
-  level: number
-}
-
 const BANYA_STEAM_PUFF_COUNT = 10
 /** Вклад одного «облачка» в запотевание (суммарно с одной бани ≈ 0.55) */
 const BANYA_STEAM_LEVEL_PER_PUFF = 0.055
@@ -352,7 +346,14 @@ function renderActionIcon(action: PairAction): React.ReactNode {
     case "diamond":
       return <span className="text-base">{"💎"}</span>
     case "beer":
-      return <Beer className="h-4 w-4" />
+      return (
+        <img
+          src={assetUrl("kvas-big.svg")}
+          alt=""
+          className="h-4 w-4 object-contain"
+          draggable={false}
+        />
+      )
     case "banya":
        
       return (
@@ -414,9 +415,9 @@ const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow:
 
 /** Мобильная полоса эмоций: один ряд, кнопка = иконка + подпись в одну линию, без панели-обёртки */
 const MOBILE_EMOTION_STRIP_SCROLL =
-  "flex w-full max-w-full items-center justify-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain py-0.5 [-webkit-overflow-scrolling:touch]"
+  "flex w-full max-w-full items-center justify-center gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain py-1 [-webkit-overflow-scrolling:touch]"
 const MOBILE_EMOTION_STRIP_BTN =
-  "flex h-8 shrink-0 flex-row items-center gap-1 rounded-full px-2 py-0 pr-2.5 text-left text-[10px] font-bold leading-none transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
+  "flex min-h-[2.75rem] shrink-0 flex-row items-center gap-2 rounded-full px-3 py-1.5 pr-3.5 text-left text-xs font-extrabold leading-tight sm:text-sm transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
 
 // isTableSyncedAction moved to hooks/use-sync-engine.ts
 
@@ -481,7 +482,15 @@ export function GameRoom() {
     [],
   )
 
-  const { dispatch, syncLiveTable, fetchTableAuthority, tableLiveReady, tableAuthorityReady } = useSyncEngine()
+  const {
+    dispatch,
+    syncLiveTable,
+    fetchTableAuthority,
+    tableLiveReady,
+    tableAuthorityReady,
+    seatConfirmed,
+    liveHumanCount,
+  } = useSyncEngine()
   const playersRef = useRef(players)
   useEffect(() => { playersRef.current = players }, [players])
 
@@ -812,7 +821,7 @@ export function GameRoom() {
   }, [showResult, roundNumber])
 
   const [showBottleCatalog, setShowBottleCatalog] = useState(false)
-  const [showRosesReceivedPopover, setShowRosesReceivedPopover] = useState(false)
+  const [_showRosesReceivedPopover, setShowRosesReceivedPopover] = useState(false)
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
   const [showChatListModal, setShowChatListModal] = useState(false)
@@ -1283,7 +1292,6 @@ export function GameRoom() {
       kiss: "\uD83D\uDC8B",
       flowers: "\uD83C\uDF37",
       diamond: "\uD83D\uDC8E",
-      beer: "\uD83C\uDF7A",
       gift_voice: "\uD83E\uDE99",
       tools: "\uD83D\uDEE0",
       lipstick: "\uD83D\uDC84",
@@ -1335,6 +1343,8 @@ export function GameRoom() {
         const frame = nextEmotionGiftFrameNum(emotionGiftFrameRef.current)
         emotionGiftFrameRef.current = frame
         queue.push({ fromIdx, toIdx, type: entry.type, imgSrc: emotionGiftFrameSrc(frame) })
+      } else if (entry.type === "beer") {
+        queue.push({ fromIdx, toIdx, type: entry.type, imgSrc: assetUrl("kvas-big.svg") })
       } else if (EMOTION_EMOJI_MAP[entry.type]) {
         queue.push({ fromIdx, toIdx, type: entry.type, emoji: EMOTION_EMOJI_MAP[entry.type] })
       }
@@ -1530,11 +1540,13 @@ export function GameRoom() {
         const spinnerIdx = players.findIndex((p) => p.id === currentTurnPlayer.id)
         const emojiMap: Record<string, string> = {
           kiss: "\uD83D\uDC8B",
-          beer: "\uD83C\uDF7A",
           skip: "",
         }
         if (defaultAction === "cocktail") {
           launchEmotionGiftImage(spinnerIdx, targetIdx)
+          playEmotionSound(defaultAction)
+        } else if (defaultAction === "beer") {
+          launchEmoji(spinnerIdx, targetIdx, undefined, assetUrl("kvas-big.svg"))
           playEmotionSound(defaultAction)
         } else if (emojiMap[defaultAction]) {
           launchEmoji(spinnerIdx, targetIdx, emojiMap[defaultAction])
@@ -1660,7 +1672,6 @@ export function GameRoom() {
       kiss: "\uD83D\uDC8B",
       flowers: "\uD83C\uDF37",
       diamond: "\uD83D\uDC8E",
-      beer: "\uD83C\uDF7A",
       cocktail: "",
       gift_voice: "\uD83E\uDE99",
       tools: "\uD83D\uDEE0",
@@ -1673,6 +1684,8 @@ export function GameRoom() {
     }
     if (actionId === "cocktail") {
       launchEmotionGiftImage(spinnerIdx, targetIdx)
+    } else if (actionId === "beer") {
+      launchEmoji(spinnerIdx, targetIdx, undefined, assetUrl("kvas-big.svg"))
     } else if (emojiMap[actionId]) {
       launchEmoji(spinnerIdx, targetIdx, emojiMap[actionId])
     }
@@ -1749,7 +1762,6 @@ export function GameRoom() {
       kiss: "💋",
       flowers: "💐",
       diamond: "💎",
-      beer: "🍺",
       cocktail: "",
       tools: "🛠️",
       lipstick: "💄",
@@ -1767,6 +1779,8 @@ export function GameRoom() {
       launchSteam(toIdx)
     } else if (actionId === "cocktail") {
       launchEmotionGiftImage(fromIdx, toIdx)
+    } else if (actionId === "beer") {
+      launchEmoji(fromIdx, toIdx, undefined, assetUrl("kvas-big.svg"))
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
     }
@@ -1822,7 +1836,6 @@ export function GameRoom() {
       kiss: "💋",
       flowers: "💐",
       diamond: "💎",
-      beer: "🍺",
       cocktail: "",
       tools: "🛠️",
       lipstick: "💄",
@@ -1839,6 +1852,8 @@ export function GameRoom() {
       launchSteam(toIdx)
     } else if (actionId === "cocktail") {
       launchEmotionGiftImage(fromIdx, toIdx)
+    } else if (actionId === "beer") {
+      launchEmoji(fromIdx, toIdx, undefined, assetUrl("kvas-big.svg"))
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
     }
@@ -2058,11 +2073,13 @@ export function GameRoom() {
     const toIdx = players.findIndex((p) => p.id === otherPlayer.id)
     const mutualEmoji: Record<string, string> = {
       kiss: "\uD83D\uDC8B",
-      beer: "\uD83C\uDF7A",
       lipstick: "\uD83D\uDC84",
     }
     if (fromIdx !== -1 && toIdx !== -1 && mutualActionId === "cocktail") {
       launchEmotionGiftImage(fromIdx, toIdx)
+      playEmotionSound(mutualActionId)
+    } else if (fromIdx !== -1 && toIdx !== -1 && mutualActionId === "beer") {
+      launchEmoji(fromIdx, toIdx, undefined, assetUrl("kvas-big.svg"))
       playEmotionSound(mutualActionId)
     } else if (fromIdx !== -1 && toIdx !== -1 && mutualEmoji[mutualActionId]) {
       launchEmoji(fromIdx, toIdx, mutualEmoji[mutualActionId])
@@ -2687,6 +2704,8 @@ export function GameRoom() {
         visible={tableLoading}
         liveReady={tableLiveReady}
         authorityReady={tableAuthorityReady}
+        seatConfirmed={seatConfirmed}
+        liveHumanCount={liveHumanCount}
         hasPlayers={players.length > 0}
         hasCurrentUser={currentUser != null && players.some(p => p.id === currentUser.id)}
         isPcLayout={isPcLayout}
@@ -2803,8 +2822,12 @@ export function GameRoom() {
                       setEmotionPurchasePick((p) => ({ ...p, [row.id]: e.target.checked }))
                     }
                   />
-                  <span className="text-lg" aria-hidden>
-                    {row.emoji}
+                  <span className="flex h-7 w-7 items-center justify-center text-lg" aria-hidden>
+                    {row.id === "beer" ? (
+                      <img src={assetUrl("kvas-big.svg")} alt="" className="h-7 w-7 object-contain" draggable={false} />
+                    ) : (
+                      row.emoji
+                    )}
                   </span>
                   <span className="flex-1 text-sm font-semibold text-slate-100">{row.label}</span>
                   <span className="text-xs tabular-nums text-cyan-300/90">+{EMOTION_QUOTA_PURCHASE_AMOUNT}</span>
@@ -2991,9 +3014,9 @@ export function GameRoom() {
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); фикс. ширина, не сжимается при резине центра ---- */}
       <div
         className={cn(
-          "relative z-20 shrink-0 flex-none flex-col gap-1.5 overflow-y-auto max-h-app p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out",
+          "relative z-20 shrink-0 flex-none flex-col gap-2 overflow-y-auto max-h-app p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out",
           isPcLayout ? "flex" : "hidden md:flex",
-          leftSideMenuExpanded ? "w-[190px]" : "w-14 lg:w-[190px]",
+          leftSideMenuExpanded ? "w-[min(92vw,250px)]" : "w-14 lg:w-[min(92vw,250px)]",
         )}
       >
         <div className="mb-1 flex shrink-0 items-center justify-center lg:hidden">
@@ -3018,29 +3041,37 @@ export function GameRoom() {
 
         <div className={!leftSideMenuExpanded ? "max-lg:hidden" : ""}>
         <div
-          className="rounded-lg p-2"
+          className="flex w-full flex-col gap-2 rounded-xl p-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
           style={{
-            background: "rgba(15, 23, 42, 0.88)",
-            border: "1px solid #475569",
+            background: "rgba(15, 23, 42, 0.92)",
+            border: "1px solid rgba(148, 163, 184, 0.45)",
           }}
         >
-          <div className="mb-2 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
-            <span className="text-[11px] font-bold" style={{ color: "#e8c06a" }}>
-              {sidebarEmotionTitle}
-            </span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 shrink-0" style={{ color: "#e8c06a" }} />
+              <span className="text-sm font-extrabold leading-tight tracking-tight" style={{ color: "#e8c06a" }}>
+                {sidebarEmotionTitle}
+              </span>
+            </div>
+            {shouldShowSidebarEmotionSubtitle && (
+              <p className="text-xs font-semibold leading-snug sm:text-sm" style={{ color: "#cbd5e1" }}>
+                {sidebarEmotionSubtitle}
+              </p>
+            )}
           </div>
-          {shouldShowSidebarEmotionSubtitle && (
-            <p className="mb-2 text-[10px] leading-tight" style={{ color: "#94a3b8" }}>
-              {sidebarEmotionSubtitle}
-            </p>
-          )}
 
-          <div className="mb-2 grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-3 gap-2">
             {limitedEmotionCounters.map((row) => (
-              <div key={row.id} className="rounded-md px-1 py-0.5 text-center" style={{ background: "rgba(30, 41, 59, 0.7)" }}>
-                <p className="text-[10px] font-semibold" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
-                <p className="text-[10px] font-bold" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
+              <div key={row.id} className="rounded-lg px-1.5 py-2 text-center ring-1 ring-slate-600/50" style={{ background: "rgba(30, 41, 59, 0.85)" }}>
+                <div className="flex min-h-[2.25rem] items-center justify-center">
+                  {row.id === "beer" ? (
+                    <img src={assetUrl("kvas-big.svg")} alt="" className="h-8 w-8 object-contain" draggable={false} />
+                  ) : (
+                    <p className="text-lg leading-none" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
+                  )}
+                </div>
+                <p className="mt-1 text-sm font-black tabular-nums" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
                   {row.used}/{row.limit}
                 </p>
               </div>
@@ -3051,7 +3082,7 @@ export function GameRoom() {
             <button
               type="button"
               onClick={openEmotionPurchaseModal}
-              className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+              className="flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl px-2 text-center text-xs font-extrabold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 sm:text-[13px]"
               disabled={voiceBalance < EMOTION_QUOTA_COST_PER_TYPE_HEARTS}
               style={{
                 background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
@@ -3064,7 +3095,7 @@ export function GameRoom() {
             </button>
           )}
 
-          <div className="flex max-h-[32dvh] flex-col gap-1 overflow-y-auto pr-0.5">
+          <div className="flex max-h-[min(52dvh,30rem)] min-h-0 flex-col gap-2 overflow-y-auto pr-0.5">
             {sidebarAvailableActions.map((action) => {
               const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
               const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
@@ -3088,20 +3119,24 @@ export function GameRoom() {
                     }
                   }}
                   disabled={isDisabled}
-                  className="flex items-center justify-start gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-semibold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                  className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-0 text-left text-[13px] font-extrabold leading-none shadow-md transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
                   style={{
                     background: style.bg,
                     color: style.text,
                     border: `1px solid ${style.border}`,
-                    boxShadow: `0 1px 0 ${style.shadow}, 0 2px 4px rgba(0,0,0,0.25)`,
+                    boxShadow: `0 1px 0 ${style.shadow}, 0 4px 10px rgba(0,0,0,0.22)`,
                   }}
                 >
-                  {renderActionIcon(action)}
-                  <span className="flex-1 truncate text-left">{action.label}</span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center [&_img]:h-7 [&_img]:w-7 [&_svg]:h-5 [&_svg]:w-5 [&>span]:text-lg">
+                    {renderActionIcon(action)}
+                  </span>
+                  <span className="min-w-0 flex-1 text-left leading-tight [overflow-wrap:anywhere]">
+                    {action.label}
+                  </span>
                   {shouldShowActionCostBadge(action.id, actionCost) && (
-                    <span className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95">
+                    <span className="heart-price heart-price--badge ml-1 flex shrink-0 items-center rounded-full px-1.5 py-0.5 opacity-95">
                       {actionCost}
-                      <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
+                      <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
                     </span>
                   )}
                 </button>
@@ -3357,7 +3392,7 @@ export function GameRoom() {
           {/** Единый стиль для аккуратных кнопок бокового меню */}
           {(() => {
             const sideBtnClass =
-              "flex items-center gap-1.5 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
+              "flex items-center gap-2 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
               (!leftSideMenuExpanded
                 ? " max-lg:min-h-[44px] max-lg:w-11 max-lg:min-w-[44px] max-lg:justify-center max-lg:rounded-full max-lg:px-2 max-lg:gap-0"
                 : "")
@@ -3388,8 +3423,8 @@ export function GameRoom() {
           {/* Ваш банк (сердца) */}
           <div
             className={
-              "flex w-full min-w-0 items-center gap-1.5 rounded-[999px] px-2 py-2 min-h-[40px] sm:px-3" +
-              (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2 max-lg:gap-1" : "")
+              "flex w-full min-w-0 items-center gap-2 rounded-[999px] px-2 py-2 min-h-[40px] sm:px-3" +
+              (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2 max-lg:gap-2" : "")
             }
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
@@ -3399,7 +3434,7 @@ export function GameRoom() {
           >
             <div
               className={
-                "flex min-w-0 flex-1 items-center gap-1.5" +
+                "flex min-w-0 flex-1 items-center gap-2" +
                 (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")
               }
             >
@@ -3503,55 +3538,52 @@ export function GameRoom() {
             )}
           </button>
 
-          {/* Колесо фортуны — панель включается FORTUNE_WHEEL_ENABLED */}
-          {currentUser && (
-            <button
-              type="button"
-              disabled={!FORTUNE_WHEEL_ENABLED}
-              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
-              className={cn(
-                sideBtnClass,
-                !FORTUNE_WHEEL_ENABLED && "cursor-not-allowed opacity-45 hover:brightness-100",
-              )}
-              style={{
-                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(56,189,248,0.28)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-              }}
-              title={!FORTUNE_WHEEL_ENABLED ? "Скоро будет доступно" : "Колесо фортуны"}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={sideBtnClass}
+                style={{
+                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                  border: "1px solid rgba(56,189,248,0.28)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                }}
+              >
+                <Menu className="h-4 w-4" style={{ color: "#e8c06a" }} />
+                <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Меню"}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="right"
+              align="start"
+              sideOffset={8}
+              className="z-[200] min-w-[13rem] border-slate-600 bg-slate-950/98 p-1 text-slate-100 shadow-xl"
             >
-              <span className="text-base" aria-hidden>{"🎡"}</span>
-              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Колесо фортуны"}</span>
-            </button>
-          )}
-
-          {/* Рейтинг */}
-          <button
-            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "rating" })}
-            className={sideBtnClass}
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-            }}
-          >
-            <Trophy className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
-          </button>
-
-          {/* Избранное */}
-          <button
-            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })}
-            className={sideBtnClass}
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-            }}
-          >
-            <Star className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
-          </button>
+              <DropdownMenuItem
+                className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+                onSelect={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "rating" })}
+              >
+                <Trophy className="h-4 w-4 shrink-0 text-amber-300" />
+                Рейтинг
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+                onSelect={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })}
+              >
+                <Star className="h-4 w-4 shrink-0 text-amber-300" />
+                Избранное
+              </DropdownMenuItem>
+              {currentUser && (
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+                  onSelect={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "daily" })}
+                >
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
+                  Ежедневные задачи
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто); на планшете — по ширине как остальные кнопки меню */}
           <div className="lg:hidden w-full">
@@ -3569,26 +3601,10 @@ export function GameRoom() {
             </button>
           </div>
 
-          {/* Ежедневные задачи */}
-          {currentUser && (
-            <button
-              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "daily" })}
-              className={sideBtnClass}
-              style={{
-                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(56,189,248,0.28)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-              }}
-            >
-              <Sparkles className="h-4 w-4" style={{ color: "#e8c06a" }} />
-              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Ежедневные задачи"}</span>
-            </button>
-          )}
-
           {/* Количество столов */}
           <div
             className={
-              "flex items-center gap-1.5 rounded-[999px] px-3 py-2 min-h-[40px]" +
+              "flex items-center gap-2 rounded-[999px] px-3 py-2 min-h-[40px]" +
               (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2" : "")
             }
             style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}
@@ -3855,17 +3871,17 @@ export function GameRoom() {
                         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
                       }}
                     >
-                      <span className="flex shrink-0 items-center justify-center text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
                         {renderActionIcon(action)}
                       </span>
-                      <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
+                      <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
                       {shouldShowActionCostBadge(action.id, actionCost) && (
                         <span
-                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
+                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
                           style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                         >
                           {actionCost}
-                          <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
+                          <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
                         </span>
                       )}
                     </button>
@@ -3891,17 +3907,17 @@ export function GameRoom() {
                         boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
                       }}
                     >
-                      <span className="flex shrink-0 items-center justify-center text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
                         {renderActionIcon(action)}
                       </span>
-                      <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
+                      <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
                       {shouldShowActionCostBadge(action.id, actionCost) && (
                         <span
-                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
+                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
                           style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                         >
                           {actionCost}
-                          <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
+                          <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
                         </span>
                       )}
                     </button>
@@ -3933,17 +3949,17 @@ export function GameRoom() {
                           boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
                         }}
                       >
-                        <span className="flex shrink-0 items-center justify-center text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
                           {renderActionIcon(action)}
                         </span>
-                        <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
+                        <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
                         {shouldShowActionCostBadge(action.id, actionCost) && (
                           <span
-                            className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
+                            className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
                             style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                           >
                             {actionCost}
-                            <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
+                            <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
                           </span>
                         )}
                       </button>
@@ -4574,6 +4590,32 @@ export function GameRoom() {
           </button>
         </div>
 
+        {/* Колесо фортуны — между Угадай-ка и чатом (панель: FORTUNE_WHEEL_ENABLED) */}
+        {currentUser && (
+          <div className="mx-2 shrink-0 px-1">
+            <button
+              type="button"
+              disabled={!FORTUNE_WHEEL_ENABLED}
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100",
+              )}
+              style={{
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                border: "1px solid rgba(56,189,248,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                color: "#f0e0c8",
+              }}
+              title={!FORTUNE_WHEEL_ENABLED ? "Скоро будет доступно" : "Колесо фортуны"}
+            >
+              <span className="text-xl leading-none" aria-hidden>
+                {"🎡"}
+              </span>
+              <span>Колесо фортуны</span>
+            </button>
+          </div>
+        )}
+
         {/* Лог и чат за столом */}
         <TableChatPanel
           gameLog={gameLog}
@@ -4610,15 +4652,6 @@ export function GameRoom() {
         >
           <RotateCw className="h-5 w-5" />
           <span className="text-[10px] font-semibold">Игра</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })}
-          className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 min-w-[64px] touch-manipulation transition-opacity active:opacity-80"
-          style={{ color: "#f0e0c8" }}
-        >
-          <Star className="h-5 w-5" />
-          <span className="text-[10px] font-semibold">Избранные</span>
         </button>
         <button
           type="button"
@@ -4724,6 +4757,15 @@ export function GameRoom() {
                       {formatCooldown(cooldownLeftMs)}
                     </span>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" }); setShowMobileMoreMenu(false) }}
+                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
+                  style={{ color: "#f0e0c8" }}
+                >
+                  <Star className="h-4 w-4 shrink-0" />
+                  Избранное
                 </button>
                 <button
                   type="button"

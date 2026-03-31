@@ -26,7 +26,7 @@ const NORMALIZE_DELAY_MS = 200
 
 export function GameApp() {
   const { state, dispatch } = useGame()
-  const [normalized, setNormalized] = useState(false)
+  const [, setNormalized] = useState(false)
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
   const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
   const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)

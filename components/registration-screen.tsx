@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react"
+import { useState, useMemo, useEffect, useLayoutEffect, type CSSProperties } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, generateBots } from "@/lib/game-context"
@@ -355,7 +355,6 @@ export function RegistrationScreen() {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- тихий вход при монтировании в VK
   }, [])
 
   const ensureAgeValid = () => {

@@ -177,11 +177,11 @@ function ActionStrip({ actions, combo, voiceBalance = Infinity, alwaysEnabled, g
             <span className="min-w-0 max-w-[5.75rem] truncate">{action.label}</span>
             {shouldShowActionCostBadge(action.id, actionCost) && (
               <span
-                className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1 py-px opacity-95"
+                className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-1.5 py-0.5 opacity-95"
                 style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
               >
                 {actionCost}
-                <Heart className="heart-price__icon h-2.5 w-2.5" fill="currentColor" />
+                <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
               </span>
             )}
           </button>

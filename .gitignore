@@ -12,3 +12,7 @@ node_modules
 .pnpm-store
 data
 out
+
+# TypeScript build info (локальный кэш)
+tsconfig.tsbuildinfo
+*.tsbuildinfo

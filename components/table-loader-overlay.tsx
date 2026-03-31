@@ -29,6 +29,10 @@ interface TableLoaderOverlayProps {
   visible: boolean
   liveReady: boolean
   authorityReady: boolean
+  /** Подтверждение из /api/table/live: вы в списке живых за столом. */
+  seatConfirmed: boolean
+  /** Живых игроков на столе (до 10 в комнате). */
+  liveHumanCount: number
   hasPlayers: boolean
   hasCurrentUser: boolean
   isPcLayout: boolean
@@ -39,6 +43,8 @@ function TableLoaderOverlayInner({
   visible,
   liveReady,
   authorityReady,
+  seatConfirmed,
+  liveHumanCount,
   hasPlayers,
   hasCurrentUser,
   isPcLayout,
@@ -92,7 +98,12 @@ function TableLoaderOverlayInner({
       return
     }
     if (fadingOut) return
-    const allReady = hasPlayers && hasCurrentUser && liveReady && authorityReady
+    const allReady =
+      hasPlayers &&
+      hasCurrentUser &&
+      liveReady &&
+      authorityReady &&
+      seatConfirmed
     if (!allReady) return
 
     const elapsed = Date.now() - startedAtRef.current
@@ -112,14 +123,14 @@ function TableLoaderOverlayInner({
       return () => clearTimeout(t)
     }
     startFade()
-  }, [visible, fadingOut, hasPlayers, hasCurrentUser, liveReady, authorityReady, onDone])
+  }, [visible, fadingOut, hasPlayers, hasCurrentUser, liveReady, authorityReady, seatConfirmed, onDone])
 
   if (!visible && !fadingOut) return null
 
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[200] isolate flex flex-col overflow-y-auto bg-slate-950 px-4 py-8 backdrop-blur-sm",
+        "fixed inset-0 z-[200] isolate flex flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain bg-slate-950 px-4 py-8 backdrop-blur-sm [scrollbar-gutter:stable]",
         fadingOut && "loader-fade-out",
       )}
       onAnimationEnd={() => {
@@ -223,9 +234,9 @@ function TableLoaderOverlayInner({
             </span>
           ))}
         </div>
-        <div className="relative h-2.5 overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-slate-600/50 sm:h-3">
+        <div className="relative h-2.5 shrink-0 overflow-hidden rounded-full bg-slate-800/90 ring-1 ring-slate-600/50 sm:h-3">
           <div
-            className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-300 ease-out"
+            className="relative h-full overflow-hidden rounded-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)] transition-[width] duration-200 ease-linear will-change-[width]"
             style={{ width: `${progress}%` }}
           >
             {progress >= 70 && progress < 100 && (
@@ -236,13 +247,30 @@ function TableLoaderOverlayInner({
             )}
           </div>
         </div>
-        <p className="mt-2 flex items-center justify-center gap-2 text-center text-[11px] font-semibold tabular-nums text-slate-400 sm:text-xs">
+        <div className="mt-2 min-h-[4.75rem] text-center text-[11px] font-semibold leading-snug text-slate-400 sm:min-h-[5rem] sm:text-xs">
+          <span className="flex items-center justify-center gap-2 tabular-nums">
+            <span
+              className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500/20 border-t-amber-400"
+              aria-hidden
+            />
+            {!seatConfirmed
+              ? "Ищем стол и место среди живых игроков…"
+              : !authorityReady
+                ? "Синхронизируем раунд и стол…"
+                : "Почти готово…"}{" "}
+            {progress}%
+          </span>
+          {/* Фиксированная высота второй строки — без скачка при появлении «Живых…» */}
           <span
-            className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-amber-500/20 border-t-amber-400"
-            aria-hidden
-          />
-          Подбираем стол… {progress}%
-        </p>
+            className={cn(
+              "mt-1.5 block text-[10px] font-medium leading-snug text-slate-500 sm:mt-2 sm:text-[11px]",
+              (!seatConfirmed || liveHumanCount <= 0) && "invisible",
+            )}
+            aria-hidden={!seatConfirmed || liveHumanCount <= 0}
+          >
+            Живых за столом: {liveHumanCount} / 10 — боты подставляются, пока не наберётся компания
+          </span>
+        </div>
       </div>
     </div>
   )

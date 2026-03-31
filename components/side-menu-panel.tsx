@@ -13,7 +13,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Menu,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { GameAction } from "@/lib/game-types"
 
@@ -54,7 +61,7 @@ function SideMenuPanelInner({
   currentUserId,
   dispatch,
   onOpenBottleCatalog,
-  onChangeTable,
+  onChangeTable: _onChangeTable,
   onExtraSpin,
   onPause,
   onOpenChatList,
@@ -182,15 +189,44 @@ function SideMenuPanelInner({
           </button>
         )}
 
-        <button onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "rating" })} className={sideBtnClass} style={darkBtnStyle}>
-          <Trophy className="h-4 w-4" style={{ color: "#e8c06a" }} />
-          <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Рейтинг"}</span>
-        </button>
-
-        <button onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })} className={sideBtnClass} style={darkBtnStyle}>
-          <Star className="h-4 w-4" style={{ color: "#e8c06a" }} />
-          <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Избранное"}</span>
-        </button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={sideBtnClass} style={darkBtnStyle}>
+              <Menu className="h-4 w-4" style={{ color: "#e8c06a" }} />
+              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Меню"}</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="right"
+            align="start"
+            sideOffset={8}
+            className="z-[200] min-w-[13rem] border-slate-600 bg-slate-950/98 p-1 text-slate-100 shadow-xl"
+          >
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+              onSelect={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "rating" })}
+            >
+              <Trophy className="h-4 w-4 shrink-0 text-amber-300" />
+              Рейтинг
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+              onSelect={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "favorites" })}
+            >
+              <Star className="h-4 w-4 shrink-0 text-amber-300" />
+              Избранное
+            </DropdownMenuItem>
+            {currentUserId ? (
+              <DropdownMenuItem
+                className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+                onSelect={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "daily" })}
+              >
+                <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
+                Ежедневные задачи
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="lg:hidden w-full">
           <button onClick={onOpenChatList} className={`${sideBtnClass} w-full justify-start`} style={darkBtnStyle}>
@@ -198,13 +234,6 @@ function SideMenuPanelInner({
             <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
           </button>
         </div>
-
-        {currentUserId && (
-          <button onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "daily" })} className={sideBtnClass} style={darkBtnStyle}>
-            <Sparkles className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Ежедневные задачи"}</span>
-          </button>
-        )}
 
         <div
           className={"flex items-center gap-1.5 rounded-[999px] px-3 py-2 min-h-[40px]" + (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2" : "")}

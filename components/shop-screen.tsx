@@ -1,14 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
-import {
-  ArrowRightLeft,
-  CalendarDays,
-  Coins,
-  Flower2,
-  Heart,
-  Sparkles,
-} from "lucide-react"
+import { ArrowRightLeft, Coins, Flower2, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { generateLogId, useGame } from "@/lib/game-context"
@@ -103,7 +96,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const currentPlayer = currentUser ? players.find((p) => p.id === currentUser.id) : undefined
   const vipUntilTs = currentPlayer?.vipUntilTs
   const isVip = !!currentPlayer?.isVip && (vipUntilTs == null || vipUntilTs > Date.now())
-  const vipLeftDays = vipUntilTs ? Math.max(0, Math.ceil((vipUntilTs - Date.now()) / (24 * 60 * 60 * 1000))) : null
   const vipTrialKey = currentUser ? `spindate_vip_trial_used_${currentUser.id}` : ""
   const [vipTrialUsed, setVipTrialUsed] = useState(false)
   const vipLevelKey = currentUser ? `spindate_vip_level_v1_${currentUser.id}` : ""
@@ -410,11 +402,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
 
   const goldCard =
     "rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 shadow-[0_10px_26px_rgba(15,23,42,0.16),inset_0_1px_0_rgba(255,255,255,0.85)]"
-  const goldInset = "rounded-2xl border border-slate-200/85 bg-gradient-to-b from-slate-50 to-white shadow-[0_4px_12px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.8)]"
-  /** Подписи к пакетам: первые два — «мешочек», дальше — «мешков». */
-  const packTitle = (hearts: number) => {
-    return `${hearts.toLocaleString("ru-RU")} сердец`
-  }
 
   /** Контраст текста зависит от фона: в panel (material) — темнее, в page (тёмный фон) — светлее. */
   const secLabel = isPanel ? "text-slate-500" : "text-slate-500"

@@ -196,7 +196,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     const maleFriends = admirersResolved.filter((p) => p.gender === "male").length
     const femaleFriends = admirersResolved.filter((p) => p.gender === "female").length
     const helloCount = sentLogs.filter((e) => e.type === "chat" && /привет/i.test(e.text)).length
-    const beerOrCocktailSent = countSent("beer") + countSent("cocktail")
     const roseOnValentine = (rosesGiven ?? []).filter((r) => {
       if (r.fromPlayerId !== uid) return false
       const d = new Date(r.timestamp)
@@ -422,10 +421,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const isPanel = variant === "panel"
-  const closePanel = () => {
-    if (isPanel && onClose) onClose()
-    else dispatch({ type: "SET_SCREEN", screen: "game" })
-  }
 
   const handleInviteFriends = async () => {
     const ok = await vkBridge.inviteFriends()
@@ -655,28 +650,20 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               placeholder="Ищу тебя"
               autoComplete="off"
             />
-            <Button
+            <button
+              type="button"
               onClick={handleSaveStatus}
               disabled={!canSaveStatus}
-              className="h-14 w-full shrink-0 rounded-[1.85rem] px-8 text-[15px] font-black disabled:!opacity-100 sm:w-auto"
-              style={
+              title={canSaveStatus ? "Сохранить статус" : "Нет изменений для сохранения"}
+              className={cn(
+                "h-14 w-full shrink-0 rounded-[1.85rem] px-8 text-[15px] font-black transition-[transform,filter,box-shadow,opacity,background-color] sm:min-w-[5.5rem] sm:w-auto",
                 canSaveStatus
-                  ? {
-                      background: "#475569",
-                      color: "#e2e8f0",
-                      border: "1px solid rgba(100,116,139,0.9)",
-                      boxShadow: "none",
-                    }
-                  : {
-                      background: "#64748b",
-                      color: "#e2e8f0",
-                      border: "1px solid rgba(148,163,184,0.65)",
-                      boxShadow: "none",
-                    }
-              }
+                  ? "cursor-pointer border-2 border-sky-700/90 bg-gradient-to-b from-sky-400 via-sky-500 to-blue-700 text-white shadow-[0_5px_0_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110 hover:shadow-[0_6px_0_rgba(15,23,42,0.42)] active:translate-y-[3px] active:shadow-[0_2px_0_rgba(15,23,42,0.38)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-400/45"
+                  : "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 shadow-none opacity-75",
+              )}
             >
               ОК
-            </Button>
+            </button>
             <button
               type="button"
               onClick={handleClearStatus}

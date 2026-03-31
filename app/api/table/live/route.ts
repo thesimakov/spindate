@@ -29,6 +29,10 @@ function parsePlayer(raw: unknown): Player | null {
   const purpose = p.purpose === "relationships" || p.purpose === "communication" || p.purpose === "love"
     ? p.purpose
     : "communication"
+  const status =
+    typeof p.status === "string" && p.status.trim()
+      ? p.status.trim().slice(0, 15)
+      : undefined
   const authUserId = typeof p.authUserId === "string" && p.authUserId.trim() ? p.authUserId.trim() : undefined
   const vkUserIdRaw = Number(p.vkUserId)
   const vkUserId = Number.isInteger(vkUserIdRaw) && vkUserIdRaw > 0 ? vkUserIdRaw : undefined
@@ -48,6 +52,7 @@ function parsePlayer(raw: unknown): Player | null {
     interests: typeof p.interests === "string" ? p.interests : undefined,
     zodiac: typeof p.zodiac === "string" ? p.zodiac : undefined,
     isVip: typeof p.isVip === "boolean" ? p.isVip : undefined,
+    status,
     authUserId,
     vkUserId,
     isBot: false,

@@ -41,6 +41,10 @@ export interface SyncEngineResult {
   fetchTableAuthority: (tid: number) => Promise<void>
   tableLiveReady: boolean
   tableAuthorityReady: boolean
+  /** Сервер подтвердил, что вы в списке живых за столом (ответ /api/table/live). */
+  seatConfirmed: boolean
+  /** Сколько живых игроков на столе по последнему успешному live-ответу. */
+  liveHumanCount: number
 }
 
 export function useSyncEngine(): SyncEngineResult {
@@ -132,33 +136,66 @@ export function useSyncEngine(): SyncEngineResult {
 
   const [tableLiveReady, setTableLiveReady] = useState(false)
   const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
+  const [seatConfirmed, setSeatConfirmed] = useState(false)
+  const [liveHumanCount, setLiveHumanCount] = useState(0)
+
+  /** Краткая задержка перед сбросом «места», чтобы не мигало при редком ответе без seated */
+  const loseSeatDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const LOSE_SEAT_DEBOUNCE_MS = 380
 
   useEffect(() => {
+    if (loseSeatDebounceRef.current) {
+      clearTimeout(loseSeatDebounceRef.current)
+      loseSeatDebounceRef.current = null
+    }
     setTableLiveReady(false)
     setTableAuthorityReady(false)
+    setSeatConfirmed(false)
+    setLiveHumanCount(0)
   }, [currentUser?.id])
+
+  useEffect(() => {
+    if (tablePaused) {
+      if (loseSeatDebounceRef.current) {
+        clearTimeout(loseSeatDebounceRef.current)
+        loseSeatDebounceRef.current = null
+      }
+      setSeatConfirmed(false)
+      setTableLiveReady(false)
+    }
+  }, [tablePaused])
 
   const fetchTableAuthority = useCallback(
     async (tid: number) => {
       const since = lastAuthorityRevisionRef.current
-      try {
-        const res = await apiFetch("/api/table/state", {
-          method: "POST",
-          cache: "no-store" as RequestCache,
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ tableId: tid, sinceRevision: since }),
-        })
-        const data = await res.json().catch(() => null)
-        if (!res.ok || !data?.ok || !data.snapshot) return
-        const snap = data.snapshot as TableAuthorityPayload
-        if (snap.revision > since) {
-          applyAuthoritySnapshot(snap)
+      const maxAttempts = 12
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const res = await apiFetch("/api/table/state", {
+            method: "POST",
+            cache: "no-store" as RequestCache,
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ tableId: tid, sinceRevision: since }),
+          })
+          const data = await res.json().catch(() => null)
+          if (res.ok && data?.ok && data.snapshot) {
+            const snap = data.snapshot as TableAuthorityPayload
+            if (snap.revision > since) {
+              applyAuthoritySnapshot(snap)
+            }
+            setTableAuthorityReady(true)
+            return
+          }
+        } catch {
+          // retry
         }
-        setTableAuthorityReady(true)
-      } catch {
-        setTableAuthorityReady(true)
+        if (attempt < maxAttempts - 1) {
+          await new Promise((r) => setTimeout(r, 80 + attempt * 40))
+        }
       }
+      // Не блокируем вход навсегла: следующий poll подтянет снимок.
+      setTableAuthorityReady(true)
     },
     [applyAuthoritySnapshot],
   )
@@ -204,6 +241,23 @@ export function useSyncEngine(): SyncEngineResult {
         const data = await res.json().catch(() => null)
         if (!res.ok || !data?.ok || !Array.isArray(data.livePlayers)) return null
         const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
+        const seated = livePlayers.some((p: Player) => p.id === currentUser.id)
+        if (!seated) {
+          if (!loseSeatDebounceRef.current) {
+            loseSeatDebounceRef.current = setTimeout(() => {
+              loseSeatDebounceRef.current = null
+              setSeatConfirmed(false)
+              setTableLiveReady(false)
+            }, LOSE_SEAT_DEBOUNCE_MS)
+          }
+          return null
+        }
+        if (loseSeatDebounceRef.current) {
+          clearTimeout(loseSeatDebounceRef.current)
+          loseSeatDebounceRef.current = null
+        }
+        setSeatConfirmed(true)
+        setLiveHumanCount(livePlayers.length)
         const nextPlayers = composePlayersFromLive(livePlayers)
         const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
         const tableActuallyChanged = nextTableId !== currentTableId
@@ -220,7 +274,6 @@ export function useSyncEngine(): SyncEngineResult {
         setTableLiveReady(true)
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
-        setTableLiveReady(true)
         return null
       }
     },
@@ -264,6 +317,15 @@ export function useSyncEngine(): SyncEngineResult {
       document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [currentUser, syncLiveTable, tablePaused])
+
+  /** Пока сервер не подтвердил место за столом — чаще повторяем join (стол собирается в фоне лоадера). */
+  useEffect(() => {
+    if (!currentUser || tablePaused || seatConfirmed) return
+    const id = window.setInterval(() => {
+      void syncLiveTable("join")
+    }, 2000)
+    return () => void clearInterval(id)
+  }, [currentUser, tablePaused, seatConfirmed, syncLiveTable])
 
   // Authority polling: every 800ms
   useEffect(() => {
@@ -325,5 +387,7 @@ export function useSyncEngine(): SyncEngineResult {
     fetchTableAuthority,
     tableLiveReady,
     tableAuthorityReady,
-  }), [dispatch, syncLiveTable, fetchTableAuthority, tableLiveReady, tableAuthorityReady])
+    seatConfirmed,
+    liveHumanCount,
+  }), [dispatch, syncLiveTable, fetchTableAuthority, tableLiveReady, tableAuthorityReady, seatConfirmed, liveHumanCount])
 }

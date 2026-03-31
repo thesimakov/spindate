@@ -219,15 +219,15 @@
       font-size: 0.85rem;
     }
   }
-  /* Мелкий бейдж цены в кнопках эмоций / меню */
+  /* Бейдж цены в кнопках эмоций — читаемее число + ❤ */
   .heart-price--badge {
-    font-size: 0.625rem;
+    font-size: 0.8125rem;
     font-weight: 900;
-    gap: 0.125rem;
+    gap: 0.2rem;
   }
   @media (min-width: 640px) {
     .heart-price--badge {
-      font-size: 0.6875rem;
+      font-size: 0.9375rem;
     }
   }
   .heart-price__icon {
@@ -524,13 +524,18 @@
   animation: app-loader-shimmer 1.5s ease-in-out infinite;
 }
 
+/* Только opacity — без scale, чтобы не было визуального «прыжка» и сдвига подложки */
 @keyframes loaderFadeOut {
-  0% { opacity: 1; transform: scale(1); }
-  70% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.02); pointer-events: none; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 .loader-fade-out {
-  animation: loaderFadeOut 0.6s ease-out forwards;
+  animation: loaderFadeOut 0.55s ease-out forwards;
+  pointer-events: none;
 }
 
 @keyframes loaderParticleBurst {
