@@ -32,7 +32,7 @@ interface SideMenuPanelProps {
   currentUserId: number | undefined
   dispatch: (action: GameAction) => void
   onOpenBottleCatalog: () => void
-  onChangeTable: () => void
+  onChangeTable?: () => void
   onExtraSpin: () => void
   onPause: () => void
   onOpenChatList: () => void
@@ -173,11 +173,6 @@ function SideMenuPanelInner({
           {cooldownLeftMs > 0 && (
             <span className={"ml-auto text-xs font-semibold " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")} style={{ color: "#e8c06a" }}>{formatCooldown(cooldownLeftMs)}</span>
           )}
-        </button>
-
-        <button onClick={onChangeTable} className={sideBtnClass} style={darkBtnStyle}>
-          <RotateCw className="h-4 w-4" style={{ color: "#e8c06a" }} />
-          <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
         </button>
 
         {currentUserId && (

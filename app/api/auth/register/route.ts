@@ -50,11 +50,11 @@ export async function POST(req: Request) {
     // ignore
   }
 
-  const avatarUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
+  const avatarUrl = gender === "female" ? "/assets/avatar-female.svg" : "/assets/avatar-male.svg"
   const profileDisplayName = displayName.length > 0 ? displayName : username
   db.prepare(
-    `INSERT INTO player_profiles (user_id, display_name, avatar_url, gender, age, purpose, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO player_profiles (user_id, display_name, avatar_url, status, gender, age, purpose, created_at, updated_at)
+     VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)`,
   ).run(userId, profileDisplayName, avatarUrl, gender, ageNum, purpose, now, now)
 
   db.prepare(
@@ -84,6 +84,7 @@ export async function POST(req: Request) {
       gender,
       age: ageNum,
       purpose,
+      status: "",
     },
     voiceBalance: 150,
     inventory: [],

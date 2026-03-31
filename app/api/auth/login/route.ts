@@ -35,17 +35,19 @@ export async function POST(req: Request) {
 
   const profile = db
     .prepare(
-      `SELECT display_name, avatar_url, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
+      `SELECT display_name, avatar_url, status, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
     )
     .get(user.id) as
-    | { display_name: string; avatar_url: string; gender: string; age: number; purpose: string }
+    | { display_name: string; avatar_url: string; status: string; gender: string; age: number; purpose: string }
     | undefined
 
   const displayName = profile?.display_name ?? username
-  const avatarUrl = profile?.avatar_url || `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
-  const gender = profile?.gender ?? "male"
+  const gender = profile?.gender === "female" ? "female" : "male"
+  const avatarUrl =
+    profile?.avatar_url || (gender === "female" ? "/assets/avatar-female.svg" : "/assets/avatar-male.svg")
   const age = profile?.age ?? 25
   const purpose = profile?.purpose ?? "communication"
+  const status = profile?.status ?? ""
 
   const gameStateRow = db
     .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
       gender,
       age,
       purpose,
+      status,
     },
     voiceBalance,
     inventory,

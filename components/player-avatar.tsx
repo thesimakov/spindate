@@ -68,6 +68,8 @@ interface PlayerAvatarProps {
   bigGiftSequence?: AvatarBigGiftType[]
   /** Рамка на аватарке (подаренная) — отображается на столе */
   frameId?: string
+  /** Скрыть бейдж с именем под аватаркой (например, в предпросмотре) */
+  hideNameLabel?: boolean
   /** Игрок сейчас в мини-игре «Угадай-ка» — показывать статус «в игре» */
   inGame?: boolean
   /** Не крутил бутылочку 3+ хода — показывать «уснул» (zzz из центра аватарки) */
@@ -79,6 +81,8 @@ interface PlayerAvatarProps {
    * подпись имени не смещает геометрию круга (иначе слоты «плывут»).
    */
   tableRingLayout?: boolean
+  /** Показывать иконку статуса рядом с аватаркой (для игрового стола) */
+  showStatusBadge?: boolean
 }
 
 export function PlayerAvatar({
@@ -91,10 +95,12 @@ export function PlayerAvatar({
   giftIcons,
   bigGiftSequence,
   frameId,
+  hideNameLabel = false,
   inGame = false,
   showAsleep = false,
   size: sizeProp,
   tableRingLayout = false,
+  showStatusBadge = false,
 }: PlayerAvatarProps) {
   const frameStyle = frameId && frameId !== "none" ? FRAME_STYLES[frameId] ?? FRAME_STYLES.none : null
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
@@ -105,6 +111,7 @@ export function PlayerAvatar({
   const outerSize = size + borderSize * 2 + 4
   const effectiveCompact = size <= 52
   const isVip = !!player.isVip && (player.vipUntilTs == null || player.vipUntilTs > Date.now())
+  const statusText = (player.status ?? "").trim().slice(0, 15)
 
   const filteredSmallGifts = (giftIcons ?? []).filter(
     (icon) => icon !== "flowers" && icon !== "diamond" && icon !== "song",
@@ -447,6 +454,32 @@ export function PlayerAvatar({
           </div>
         )}
 
+        {/* Status badge: иконка сбоку, по hover раскрывается текст статуса */}
+        {showStatusBadge && statusText.length > 0 && !isTarget && (
+          <div
+            className="group absolute z-[12]"
+            style={{
+              right: effectiveCompact ? -8 : -10,
+              top: "50%",
+              transform: "translateY(-50%)",
+            }}
+          >
+            <div
+              className="flex h-5 w-5 items-center justify-center rounded-full border border-sky-300/60 bg-sky-500/90 text-white shadow-[0_2px_8px_rgba(14,165,233,0.45)]"
+              aria-label={`Статус: ${statusText}`}
+              title={statusText}
+            >
+              <span className="text-[10px] leading-none">💬</span>
+            </div>
+            <div
+              className="pointer-events-none absolute right-6 top-1/2 max-w-0 -translate-y-1/2 overflow-hidden whitespace-nowrap rounded-full border border-sky-200/60 bg-slate-900/95 px-0 py-0 text-[10px] font-bold text-sky-100 opacity-0 shadow-[0_6px_16px_rgba(2,6,23,0.55)] transition-all duration-200 group-hover:max-w-[140px] group-hover:px-2.5 group-hover:py-1 group-hover:opacity-100"
+              aria-hidden
+            >
+              {statusText}
+            </div>
+          </div>
+        )}
+
         {/* Kiss counter (top-left); на мобильной компактнее, чтобы не перегружать */}
         {typeof kissCount === "number" && kissCount > 0 && !isTarget && (
           <div
@@ -569,7 +602,7 @@ export function PlayerAvatar({
         )}
       </div>
 
-      {tableRingLayout ? (
+      {!hideNameLabel && tableRingLayout ? (
         <div className={belowAvatarWrapClass}>
           {/* Name label — под аватаркой, вне потока позиционирования кольца */}
           <div
@@ -618,28 +651,29 @@ export function PlayerAvatar({
         </div>
       ) : (
         <>
-          {/* Name label - dark badge style; на мобильной (compact) шире, чтобы имя не обрезалось */}
-          <div
-            className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.24)",
-              minWidth: effectiveCompact ? 50 : 64,
-              maxWidth: effectiveCompact ? 96 : 96,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-            }}
-          >
-            <span
-              className="block w-full truncate text-center font-semibold leading-tight"
+          {!hideNameLabel && (
+            <div
+              className="flex items-center justify-center rounded-full px-2 py-0.5 sm:px-3"
               style={{
-                fontSize: effectiveCompact ? 10 : 12,
-                color: "#f8fafc",
-                textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                background: "linear-gradient(135deg, rgba(15,23,42,0.92) 0%, rgba(2,6,23,0.92) 100%)",
+                border: "1px solid rgba(56,189,248,0.24)",
+                minWidth: effectiveCompact ? 50 : 64,
+                maxWidth: effectiveCompact ? 96 : 96,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
               }}
             >
-              {player.name}
-            </span>
-          </div>
+              <span
+                className="block w-full truncate text-center font-semibold leading-tight"
+                style={{
+                  fontSize: effectiveCompact ? 10 : 12,
+                  color: "#f8fafc",
+                  textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                }}
+              >
+                {player.name}
+              </span>
+            </div>
+          )}
 
           {isPredictionTarget && (
             <div

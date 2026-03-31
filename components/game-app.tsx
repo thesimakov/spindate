@@ -19,6 +19,7 @@ import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { PlayerChatPanel } from "@/components/player-chat-panel"
 import { PmNotificationToasts } from "@/components/pm-notification-toast"
 import { RatingLeaderboardBody } from "@/components/rating-screen"
+import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
 
 /** Задержка после готовности стола, чтобы интерфейс успел стабилизироваться */
 const NORMALIZE_DELAY_MS = 200
@@ -197,6 +198,7 @@ export function GameApp() {
       return (
         <>
           <GameRoom />
+          <ZeroBalanceDialog />
           {showLayoutDebugOverlay && layoutDebugSnapshot && (
             <div className="fixed bottom-2 left-2 z-[110] w-[min(92vw,26rem)] rounded-xl border border-cyan-300/50 bg-slate-950/90 p-2 font-mono text-[11px] leading-tight text-cyan-100 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
               <div className="mb-1 flex items-center justify-between gap-2">

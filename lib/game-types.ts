@@ -26,6 +26,8 @@ export interface Player {
   interests?: string
   /** Знак зодиака */
   zodiac?: string
+  /** Короткий статус игрока (до 15 символов) */
+  status?: string
 }
 
 export interface ChatMessage {
@@ -188,20 +190,20 @@ export interface PairAction {
 export const PAIR_ACTIONS: PairAction[] = [
   // M+F
   { id: "kiss",    label: "Поцеловать",         icon: "kiss",     cost: 1, combo: ["MF"] },
+  // F+F (сразу после MF-блока — порядок для FF: сладкое → цветы → помада)
+  { id: "cocktail", label: "Сладкое",           icon: "cocktail", cost: 1, combo: ["FF"] },
   { id: "flowers", label: "Цветы",              icon: "flowers",  cost: 1, combo: ["MF", "FF"] },
   { id: "diamond", label: "Бриллианты",         icon: "diamond",  cost: 3, combo: ["MF"] },
   // M+M
-  { id: "beer",    label: "Выпить пива",        icon: "beer",     cost: 1, combo: ["MM"] },
+  { id: "beer",    label: "По квасику",         icon: "beer",     cost: 1, combo: ["MM"] },
   { id: "banya",   label: "Банька",             icon: "banya",    cost: 1, combo: ["MM"] },
   { id: "tools",   label: "Инструменты",        icon: "tools",    cost: 2, combo: ["MM"] },
-  // F+F
   { id: "lipstick", label: "Губная помада",     icon: "lipstick", cost: 1, combo: ["FF"] },
-  { id: "cocktail", label: "Коктейль",          icon: "cocktail", cost: 1, combo: ["FF"] },
   // Universal
   { id: "skip",    label: "Пропустить",         icon: "skip",     cost: 0,  combo: ["MM", "MF", "FF"] },
 ]
 
-export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily" | "player-chat"
+export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily" | "fortune-wheel" | "player-chat"
 
 /** Сколько последних записей лога стола храним на клиенте (эмоции с дневным лимитом считаются отдельно). */
 export const GAME_TABLE_LOG_MAX_ENTRIES = 400
@@ -316,6 +318,7 @@ export type GameAction =
   | { type: "CLEAR_USER" }
   | { type: "UPDATE_USER_NAME"; playerId: number; name: string }
   | { type: "UPDATE_USER_AVATAR"; playerId: number; avatar: string }
+  | { type: "UPDATE_USER_STATUS"; playerId: number; status: string }
   | { type: "ADD_DRUNK_TIME"; playerId: number; ms: number }
   | { type: "SET_PLAYERS"; players: Player[] }
   | { type: "SET_TABLE_ID"; tableId: number }

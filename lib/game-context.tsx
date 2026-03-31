@@ -92,6 +92,8 @@ const initialState: GameState = {
 }
 
 const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
+const AVATAR_FRAME_LS_KEY = (userId: number) => `spindate_avatar_frame_v1_${userId}`
+const BOTTLE_SKIN_LS_KEY = (userId: number) => `spindate_bottle_skin_v1_${userId}`
 
 function parseAdmirersFromStorage(raw: string): Player[] {
   try {
@@ -264,15 +266,33 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case "SET_USER": {
       let admirers: Player[] = []
+      let restoredFrameId: string | null = null
+      let restoredBottleSkin: GameState["bottleSkin"] | null = null
       try {
         if (typeof window !== "undefined") {
           const raw = window.localStorage.getItem(ADMIRERS_LS_KEY(action.user.id))
           if (raw) admirers = parseAdmirersFromStorage(raw)
+          const savedFrame = window.localStorage.getItem(AVATAR_FRAME_LS_KEY(action.user.id))
+          if (savedFrame && savedFrame !== "none") restoredFrameId = savedFrame
+          const savedBottle = window.localStorage.getItem(BOTTLE_SKIN_LS_KEY(action.user.id)) as GameState["bottleSkin"] | null
+          if (savedBottle) restoredBottleSkin = savedBottle
         }
       } catch {
         admirers = []
       }
-      return { ...state, currentUser: action.user, admirers }
+      const nextFrames = { ...(state.avatarFrames ?? {}) }
+      if (restoredFrameId) nextFrames[action.user.id] = restoredFrameId
+      const nextOwnedBottleSkins = Array.from(
+        new Set([...(state.ownedBottleSkins ?? ["classic"]), restoredBottleSkin ?? "classic"]),
+      )
+      return {
+        ...state,
+        currentUser: action.user,
+        admirers,
+        avatarFrames: nextFrames,
+        bottleSkin: restoredBottleSkin ?? state.bottleSkin,
+        ownedBottleSkins: nextOwnedBottleSkins,
+      }
     }
     case "CLEAR_USER":
       return {
@@ -316,6 +336,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           : state.currentUser
       return { ...state, players: updatedPlayers, currentUser: updatedUser }
     }
+    case "UPDATE_USER_STATUS": {
+      const nextStatus = action.status.trim().slice(0, 15)
+      const updatedPlayers = state.players.map((p) =>
+        p.id === action.playerId ? { ...p, status: nextStatus } : p,
+      )
+      const updatedUser =
+        state.currentUser && state.currentUser.id === action.playerId
+          ? { ...state.currentUser, status: nextStatus }
+          : state.currentUser
+      return { ...state, players: updatedPlayers, currentUser: updatedUser }
+    }
     case "SET_PLAYERS": {
       // Синхронизация комнаты: если текущий пользователь по каким-то причинам
       // отсутствует в приходящем списке игроков, добавляем его обратно.
@@ -346,6 +377,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         nextPlayers = [state.currentUser, ...nextPlayers]
       }
 
+      const existingById = new Map(state.players.map((p) => [p.id, p]))
+      nextPlayers = nextPlayers.map((p) => {
+        const prev = existingById.get(p.id)
+        const currentStatus = state.currentUser?.id === p.id ? state.currentUser.status : undefined
+        return {
+          ...p,
+          status: p.status ?? currentStatus ?? prev?.status,
+        }
+      })
+
       const current = state.players[state.currentTurnIndex]
       let nextIndex = 0
       if (current) {
@@ -372,7 +413,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // похожее на уже активную комнату.
       {
         const now = Date.now()
-        const nextPlayers = action.players
+        const nextPlayersRaw = action.players
+        const existingById = new Map(state.players.map((p) => [p.id, p]))
+        const nextPlayers = nextPlayersRaw.map((p) => {
+          const prev = existingById.get(p.id)
+          const currentStatus = state.currentUser?.id === p.id ? state.currentUser.status : undefined
+          return {
+            ...p,
+            status: p.status ?? currentStatus ?? prev?.status,
+          }
+        })
         const spinnerIdx = nextPlayers.length > 0 ? Math.floor(Math.random() * nextPlayers.length) : 0
         const spinner = nextPlayers[spinnerIdx]
         const others = spinner ? nextPlayers.filter((p) => p.id !== spinner.id) : []
@@ -815,10 +865,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, inventory: [...rest, ...rosesLeft] }
     }
     case "CLAIM_WELCOME_GIFT": {
-      return {
-        ...state,
-        voiceBalance: state.voiceBalance + 150,
-      }
+      /* Раньше: +150 за первый вход. Награды теперь через ежедневную серию в DailyStreakBonusDialog. */
+      return { ...state }
     }
     case "UGADAIKA_ADD_ROUND_WON": {
       const uid = state.currentUser?.id
@@ -862,6 +910,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "CLOSE_PLAYER_MENU":
       return { ...state, playerMenuTarget: null }
     case "SET_AVATAR_FRAME": {
+      try {
+        if (typeof window !== "undefined" && state.currentUser?.id === action.playerId) {
+          if (action.frameId === "none") window.localStorage.removeItem(AVATAR_FRAME_LS_KEY(action.playerId))
+          else window.localStorage.setItem(AVATAR_FRAME_LS_KEY(action.playerId), action.frameId)
+        }
+      } catch {
+        // ignore
+      }
       const next = { ...(state.avatarFrames ?? {}), [action.playerId]: action.frameId }
       if (action.frameId === "none") {
         const { [action.playerId]: _, ...rest } = next
@@ -904,6 +960,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     // ---- Bottle skin ----
     case "SET_BOTTLE_SKIN":
+      try {
+        if (typeof window !== "undefined" && state.currentUser?.id != null) {
+          window.localStorage.setItem(BOTTLE_SKIN_LS_KEY(state.currentUser.id), action.skin)
+        }
+      } catch {
+        // ignore
+      }
       return {
         ...state,
         bottleSkin: action.skin,
@@ -940,14 +1003,24 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       const keepLocalAngle = state.isSpinning && !p.isSpinning
+      const localById = new Map(state.players.map((pl) => [pl.id, pl]))
+      const mergedPlayers = p.players.map((pl) => {
+        const prev = localById.get(pl.id)
+        const currentStatus = state.currentUser?.id === pl.id ? state.currentUser.status : undefined
+        return {
+          ...pl,
+          status: pl.status ?? currentStatus ?? prev?.status,
+        }
+      })
+
       return {
         ...state,
-        players: p.players,
+        players: mergedPlayers,
         currentTurnIndex: p.currentTurnIndex,
         isSpinning: p.isSpinning,
         countdown: p.countdown,
         bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,
-        bottleSkin: p.bottleSkin ?? "classic",
+        bottleSkin: p.bottleSkin ?? state.bottleSkin ?? "classic",
         bottleDonorId: p.bottleDonorId,
         bottleDonorName: p.bottleDonorName,
         targetPlayer: p.targetPlayer,

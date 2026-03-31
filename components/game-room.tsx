@@ -35,16 +35,21 @@ import {
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
-import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS } from "@/lib/assets"
+import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
 import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
-import { WelcomeGiftDialog } from "@/components/welcome-gift-dialog"
+import { DailyStreakBonusDialog } from "@/components/daily-streak-bonus-dialog"
+import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
+import { BankHeartBalanceTooltip } from "@/components/bank-heart-balance-tooltip"
+import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
+import { useBankPassive } from "@/hooks/use-bank-passive"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { composeTablePlayers } from "@/lib/table-composition"
@@ -55,7 +60,9 @@ import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FlyingEmojisLayer } from "@/components/flying-emojis-layer"
 import { BottleCenter } from "@/components/bottle-center"
 import { TurnTimerDisplay } from "@/components/turn-timer-display"
-import { GameBoardPlayers } from "@/components/game-board-players"
+import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
+import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
+import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -90,6 +97,15 @@ const DAILY_EMOTION_LIMIT = 50
 /** Покупка доп. лимита по выбранным типам: +50 использований за 10 ❤ на тип. */
 const EMOTION_QUOTA_PURCHASE_AMOUNT = 50
 const EMOTION_QUOTA_COST_PER_TYPE_HEARTS = 10
+const EMOTION_GIFT_IMAGE_FRAMES = 16
+
+function nextEmotionGiftFrameNum(current: number): number {
+  return (current % EMOTION_GIFT_IMAGE_FRAMES) + 1
+}
+
+function emotionGiftFrameSrc(frameNum: number): string {
+  return publicUrl(`/${String(frameNum).padStart(3, "0")}.webp`)
+}
 
 function getTodayDateKey(): string {
   const d = new Date()
@@ -366,7 +382,7 @@ function renderActionIcon(action: PairAction): React.ReactNode {
     case "laugh":
       return <span className="text-base">{"😂"}</span>
     case "cocktail":
-      return <span className="text-base">{"🍹"}</span>
+      return <span className="text-base">{"🍬"}</span>
     case "skip":
       return <ArrowRight className="h-4 w-4" />
     default:
@@ -484,6 +500,29 @@ export function GameRoom() {
 
   const { toast, showToast } = useInlineToast(2000)
 
+  const {
+    wheelTickets,
+    wheelRotationDeg,
+    wheelSpinning,
+    wheelLastRewardText,
+    freeChanceReady,
+    freeChanceCountdown,
+    handleSpinFortuneWheel,
+    handleSpinFreeChance,
+    handleBuyWheelTickets,
+  } = useFortuneWheel({
+    currentUser,
+    dispatch,
+    voiceBalance,
+    showToast,
+  })
+
+  useEffect(() => {
+    if (!FORTUNE_WHEEL_ENABLED && gameSidePanel === "fortune-wheel") {
+      dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })
+    }
+  }, [gameSidePanel, dispatch])
+
   // Рандомный бот периодически меняет себе рамку
   useEffect(() => {
     const bots = players.filter((p): p is Player => !!p.isBot)
@@ -585,6 +624,17 @@ export function GameRoom() {
   const [showWelcomeGift, setShowWelcomeGift] = useState(false)
   const [welcomeClaimedForSession, setWelcomeClaimedForSession] = useState(false)
 
+  const welcomeComplete = useMemo(() => {
+    if (!currentUser) return false
+    try {
+      const raw = localStorage.getItem(WELCOME_GIFT_KEY)
+      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+      return !!stored[String(currentUser.id)]
+    } catch {
+      return false
+    }
+  }, [currentUser?.id, welcomeClaimedForSession])
+
   useEffect(() => {
     if (!currentUser || tableLoading) return
     try {
@@ -605,22 +655,6 @@ export function GameRoom() {
       setShowWelcomeGift(true)
     }
   }, [currentUser?.id, currentUser?.authProvider, voiceBalance, tableLoading])
-
-  const handleClaimWelcomeGift = useCallback(() => {
-    dispatch({ type: "CLAIM_WELCOME_GIFT" })
-    if (currentUser) {
-      try {
-        const raw = localStorage.getItem(WELCOME_GIFT_KEY)
-        const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
-        stored[String(currentUser.id)] = true
-        localStorage.setItem(WELCOME_GIFT_KEY, JSON.stringify(stored))
-      } catch {
-        // ignore
-      }
-    }
-    setShowWelcomeGift(false)
-    setWelcomeClaimedForSession(true)
-  }, [dispatch, currentUser])
 
   // Daily bonus (client-only, saved in localStorage)
   const [, setDailyOpen] = useState(false)
@@ -657,13 +691,13 @@ export function GameRoom() {
       const streak = typeof parsed.streakDay === "number" ? parsed.streakDay : 0
 
       if (last === dailyBonusTodayKey) {
-        setDailyDay(Math.min(5, Math.max(1, streak || 1)))
+        setDailyDay(computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey))
         setDailyClaimedToday(true)
         setDailyOpen(false)
         return
       }
 
-      const nextDay = last === dailyBonusYesterdayKey ? Math.min(5, (streak || 0) + 1) : 1
+      const nextDay = computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey)
       setDailyDay(nextDay)
       setDailyClaimedToday(false)
       setDailyOpen(false)
@@ -674,30 +708,86 @@ export function GameRoom() {
     }
   }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession, tableLoading])
 
-  const _handleClaimDaily = useCallback(() => {
-    if (dailyClaimedToday) return
-    const reward = dailyDay // 1..5 как на макете
-    dispatch({ type: "PAY_VOICES", amount: -reward })
-    if (currentUser) {
+  const handleClaimStreakBonus = useCallback(() => {
+    if (dailyClaimedToday || !currentUser) return
+    const spec = getDailyStreakReward(dailyDay)
+    if (!spec) return
+    if (spec.kind === "hearts") {
+      dispatch({ type: "PAY_VOICES", amount: -spec.amount })
       dispatch({
         type: "ADD_LOG",
         entry: {
           id: generateLogId(),
           type: "system",
           fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: +${reward} сердец`,
+          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} сердец`,
+          timestamp: Date.now(),
+        },
+      })
+    } else if (spec.kind === "roses") {
+      const base = Date.now()
+      for (let i = 0; i < spec.amount; i++) {
+        dispatch({
+          type: "ADD_INVENTORY_ITEM",
+          item: {
+            type: "rose",
+            fromPlayerId: 0,
+            fromPlayerName: "Ежедневный бонус",
+            timestamp: base + i,
+          },
+        })
+      }
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentUser,
+          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} роз`,
+          timestamp: Date.now(),
+        },
+      })
+    } else {
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentUser,
+          text: `${currentUser.name} получил(а) ежедневный бонус: супер-рамка (награда будет начислена позже)`,
           timestamp: Date.now(),
         },
       })
     }
     try {
-      localStorage.setItem("botl_daily_bonus_v1", JSON.stringify({ lastClaimDate: dailyBonusTodayKey, streakDay: dailyDay }))
+      const raw = localStorage.getItem(WELCOME_GIFT_KEY)
+      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+      if (!stored[String(currentUser.id)]) {
+        stored[String(currentUser.id)] = true
+        localStorage.setItem(WELCOME_GIFT_KEY, JSON.stringify(stored))
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      localStorage.setItem(
+        "botl_daily_bonus_v1",
+        JSON.stringify({ lastClaimDate: dailyBonusTodayKey, streakDay: dailyDay }),
+      )
     } catch {
       // ignore
     }
     setDailyClaimedToday(true)
+    setShowWelcomeGift(false)
+    setWelcomeClaimedForSession(true)
     setDailyOpen(false)
-  }, [dailyClaimedToday, dailyDay, dispatch, currentUser, dailyBonusTodayKey])
+  }, [dailyClaimedToday, dailyDay, dailyBonusTodayKey, dispatch, currentUser])
+
+  const showStreakDialog =
+    !!currentUser &&
+    !tableLoading &&
+    !dailyClaimedToday &&
+    (showWelcomeGift || welcomeComplete)
 
   // Result UI state (for center overlay)
   const [, setResultChosenAction] = useState<string | null>(null)
@@ -737,6 +827,7 @@ export function GameRoom() {
   })
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
+  const emotionGiftFrameRef = useRef(0)
   const [chatInput, setChatInput] = useState("")
   const logEndRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -858,8 +949,8 @@ export function GameRoom() {
     const uid = currentUser?.id
     const rows = [
       { id: "kiss" as const, label: "Поцелуй", emoji: "💋" },
-      { id: "beer" as const, label: "Пиво", emoji: "🍺" },
-      { id: "cocktail" as const, label: "Коктейль", emoji: "🍹" },
+      { id: "beer" as const, label: "По квасику", emoji: "🍺" },
+      { id: "cocktail" as const, label: "Сладкое", emoji: "🍬" },
     ]
     return rows.map((row) => {
       const used = uid ? getLimitedEmotionUseCount(uid, row.id) : 0
@@ -1059,7 +1150,7 @@ export function GameRoom() {
     const path = EMOTION_SOUNDS[actionId]
     if (!path || typeof window === "undefined") return
     try {
-      const url = assetUrl(path)
+      const url = emotionSoundUrl(path)
       const a = new Audio(url)
       a.volume = 0.7
       a.play().catch(() => {})
@@ -1099,6 +1190,16 @@ export function GameRoom() {
       }, duration)
     },
     [positions]
+  )
+
+  const launchEmotionGiftImage = useCallback(
+    (fromIdx: number, toIdx: number) => {
+      const next = nextEmotionGiftFrameNum(emotionGiftFrameRef.current)
+      emotionGiftFrameRef.current = next
+      launchEmoji(fromIdx, toIdx, undefined, emotionGiftFrameSrc(next))
+      return next
+    },
+    [launchEmoji],
   )
 
   const launchSteam = useCallback(
@@ -1171,7 +1272,6 @@ export function GameRoom() {
       flowers: "\uD83C\uDF37",
       diamond: "\uD83D\uDC8E",
       beer: "\uD83C\uDF7A",
-      cocktail: "\uD83C\uDF79",
       gift_voice: "\uD83E\uDE99",
       tools: "\uD83D\uDEE0",
       lipstick: "\uD83D\uDC84",
@@ -1181,7 +1281,7 @@ export function GameRoom() {
       song: "\uD83C\uDFB5",
       rose: "\uD83C\uDF39",
     }
-    const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya"])
+    const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya", "cocktail"])
 
     type QueuedEmotion = {
       fromIdx: number
@@ -1219,6 +1319,10 @@ export function GameRoom() {
 
       if (entry.type === "banya") {
         queue.push({ fromIdx, toIdx, type: entry.type, emoji: "\uD83E\uDDF9", imgSrc: assetUrl(EMOJI_BANYA) })
+      } else if (entry.type === "cocktail") {
+        const frame = nextEmotionGiftFrameNum(emotionGiftFrameRef.current)
+        emotionGiftFrameRef.current = frame
+        queue.push({ fromIdx, toIdx, type: entry.type, imgSrc: emotionGiftFrameSrc(frame) })
       } else if (EMOTION_EMOJI_MAP[entry.type]) {
         queue.push({ fromIdx, toIdx, type: entry.type, emoji: EMOTION_EMOJI_MAP[entry.type] })
       }
@@ -1415,10 +1519,12 @@ export function GameRoom() {
         const emojiMap: Record<string, string> = {
           kiss: "\uD83D\uDC8B",
           beer: "\uD83C\uDF7A",
-          cocktail: "\uD83C\uDF79",
           skip: "",
         }
-        if (emojiMap[defaultAction]) {
+        if (defaultAction === "cocktail") {
+          launchEmotionGiftImage(spinnerIdx, targetIdx)
+          playEmotionSound(defaultAction)
+        } else if (emojiMap[defaultAction]) {
           launchEmoji(spinnerIdx, targetIdx, emojiMap[defaultAction])
           playEmotionSound(defaultAction)
         }
@@ -1442,7 +1548,7 @@ export function GameRoom() {
       }
     }, 6000)
      
-  }, [players, currentTurnPlayer, dispatch, launchEmoji, playEmotionSound, predictions, bets, pot, currentUser])
+  }, [players, currentTurnPlayer, dispatch, launchEmoji, launchEmotionGiftImage, playEmotionSound, predictions, bets, pot, currentUser])
 
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
@@ -1482,7 +1588,7 @@ export function GameRoom() {
       extraPerPurchase: EMOTION_QUOTA_PURCHASE_AMOUNT,
       costPerType: EMOTION_QUOTA_COST_PER_TYPE_HEARTS,
     })
-    const labelMap: Record<string, string> = { kiss: "поцелуи", beer: "пиво", cocktail: "коктейль" }
+    const labelMap: Record<string, string> = { kiss: "поцелуи", beer: "по квасику", cocktail: "сладкое" }
     dispatch({
       type: "ADD_LOG",
       entry: {
@@ -1543,7 +1649,7 @@ export function GameRoom() {
       flowers: "\uD83C\uDF37",
       diamond: "\uD83D\uDC8E",
       beer: "\uD83C\uDF7A",
-      cocktail: "\uD83C\uDF79",
+      cocktail: "",
       gift_voice: "\uD83E\uDE99",
       tools: "\uD83D\uDEE0",
       lipstick: "\uD83D\uDC84",
@@ -1553,7 +1659,9 @@ export function GameRoom() {
       song: "\uD83C\uDFB5",
       rose: "\uD83C\uDF39",
     }
-    if (emojiMap[actionId]) {
+    if (actionId === "cocktail") {
+      launchEmotionGiftImage(spinnerIdx, targetIdx)
+    } else if (emojiMap[actionId]) {
       launchEmoji(spinnerIdx, targetIdx, emojiMap[actionId])
     }
 
@@ -1561,8 +1669,7 @@ export function GameRoom() {
       launchEmoji(spinnerIdx, targetIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(targetIdx)
     }
-
-    if (actionId === "beer" || actionId === "cocktail") {
+    if (actionId === "beer") {
       dispatch({ type: "ADD_DRUNK_TIME", playerId: currentTurnPlayer.id, ms: 60_000 })
     }
 
@@ -1631,7 +1738,7 @@ export function GameRoom() {
       flowers: "💐",
       diamond: "💎",
       beer: "🍺",
-      cocktail: "🍹",
+      cocktail: "",
       tools: "🛠️",
       lipstick: "💄",
       chat: "💬",
@@ -1646,8 +1753,13 @@ export function GameRoom() {
     if (actionId === "banya") {
       launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(toIdx)
+    } else if (actionId === "cocktail") {
+      launchEmotionGiftImage(fromIdx, toIdx)
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
+    }
+    if (actionId === "beer") {
+      dispatch({ type: "ADD_DRUNK_TIME", playerId: from.id, ms: 60_000 })
     }
 
     const label = actionDef?.label ?? actionId
@@ -1699,7 +1811,7 @@ export function GameRoom() {
       flowers: "💐",
       diamond: "💎",
       beer: "🍺",
-      cocktail: "🍹",
+      cocktail: "",
       tools: "🛠️",
       lipstick: "💄",
       chat: "💬",
@@ -1713,11 +1825,12 @@ export function GameRoom() {
     if (actionId === "banya") {
       launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
       launchSteam(toIdx)
+    } else if (actionId === "cocktail") {
+      launchEmotionGiftImage(fromIdx, toIdx)
     } else if (emojiMap[actionId]) {
       launchEmoji(fromIdx, toIdx, emojiMap[actionId])
     }
-
-    if (actionId === "beer" || actionId === "cocktail") {
+    if (actionId === "beer") {
       dispatch({ type: "ADD_DRUNK_TIME", playerId: currentUser.id, ms: 60_000 })
     }
 
@@ -1934,15 +2047,16 @@ export function GameRoom() {
     const mutualEmoji: Record<string, string> = {
       kiss: "\uD83D\uDC8B",
       beer: "\uD83C\uDF7A",
-      cocktail: "\uD83C\uDF79",
       lipstick: "\uD83D\uDC84",
     }
-    if (fromIdx !== -1 && toIdx !== -1 && mutualEmoji[mutualActionId]) {
+    if (fromIdx !== -1 && toIdx !== -1 && mutualActionId === "cocktail") {
+      launchEmotionGiftImage(fromIdx, toIdx)
+      playEmotionSound(mutualActionId)
+    } else if (fromIdx !== -1 && toIdx !== -1 && mutualEmoji[mutualActionId]) {
       launchEmoji(fromIdx, toIdx, mutualEmoji[mutualActionId])
       playEmotionSound(mutualActionId)
     }
-
-    if (mutualActionId === "beer" || mutualActionId === "cocktail") {
+    if (mutualActionId === "beer") {
       dispatch({ type: "ADD_DRUNK_TIME", playerId: currentUser.id, ms: 60_000 })
     }
 
@@ -1954,14 +2068,13 @@ export function GameRoom() {
         type: mutualActionId as GameLogEntry["type"],
         fromPlayer: currentUser,
         toPlayer: otherPlayer,
-        text:
-          mutualActionId === "kiss"
+        text: `${mutualActionId === "kiss"
             ? `${currentUser.name} поцеловал(а) в ответ ${otherPlayer.name}`
             : mutualActionId === "beer"
-              ? `${currentUser.name} выпил(а) пива вместе с ${otherPlayer.name}`
+              ? `${currentUser.name} предложил(а) по квасику ${otherPlayer.name}`
               : mutualActionId === "cocktail"
-                ? `${currentUser.name} выпил(а) коктейль вместе с ${otherPlayer.name}`
-                : `${currentUser.name} подарил(а) помаду ${otherPlayer.name}`,
+                ? `${currentUser.name} дарит сладкое ${otherPlayer.name}`
+                : `${currentUser.name} подарил(а) помаду ${otherPlayer.name}`}`,
         timestamp: Date.now(),
       },
     })
@@ -2509,17 +2622,53 @@ export function GameRoom() {
     showToast("Сервер недоступен — включён локальный стол", "info")
   }
 
+  /* Пассивное пополнение банка: +3 ❤ / мин */
+  const [bankPassiveBurstKey, setBankPassiveBurstKey] = useState(0)
+  const [bankPassiveBurstOrigin, setBankPassiveBurstOrigin] = useState<{ x: number; y: number } | null>(null)
+  const bankPlusButtonRef = useRef<HTMLButtonElement | null>(null)
+  const triggerBankPassiveBurst = useCallback(() => {
+    const el = bankPlusButtonRef.current
+    if (el) {
+      const r = el.getBoundingClientRect()
+      setBankPassiveBurstOrigin({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
+    }
+    setBankPassiveBurstKey((k) => k + 1)
+  }, [])
+  const { msUntilNext: msUntilNextBank } = useBankPassive(currentUser?.id, dispatch, triggerBankPassiveBurst)
+  const handlePauseGame = useCallback(() => {
+    if (!currentUser) return
+    // Явно освобождаем место за live-столом и отключаем синхронизацию, пока пользователь не возобновит.
+    const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
+      } else {
+        void apiFetch("/api/table/live", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: payload,
+        }).catch(() => {})
+      }
+    } catch {
+      // ignore
+    }
+    dispatch({ type: "SET_TABLE_PAUSED", paused: true })
+    showToast("Пауза включена — вы покинули стол", "info")
+  }, [currentUser, dispatch, showToast])
+
   /* ================================================================ */
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
     <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
       {toast && <InlineToast toast={toast} />}
-      <WelcomeGiftDialog
-        open={showWelcomeGift}
-        onOpenChange={setShowWelcomeGift}
-        userName={currentUser?.name ?? ""}
-        onClaim={handleClaimWelcomeGift}
+      <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
+      <DailyStreakBonusDialog
+        open={showStreakDialog}
+        onOpenChange={() => {}}
+        streakDay={dailyDay}
+        onClaim={handleClaimStreakBonus}
       />
 
       <TableLoaderOverlay
@@ -2598,25 +2747,10 @@ export function GameRoom() {
               >
                 Вернуться
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  returnFromAway()
-                  void handleChangeTable()
-                }}
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl border text-sm font-bold text-slate-100 transition-all hover:brightness-110 active:scale-[0.99] sm:w-auto sm:min-w-[10rem]"
-                style={{
-                  borderColor: "rgba(148,163,184,0.35)",
-                  background: "rgba(15,23,42,0.6)",
-                }}
-              >
-                Сменить стол
-              </button>
             </div>
           </div>
         </div>
       )}
-
       {/* Покупка доп. лимита эмоций (+50 к типу за 10 ❤) */}
       {emotionPurchaseOpen && currentUser && (
         <div className="fixed inset-0 z-[47] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
@@ -2641,8 +2775,8 @@ export function GameRoom() {
               {(
                 [
                   { id: "kiss" as const, label: "Поцелуй", emoji: "💋" },
-                  { id: "beer" as const, label: "Пиво", emoji: "🍺" },
-                  { id: "cocktail" as const, label: "Коктейль", emoji: "🍹" },
+                  { id: "beer" as const, label: "По квасику", emoji: "🍺" },
+                  { id: "cocktail" as const, label: "Сладкое", emoji: "🍬" },
                 ] as const
               ).map((row) => (
                 <label
@@ -3257,8 +3391,18 @@ export function GameRoom() {
                 (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")
               }
             >
-              <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
-              <span className="text-[15px] font-black tabular-nums leading-none shrink-0 sm:text-base" style={{ color: "#fff" }}>{voiceBalance}</span>
+              <Heart
+                className="bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]"
+                style={{ color: "#fde68a" }}
+                fill="currentColor"
+              />
+              <BankHeartBalanceTooltip
+                voiceBalance={voiceBalance}
+                msUntilNext={msUntilNextBank}
+                onOpenShop={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+                className="inline-flex shrink-0 items-baseline"
+                tabularClassName="text-[15px] font-black tabular-nums leading-none text-white sm:text-base"
+              />
               <span
                 className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
                 style={{ color: "#cbd5e1" }}
@@ -3268,6 +3412,7 @@ export function GameRoom() {
             </div>
             <button
               type="button"
+              ref={bankPlusButtonRef}
               onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
               className={
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95" +
@@ -3346,53 +3491,25 @@ export function GameRoom() {
             )}
           </button>
 
-          {/* Сменить стол */}
-          <button
-            onClick={handleChangeTable}
-            className={sideBtnClass}
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-            }}
-          >
-            <RotateCw className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сменить стол"}</span>
-          </button>
-
-          {/* Пауза: выйти из live-стола (явно) */}
+          {/* Колесо фортуны — панель включается FORTUNE_WHEEL_ENABLED */}
           {currentUser && (
             <button
               type="button"
-              onClick={() => {
-                // Явно освобождаем место за live-столом и отключаем синхронизацию, пока пользователь не возобновит.
-                const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
-                try {
-                  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-                    navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
-                  } else {
-                    void apiFetch("/api/table/live", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      keepalive: true,
-                      body: payload,
-                    }).catch(() => {})
-                  }
-                } catch {
-                  // ignore
-                }
-                dispatch({ type: "SET_TABLE_PAUSED", paused: true })
-                showToast("Пауза включена — вы покинули стол", "info")
-              }}
-              className={sideBtnClass}
+              disabled={!FORTUNE_WHEEL_ENABLED}
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
+              className={cn(
+                sideBtnClass,
+                !FORTUNE_WHEEL_ENABLED && "cursor-not-allowed opacity-45 hover:brightness-100",
+              )}
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(239,68,68,0.28)",
+                border: "1px solid rgba(56,189,248,0.28)",
                 boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
               }}
+              title={!FORTUNE_WHEEL_ENABLED ? "Скоро будет доступно" : "Колесо фортуны"}
             >
-              <span className="text-base" aria-hidden>{"⏸"}</span>
-              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Пауза"}</span>
+              <span className="text-base" aria-hidden>{"🎡"}</span>
+              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Колесо фортуны"}</span>
             </button>
           )}
 
@@ -3479,7 +3596,21 @@ export function GameRoom() {
         </div>
       </div>
 
-      {/* Модалка каталога бутылочек */}
+      {FORTUNE_WHEEL_ENABLED && (
+        <FortuneWheelSidePanel
+          open={gameSidePanel === "fortune-wheel"}
+          wheelSpinning={wheelSpinning}
+          wheelRotationDeg={wheelRotationDeg}
+          wheelTickets={wheelTickets}
+          wheelLastRewardText={wheelLastRewardText}
+          freeChanceReady={freeChanceReady}
+          freeChanceCountdown={freeChanceCountdown}
+          onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
+          onSpin={handleSpinFortuneWheel}
+          onSpinFree={handleSpinFreeChance}
+          onBuyTickets={handleBuyWheelTickets}
+        />
+      )}
       {/* Модалка: выбор собеседника для приватного чата */}
       {showChatListModal && currentUser && (
         <div
@@ -3821,12 +3952,23 @@ export function GameRoom() {
             </div>
           )}
         </div>
+        {/* ПК: невидимые боковые поля flex-1 тянутся к краям центральной колонки; стол — без изменений размеров */}
+        <div
+          className={
+            isPcLayout
+              ? "flex w-full min-h-0 shrink-0 flex-row items-center justify-center"
+              : "contents"
+          }
+        >
+          {isPcLayout && (
+            <div className="min-h-0 min-w-0 flex-1 basis-0 shrink" aria-hidden />
+          )}
         {/* Стол ~60:50 (ширина/высота): моб — 90% / max 420px; ПК — вписать в min(72vh,78dvh) по высоте */}
         <div
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto mt-1 rounded-2xl sm:rounded-3xl`
+              : `relative flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mt-1 rounded-2xl sm:rounded-3xl`
           }
           style={{
             ...(isMobile
@@ -3870,6 +4012,50 @@ export function GameRoom() {
           />
 
           <TableDecorations />
+          {currentUser && !tablePaused && (
+            <>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handlePauseGame}
+                    className="absolute bottom-2 left-2 z-[34] inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-300/40 bg-slate-900/85 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm transition hover:brightness-110 active:scale-95 sm:bottom-3 sm:left-3 sm:h-10 sm:w-10"
+                    aria-label="Поставить игру на паузу"
+                  >
+                    <span className="text-sm leading-none sm:text-base" aria-hidden>
+                      ⏸
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  sideOffset={8}
+                  className="border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-100 shadow-xl"
+                >
+                  Пауза игры
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={0}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => void handleChangeTable()}
+                    className="absolute bottom-2 right-2 z-[34] inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-400/45 bg-slate-900/85 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm transition hover:brightness-110 active:scale-95 sm:bottom-3 sm:right-3 sm:h-10 sm:w-10"
+                    aria-label="Сменить стол"
+                  >
+                    <RotateCw className="h-4 w-4 shrink-0 sm:h-[1.125rem] sm:w-[1.125rem]" style={{ color: "#7dd3fc" }} aria-hidden />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  sideOffset={8}
+                  className="border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-100 shadow-xl"
+                >
+                  Сменить стол
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
 
           {/* ---- PLAYERS around the circle ---- */}
           {players.map((player, i) => {
@@ -3887,6 +4073,7 @@ export function GameRoom() {
               manyPlayersOnMobile ? 42 : isMobile ? 52 : 70
             const steamBorder = steamAvatarSize <= 52 ? 3 : 4
             const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
+            const avatarMenuOpenUpward = pos.y >= 50
             return (
               <div
                 key={player.id}
@@ -3906,6 +4093,7 @@ export function GameRoom() {
                   <PlayerAvatar
                     player={player}
                     tableRingLayout
+                    showStatusBadge
                     compact={isMobile || manyPlayersOnMobile}
                     size={manyPlayersOnMobile ? 42 : isMobile ? 52 : undefined}
                     // Во время результата подсвечиваем только пару, а не крутящего
@@ -3991,7 +4179,12 @@ export function GameRoom() {
                 </div>
                 {isAvatarMenuOpen && (
                   <div
-                    className="absolute left-1/2 top-full z-40 mt-2 w-[min(92vw,184px)] -translate-x-1/2"
+                    className="absolute left-1/2 z-40 w-[min(92vw,184px)] -translate-x-1/2"
+                    style={
+                      avatarMenuOpenUpward
+                        ? { bottom: "100%", marginBottom: "0.5rem" }
+                        : { top: "100%", marginTop: "0.5rem" }
+                    }
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div
@@ -4209,6 +4402,10 @@ export function GameRoom() {
                 </span>
               )}
             </div>
+          )}
+        </div>
+          {isPcLayout && (
+            <div className="min-h-0 min-w-0 flex-1 basis-0 shrink" aria-hidden />
           )}
         </div>
 
@@ -4493,7 +4690,16 @@ export function GameRoom() {
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
-                    <span className="text-base font-black tabular-nums shrink-0 text-white">{voiceBalance}</span>
+                    <BankHeartBalanceTooltip
+                      voiceBalance={voiceBalance}
+                      msUntilNext={msUntilNextBank}
+                      onOpenShop={() => {
+                        dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
+                        setShowMobileMoreMenu(false)
+                      }}
+                      className="inline-flex shrink-0 items-baseline"
+                      tabularClassName="text-base font-black tabular-nums text-white"
+                    />
                     <span className="min-w-0 truncate text-xs" style={{ color: "#cbd5e1" }}>
                       Ваш банк
                     </span>
@@ -4532,15 +4738,6 @@ export function GameRoom() {
                       {formatCooldown(cooldownLeftMs)}
                     </span>
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { handleChangeTable(); setShowMobileMoreMenu(false) }}
-                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
-                  style={{ color: "#f0e0c8" }}
-                >
-                  <RotateCw className="h-4 w-4 shrink-0" />
-                  Сменить стол
                 </button>
                 <button
                   type="button"
@@ -4895,7 +5092,12 @@ export function GameRoom() {
       {/* ---- PLAYER INTERACTION MENU ---- */}
       {playerMenuTarget && (() => {
         const ZODIAC_SIGNS = ["Овен", "Телец", "Близнецы", "Рак", "Лев", "Дева", "Весы", "Скорпион", "Стрелец", "Козерог", "Водолей", "Рыбы"]
-        const zodiacDisplay = playerMenuTarget.zodiac ?? ZODIAC_SIGNS[playerMenuTarget.id % 12]
+        const ZODIAC_SYMBOLS = ["♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓"]
+        const zodiacIdxFromName =
+          typeof playerMenuTarget.zodiac === "string" ? Math.max(0, ZODIAC_SIGNS.indexOf(playerMenuTarget.zodiac)) : -1
+        const zodiacIdx = zodiacIdxFromName >= 0 ? zodiacIdxFromName : playerMenuTarget.id % 12
+        const zodiacDisplay = ZODIAC_SIGNS[zodiacIdx]
+        const zodiacSymbol = ZODIAC_SYMBOLS[zodiacIdx]
         return (
         <div
           className="player-menu-backdrop fixed inset-0 z-50 flex items-stretch justify-end overflow-hidden bg-black/60 p-0"
@@ -4905,20 +5107,26 @@ export function GameRoom() {
           <div
             className="player-menu-modal player-menu-modal-drawer relative flex h-app max-h-app w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
             style={{
-              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
-              border: "2px solid rgba(251, 191, 36, 0.25)",
+              background: "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(255,255,255,0.98) 40%, rgba(241,245,249,0.98) 100%)",
+              border: "1px solid rgba(148,163,184,0.45)",
               borderRightWidth: 0,
-              fontSize: "14px",
+              fontSize: "15px",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="pointer-events-none absolute inset-0 rounded-l-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
+            <div
+              className="pointer-events-none absolute inset-0 rounded-l-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(56,189,248,0.14)_0%,transparent_55%)]"
+              aria-hidden
+            />
             {/* Шапка: закрытие всегда на месте при прокрутке контента */}
-            <div className="relative z-20 flex shrink-0 justify-end border-b border-slate-600/20 bg-slate-900/75 px-3 py-2 backdrop-blur-md sm:px-4 sm:py-2.5">
+            <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-slate-800/70 bg-slate-950/90 px-3 py-2 backdrop-blur-md sm:px-4 sm:py-2.5">
+              <div className="min-w-0">
+                <span className="truncate text-[15px] font-black tracking-tight text-slate-100">Профиль игрока</span>
+              </div>
               <button
                 type="button"
                 onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100 sm:h-10 sm:w-10"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-300 transition-all duration-200 hover:scale-110 hover:bg-white/10 hover:text-white sm:h-10 sm:w-10"
                 aria-label="Закрыть"
               >
                 <X className="h-5 w-5" />
@@ -4928,13 +5136,13 @@ export function GameRoom() {
             <div className="relative flex min-w-0 flex-col gap-5">
               {/* Профиль и действия — одна вертикальная колонка (боковая панель справа) */}
               <div
-                className="player-menu-left w-full shrink-0 overflow-hidden rounded-2xl border border-slate-500/35 bg-gradient-to-b from-slate-900/95 to-slate-950/98 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                className="player-menu-left w-full shrink-0 overflow-hidden rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 p-4 shadow-[0_10px_26px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.85)]"
               >
                 <div className="relative flex flex-col items-center">
                   <div
                     className="pointer-events-none absolute left-1/2 top-[52px] h-36 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-80"
                     style={{
-                      background: "radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(56, 189, 248, 0.05) 50%, transparent 72%)",
+                      background: "radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(167, 139, 250, 0.08) 48%, transparent 72%)",
                     }}
                     aria-hidden
                   />
@@ -4943,30 +5151,28 @@ export function GameRoom() {
                     frameId={avatarFrames?.[playerMenuTarget.id] || "none"}
                     size={isMobile ? 100 : 128}
                   />
-                  <h2 className="relative z-[1] mt-3 max-w-full px-1 text-center text-[1.35rem] font-extrabold leading-tight tracking-tight text-white sm:text-2xl">
+                  <h2 className="relative z-[1] mt-3 max-w-full px-1 text-center text-xl font-black leading-tight tracking-tight text-slate-900 sm:text-2xl">
                     {playerMenuTarget.name}
                   </h2>
                   <div className="relative z-[1] mt-3 grid w-full min-w-0 grid-cols-[1fr_auto] items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setShowRosesReceivedPopover((v) => !v)}
-                      className="group flex h-11 min-w-0 flex-row flex-nowrap items-center justify-center gap-2 rounded-xl border border-sky-400/40 bg-[#0a1424] px-2.5 shadow-md ring-1 ring-amber-400/20 transition-all hover:border-sky-300/55 hover:ring-amber-300/35 sm:h-12 sm:gap-2.5 sm:px-4"
+                      className="group flex h-11 min-w-0 flex-row flex-nowrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:bg-slate-50 sm:h-12 sm:gap-2.5 sm:px-4"
                       aria-label="Сколько роз получил игрок"
                     >
-                      <span className="shrink-0 text-base leading-none sm:text-lg" aria-hidden>
-                        🌹
-                      </span>
-                      <span className="shrink-0 text-base font-black tabular-nums text-white sm:text-lg">
+                      <Flower2 className="h-6 w-6 shrink-0 text-fuchsia-600" strokeWidth={2.25} aria-hidden />
+                      <span className="shrink-0 text-base font-black tabular-nums text-slate-900 sm:text-lg">
                         {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
                       </span>
-                      <span className="min-w-0 truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400 group-hover:text-sky-200/90 sm:text-[10px]">
+                      <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-slate-700">
                         получено
                       </span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowFramePicker(true)}
-                      className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/45 bg-gradient-to-b from-amber-500/18 to-amber-800/15 px-3.5 text-[11px] font-bold text-amber-100 shadow-sm transition-all hover:brightness-110 active:scale-[0.98] sm:h-12 sm:px-4 sm:text-xs"
+                      className="inline-flex h-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3.5 text-[15px] font-black text-slate-900 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition hover:bg-slate-50 active:translate-y-px sm:h-12 sm:px-4"
                     >
                       Рамка
                     </button>
@@ -5016,38 +5222,37 @@ export function GameRoom() {
                     </div>
                   )}
                 </div>
-                <div className="mt-4 border-t border-slate-600/35 pt-3">
-                  <p className="mb-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Анкета</p>
-                  <ul className="space-y-2.5 text-left text-sm text-slate-300 sm:text-[15px]">
-                    <li className="flex items-baseline gap-2.5 border-b border-slate-700/40 pb-2.5">
-                      <span className="w-6 shrink-0 text-center text-base opacity-90" aria-hidden>
-                        👤
-                      </span>
-                      <span className="min-w-0 font-semibold text-slate-100">
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <p className="mb-2.5 text-[15px] font-black tracking-tight text-slate-900">Анкета</p>
+                  <ul className="space-y-2.5 text-left text-[15px] font-medium text-slate-700">
+                    <li className="flex items-baseline gap-2.5 border-b border-slate-200 pb-2.5">
+                      <User className="mt-0.5 h-6 w-6 shrink-0 text-slate-500" strokeWidth={2.25} aria-hidden />
+                      <span className="min-w-0 font-semibold text-slate-900">
                         {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
                       </span>
                     </li>
                     {playerMenuTarget.city && (
-                      <li className="flex items-start gap-2.5 border-b border-slate-700/40 pb-2.5">
-                        <span className="mt-0.5 w-6 shrink-0 text-center text-base" aria-hidden>
-                          📍
+                      <li className="flex items-start gap-2.5 border-b border-slate-200 pb-2.5">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-slate-500" aria-hidden>
+                          <span className="h-2 w-2 rounded-full bg-rose-500 ring-2 ring-rose-200" />
                         </span>
                         <span className="min-w-0 leading-snug">{playerMenuTarget.city}</span>
                       </li>
                     )}
                     {playerMenuTarget.interests && (
-                      <li className="flex items-start gap-2.5 border-b border-slate-700/40 pb-2.5">
-                        <span className="mt-0.5 w-6 shrink-0 text-center text-base" aria-hidden>
-                          🎯
-                        </span>
+                      <li className="flex items-start gap-2.5 border-b border-slate-200 pb-2.5">
+                        <Target className="mt-0.5 h-6 w-6 shrink-0 text-slate-500" strokeWidth={2.25} aria-hidden />
                         <span className="min-w-0 leading-snug">{playerMenuTarget.interests}</span>
                       </li>
                     )}
-                    <li className="flex items-center gap-2.5 pt-0.5 text-amber-200/95">
-                      <span className="w-6 shrink-0 text-center text-base" aria-hidden>
-                        ✨
+                    <li className="flex items-center gap-2.5 pt-0.5 text-fuchsia-700">
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-100 to-violet-100 text-[18px] font-black text-fuchsia-700 shadow-[0_10px_18px_rgba(236,72,153,0.12),inset_0_1px_0_rgba(255,255,255,0.8)]"
+                        aria-hidden
+                      >
+                        {zodiacSymbol}
                       </span>
-                      <span className="font-medium">{zodiacDisplay}</span>
+                      <span className="font-semibold">{zodiacDisplay}</span>
                     </li>
                   </ul>
                 </div>
@@ -5056,7 +5261,7 @@ export function GameRoom() {
               {/* Действия */}
               <div className="player-menu-actions flex min-h-0 min-w-0 w-full flex-1 flex-col gap-5">
                 <div>
-                  <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Действия</p>
+                  <p className="mb-2.5 text-[15px] font-black tracking-tight text-slate-900">Действия</p>
                   {/* Избранное и ухаживание — верхний ряд; розы и «от вас» — ниже; ВК + магазин */}
                   {(() => {
                     const todayKey = new Date().toISOString().slice(0, 10)
@@ -5113,19 +5318,19 @@ export function GameRoom() {
                       showToast("Розы подарены", "success")
                     }
                     const baseTile =
-                      "flex min-h-[5.75rem] min-w-0 flex-col items-center justify-between gap-1 rounded-xl py-2 text-center font-bold transition-all hover:brightness-110 active:scale-[0.98] sm:min-h-[6.25rem] sm:gap-1.5 sm:py-2.5"
+                      "flex min-h-[5.75rem] min-w-0 flex-col items-center justify-between gap-2 rounded-3xl border border-slate-200 bg-gradient-to-b from-white to-slate-50 py-2 text-center font-black shadow-[0_10px_26px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.9)] transition hover:bg-slate-50/80 active:translate-y-px active:shadow-[0_6px_16px_rgba(15,23,42,0.12)] sm:min-h-[6.25rem] sm:py-2.5"
                     const baseTileNarrow =
                       "px-1.5 sm:px-2"
                     const baseTileWide =
                       "px-2 sm:px-2.5"
                     const titleCls =
-                      "px-0.5 text-center text-xs font-extrabold leading-snug tracking-tight sm:text-sm"
+                      "px-0.5 text-center text-[15px] font-black leading-snug tracking-tight"
                     const priceCellLight =
-                      "flex w-full items-center justify-center gap-1 rounded-lg border border-white/35 bg-black/25 px-1.5 py-1.5 text-[11px] font-bold tabular-nums shadow-inner sm:py-2 sm:text-xs"
+                      "flex w-full items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white/75 px-2 py-2 text-[15px] font-black tabular-nums text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)]"
                     const priceCellGold =
-                      "flex w-full items-center justify-center rounded-lg border border-slate-900/20 bg-slate-900/10 px-1.5 py-1.5 text-[11px] font-bold text-slate-900 shadow-inner sm:py-2 sm:text-xs"
+                      "flex w-full items-center justify-center rounded-xl border border-slate-900/10 bg-white/65 px-2 py-2 text-[15px] font-black text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)]"
                     const buyHeartsBtnCls =
-                      "flex min-h-[3rem] w-full min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-center text-[12px] font-extrabold leading-tight transition-all hover:brightness-110 active:scale-[0.99] sm:min-h-[3.25rem] sm:text-[13px]"
+                      "flex min-h-[3rem] w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-3 py-2 text-center text-[15px] font-black leading-tight transition-all hover:brightness-105 active:scale-[0.99] sm:min-h-[3.25rem]"
                     return (
                       <div className="flex flex-col gap-2 sm:gap-2.5">
                         <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:gap-2">
@@ -5143,7 +5348,7 @@ export function GameRoom() {
                               boxShadow: "0 2px 0 #475569",
                             }}
                           >
-                            <Star className="h-5 w-5 shrink-0 text-slate-900 sm:h-6 sm:w-6" />
+                            <Star className="h-7 w-7 shrink-0 text-amber-600" strokeWidth={2.25} />
                             <span className={`${titleCls} text-slate-900`}>В избранное</span>
                             <div className={priceCellGold}>бесплатно</div>
                           </button>
@@ -5159,11 +5364,11 @@ export function GameRoom() {
                               boxShadow: "0 2px 0 #831843",
                             }}
                           >
-                            <Heart className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" fill="currentColor" />
-                            <span className={`${titleCls} text-white`}>Ухаживать</span>
+                            <Heart className="h-7 w-7 shrink-0 text-white" strokeWidth={2.25} fill="currentColor" />
+                            <span className={`${titleCls} text-white [text-shadow:0_2px_8px_rgba(0,0,0,0.28)]`}>Ухаживать</span>
                             <div className={priceCellLight}>
                               <span>50</span>
-                              <Heart className="h-3.5 w-3.5 opacity-95" fill="currentColor" />
+                              <Heart className="h-4 w-4 text-rose-600" fill="currentColor" />
                             </div>
                           </button>
                           <button
@@ -5178,13 +5383,11 @@ export function GameRoom() {
                               boxShadow: "0 2px 0 #881337",
                             }}
                           >
-                            <span className="text-xl leading-none sm:text-2xl" aria-hidden>
-                              🌹
-                            </span>
-                            <span className={`${titleCls} text-white`}>Подарить розы</span>
+                            <Flower2 className="h-7 w-7 shrink-0 text-white" strokeWidth={2.25} aria-hidden />
+                            <span className={`${titleCls} text-white [text-shadow:0_2px_8px_rgba(0,0,0,0.28)]`}>Подарить розы</span>
                             <div className={priceCellLight}>
                               <span>50</span>
-                              <Heart className="h-3.5 w-3.5 opacity-95" fill="currentColor" />
+                              <Heart className="h-4 w-4 text-rose-600" fill="currentColor" />
                             </div>
                           </button>
                           {currentUser && (
@@ -5198,10 +5401,8 @@ export function GameRoom() {
                               }}
                               title="Сколько роз вы подарили этому игроку"
                             >
-                              <span className="text-xl leading-none sm:text-2xl" aria-hidden>
-                                🌹
-                              </span>
-                              <span className={`${titleCls} text-white`}>От вас</span>
+                              <Flower2 className="h-7 w-7 shrink-0 text-white" strokeWidth={2.25} aria-hidden />
+                              <span className={`${titleCls} text-white [text-shadow:0_2px_8px_rgba(0,0,0,0.28)]`}>От вас</span>
                               <div className={priceCellLight}>
                                 <span className="tabular-nums">{myRosesToThem}</span>
                               </div>
@@ -5230,7 +5431,7 @@ export function GameRoom() {
                                 boxShadow: "0 2px 0 #0d47a1",
                               }}
                             >
-                              <User className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
+                              <User className="h-6 w-6 shrink-0" strokeWidth={2.25} />
                               <span className="text-center leading-snug">Профиль ВК — 200 ❤</span>
                             </button>
                             <button
@@ -5246,7 +5447,7 @@ export function GameRoom() {
                                 boxShadow: "0 2px 0 #b45309",
                               }}
                             >
-                              <Heart className="h-4 w-4 shrink-0" fill="currentColor" />
+                              <Heart className="h-6 w-6 shrink-0 text-rose-600" fill="currentColor" />
                               Купить сердца
                             </button>
                           </div>

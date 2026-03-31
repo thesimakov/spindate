@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS player_profiles (
   user_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL,
   avatar_url TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT '',
   gender TEXT NOT NULL DEFAULT 'male',
   age INTEGER NOT NULL DEFAULT 25,
   purpose TEXT NOT NULL DEFAULT 'communication',

@@ -52,6 +52,17 @@ export function assetUrl(path: string): string {
   return fullPath + q
 }
 
+/** URL произвольного файла из public/ (без автодобавления assets/). */
+export function publicUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`
+  const base = getBasePath()
+  const fullPath = (base ? base.replace(/\/$/, "") : "") + p
+  const q = ASSET_CACHE_VERSION ? `?v=${ASSET_CACHE_VERSION}` : ""
+  if (typeof window !== "undefined") return fullPath + q
+  if (APP_URL) return `${APP_URL.replace(/\/$/, "")}${fullPath}${q}`
+  return fullPath + q
+}
+
 /** Пути к картинкам бутылочек (каталог в игре + отображение на столе). Полный список — public/assets/README.md */
 export const BOTTLE_IMAGES = {
   classic: "/assets/b_standart_v2.webp",
@@ -78,15 +89,21 @@ export const BOTTLE_IMAGES = {
 /** Картинка эмоции «баня» (веник) */
 export const EMOJI_BANYA = "/assets/7786876.svg"
 
-/** Звуки при эмоциях (MP3 в public/assets/) */
+/** Звуки при эмоциях (MP3 в public/assets/; путь `music/…` — из public/music/) */
 export const EMOTION_SOUNDS: Record<string, string> = {
   kiss: "kiss_mkqxy6eu.mp3",
   diamond: "001_38372.mp3",
   flowers: "546546745.mp3",
   beer: "dne-can-open-medium.mp3",
-  cocktail: "9160bfefbb62e94654645.mp3",
+  cocktail: "music/567787ce397a02e.mp3",
   banya: "2de04e7deb74c4b.mp3",
   tools: "power_tool_electric_screwdriver_2.mp3",
+}
+
+/** URL файла из {@link EMOTION_SOUNDS}: `music/…` → public/music/, иначе public/assets/ */
+export function emotionSoundUrl(fileRef: string): string {
+  if (fileRef.startsWith("music/")) return publicUrl(fileRef)
+  return assetUrl(fileRef)
 }
 
 /** Рамки-картинки для аватарки (SVG из assets, один формат — центрируем одинаково) */

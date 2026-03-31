@@ -107,6 +107,7 @@ function GameBoardPlayersInner({
         const steamAvatarSize = manyPlayersOnMobile ? 42 : isMobile ? 52 : 70
         const steamBorder = steamAvatarSize <= 52 ? 3 : 4
         const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
+        const avatarMenuOpenUpward = pos.y >= 50
         return (
           <div
             key={player.id}
@@ -210,7 +211,12 @@ function GameBoardPlayersInner({
             </div>
             {isAvatarMenuOpen && (
               <div
-                className="absolute left-1/2 top-full z-40 mt-2 w-[min(92vw,184px)] -translate-x-1/2"
+                className="absolute left-1/2 z-40 w-[min(92vw,184px)] -translate-x-1/2"
+                style={
+                  avatarMenuOpenUpward
+                    ? { bottom: "100%", marginBottom: "0.5rem" }
+                    : { top: "100%", marginTop: "0.5rem" }
+                }
                 onClick={(e) => e.stopPropagation()}
               >
                 <div

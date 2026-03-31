@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Flower2, Heart, Sparkles, Trophy, Users, Volume2, VolumeX, X } from "lucide-react"
+import { Flower2, Heart, Sparkles, Trash2, Trophy, Users, Volume2, VolumeX, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { PlayerAvatar } from "@/components/player-avatar"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
 import { assetUrl } from "@/lib/assets"
@@ -55,6 +56,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     avatarFrames,
     soundsEnabled,
     admirers,
+    ugadaikaRoundsWon,
   } = state
 
   const pushAvatarFrameToTable = async (frameId: string) => {
@@ -160,16 +162,163 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     return Object.values(byTarget).some((n) => n >= 10)
   }, [currentUser, rosesGiven])
 
+  const achievementStats = useMemo(() => {
+    const uid = currentUser?.id
+    if (!uid) return {} as Record<string, { current: number; target: number; known: boolean }>
+
+    const sentLogs = gameLog.filter((e) => e.fromPlayer?.id === uid)
+    const recvLogs = gameLog.filter((e) => e.toPlayer?.id === uid)
+    const countSent = (type: string) => sentLogs.filter((e) => e.type === type).length
+    const countRecv = (type: string) => recvLogs.filter((e) => e.type === type).length
+    const maxStreakForTypes = (types: ReadonlySet<string>) => {
+      let max = 0
+      let cur = 0
+      for (const e of gameLog) {
+        if (e.fromPlayer?.id !== uid) continue
+        if (types.has(e.type)) {
+          cur += 1
+          if (cur > max) max = cur
+        } else if (e.type !== "system") {
+          cur = 0
+        }
+      }
+      return max
+    }
+    const sentToys = sentLogs.filter((e) => e.type === "toy_bear" || e.type === "toy_car" || e.type === "toy_ball").length
+    const sentSeasonal = sentLogs.filter((e) => e.type === "plush_heart" || e.type === "souvenir_keychain" || e.type === "souvenir_magnet").length
+    const sentGiftCount = sentLogs.filter((e) => GIFT_IDS.has(e.type)).length
+    const recvSoft = inventory.filter(
+      (i) => i.type === "toy_bear" || i.type === "toy_car" || i.type === "toy_ball" || i.type === "plush_heart",
+    ).length
+    const recvFlowers = inventory.filter((i) => i.type === "flowers").length
+    const recvSweets = inventory.filter((i) => i.type === "chocolate_box").length
+    const rosesSent = (rosesGiven ?? []).filter((r) => r.fromPlayerId === uid).length
+    const maleFriends = admirersResolved.filter((p) => p.gender === "male").length
+    const femaleFriends = admirersResolved.filter((p) => p.gender === "female").length
+    const helloCount = sentLogs.filter((e) => e.type === "chat" && /привет/i.test(e.text)).length
+    const beerOrCocktailSent = countSent("beer") + countSent("cocktail")
+    const roseOnValentine = (rosesGiven ?? []).filter((r) => {
+      if (r.fromPlayerId !== uid) return false
+      const d = new Date(r.timestamp)
+      return d.getMonth() === 1 && d.getDate() === 14
+    }).length
+    const sentKissByFairy = currentFrameId === "fairy" ? countSent("kiss") : 0
+
+    const mk = (current: number, target: number, known = true) => ({ current, target, known })
+    return {
+      "Любитель крепкого": mk(countSent("beer"), 1),
+      "Собутыльник": mk(countSent("tools"), 1),
+      "Бармен": mk(maxStreakForTypes(new Set(["beer", "cocktail"])), 40),
+      "Душа стола": mk(maxStreakForTypes(new Set(["beer"])), 20),
+      "Любитель отдыха": mk(countSent("banya"), 10),
+      "Транжира": mk(countSent("diamond"), 20),
+      "Бонжур": mk(countSent("song"), 1),
+      "Пушистость": mk(recvSoft, 10),
+      "Чайная церемония": mk(countSent("gift_voice"), 1),
+      "Утренник": mk(sentToys, 6),
+      "Фермер": mk(currentFrameId === "vesna" ? 1 : 0, 1),
+      "Душа компании": mk(countRecv("beer"), 100, currentUser.gender === "male"),
+      "Подручная": mk(countRecv("cocktail"), 100, currentUser.gender === "female"),
+      "8 марта": mk(recvFlowers, 100, currentUser.gender === "female"),
+      "Одиночка": mk(countRecv("kiss") === 0 ? 1 : 0, 1),
+      "Ювелир": mk(countSent("diamond"), 300),
+      "Мужская дружба": mk(maleFriends, 20),
+      "Женская дружба": mk(femaleFriends, 20),
+      "Новый год": mk(sentSeasonal, 1),
+      "Пират": mk(0, 30, false),
+      "Принц": mk(0, 50, false),
+      "Принцесса": mk(0, 200, false),
+      "Трезвенник": mk(0, 10, false),
+      "Снежный бой": mk(0, 300, false),
+      "Сладкоежка": mk(recvSweets, 20),
+      "Сердцеед (ка)": mk(voiceBalance, 500),
+      "Купидон (ка)": mk(rosesSent, 100),
+      "Маг": mk(currentFrameId === "mag" ? 1 : 0, 10),
+      "Помощь новичкам": mk(sentGiftCount, 50),
+      "Дедушка Мороз": mk(sentSeasonal, 300),
+      "Турист": mk(0, 3, false),
+      "Фея": mk(sentKissByFairy, 300),
+      "Первый парень": mk(0, 3, false),
+      "Первая леди": mk(0, 3, false),
+      "Дружбанио": mk(countSent("invite"), 10),
+      "Экстрасенс": mk(ugadaikaRoundsWon ?? 0, 10),
+      "Культурный игрок": mk(helloCount, 20),
+      "Ведьмак (Ведьма)": mk(0, 5, false),
+      "Валентин": mk(roseOnValentine, 100),
+      "Дачник": mk(0, 20, false),
+      "Снегурочка": mk(0, 2, false),
+    } as Record<string, { current: number; target: number; known: boolean }>
+  }, [currentUser?.id, currentUser?.gender, gameLog, inventory, rosesGiven, admirersResolved, ugadaikaRoundsWon, voiceBalance, currentFrameId])
+
+  const achievementStatusDelta = useMemo(() => {
+    const baseDone =
+      (heartbreakerCount >= 100 ? 1 : 0) +
+      (giftSpent >= 1000 ? 1 : 0) +
+      (spinCount >= 50 ? 1 : 0)
+    const eventsDone = [
+      "Любитель крепкого",
+      "Собутыльник",
+      "Бармен",
+      "Душа стола",
+      "Любитель отдыха",
+      "Транжира",
+      "Бонжур",
+      "Пушистость",
+      "Чайная церемония",
+      "Утренник",
+      "Фермер",
+      "Душа компании",
+      "Подручная",
+      "8 марта",
+      "Одиночка",
+      "Ювелир",
+      "Мужская дружба",
+      "Женская дружба",
+      "Новый год",
+      "Пират",
+      "Принц",
+      "Принцесса",
+      "Трезвенник",
+      "Снежный бой",
+      "Сладкоежка",
+      "Сердцеед (ка)",
+      "Купидон (ка)",
+      "Маг",
+      "Помощь новичкам",
+      "Дедушка Мороз",
+      "Турист",
+      "Фея",
+      "Первый парень",
+      "Первая леди",
+      "Дружбанио",
+      "Экстрасенс",
+      "Культурный игрок",
+      "Ведьмак (Ведьма)",
+      "Валентин",
+      "Дачник",
+      "Снегурочка",
+    ].reduce((sum, key) => {
+      const stat = achievementStats[key]
+      if (!stat || !stat.known) return sum
+      return sum + (stat.current >= stat.target ? 1 : 0)
+    }, 0)
+    return baseDone + eventsDone
+  }, [achievementStats, heartbreakerCount, giftSpent, spinCount])
+
   if (!currentUser) return null
 
   const myPlayer = players.find((p) => p.id === currentUser.id)
   const isVip = !!myPlayer?.isVip && (myPlayer.vipUntilTs == null || myPlayer.vipUntilTs > Date.now())
   const initialName = useMemo(() => currentUser.name ?? "", [currentUser.name])
+  const initialStatus = useMemo(() => (currentUser.status ?? "").slice(0, 15), [currentUser.status])
   const [name, setName] = useState(initialName)
+  const [status, setStatus] = useState(initialStatus)
   const [avatarInput, setAvatarInput] = useState(currentUser.avatar ?? "")
   const [showGiveRoseModal, setShowGiveRoseModal] = useState(false)
   const [showFramesModal, setShowFramesModal] = useState(false)
   const [profileDailyLevel, setProfileDailyLevel] = useState(1)
+  const [profileTab, setProfileTab] = useState<"profile" | "achievements">("profile")
+  const [showReceivedOnly, setShowReceivedOnly] = useState(false)
   /** В модалке рамок: наведение на карточку — крупное превью; иначе показываем текущую рамку */
   const [frameHoverPreviewId, setFrameHoverPreviewId] = useState<string | null>(null)
   /** Анимация «как за столом» после успешной отправки розы */
@@ -177,15 +326,23 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const roseGiftFxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { toast, showToast } = useInlineToast(1700)
   const nameTrimmed = name.trim()
+  const statusTrimmed = status.trim().slice(0, 15)
   const canSaveName = nameTrimmed.length >= 2 && nameTrimmed.length <= 16 && nameTrimmed !== currentUser.name
+  const canSaveStatus = statusTrimmed !== (currentUser.status ?? "")
   const canChangeAvatar = currentUser.authProvider === "login" && avatarInput.trim().length > 0 && avatarInput !== currentUser.avatar
-  const sectionCardClass = "rounded-xl border border-cyan-300/20 bg-slate-950/70 px-3 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.5)]"
-  const secondaryBtnClass = "rounded-xl border border-slate-600 bg-slate-800/70 text-sm font-semibold text-slate-100 transition-all hover:bg-slate-700/70"
-  const valueTextClass = "text-sm font-bold text-slate-100"
+  const sectionCardClass =
+    "rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 px-4 py-4 shadow-[0_10px_26px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.85)]"
+  const secondaryBtnClass =
+    "rounded-2xl border border-slate-200 bg-white text-[15px] font-extrabold text-slate-900 shadow-[0_6px_14px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.9)] transition hover:bg-slate-50 active:translate-y-px active:shadow-[0_3px_8px_rgba(15,23,42,0.10)] disabled:opacity-55"
+  const valueTextClass = "text-[15px] font-black text-slate-900"
 
   useEffect(() => {
     setName(initialName)
   }, [initialName])
+
+  useEffect(() => {
+    setStatus(initialStatus)
+  }, [initialStatus])
 
   useEffect(() => {
     if (showFramesModal) setFrameHoverPreviewId(null)
@@ -231,6 +388,39 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     showToast("Имя сохранено", "success")
   }
 
+  const handleSaveStatus = async () => {
+    if (!canSaveStatus) return
+    dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: statusTrimmed })
+    try {
+      await apiFetch("/api/user/state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: statusTrimmed }),
+      })
+      showToast("Статус обновлен", "success")
+    } catch {
+      showToast("Статус обновлен локально", "info")
+    }
+  }
+
+  const handleClearStatus = async () => {
+    if (!currentUser.status && !statusTrimmed) return
+    setStatus("")
+    dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: "" })
+    try {
+      await apiFetch("/api/user/state", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: "" }),
+      })
+    } catch {
+      // ignore network failure: local state already cleared
+    }
+    showToast("Статус удален", "success")
+  }
+
   const isPanel = variant === "panel"
   const closePanel = () => {
     if (isPanel && onClose) onClose()
@@ -245,9 +435,44 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
   const renderProfileFields = () => (
     <>
+        <div className={`${sectionCardClass} p-2`}>
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200">
+            <button
+              type="button"
+              onClick={() => setProfileTab("profile")}
+              className={`rounded-xl px-3 py-2 text-[15px] font-black transition ${
+                profileTab === "profile" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
+              }`}
+              aria-pressed={profileTab === "profile"}
+            >
+              Профиль
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileTab("achievements")}
+              className={`relative rounded-xl px-3 py-2 text-[15px] font-black transition ${
+                profileTab === "achievements" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
+              }`}
+              aria-pressed={profileTab === "achievements"}
+            >
+              {achievementStatusDelta > 0 && (
+                <span
+                  className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-black leading-none text-emerald-700 shadow-[0_4px_10px_rgba(16,185,129,0.2)]"
+                  aria-hidden
+                >
+                  +{achievementStatusDelta}
+                </span>
+              )}
+              Достижения
+            </button>
+          </div>
+        </div>
+
+      {profileTab === "profile" && (
+      <>
         {/* Карточка профиля: аватар + имя + фото (login) */}
         <div className={`${sectionCardClass} space-y-4`}>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Ваш профиль</p>
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Ваш профиль</p>
           <div className="flex flex-col items-stretch gap-6 sm:flex-row sm:items-start">
             {/* Слева: аватар + возраст / пол */}
             <div className="flex shrink-0 flex-col items-center gap-2.5 sm:items-start">
@@ -297,35 +522,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                     </div>
                   </>
                 )}
-                <div
-                  className={`relative z-[10] h-full w-full overflow-hidden rounded-full transition-all duration-200 ${
-                    (() => {
-                      const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                      return f?.animationClass ?? ""
-                    })()
-                  }`}
-                  style={
-                    currentFrameId !== "none"
-                      ? (() => {
-                          const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                          return f ? { border: f.border, boxShadow: f.shadow, padding: 3 } : {}
-                        })()
-                      : { border: "2px solid #475569" }
-                  }
-                >
-                  <img src={currentUser.avatar} alt="" className="h-full w-full rounded-full object-cover" />
-                </div>
-                {(() => {
-                  const f = PROFILE_FRAMES.find((x) => x.id === currentFrameId)
-                  return f?.svgPath ? (
-                    <img
-                      src={assetUrl(f.svgPath)}
-                      alt=""
-                      className="pointer-events-none absolute inset-0 z-[11] h-full w-full object-contain"
-                      aria-hidden
-                    />
-                  ) : null
-                })()}
+                <PlayerAvatar player={currentUser} frameId={currentFrameId} size={88} hideNameLabel />
                 {isVip && (
                   <div
                     className="absolute z-[26] flex items-center justify-center rounded-full"
@@ -358,10 +555,10 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                   }}
                   aria-label={`Уровень: ${profileDailyLevel}`}
                 >
-                  <span className="text-[11px] font-black tabular-nums leading-none text-white">{profileDailyLevel}</span>
+                  <span className="text-[15px] font-black tabular-nums leading-none text-white">{profileDailyLevel}</span>
                 </div>
               </div>
-              <p className="max-w-[9rem] text-center text-sm leading-snug text-slate-400 sm:max-w-none sm:text-left">
+              <p className="max-w-[9rem] text-center text-[15px] font-semibold leading-snug text-slate-700 sm:max-w-none sm:text-left">
                 {currentUser.age} лет <span className="text-slate-600">·</span> {genderLabel(currentUser.gender)}
               </p>
             </div>
@@ -369,7 +566,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             {/* Справа: заголовок → поле → кнопка (вертикально) */}
             <div className="min-w-0 w-full flex-1 space-y-3">
               <div className="flex flex-col gap-2">
-                <label htmlFor="profile-name" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label htmlFor="profile-name" className="text-[15px] font-extrabold tracking-tight text-slate-800">
                   Имя в игре
                 </label>
                 <input
@@ -377,14 +574,14 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={16}
-                  className="h-11 w-full min-w-0 rounded-xl border border-slate-600/80 bg-slate-950/80 px-3.5 text-sm font-semibold text-slate-50 outline-none ring-0 transition-colors focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-500/20"
+                  className="h-11 w-full min-w-0 rounded-2xl border border-slate-200 bg-white px-3.5 text-[15px] font-semibold text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] outline-none ring-0 transition-colors focus:border-sky-400/70 focus:ring-2 focus:ring-sky-300/30"
                   placeholder="Как вас видят за столом"
                   autoComplete="nickname"
                 />
                 <Button
                   onClick={handleSaveName}
                   disabled={!canSaveName}
-                  className="h-11 w-full shrink-0 rounded-xl px-4 text-sm font-bold disabled:!opacity-100 sm:w-auto sm:self-start"
+                  className="h-11 w-full shrink-0 rounded-2xl px-4 text-[15px] font-black disabled:!opacity-100 sm:w-auto sm:self-start"
                   style={
                     canSaveName
                       ? {
@@ -406,8 +603,8 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               </div>
 
               {currentUser.authProvider === "login" && (
-                <div className="space-y-2 border-t border-slate-700/50 pt-3">
-                  <label htmlFor="profile-avatar-url" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="space-y-2 border-t border-slate-200 pt-3">
+                  <label htmlFor="profile-avatar-url" className="text-[15px] font-extrabold tracking-tight text-slate-800">
                     Фото (URL)
                   </label>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -417,7 +614,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       value={avatarInput}
                       onChange={(e) => setAvatarInput(e.target.value)}
                       placeholder="https://…"
-                      className="h-10 min-h-0 w-full flex-1 rounded-xl border border-slate-600/80 bg-slate-950/80 px-3 text-sm text-slate-50 outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-500/20"
+                      className="h-10 min-h-0 w-full flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-[15px] text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] outline-none focus:border-sky-400/70 focus:ring-2 focus:ring-sky-300/30"
                     />
                     <Button
                       size="sm"
@@ -427,7 +624,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         showToast("Фото обновлено", "success")
                       }}
                       disabled={!canChangeAvatar}
-                      className="h-10 w-full shrink-0 rounded-xl px-4 text-sm font-bold disabled:opacity-45 sm:w-auto"
+                      className="h-10 w-full shrink-0 rounded-2xl px-4 text-[15px] font-black disabled:opacity-45 sm:w-auto"
                       style={{
                         background: canChangeAvatar ? "linear-gradient(135deg,#38bdf8,#a78bfa)" : "rgba(51,65,85,0.6)",
                         color: "#0b1220",
@@ -437,7 +634,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       Обновить фото
                     </Button>
                   </div>
-                  <p className="text-xs leading-relaxed text-slate-500">
+                  <p className="text-[15px] font-medium leading-relaxed text-slate-700">
                     Аватар по ссылке; позже загрузка на сервер.
                   </p>
                 </div>
@@ -446,11 +643,56 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           </div>
         </div>
 
+        <div className={`${sectionCardClass} space-y-3`}>
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Статус</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              id="profile-status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value.slice(0, 15))}
+              maxLength={15}
+              className="h-14 w-full min-w-0 rounded-[1.85rem] border border-slate-200 bg-white px-7 text-[15px] font-semibold text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] outline-none ring-0 transition-colors focus:border-slate-300 focus:ring-0"
+              placeholder="Ищу тебя"
+              autoComplete="off"
+            />
+            <Button
+              onClick={handleSaveStatus}
+              disabled={!canSaveStatus}
+              className="h-14 w-full shrink-0 rounded-[1.85rem] px-8 text-[15px] font-black disabled:!opacity-100 sm:w-auto"
+              style={
+                canSaveStatus
+                  ? {
+                      background: "#475569",
+                      color: "#e2e8f0",
+                      border: "1px solid rgba(100,116,139,0.9)",
+                      boxShadow: "none",
+                    }
+                  : {
+                      background: "#64748b",
+                      color: "#e2e8f0",
+                      border: "1px solid rgba(148,163,184,0.65)",
+                      boxShadow: "none",
+                    }
+              }
+            >
+              ОК
+            </Button>
+            <button
+              type="button"
+              onClick={handleClearStatus}
+              aria-label="Удалить статус"
+              className="inline-flex h-14 w-full items-center justify-center rounded-[1.85rem] border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 sm:w-14"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
         {/* Поклонники — наполняется кнопкой «Стать поклонником» в профиле игрока за столом */}
         <div className={`${sectionCardClass} space-y-3`}>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Твои поклонники</p>
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Твои поклонники</p>
           {admirersResolved.length === 0 ? (
-            <p className="text-sm leading-relaxed text-slate-500">
+            <p className="text-[15px] font-medium leading-relaxed text-slate-700">
               Пока никого. Когда кто-то за вами поухаживает — он появится здесь.
             </p>
           ) : (
@@ -460,26 +702,26 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                   <button
                     type="button"
                     onClick={() => dispatch({ type: "OPEN_SIDE_CHAT", player: p })}
-                    className="group flex flex-col items-center gap-1 rounded-xl border border-amber-500/35 bg-slate-900/60 px-2 py-2 transition-opacity hover:opacity-90"
+                    className="group flex flex-col items-center gap-1 rounded-2xl border border-slate-200 bg-white px-2 py-2 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition hover:bg-slate-50"
                   >
                     {p.avatar ? (
                       <img
                         src={p.avatar}
                         alt=""
-                        className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-600/80"
+                        className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-200"
                       />
                     ) : (
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-xs font-bold text-slate-200 ring-1 ring-slate-600/80">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-[15px] font-black text-slate-800 ring-1 ring-slate-200">
                         {(p.name || "?").slice(0, 1)}
                       </span>
                     )}
-                    <span className="max-w-[56px] truncate text-[10px] font-semibold text-slate-100">{p.name}</span>
+                    <span className="max-w-[56px] truncate text-[15px] font-bold text-slate-900">{p.name}</span>
                   </button>
                   <button
                     type="button"
                     aria-label={`Убрать ${p.name} из поклонников`}
                     onClick={() => dispatch({ type: "REMOVE_ADMIRER", playerId: p.id })}
-                    className="absolute -right-1 -top-1 rounded-full bg-slate-800 p-0.5 text-slate-500 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    className="absolute -right-1 -top-1 rounded-full bg-white p-0.5 text-slate-500 shadow-[0_6px_14px_rgba(15,23,42,0.12)] transition-colors hover:bg-slate-50 hover:text-slate-700"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -491,24 +733,24 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
         {/* Приглашение друзей в игру (VK) */}
         <div className={`${sectionCardClass} space-y-3`}>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Сообщество</p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Сообщество</p>
+          <div className="flex flex-col gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-600/80 to-slate-800/90 ring-1 ring-white/10"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 shadow-[0_10px_18px_rgba(37,99,235,0.22),inset_0_1px_0_rgba(255,255,255,0.35)] ring-1 ring-white/70"
                 aria-hidden
               >
-                <Users className="h-5 w-5 text-slate-200" strokeWidth={2} />
+                <Users className="h-5 w-5 text-white" strokeWidth={2} />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-100">Добавить друзей</p>
-                <p className="text-xs leading-relaxed text-slate-400">Пригласите в игру — веселее вместе</p>
+                <p className="text-base font-black text-slate-900">Добавить друзей</p>
+                <p className="text-[15px] font-medium leading-relaxed text-slate-700">Пригласите в игру — веселее вместе</p>
               </div>
             </div>
             <Button
               type="button"
               variant="outline"
-              className={`shrink-0 px-5 ${secondaryBtnClass}`}
+              className={`w-full px-5 ${secondaryBtnClass}`}
               onClick={handleInviteFriends}
             >
               Пригласить
@@ -518,7 +760,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
         {/* Быстрые настройки */}
         <div className={`${sectionCardClass} space-y-2`}>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Настройки</p>
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Настройки</p>
           <div className="flex flex-col gap-2">
             <button
               type="button"
@@ -551,28 +793,28 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             </button>
           </div>
         </div>
+      </>
+      )}
 
+        {profileTab === "achievements" && (
+        <>
         {/* Достижения — отдельный акцентный блок: цель → счётчик → полоса */}
         <section
-          className="rounded-2xl border border-slate-800/90 bg-[#070b12] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_40px_rgba(0,0,0,0.45)]"
+          className={`${sectionCardClass}`}
           aria-labelledby="achievements-heading"
         >
           <div className="mb-4 flex items-start gap-3">
             <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/25"
-              style={{
-                background: "linear-gradient(145deg, rgba(251,191,36,0.18) 0%, rgba(15,23,42,0.9) 100%)",
-                boxShadow: "0 0 20px rgba(251,191,36,0.12)",
-              }}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-200 to-orange-300 shadow-[0_10px_18px_rgba(217,119,6,0.18),inset_0_1px_0_rgba(255,255,255,0.55)]"
               aria-hidden
             >
-              <Sparkles className="h-5 w-5 text-amber-400" strokeWidth={2.25} />
+              <Sparkles className="h-5 w-5 text-amber-900" strokeWidth={2.25} />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 id="achievements-heading" className="text-base font-bold tracking-tight text-white">
+              <h2 id="achievements-heading" className="text-lg font-black tracking-tight text-slate-900">
                 Достижения
               </h2>
-              <p className="mt-0.5 text-xs leading-snug text-slate-500">
+              <p className="mt-1 text-[15px] font-medium leading-snug text-slate-700">
                 Накопительный прогресс по игре: поцелуи, траты на подарки и кручения бутылочки.
               </p>
             </div>
@@ -617,19 +859,19 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                   className={
                     "rounded-xl border px-3.5 py-3 transition-colors " +
                     (row.done
-                      ? "border-emerald-500/35 bg-emerald-950/20"
-                      : "border-slate-800 bg-slate-950/60")
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-slate-200 bg-white")
                   }
                 >
                   <div className="mb-2 flex items-baseline justify-between gap-3">
                     <div className="min-w-0">
-                      <span className="text-[13px] font-semibold text-white">{row.label}</span>
-                      <span className="mt-0.5 block text-[11px] text-slate-500">{row.hint}</span>
+                      <span className="text-base font-black text-slate-900">{row.label}</span>
+                      <span className="mt-1 block text-[15px] font-medium text-slate-700">{row.hint}</span>
                     </div>
                     <span
                       className={
-                        "shrink-0 tabular-nums text-sm font-semibold " +
-                        (row.done ? "text-emerald-400" : "text-slate-400")
+                        "shrink-0 tabular-nums text-[15px] font-bold " +
+                        (row.done ? "text-emerald-700" : "text-slate-600")
                       }
                       title={`${shown} из ${row.target}`}
                     >
@@ -637,7 +879,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                     </span>
                   </div>
                   <div
-                    className="h-2 w-full overflow-hidden rounded-full bg-slate-900 ring-1 ring-slate-800/80"
+                    className="h-2 w-full overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-200"
                     role="progressbar"
                     aria-valuenow={shown}
                     aria-valuemin={0}
@@ -656,27 +898,136 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               )
             })}
           </ul>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-lg font-black tracking-tight text-slate-900">Рейтинги и ивенты</p>
+              <button
+                type="button"
+                onClick={() => setShowReceivedOnly((v) => !v)}
+                className={`rounded-xl border px-3 py-1.5 text-[15px] font-black transition ${
+                  showReceivedOnly
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+                aria-pressed={showReceivedOnly}
+              >
+                Получено
+              </button>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {(
+                [
+                  ["Любитель крепкого", "подарил на стол бутылку водки"],
+                  ["Собутыльник", "подарил на стол коньяк"],
+                  ["Бармен", "отправить подряд 40 коктейлей или кружек пива"],
+                  ["Душа стола", "отправить подряд 20 кружек пива"],
+                  ["Любитель отдыха", "попарить 10 раз друга"],
+                  ["Транжира", "подарить красотке 20 бриллиантов"],
+                  ["Бонжур", "подарить на стол шампанское"],
+                  ["Пушистость", "получить 10 мягких игрушек"],
+                  ["Чайная церемония", "условие будет добавлено"],
+                  ["Утренник", "подарить всем игрокам игрушки"],
+                  ["Фермер", "купить рамку и получить в подарок корову"],
+                  ["Душа компании", "получить 100 кружек пива (для парня)"],
+                  ["Подручная", "получить 100 коктейлей (для девушек)"],
+                  ["Гуляка", "сменить 5 столов за 10 минут"],
+                  ["8 марта", "получить 100 цветов за час (для девушек)"],
+                  ["Одиночка", "не получить поцелуя в ответ"],
+                  ["Монах", "прожить в игре 30 дней подряд"],
+                  ["Принц", "поцеловать 50 раз девушку с рамкой принцесса"],
+                  ["Ювелир", "подарить 300 бриллиантов"],
+                  ["Мужская дружба", "собрать 20 друзей мужиков"],
+                  ["Женская дружба", "собрать 20 друзей женщин"],
+                  ["Новый год", "подарить новогодний стол"],
+                  ["Пират", "купить 30 сундуков"],
+                  ["Принцесса", "поцеловать 200 раз парня с рамкой принц"],
+                  ["Трезвенник", "купить 10 раз безалкогольную бутылку"],
+                  ["Снежный бой", "во время зимней игры запустить снежком 300 раз в игроков"],
+                  ["Сладкоежка", "получить в подарок 20 сладостей"],
+                  ["Сердцеед (ка)", "собрать 500 сердец за неделю"],
+                  ["Купидон (ка)", "подарить 100 роз"],
+                  ["Маг", "купить 10 раз рамку магия"],
+                  ["Помощь новичкам", "подарить 50 подарков новичкам"],
+                  ["Дедушка Мороз", "отправить 300 новогодних подарков"],
+                  ["Турист", "играй с разных городов и стран"],
+                  ["Фея", "с рамкой фея поцелуй 300 раз"],
+                  ["Первый парень", "продержаться в топ-10 3 недели (для парней)"],
+                  ["Первая леди", "продержаться в топ-10 3 недели (для девушек)"],
+                  ["Дружбанио", "пригласить 10 друзей за месяц"],
+                  ["Экстрасенс", "выиграть 10 турниров в мини-игре"],
+                  ["Культурный игрок", "сказать «привет» всем игрокам 20 раз"],
+                  ["Ведьмак (Ведьма)", "во время хэллоуинского ивента собрать коллекцию из 5 разных «проклятых» предметов"],
+                  ["Валентин", "отправить 100 «валентинок» за день 14 февраля"],
+                  ["Дачник", "во время летнего ивента посадить и вырастить 20 виртуальных растений"],
+                  ["Снегурочка", "помочь «Деду Морозу» за одним столом не менее 2 часов"],
+                ] as const
+              )
+                .map(([title, hint]) => {
+                  const stat = achievementStats[title]
+                  const current = stat?.current ?? 0
+                  const target = stat?.target ?? 1
+                  const known = stat?.known ?? false
+                  const progressPct = Math.max(0, Math.min(100, Math.round((current / Math.max(1, target)) * 100)))
+                  return { title, hint, progressPct, done: progressPct >= 100, known, current, target }
+                })
+                .filter((row) => (showReceivedOnly ? row.done : true))
+                .map(({ title, hint, progressPct, known, current, target }) => {
+                return (
+                  <li key={title} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+                    <div className="flex items-start gap-3">
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                        {/* Placeholder: сюда можно подставить картинку достижения */}
+                        <div className="flex h-full w-full items-center justify-center text-[15px] font-black text-slate-500">+</div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-black text-slate-900">{title}</p>
+                        <p className="mt-0.5 text-[15px] font-medium text-slate-700">{hint}</p>
+                        <p className="mt-1 text-[13px] font-semibold text-slate-500">
+                          {known ? `${current}/${target}` : "нет данных"}
+                        </p>
+                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-200">
+                          <div
+                            className={`h-full rounded-full transition-[width] duration-300 ${
+                              known ? "bg-gradient-to-r from-cyan-500 to-blue-500" : "bg-slate-300"
+                            }`}
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                  )
+                })}
+            </ul>
+            {showReceivedOnly && (
+              <p className="text-[15px] font-medium text-slate-600">Здесь будут только полученные достижения.</p>
+            )}
+          </div>
         </section>
+        </>
+        )}
 
+      {profileTab === "profile" && (
+      <>
         <div className={`${sectionCardClass} overflow-hidden p-0`}>
-          <p className="border-b border-cyan-400/10 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          <p className="border-b border-slate-200 px-4 py-3 text-[15px] font-black tracking-tight text-slate-900">
             Баланс
           </p>
-          <div className="grid grid-cols-3 divide-x divide-slate-600/40">
+          <div className="grid grid-cols-3 divide-x divide-slate-200">
             <div className="flex flex-col items-center justify-center gap-2 px-2 py-4 text-center sm:py-5">
               <div
                 className="flex h-11 w-11 items-center justify-center rounded-2xl sm:h-12 sm:w-12"
                 style={{
                   background: "rgba(249, 115, 22, 0.12)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
                 }}
               >
                 <Heart className="h-5 w-5 text-orange-400 sm:h-6 sm:w-6" fill="currentColor" strokeWidth={0} aria-hidden />
               </div>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+              <span className="text-[15px] font-bold tracking-tight text-slate-700">
                 Сердца
               </span>
-              <span className="text-[1.35rem] font-black tabular-nums leading-none text-white tracking-tight sm:text-2xl">
+              <span className="text-[1.35rem] font-black tabular-nums leading-none text-slate-900 tracking-tight sm:text-2xl">
                 {voiceBalance}
               </span>
               <span className="text-[9px] leading-tight text-slate-600">основная валюта</span>
@@ -686,15 +1037,15 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 className="flex h-11 w-11 items-center justify-center rounded-2xl sm:h-12 sm:w-12"
                 style={{
                   background: "rgba(52, 211, 153, 0.1)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
                 }}
               >
                 <Trophy className="h-5 w-5 text-emerald-400 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden />
               </div>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+              <span className="text-[15px] font-bold tracking-tight text-slate-700">
                 Бонусы
               </span>
-              <span className="text-[1.35rem] font-black tabular-nums leading-none text-white tracking-tight sm:text-2xl">
+              <span className="text-[1.35rem] font-black tabular-nums leading-none text-slate-900 tracking-tight sm:text-2xl">
                 {bonusBalance}
               </span>
               <span className="text-[9px] leading-tight text-slate-600">награды</span>
@@ -704,15 +1055,15 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 className="flex h-11 w-11 items-center justify-center rounded-2xl sm:h-12 sm:w-12"
                 style={{
                   background: "rgba(244, 63, 94, 0.1)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
                 }}
               >
                 <Flower2 className="h-5 w-5 text-rose-400 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden />
               </div>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[11px]">
+              <span className="text-[15px] font-bold tracking-tight text-slate-700">
                 Розы
               </span>
-              <span className="text-[1.35rem] font-black tabular-nums leading-none text-white tracking-tight sm:text-2xl">
+              <span className="text-[1.35rem] font-black tabular-nums leading-none text-slate-900 tracking-tight sm:text-2xl">
                 {rosesBalance}
               </span>
               <span className="text-[9px] leading-tight text-slate-600">в инвентаре</span>
@@ -722,12 +1073,12 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
         <div className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${sectionCardClass}`}>
           <div>
-            <div className="text-xs sm:text-sm font-semibold text-slate-400">{"Получено роз"}</div>
+            <div className="text-[15px] font-bold text-slate-700">{"Получено роз"}</div>
             <div className={valueTextClass}>{rosesReceived}</div>
           </div>
           <Button
             size="sm"
-            className="rounded-xl text-sm font-semibold shrink-0"
+            className="shrink-0 rounded-2xl text-[15px] font-black"
             style={{
               background: voiceBalance >= 50 ? "linear-gradient(180deg, #e11d48 0%, #be123c 100%)" : undefined,
               border: "1px solid rgba(225,29,72,0.5)",
@@ -741,10 +1092,10 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           </Button>
         </div>
         {hasTrueFeelingsAchievement && (
-          <div className="rounded-xl border border-rose-500/50 bg-rose-950/30 px-3 py-2 flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2">
             <span className="text-lg">🌹</span>
-            <span className="text-sm font-semibold text-rose-200">{"Настоящие чувства"}</span>
-            <span className="text-xs sm:text-sm text-slate-400">— подарили 10 роз одному игроку</span>
+            <span className="text-[15px] font-black text-rose-700">{"Настоящие чувства"}</span>
+            <span className="text-[15px] font-medium text-slate-700">— подарили 10 роз одному игроку</span>
           </div>
         )}
 
@@ -759,13 +1110,13 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 allowed: e.target.checked,
               })
             }
-            className="h-4 w-4 rounded border-slate-600 accent-amber-500 transition-transform duration-200 checked:scale-110"
+            className="h-4 w-4 rounded border-slate-300 accent-amber-500 transition-transform duration-200 checked:scale-110"
           />
-          <span className="text-sm font-medium text-slate-100">
+          <span className="text-[15px] font-bold text-slate-900">
             {"Разрешаю ухаживание"}
           </span>
         </label>
-        <p className="text-xs sm:text-sm text-slate-400 -mt-2">
+        <p className="-mt-2 text-[15px] font-medium text-slate-700">
           {courtshipProfileAllowed?.[currentUser.id] !== false
             ? "Кто нажал «Ухаживание» — увидит ссылку на ваш профиль ВК."
             : "Кто нажал «Ухаживание» — сможет написать вам личное сообщение в игре."}
@@ -782,27 +1133,17 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 allowed: e.target.checked,
               })
             }
-            className="h-4 w-4 rounded border-slate-600 accent-amber-500 transition-transform duration-200 checked:scale-110"
+            className="h-4 w-4 rounded border-slate-300 accent-amber-500 transition-transform duration-200 checked:scale-110"
           />
-          <span className="text-sm font-medium text-slate-100">
+          <span className="text-[15px] font-bold text-slate-900">
             {"Общение"}
           </span>
         </label>
-        <p className="text-xs sm:text-sm text-slate-400 -mt-2">
+        <p className="-mt-2 text-[15px] font-medium text-slate-700">
           {allowChatInvite?.[currentUser.id] === true
             ? "У вас включена кнопка «Пригласить общаться» — другие могут пригласить вас в личный чат."
             : "Если хотите пообщаться, но кнопка не работает — активируйте приват."}
         </p>
-
-        <div className="flex flex-col gap-2 pt-1">
-          <Button
-            variant="outline"
-            className="w-full rounded-xl text-sm"
-            onClick={closePanel}
-          >
-            {"Назад к столу"}
-          </Button>
-        </div>
 
       <button
         type="button"
@@ -811,12 +1152,14 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           dispatch({ type: "SET_SCREEN", screen: "registration" })
         }}
         className={cn(
-          "mt-4 text-sm font-medium text-slate-400 transition-colors hover:text-slate-200",
+          "mt-4 text-[15px] font-semibold text-slate-600 transition-colors hover:text-slate-800",
           isPanel && "px-1",
         )}
       >
         {"Выйти из профиля"}
       </button>
+      </>
+      )}
     </>
   )
 
@@ -829,11 +1172,12 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             title="Профиль"
             subtitle="Имя, рамка, баланс и приватность"
             onClose={onClose!}
-            headerRight={<span className="text-sm text-slate-400 tabular-nums">ID {currentUser.id}</span>}
+            variant="material"
+            headerRight={<span className="text-[15px] font-semibold text-slate-300 tabular-nums">ID {currentUser.id}</span>}
           >
             <div
               className={cn(
-                "w-full max-w-full space-y-4 rounded-[1.75rem] border border-white/[0.08] bg-gradient-to-b from-slate-900/[0.98] via-[#0a1020]/[0.97] to-slate-950/95 px-4 py-5 shadow-[0_28px_80px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.04] backdrop-blur-md sm:px-5",
+                "w-full max-w-full space-y-4 px-0 py-0",
               )}
             >
               {renderProfileFields()}
@@ -841,16 +1185,16 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           </GameSidePanelShell>
         </>
       ) : (
-        <div className="flex h-app max-h-app flex-col items-center px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] game-bg-animated">
+        <div className="flex h-app max-h-app flex-col items-center bg-gradient-to-b from-slate-50 via-white to-slate-100 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {toast && <InlineToast toast={toast} />}
-          <div className="flex h-full min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[rgba(2,6,23,0.85)] shadow-[0_24px_50px_rgba(0,0,0,0.75)]">
+          <div className="flex h-full min-h-0 w-full max-w-lg flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
             <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 py-5 sm:px-6 sm:py-7">
-              <div className="sticky top-0 z-10 -mx-4 mb-1 border-b border-cyan-300/15 bg-slate-950/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
+              <div className="sticky top-0 z-10 -mx-4 mb-1 border-b border-slate-200 bg-white/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6">
                 <div className="flex items-center justify-between gap-2">
-                  <h1 id="profile-page-title" className="text-lg font-bold tracking-wide text-slate-100 sm:text-xl">
+                  <h1 id="profile-page-title" className="text-lg font-black tracking-tight text-slate-900 sm:text-xl">
                     Профиль
                   </h1>
-                  <span className="text-xs text-slate-400 sm:text-sm">ID: {currentUser.id}</span>
+                  <span className="text-[15px] font-semibold text-slate-700">ID: {currentUser.id}</span>
                 </div>
               </div>
               {renderProfileFields()}
@@ -887,60 +1231,15 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 setFrameHoverPreviewId(null)
               }}
             >
-              <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              <p className="mb-3 text-center text-[15px] font-black tracking-tight text-slate-200">
                 Предпросмотр
               </p>
               <div className="mb-2 flex justify-center">
-                <div className="relative h-[7.5rem] w-[7.5rem]">
-                  <div
-                    className={`h-full w-full overflow-hidden rounded-full transition-all duration-200 ${previewFrameMeta.animationClass ?? ""}`}
-                    style={
-                      displayFrameId !== "none"
-                        ? { border: previewFrameMeta.border, boxShadow: previewFrameMeta.shadow, padding: 4 }
-                        : { border: "2px solid #475569" }
-                    }
-                  >
-                    <img
-                      src={currentUser.avatar}
-                      alt=""
-                      className="h-full w-full rounded-full object-cover"
-                    />
-                  </div>
-                  {previewFrameMeta.svgPath ? (
-                    <img
-                      src={assetUrl(previewFrameMeta.svgPath)}
-                      alt=""
-                      className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-                      aria-hidden
-                    />
-                  ) : null}
-                  {isVip && (
-                    <div
-                      className="absolute flex items-center justify-center rounded-full"
-                      style={{
-                        width: 26,
-                        height: 26,
-                        background: "linear-gradient(135deg,#facc15,#f97316)",
-                        color: "#111827",
-                        border: "2px solid #a15c10",
-                        top: 6,
-                        right: 6,
-                        boxShadow: "0 0 10px rgba(250,204,21,0.9)",
-                      }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          d="M4 18h16l-1.5-7.5-3.5 3-3-6.5-3 6.5-3.5-3L4 18z"
-                          fill="#111827"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </div>
+                <PlayerAvatar player={currentUser} frameId={displayFrameId} size={120} hideNameLabel />
               </div>
-              <p className="mb-5 text-center text-sm font-semibold text-cyan-100/95">{previewFrameMeta.label}</p>
+              <p className="mb-5 text-center text-[15px] font-black text-slate-100">{previewFrameMeta.label}</p>
 
-            <p className="relative mb-3 text-xs font-bold uppercase tracking-wider" style={{ color: "#94a3b8" }}>
+            <p className="relative mb-3 text-[15px] font-black tracking-tight text-slate-300">
               Бесплатные
             </p>
             <div className="relative grid grid-cols-4 gap-3 mb-6">
@@ -979,15 +1278,15 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         />
                       )}
                     </div>
-                    <span className="text-xs font-medium text-slate-200 leading-tight text-center">{f.label}</span>
+                    <span className="text-[15px] font-semibold text-slate-200 leading-tight text-center">{f.label}</span>
                   </button>
                 )
               })}
             </div>
 
-            <p className="relative mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider" style={{ color: "#fcd34d" }}>
+            <p className="relative mb-3 flex items-center gap-2 text-[15px] font-black tracking-tight text-amber-300">
               <span>Премиум</span>
-              <span className="text-sm font-extrabold normal-case text-rose-200 opacity-95">5 ❤ за рамку</span>
+              <span className="text-[15px] font-black text-rose-200/95">5 ❤ за рамку</span>
             </p>
             <div className="relative grid grid-cols-3 gap-3">
               {PREMIUM_FRAMES.map((f) => {
@@ -1033,7 +1332,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         />
                       )}
                     </div>
-                    <span className="text-xs font-medium text-slate-200 leading-tight text-center">{f.label}</span>
+                    <span className="text-[15px] font-semibold text-slate-200 leading-tight text-center">{f.label}</span>
                     <span className="heart-price heart-price--compact text-amber-200">{f.cost} ❤</span>
                   </button>
                 )
@@ -1043,7 +1342,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
             <Button
               variant="outline"
-              className="relative mt-2 w-full rounded-xl text-sm font-semibold border transition-all hover:scale-[1.01] active:scale-[0.99]"
+              className="relative mt-2 w-full rounded-2xl border text-[15px] font-black transition-all hover:scale-[1.01] active:scale-[0.99]"
               style={{ borderColor: "rgba(56,189,248,0.45)", color: "#e2e8f0" }}
               onClick={() => setShowFramesModal(false)}
             >
@@ -1068,19 +1367,19 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-2 text-base font-bold text-slate-100">
+            <h3 className="mb-2 text-lg font-black text-slate-100">
               Подарить розу (<span className="heart-price heart-price--compact text-rose-200">50 ❤</span>)
             </h3>
-            <p className="mb-3 text-sm text-slate-400">Повышает рейтинг симпатии. За 10 роз одному игроку — ачивка «Настоящие чувства».</p>
+            <p className="mb-3 text-[15px] font-medium text-slate-200">Повышает рейтинг симпатии. За 10 роз одному игроку — ачивка «Настоящие чувства».</p>
             <ul className="max-h-48 overflow-y-auto space-y-1">
               {players
                 .filter((p) => p.id !== currentUser.id)
                 .map((p) => (
-                  <li key={p.id} className="flex items-center justify-between rounded-lg border border-slate-700/80 bg-slate-900/70 px-3 py-2">
-                    <span className="text-sm text-slate-100 truncate">{p.name}</span>
+                  <li key={p.id} className="flex items-center justify-between rounded-2xl border border-slate-700/80 bg-slate-900/70 px-3 py-2">
+                    <span className="text-[15px] font-semibold text-slate-100 truncate">{p.name}</span>
                     <Button
                       size="sm"
-                      className="rounded-lg text-xs font-semibold shrink-0 disabled:opacity-50"
+                      className="shrink-0 rounded-xl text-[15px] font-black disabled:opacity-50"
                       style={{
                         background: voiceBalance >= 50 ? "linear-gradient(180deg, #e11d48 0%, #be123c 100%)" : undefined,
                         color: "#fff",
@@ -1105,7 +1404,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             </ul>
             <Button
               variant="outline"
-              className="mt-3 w-full rounded-xl text-sm"
+              className="mt-3 w-full rounded-2xl text-[15px] font-black"
               onClick={() => setShowGiveRoseModal(false)}
             >
               Закрыть

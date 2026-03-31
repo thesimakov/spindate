@@ -30,10 +30,10 @@ function buildUserPayload(
 ) {
   const profile = db
     .prepare(
-      `SELECT display_name, avatar_url, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
+      `SELECT display_name, avatar_url, status, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
     )
     .get(userId) as
-    | { display_name: string; avatar_url: string; gender: string; age: number; purpose: string }
+    | { display_name: string; avatar_url: string; status: string; gender: string; age: number; purpose: string }
     | undefined
 
   const displayName = profile?.display_name ?? username
@@ -43,6 +43,7 @@ function buildUserPayload(
   const gender = profile?.gender ?? "male"
   const age = profile?.age ?? 25
   const purpose = profile?.purpose ?? "communication"
+  const status = profile?.status ?? ""
 
   return {
     id: userId,
@@ -52,6 +53,7 @@ function buildUserPayload(
     gender,
     age,
     purpose,
+    status,
     vkUserId: vkUserId ?? undefined,
   }
 }
@@ -145,8 +147,8 @@ export async function POST(req: Request) {
         : `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
 
     db.prepare(
-      `INSERT INTO player_profiles (user_id, display_name, avatar_url, gender, age, purpose, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO player_profiles (user_id, display_name, avatar_url, status, gender, age, purpose, created_at, updated_at)
+       VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)`,
     ).run(userId, displayName, avatarUrl, gender, ageNum, purpose, now, now)
 
     const vkState = db

@@ -35,6 +35,7 @@ function migrate(database: Database.Database) {
       user_id TEXT PRIMARY KEY,
       display_name TEXT NOT NULL,
       avatar_url TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT '',
       gender TEXT NOT NULL DEFAULT 'male',
       age INTEGER NOT NULL DEFAULT 25,
       purpose TEXT NOT NULL DEFAULT 'communication',
@@ -80,6 +81,10 @@ function migrate(database: Database.Database) {
     // SQLite не позволяет ADD COLUMN ... UNIQUE. Добавляем колонку отдельно,
     // а уникальность обеспечиваем индексом idx_users_vk_user_id_unique выше.
     database.exec(`ALTER TABLE users ADD COLUMN vk_user_id INTEGER`)
+  }
+  const profileCols = database.prepare(`PRAGMA table_info(player_profiles)`).all() as { name: string }[]
+  if (!profileCols.some((c) => c.name === "status")) {
+    database.exec(`ALTER TABLE player_profiles ADD COLUMN status TEXT NOT NULL DEFAULT ''`)
   }
 }
 

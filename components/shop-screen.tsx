@@ -1,15 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
 import {
   ArrowRightLeft,
   CalendarDays,
-  Crown,
+  Coins,
   Flower2,
-  Gem,
   Heart,
   Sparkles,
-  type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
@@ -19,6 +17,7 @@ import { listVotesForPack, payVotesForPack } from "@/lib/heart-shop-pricing"
 import { apiFetch } from "@/lib/api-fetch"
 import { vkBridge } from "@/lib/vk-bridge"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
 
 type ShopScreenProps = {
   variant?: "page" | "panel"
@@ -45,18 +44,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     const votes = payVotesForPack(o.hearts)
     return { ...o, votes, listVotes }
   })
-  const sectionCardClass =
-    "rounded-2xl border border-white/[0.07] bg-slate-900/75 shadow-[0_10px_40px_rgba(0,0,0,0.4)] backdrop-blur-sm"
-  const sectionLabelClass = "text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500"
-  const subtleTextClass = "text-xs sm:text-sm text-slate-300"
-  const ctaPrimaryClass =
-    "h-10 w-full rounded-xl border border-cyan-200/70 text-sm font-semibold text-slate-950 shadow-[0_8px_20px_rgba(56,189,248,0.5)] disabled:opacity-60"
-  const ctaSecondaryClass =
-    "h-10 rounded-xl border border-cyan-300/55 bg-slate-900 text-sm font-semibold text-slate-100 hover:bg-slate-800 hover:border-cyan-200/80"
-
-  /** Обводка как у Material Symbols Outlined (~24dp, weight 400) */
-  const mdIconStroke = 2
-
   const SHOP_PARTICLE_EASE = [
     "cubic-bezier(0.45, 0.02, 0.29, 0.98)",
     "cubic-bezier(0.33, 0.12, 0.53, 0.94)",
@@ -110,18 +97,16 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     return list
   }, [])
 
-  if (!currentUser) return null
-
   const isPanel = variant === "panel"
-  /** Узкая колонка боковой панели: всё идёт сверху вниз без сетки 2–4 колонки */
-  const layoutDense = isPanel
 
-  const currentPlayer = players.find((p) => p.id === currentUser.id)
+  const currentPlayer = currentUser ? players.find((p) => p.id === currentUser.id) : undefined
   const vipUntilTs = currentPlayer?.vipUntilTs
   const isVip = !!currentPlayer?.isVip && (vipUntilTs == null || vipUntilTs > Date.now())
   const vipLeftDays = vipUntilTs ? Math.max(0, Math.ceil((vipUntilTs - Date.now()) / (24 * 60 * 60 * 1000))) : null
-  const vipTrialKey = `spindate_vip_trial_used_${currentUser.id}`
+  const vipTrialKey = currentUser ? `spindate_vip_trial_used_${currentUser.id}` : ""
   const [vipTrialUsed, setVipTrialUsed] = useState(false)
+  const vipLevelKey = currentUser ? `spindate_vip_level_v1_${currentUser.id}` : ""
+  const [vipLevel, setVipLevel] = useState<0 | 1 | 2 | 3>(0)
 
   useEffect(() => {
     try {
@@ -130,6 +115,151 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       setVipTrialUsed(false)
     }
   }, [vipTrialKey])
+
+  useEffect(() => {
+    if (!vipLevelKey) {
+      setVipLevel(0)
+      return
+    }
+    try {
+      const raw = localStorage.getItem(vipLevelKey)
+      const n = raw ? Number.parseInt(raw, 10) : 0
+      setVipLevel(n === 1 || n === 2 || n === 3 ? n : 0)
+    } catch {
+      setVipLevel(0)
+    }
+  }, [vipLevelKey])
+
+  useEffect(() => {
+    if (!vipLevelKey) return
+    try {
+      localStorage.setItem(vipLevelKey, String(vipLevel))
+    } catch {
+      // ignore
+    }
+  }, [vipLevel, vipLevelKey])
+
+  const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
+  const DAILY_BONUS_KEY = "botl_daily_bonus_v1"
+
+  const dailyBonusTodayKey = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString().slice(0, 10)
+  }, [])
+
+  const dailyBonusYesterdayKey = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
+  }, [])
+
+  const [dailyDay, setDailyDay] = useState(1)
+  const [dailyClaimedToday, setDailyClaimedToday] = useState(false)
+  const [welcomeGiftDone, setWelcomeGiftDone] = useState(false)
+
+  const dailyStreakRewardSpec = useMemo(() => getDailyStreakReward(dailyDay), [dailyDay])
+
+  useEffect(() => {
+    if (!currentUser) {
+      setDailyDay(1)
+      setDailyClaimedToday(false)
+      setWelcomeGiftDone(false)
+      return
+    }
+    try {
+      const welcomeRaw = localStorage.getItem(WELCOME_GIFT_KEY)
+      const welcomeStored = welcomeRaw ? (JSON.parse(welcomeRaw) as Record<string, boolean>) : {}
+      const welcomeOk = !!welcomeStored[String(currentUser.id)]
+      setWelcomeGiftDone(welcomeOk)
+      if (!welcomeOk) {
+        setDailyDay(1)
+        setDailyClaimedToday(false)
+        return
+      }
+      const raw = localStorage.getItem(DAILY_BONUS_KEY)
+      const parsed = raw ? (JSON.parse(raw) as { lastClaimDate?: string; streakDay?: number }) : {}
+      const last = parsed.lastClaimDate
+      const streak = typeof parsed.streakDay === "number" ? parsed.streakDay : 0
+      if (last === dailyBonusTodayKey) {
+        setDailyDay(computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey))
+        setDailyClaimedToday(true)
+        return
+      }
+      const nextDay = computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey)
+      setDailyDay(nextDay)
+      setDailyClaimedToday(false)
+    } catch {
+      setDailyDay(1)
+      setDailyClaimedToday(false)
+    }
+  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey])
+
+  const handleClaimDailyBonus = useCallback(() => {
+    if (!currentUser || !welcomeGiftDone || dailyClaimedToday) return
+    const spec = getDailyStreakReward(dailyDay)
+    if (!spec) return
+    if (spec.kind === "hearts") {
+      dispatch({ type: "PAY_VOICES", amount: -spec.amount })
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentUser,
+          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} сердец`,
+          timestamp: Date.now(),
+        },
+      })
+      showToast(`+${spec.amount} сердец в подарок`, "success")
+    } else if (spec.kind === "roses") {
+      const base = Date.now()
+      for (let i = 0; i < spec.amount; i++) {
+        dispatch({
+          type: "ADD_INVENTORY_ITEM",
+          item: {
+            type: "rose",
+            fromPlayerId: 0,
+            fromPlayerName: "Ежедневный бонус",
+            timestamp: base + i,
+          },
+        })
+      }
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentUser,
+          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} роз`,
+          timestamp: Date.now(),
+        },
+      })
+      showToast(`+${spec.amount} роз в инвентарь`, "success")
+    } else {
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentUser,
+          text: `${currentUser.name} получил(а) ежедневный бонус: супер-рамка (награда будет начислена позже)`,
+          timestamp: Date.now(),
+        },
+      })
+      showToast("Супер-рамка — скоро в профиле", "success")
+    }
+    try {
+      localStorage.setItem(
+        DAILY_BONUS_KEY,
+        JSON.stringify({ lastClaimDate: dailyBonusTodayKey, streakDay: dailyDay }),
+      )
+    } catch {
+      // ignore
+    }
+    setDailyClaimedToday(true)
+  }, [currentUser, welcomeGiftDone, dailyClaimedToday, dailyDay, dispatch, dailyBonusTodayKey, showToast])
 
   const runLiveKeepAlive = async (user: typeof currentUser, ms: number) => {
     if (!user) return () => {}
@@ -170,8 +300,19 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     itemId?: string
     isTrial?: boolean
   }) => {
-    if (isVip) {
-      showToast(vipLeftDays ? `VIP уже активен: ещё ${vipLeftDays} дн.` : "VIP уже активен", "info")
+    // Уровни: 0 нет, 1 триал, 2 куплено 7д, 3 куплено 30д.
+    const targetLevel: 1 | 2 | 3 = isTrial ? 1 : days >= 30 ? 3 : 2
+    const allowed =
+      vipLevel === 0
+        ? true
+        : vipLevel === 1
+          ? targetLevel === 2 || targetLevel === 3
+          : vipLevel === 2
+            ? targetLevel === 3
+            : false
+
+    if (!allowed) {
+      showToast("Этот пакет сейчас недоступен", "info")
       return
     }
     if (isTrial && vipTrialUsed) {
@@ -182,6 +323,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       showToast("Недостаточно сердец для VIP", "error")
       return
     }
+
+    if (!currentUser) return
 
     if (cost > 0) {
       const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
@@ -194,7 +337,8 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
 
     if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
-    const until = Date.now() + days * 24 * 60 * 60 * 1000
+    const base = vipUntilTs && vipUntilTs > Date.now() ? vipUntilTs : Date.now()
+    const until = base + days * 24 * 60 * 60 * 1000
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true, vipUntilTs: until })
     dispatch({
       type: "ADD_LOG",
@@ -214,10 +358,12 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       }
       setVipTrialUsed(true)
     }
+    setVipLevel((prev) => (prev >= targetLevel ? prev : targetLevel))
     showToast(`VIP активирован на ${days} дн.`, "success")
   }
 
   const handleTopUp = async (amount: number, votes: number, itemId: string) => {
+    if (!currentUser) return
     const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
     const ok = await vkBridge.showPaymentWall(votes, itemId)
     stopKeepAlive()
@@ -229,681 +375,452 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     showToast(`Баланс пополнен на ${amount} ❤`, "success")
   }
 
+  if (!currentUser) return null
+
+  const goldCard =
+    "rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 shadow-[0_10px_26px_rgba(15,23,42,0.16),inset_0_1px_0_rgba(255,255,255,0.85)]"
+  const goldInset = "rounded-2xl border border-slate-200/85 bg-gradient-to-b from-slate-50 to-white shadow-[0_4px_12px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.8)]"
+  /** Подписи к пакетам: первые два — «мешочек», дальше — «мешков». */
+  const packTitle = (hearts: number) => {
+    return `${hearts.toLocaleString("ru-RU")} сердец`
+  }
+
+  /** Контраст текста зависит от фона: в panel (material) — темнее, в page (тёмный фон) — светлее. */
+  const secLabel = isPanel ? "text-slate-500" : "text-slate-500"
+  const secTitle = isPanel ? "text-slate-900" : "text-slate-100"
+  const secMuted = isPanel ? "text-slate-600" : "text-slate-400"
+
+  // Типографика магазина (единые «токены», чтобы не прыгали размеры)
+  const tOverline = "text-[11px] font-extrabold uppercase tracking-[0.18em]"
+  const tH2 = "text-lg font-black sm:text-xl"
+  const tCardTitle = "text-base font-black sm:text-lg"
+  const tCardValue = "text-3xl font-black leading-none sm:text-4xl"
+  const tBodySm = "text-xs font-medium"
+  const tCta = "text-base font-black sm:text-lg"
+
   const shopInnerCard = (
     <div
       className={
-        "w-full shrink-0 space-y-6 rounded-[1.75rem] border border-white/[0.08] bg-gradient-to-b from-slate-900/[0.98] via-[#0a1020]/[0.97] to-slate-950/95 shadow-[0_28px_80px_rgba(0,0,0,0.65)] ring-1 ring-white/[0.04] backdrop-blur-md " +
-        (isPanel ? "max-w-full space-y-5 px-4 py-5 sm:px-5" : "max-w-2xl space-y-7 px-5 py-7 sm:px-8 sm:py-9")
+        "w-full shrink-0 space-y-5 font-sans " +
+        (isPanel ? "text-slate-900 " : "text-slate-100 ") +
+        (isPanel ? "max-w-full px-0 py-1" : "max-w-md space-y-6 px-1 py-2 sm:max-w-lg")
       }
     >
-        {!isPanel && (
-          <header className="space-y-2 text-center sm:text-left">
-            <p className={sectionLabelClass}>Стол и валюта</p>
-            <h1 className="bg-gradient-to-r from-slate-50 via-white to-slate-300 bg-clip-text text-2xl font-bold tracking-tight text-transparent sm:text-3xl">
-              Магазин
-            </h1>
-            <p className="text-sm leading-relaxed text-slate-400 sm:text-base">
-              Пополнение сердец, VIP и обмен — всё в одном месте.
-            </p>
-          </header>
-        )}
+      {!isPanel && (
+        <div className="relative mx-auto max-w-sm overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-b from-white to-slate-100 px-6 py-3 text-center shadow-[0_10px_24px_rgba(15,23,42,0.14)]">
+          <h1 className="text-xl font-black tracking-wide text-slate-800 sm:text-2xl">
+            Магазин
+          </h1>
+        </div>
+      )}
 
-        {/* Баланс */}
+      {/* Баланс */}
+      <div className={`relative overflow-hidden ${goldCard} p-4`}>
         <div
-          className={`relative overflow-hidden ${sectionCardClass} ${
-            layoutDense ? "p-4" : "p-5 sm:p-6"
-          }`}
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            background:
+              "radial-gradient(circle at 50% 20%, rgba(125,211,252,0.22) 0%, transparent 55%)",
+          }}
+          aria-hidden
+        />
+        <div className="relative flex items-center justify-between gap-3">
+          <div>
+            <p className={`${tOverline} text-slate-500`}>Баланс</p>
+            <p className="mt-0.5 text-xs font-semibold text-slate-700">Сердечки</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-400 to-rose-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_6px_12px_rgba(190,24,93,0.35)] ring-1 ring-rose-200/70">
+              <Heart className="bank-heart-beat h-7 w-7 text-white drop-shadow" strokeWidth={2} fill="currentColor" aria-hidden />
+            </div>
+            <span className="text-3xl font-black tabular-nums tracking-tight text-slate-800 sm:text-4xl">
+              {voiceBalance}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Ежедневный подарок */}
+      <div
+        className={`relative flex items-center gap-3 overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-r from-violet-50 via-white to-fuchsia-50 px-3 py-3 shadow-[0_8px_18px_rgba(109,40,217,0.14),inset_0_1px_0_rgba(255,255,255,0.9)] sm:px-4`}
+      >
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-violet-500 via-fuchsia-500 to-purple-700 opacity-80"
+          aria-hidden
+        />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-purple-700 shadow-[0_10px_18px_rgba(109,40,217,0.25),inset_0_1px_0_rgba(255,255,255,0.35)] ring-1 ring-white/70">
+          <Heart className="h-5 w-5 text-white drop-shadow" strokeWidth={2.25} fill="currentColor" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Сердечки в подарок</p>
+          <p className="mt-0.5 text-xs font-semibold text-slate-700">
+            {!welcomeGiftDone ? (
+              <>Доступно раз в день — сначала примите приветственный подарок</>
+            ) : dailyStreakRewardSpec?.kind === "hearts" ? (
+              <>
+                <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-200/80 bg-white/70 px-2 py-0.5 font-extrabold text-fuchsia-700 shadow-[0_6px_12px_rgba(236,72,153,0.12)]">
+                  +{dailyStreakRewardSpec.amount}
+                </span>{" "}
+                сердечек раз в сутки
+              </>
+            ) : dailyStreakRewardSpec?.kind === "roses" ? (
+              <>30 роз — награда раз в сутки</>
+            ) : dailyStreakRewardSpec?.kind === "frame" ? (
+              <>Супер-рамка — раз в сутки</>
+            ) : (
+              <>Доступно раз в день</>
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!welcomeGiftDone || dailyClaimedToday}
+          onClick={handleClaimDailyBonus}
+          className="relative inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-violet-400/85 bg-gradient-to-b from-violet-400 via-fuchsia-500 to-purple-700 px-3 py-2 text-xs font-extrabold text-white shadow-[0_4px_0_#4c1d95,0_10px_22px_rgba(139,92,246,0.35),inset_0_2px_0_rgba(255,255,255,0.35)] [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition hover:brightness-[1.06] active:translate-y-px active:shadow-[0_2px_0_#4c1d95,0_8px_18px_rgba(139,92,246,0.3)] disabled:cursor-not-allowed disabled:border-slate-500 disabled:from-slate-400 disabled:via-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none disabled:hover:brightness-100"
         >
-          <div
-            className="pointer-events-none absolute -right-6 -top-10 h-36 w-36 rounded-full bg-rose-500/[0.12] blur-3xl"
-            aria-hidden
-          />
-          <div className="pointer-events-none absolute -bottom-8 left-1/2 h-24 w-48 -translate-x-1/2 rounded-full bg-cyan-500/[0.06] blur-2xl" aria-hidden />
-          <div className="relative flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className={sectionLabelClass}>Баланс</p>
-              <p className={`mt-1 font-medium text-slate-300 ${layoutDense ? "text-xs" : "text-sm"}`}>
-                Сердечки на столе
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
-              <div
-                className={`flex items-center justify-center rounded-2xl bg-rose-500/15 ring-1 ring-rose-400/25 ${
-                  layoutDense ? "h-11 w-11" : "h-12 w-12 sm:h-14 sm:w-14"
-                }`}
-              >
-                <Heart
-                  className={`shrink-0 text-rose-300 ${layoutDense ? "h-5 w-5" : "h-6 w-6 sm:h-7 sm:w-7"}`}
-                  strokeWidth={mdIconStroke}
-                  fill="none"
+          {!dailyClaimedToday && welcomeGiftDone && (
+            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
+          )}
+          <Coins className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
+          {dailyClaimedToday ? "Забрано" : "Забрать"}
+        </button>
+      </div>
+
+      {/* Заголовок пакетов */}
+      <div className="px-1">
+        <p className={`${tOverline} ${secLabel}`}>Пополнение</p>
+        <h2 className={`${tH2} ${secTitle}`}>Наборы сердец</h2>
+        <p className={`${tBodySm} ${secMuted}`}>Оплата голосами VK</p>
+      </div>
+
+      {/* Пакеты сердец — карточка: иконка → количество → цена в голосах; скидка — шильдик в углу */}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
+        {heartOffers.map((offer) => {
+          const hasDiscount = offer.listVotes > offer.votes
+          const doubledIcon = offer.hearts === 5 || offer.hearts === 50 || offer.hearts === 150 || offer.hearts === 500
+          const normalIcon = offer.hearts === 1000 || offer.hearts === 5000
+          const benefitPct = hasDiscount
+            ? Math.round((offer.listVotes / offer.votes - 1) * 100)
+            : 0
+          return (
+            <div
+              key={offer.hearts}
+              className="relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-[#fffdf8] shadow-[0_8px_18px_rgba(15,23,42,0.18),0_1px_0_rgba(255,255,255,0.85)_inset]"
+            >
+              {hasDiscount && (
+                <div
+                  className="pointer-events-none absolute right-1 top-1 z-[6] min-w-[4.15rem] rounded-[0.9rem] border-[2px] border-white/70 bg-gradient-to-b from-fuchsia-400 via-violet-500 to-purple-700 px-2 py-0.5 text-center shadow-[0_6px_14px_rgba(76,29,149,0.45),inset_0_1px_0_rgba(255,255,255,0.45)] ring-1 ring-purple-900/25 sm:right-1.5 sm:top-1.5 sm:min-w-[4.5rem] sm:rounded-[1rem] sm:px-2.5 sm:py-1"
                   aria-hidden
-                />
+                >
+                  <div className="rounded-[0.62rem] bg-gradient-to-b from-white/15 to-black/20 px-1 py-0.5 leading-none ring-1 ring-white/25 sm:rounded-[0.72rem] sm:px-1.5">
+                    <span className="block text-[10px] font-black tabular-nums text-white sm:text-[11px] [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]">
+                      −{benefitPct}%
+                    </span>
+                    <span className="mt-0.5 block text-[8px] font-extrabold uppercase tracking-[0.09em] text-violet-100 sm:text-[9px] [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
+                      выгода
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-1 flex-col items-center px-2.5 pb-1.5 pt-4 sm:px-3.5 sm:pt-5">
+                <div
+                  className={`flex w-full items-center justify-center ${
+                    doubledIcon ? "h-[7.4rem] sm:h-[9.6rem]" : "h-[4.25rem] sm:h-24"
+                  }`}
+                >
+                  <img
+                    src={`/assets/${offer.hearts}.svg`}
+                    alt=""
+                    className={`select-none ${
+                      doubledIcon
+                        ? "h-[7rem] w-[7rem] drop-shadow-[0_12px_20px_rgba(0,0,0,0.3)] sm:h-[9rem] sm:w-[9rem]"
+                        : normalIcon
+                          ? "h-[3.75rem] w-[3.75rem] drop-shadow-[0_6px_10px_rgba(0,0,0,0.2)] sm:h-20 sm:w-20"
+                          : "h-[3.75rem] w-[3.75rem] drop-shadow-[0_6px_10px_rgba(0,0,0,0.2)] sm:h-20 sm:w-20"
+                    }`}
+                    loading="lazy"
+                    draggable={false}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-center gap-1">
+                  <span className="text-2xl font-black tabular-nums tracking-tight text-[#3b2a09] sm:text-3xl">
+                    {offer.hearts.toLocaleString("ru-RU")}
+                  </span>
+                  <Heart
+                    className="h-7 w-7 shrink-0 text-rose-500 sm:h-8 sm:w-8"
+                    strokeWidth={2}
+                    fill="currentColor"
+                    aria-hidden
+                  />
+                </div>
               </div>
-              <span
-                className={`font-black tabular-nums tracking-tight text-white ${
-                  layoutDense ? "text-2xl" : "text-3xl sm:text-4xl"
-                }`}
-              >
-                {voiceBalance}
-              </span>
+
+              <div className="mt-auto flex justify-center px-2.5 pb-3.5 pt-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleTopUp(offer.hearts, offer.votes, offer.itemId)}
+                  className="w-full rounded-2xl border border-amber-500/45 bg-gradient-to-b from-amber-300 via-amber-400 to-orange-500 px-2 py-2.5 text-center text-[13px] font-black tracking-tight text-[#2f1a04] shadow-[0_6px_12px_rgba(217,119,6,0.32),inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:brightness-105 active:translate-y-px active:shadow-[0_3px_7px_rgba(217,119,6,0.35)] sm:text-sm"
+                >
+                  <span className="tabular-nums">{offer.votes}</span>
+                  <span className="hidden sm:inline"> голосов</span>
+                  <span className="sm:hidden"> гол.</span>
+                </button>
+              </div>
             </div>
+          )
+        })}
+      </div>
+
+      {/* VIP тарифы */}
+      <div className="space-y-2 px-1">
+        <p className={`${tOverline} ${secLabel}`}>VIP</p>
+        <h2 className={`${tH2} ${secTitle}`}>Тарифы</h2>
+      </div>
+      <div className="-mx-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 sm:-mx-5 sm:px-5">
+        <div className="flex min-w-max snap-x snap-mandatory gap-3 pr-2 sm:pr-3">
+        <div className="relative w-[18.5rem] shrink-0 snap-start sm:w-[19.5rem]">
+          <div className="pointer-events-none absolute -left-1.5 -top-1.5 z-[3] h-[4.6rem] w-[4.6rem] drop-shadow-[0_10px_18px_rgba(0,0,0,0.25)] sm:-left-2 sm:-top-2 sm:h-[5.25rem] sm:w-[5.25rem]" aria-hidden>
+            <img src="/assets/green.png" alt="" className="h-full w-full" />
+          </div>
+          <div className="relative overflow-hidden rounded-3xl border border-lime-300/70 bg-[#f4f4f5] shadow-[0_6px_14px_rgba(148,163,184,0.22)]">
+          <div className="px-4 pt-4 text-center">
+            <p className={`${tCardTitle} text-rose-500`}>VIP 7 дней</p>
+          </div>
+          <div className="px-4 pb-3 pt-2">
+            <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
+              Попробуйте сейчас!
+            </div>
+            <p className={`mt-2 text-center ${tCardValue} text-lime-600`}>Бесплатно!</p>
+            <button
+              type="button"
+              disabled={vipTrialUsed || vipLevel !== 0 || !!isVip}
+              onClick={() => handleActivateVip({ days: 3, cost: 0, isTrial: true })}
+              className={`mt-2 w-full rounded-full border border-green-700/35 bg-gradient-to-b from-lime-400 to-green-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(22,163,74,0.35),inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
+            >
+              {vipTrialUsed ? "Проба использована" : vipLevel !== 0 || isVip ? "Недоступно" : "Попробовать!"}
+            </button>
+          </div>
           </div>
         </div>
 
-        {/* Пополнение сердечек (оплата через VK по пакетам) */}
-        {layoutDense ? (
-          <div className="border-t border-slate-600/35 pt-5">
-            <p className={sectionLabelClass}>Пополнение</p>
-            <p className="mt-1.5 text-sm font-semibold text-slate-100">Пакеты сердец</p>
-            <p className="mt-0.5 text-xs text-slate-500">Оплата голосами VK</p>
+        <div className="w-[18.5rem] shrink-0 snap-start overflow-hidden rounded-3xl border border-slate-200 bg-[#f4f4f5] shadow-[0_6px_14px_rgba(148,163,184,0.2)] sm:w-[19.5rem]">
+          <div className="px-4 pt-4 text-center">
+              <p className={`${tCardTitle} text-rose-500`}>VIP 7 дней</p>
           </div>
-        ) : (
-          <div className="space-y-1 px-0.5">
-            <p className={sectionLabelClass}>Пополнение</p>
-            <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl">Пакеты сердец</h2>
-            <p className="text-xs text-slate-500 sm:text-sm">Оплата голосами VK · скидки на крупные пакеты</p>
+          <div className="px-4 pb-3 pt-2">
+            <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
+              {Math.round(20 / 7)} голоса в неделю
+            </div>
+              <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">20 голосов</p>
+            <button
+              type="button"
+              disabled={voiceBalance < 20 || vipLevel === 2 || vipLevel === 3}
+              onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
+                className={`mt-2 w-full rounded-full border border-rose-600/45 bg-gradient-to-b from-rose-400 to-pink-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.42)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
+            >
+              {voiceBalance < 20 ? "Недостаточно ❤" : vipLevel === 2 || vipLevel === 3 ? "Недоступно" : "Купить"}
+            </button>
           </div>
-        )}
-        <div
-          className={
-            layoutDense ? "grid grid-cols-3 gap-2 sm:gap-3" : "grid grid-cols-3 gap-3 sm:gap-3.5"
-          }
-        >
-          {heartOffers.map((offer) => {
-            const hasDiscount = offer.listVotes > offer.votes
-            const discountPercent = hasDiscount ? Math.round((1 - offer.votes / offer.listVotes) * 100) : 0
-            const isPopular = offer.hearts === 500
-            const isBest = offer.hearts === 5000
-            const iconConfig: {
-              bg: string
-              ring: string
-              fg: string
-              Icon: LucideIcon
-              filled?: boolean
-            } =
-              offer.hearts >= 5000
-                ? {
-                    bg: "bg-gradient-to-br from-amber-200 via-yellow-300 to-amber-400",
-                    ring: "ring-amber-300/80",
-                    fg: "text-amber-800",
-                    Icon: Crown,
-                  }
-                : offer.hearts >= 1000
-                  ? {
-                      bg: "bg-gradient-to-br from-sky-200 via-indigo-300 to-sky-400",
-                      ring: "ring-sky-200/80",
-                      fg: "text-sky-900",
-                      Icon: Gem,
-                    }
-                  : offer.hearts >= 150
-                    ? {
-                        bg: "bg-gradient-to-br from-rose-200 via-pink-300 to-rose-400",
-                        ring: "ring-rose-200/80",
-                        fg: "text-rose-800",
-                        Icon: Heart,
-                        filled: true,
-                      }
-                    : {
-                        bg: "bg-gradient-to-br from-slate-100 via-slate-200 to-slate-300",
-                        ring: "ring-slate-200/80",
-                        fg: "text-sky-700",
-                        Icon: Heart,
-                        filled: false,
-                      }
-            const cardAccent =
-              isBest
-                ? "border-amber-400/45 bg-gradient-to-b from-amber-500/[0.14] via-slate-950/75 to-[#060a12] shadow-[0_12px_40px_rgba(245,158,11,0.12),inset_0_1px_0_rgba(255,255,255,0.06)]"
-                : offer.hearts >= 1000
-                  ? "border-indigo-400/35 bg-gradient-to-b from-indigo-500/[0.12] via-slate-950/80 to-[#060a12] shadow-[0_12px_40px_rgba(99,102,241,0.14),inset_0_1px_0_rgba(255,255,255,0.05)]"
-                  : hasDiscount
-                    ? "border-rose-500/40 bg-gradient-to-b from-rose-500/[0.11] via-slate-950/80 to-[#060a12] shadow-[0_12px_40px_rgba(244,63,94,0.1),inset_0_1px_0_rgba(255,255,255,0.05)]"
-                    : "border-cyan-500/25 bg-gradient-to-b from-cyan-500/[0.08] via-slate-950/85 to-[#060a12] shadow-[0_12px_36px_rgba(34,211,238,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]"
+        </div>
 
-            const iconWellStyle =
-              offer.hearts >= 5000
-                ? { background: "radial-gradient(circle at 30% 25%, rgba(254,243,199,0.95) 0%, rgba(251,191,36,0.55) 42%, rgba(180,83,9,0.35) 100%)" }
-                : offer.hearts >= 1000
-                  ? { background: "radial-gradient(circle at 30% 25%, rgba(224,231,255,0.9) 0%, rgba(129,140,248,0.5) 45%, rgba(67,56,202,0.4) 100%)" }
-                  : offer.hearts >= 150
-                    ? { background: "radial-gradient(circle at 30% 25%, rgba(254,205,211,0.95) 0%, rgba(251,113,133,0.45) 48%, rgba(190,18,60,0.35) 100%)" }
-                    : { background: "radial-gradient(circle at 30% 25%, rgba(248,250,252,0.95) 0%, rgba(148,163,184,0.45) 50%, rgba(71,85,105,0.35) 100%)" }
+        <div className="relative w-[18.5rem] shrink-0 snap-start sm:w-[19.5rem]">
+          <div className="pointer-events-none absolute -left-1.5 -top-1.5 z-[3] h-[4.6rem] w-[4.6rem] drop-shadow-[0_10px_18px_rgba(0,0,0,0.25)] sm:-left-2 sm:-top-2 sm:h-[5.25rem] sm:w-[5.25rem]" aria-hidden>
+            <img src="/assets/red.png" alt="" className="h-full w-full" />
+          </div>
+          <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-[#f4f4f5] shadow-[0_6px_14px_rgba(148,163,184,0.2)]">
+          <div className="px-4 pt-4 text-center">
+              <p className={`${tCardTitle} text-rose-500`}>VIP 30 дней</p>
+          </div>
+          <div className="px-4 pb-3 pt-2">
+            <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
+              {Math.round(70 / 4)} голосов в неделю
+            </div>
+              <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">70 голосов</p>
+            <button
+              type="button"
+              disabled={voiceBalance < 70 || vipLevel === 3}
+              onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
+                className={`mt-2 w-full rounded-full border border-rose-600/45 bg-gradient-to-b from-rose-400 to-pink-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.42)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
+            >
+              {voiceBalance < 70 ? "Недостаточно ❤" : vipLevel === 3 ? "Недоступно" : "Купить"}
+            </button>
+          </div>
+          </div>
+        </div>
+        </div>
+      </div>
 
-            const badgeSm = layoutDense ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px] sm:text-xs"
-
-            return (
-              <div
-                key={offer.hearts}
-                className={`group relative flex h-full min-h-[11rem] flex-col overflow-hidden rounded-[1.25rem] border text-slate-50 backdrop-blur-md transition-all duration-300 sm:rounded-[1.35rem] sm:min-h-[12.5rem] ${cardAccent} hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(0,0,0,0.45)]`}
-              >
-                <div
-                  className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-80"
-                  aria-hidden
-                />
-                <div className="pointer-events-none absolute inset-x-6 top-8 h-16 rounded-full bg-cyan-400/10 blur-2xl" aria-hidden />
-
-                <div
-                  className={`relative flex min-h-0 flex-1 flex-col items-center px-2 pb-2 pt-3 sm:px-3 sm:pb-3 sm:pt-4 ${layoutDense ? "pt-2.5" : ""}`}
-                >
-                  {(isPopular || isBest) && (
-                    <span
-                      className={`absolute left-1.5 top-1.5 z-[1] rounded-full font-bold uppercase tracking-wider shadow-md sm:left-2 sm:top-2 ${badgeSm} ${
-                        isBest
-                          ? "bg-gradient-to-r from-amber-300 to-yellow-400 text-amber-950 ring-1 ring-amber-200/60"
-                          : "bg-gradient-to-r from-cyan-400 to-sky-400 text-cyan-950 ring-1 ring-cyan-100/50"
-                      }`}
-                    >
-                      {isBest ? "Топ" : "Хит"}
-                    </span>
-                  )}
-                  {hasDiscount && (
-                    <span
-                      className={`absolute right-1.5 top-1.5 z-[1] rounded-full bg-gradient-to-r from-rose-600 to-rose-500 font-bold uppercase tracking-wide text-white shadow-[0_4px_14px_rgba(244,63,94,0.55)] ring-1 ring-rose-300/40 sm:right-2 sm:top-2 ${badgeSm}`}
-                    >
-                      −{discountPercent}%
-                    </span>
-                  )}
-
-                  <div
-                    className={`relative mb-2 flex shrink-0 items-center justify-center rounded-full shadow-[0_8px_28px_rgba(0,0,0,0.35)] ring-2 ring-white/15 ${iconConfig.ring} ${layoutDense ? "h-[3.25rem] w-[3.25rem] sm:h-14 sm:w-14" : "h-14 w-14 sm:h-16 sm:w-16"}`}
-                    style={iconWellStyle}
+      {/* Обмен */}
+      <div className="space-y-2 px-1">
+        <p className={`${tOverline} ${secLabel}`}>Обмен</p>
+        <h2 className={`${tH2} ${secTitle}`}>Сердца и розы</h2>
+      </div>
+      <div className={`overflow-hidden ${goldCard} p-0`}>
+        <div className="space-y-3 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5 text-cyan-700" strokeWidth={2} aria-hidden />
+            <span className="text-sm font-extrabold text-slate-700">Курс</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-2 text-xs font-bold text-slate-700">
+              <span className="tabular-nums">5</span>
+              <Heart className="h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+              <span>=</span>
+              <span>1</span>
+              <Flower2 className="h-4 w-4 text-fuchsia-600" strokeWidth={2} aria-hidden />
+            </span>
+          </div>
+          <div
+            role="tablist"
+            className="flex gap-2 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200"
+            aria-label="Направление обмена"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={exchangeTab === "voices-to-roses"}
+              onClick={() => setExchangeTab("voices-to-roses")}
+              className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-extrabold transition sm:text-sm ${
+                exchangeTab === "voices-to-roses"
+                  ? "bg-gradient-to-r from-cyan-400 to-sky-500 text-slate-900 shadow"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <span className="font-black">Сердце</span>
+                <span className="text-slate-900/60" aria-hidden>
+                  →
+                </span>
+                <span className="font-black">Роза</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={exchangeTab === "roses-to-voices"}
+              onClick={() => setExchangeTab("roses-to-voices")}
+              className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-extrabold transition sm:text-sm ${
+                exchangeTab === "roses-to-voices"
+                  ? "bg-gradient-to-r from-fuchsia-400 to-pink-500 text-white shadow"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <span className="font-black">Роза</span>
+                <span className={exchangeTab === "roses-to-voices" ? "text-white/80" : "text-slate-900/60"} aria-hidden>
+                  →
+                </span>
+                <span className="font-black">Сердце</span>
+              </span>
+            </button>
+          </div>
+        </div>
+        <div className="space-y-3 px-4 py-4">
+          {exchangeTab === "voices-to-roses" ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="text-xs font-bold text-slate-500">Баланс</span>
+                <span className="inline-flex items-center gap-1 text-lg font-black text-slate-800">
+                  <span className="tabular-nums">{voiceBalance}</span>
+                  <Heart className="h-5 w-5 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                {(
+                  [
+                    { roses: 1, cost: 5 },
+                    { roses: 5, cost: 25 },
+                    { roses: 10, cost: 50 },
+                  ] as const
+                ).map(({ roses, cost }) => (
+                  <Button
+                    key={roses}
+                    type="button"
+                    variant="outline"
+                    disabled={voiceBalance < cost}
+                    className="flex h-auto min-h-[4.5rem] min-w-0 flex-col gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-[11px] font-extrabold text-slate-800 shadow-[0_4px_10px_rgba(15,23,42,0.08)] hover:bg-slate-50 disabled:opacity-50 sm:gap-2 sm:px-3 sm:py-3 sm:text-sm"
+                    onClick={() => dispatch({ type: "EXCHANGE_VOICES_FOR_ROSES", amount: roses })}
                   >
-                    <iconConfig.Icon
-                      className={`${layoutDense ? "h-[1.35rem] w-[1.35rem] sm:h-7 sm:w-7" : "h-7 w-7 sm:h-8 sm:w-8"} ${iconConfig.fg} drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]`}
-                      strokeWidth={iconConfig.filled ? 0 : mdIconStroke}
-                      fill={iconConfig.filled ? "currentColor" : "none"}
-                      aria-hidden
-                    />
-                  </div>
-
-                  <div className="mt-auto flex w-full flex-col items-center justify-end pb-0.5 text-center">
-                    <div
-                      className={`heart-price heart-price--bright ${
-                        layoutDense ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"
-                      }`}
-                    >
-                      <span>{offer.hearts}</span>
-                      <Heart
-                        className="heart-price__icon h-[1.15em] w-[1.15em] shrink-0 text-rose-200"
-                        strokeWidth={mdIconStroke}
-                        fill="currentColor"
-                        aria-hidden
-                      />
-                    </div>
-                  </div>
-                </div>
-
+                    <span className="inline-flex items-center justify-center gap-1 sm:gap-2">
+                      <Flower2 className="h-5 w-5 shrink-0 text-fuchsia-600 sm:h-6 sm:w-6" strokeWidth={2} aria-hidden />
+                      +{roses}
+                    </span>
+                    <span className="heart-price heart-price--compact text-sm">
+                      <span className="tabular-nums">{cost}</span>
+                      <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="text-xs font-bold text-slate-500">Доступные розы</span>
+                <span className="inline-flex items-center gap-1 text-lg font-black text-slate-800">
+                  <span className="tabular-nums">{rosesCount}</span>
+                  <Flower2 className="h-5 w-5 text-fuchsia-600" strokeWidth={2} aria-hidden />
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                 <Button
-                  size="lg"
-                  className={`mt-auto min-h-[2.75rem] w-full shrink-0 rounded-none rounded-b-[1.25rem] border-0 border-t border-white/10 px-2 py-2.5 font-bold shadow-none transition hover:brightness-105 active:brightness-95 sm:min-h-12 sm:rounded-b-[1.35rem] ${layoutDense ? "text-[10px] leading-tight sm:text-xs" : "text-xs sm:text-sm"}`}
-                  style={{
-                    background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 70%, #6366f1 100%)",
-                    color: "#0f172a",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
-                  }}
-                  onClick={() => handleTopUp(offer.hearts, offer.votes, offer.itemId)}
+                  type="button"
+                  variant="outline"
+                  disabled={rosesCount < 1}
+                  className="flex h-auto min-h-[4.5rem] min-w-0 flex-col gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-[11px] font-extrabold text-slate-800 shadow-[0_4px_10px_rgba(15,23,42,0.08)] hover:bg-slate-50 disabled:opacity-50 sm:gap-2 sm:px-3 sm:py-3 sm:text-sm"
+                  onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 1 })}
                 >
-                  <span className="tabular-nums">{offer.votes}</span> гол.
+                  1 роза
+                  <span className="heart-price heart-price--compact text-sm">
+                    +5
+                    <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={rosesCount < 5}
+                  className="flex h-auto min-h-[4.5rem] min-w-0 flex-col gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 py-2.5 text-[11px] font-extrabold text-slate-800 shadow-[0_4px_10px_rgba(15,23,42,0.08)] hover:bg-slate-50 disabled:opacity-50 sm:gap-2 sm:px-3 sm:py-3 sm:text-sm"
+                  onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 5 })}
+                >
+                  5 роз
+                  <span className="heart-price heart-price--compact text-sm">
+                    +25
+                    <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                  </span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={rosesCount < 1}
+                  className="flex h-auto min-h-[4.5rem] min-w-0 flex-col gap-1.5 rounded-2xl border border-violet-300/55 bg-violet-50 px-2 py-2.5 text-[11px] font-extrabold text-violet-900 shadow-[0_4px_10px_rgba(76,29,149,0.12)] hover:bg-violet-100 disabled:opacity-50 sm:gap-2 sm:px-3 sm:py-3 sm:text-sm"
+                  onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: rosesCount })}
+                >
+                  Все розы
+                  <span className="heart-price heart-price--compact text-sm">
+                    +{rosesCount * 5}
+                    <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                  </span>
                 </Button>
               </div>
-            )
-          })}
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* VIP-статус: единый модуль + три карточки в один ряд */}
-        <div className="space-y-3">
-          <div className="px-0.5">
-            <p className={sectionLabelClass}>Премиум</p>
-            <h2 className="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">VIP за столом</h2>
-            <p className="mt-1 text-xs text-slate-500 sm:text-sm">Рамка, значок и приоритет в списке игроков</p>
-          </div>
-        <div
-          className={`overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-b from-amber-950/[0.15] via-[#0a0f18] to-[#06090f] shadow-[0_24px_56px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] ${
-            layoutDense ? "" : ""
-          }`}
-        >
-          <div className="border-b border-amber-500/10 px-4 py-4 sm:px-5 sm:py-5">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14"
-                style={{
-                  background: "linear-gradient(145deg, #fcd34d 0%, #f59e0b 45%, #d97706 100%)",
-                  boxShadow: "0 0 28px rgba(251,191,36,0.35), inset 0 1px 0 rgba(255,255,255,0.35)",
-                }}
-              >
-                <Crown className="h-6 w-6 text-amber-950 sm:h-7 sm:w-7" strokeWidth={mdIconStroke} aria-hidden />
-              </div>
-              <div className="min-w-0 flex flex-col gap-2 pt-0.5">
-                <p className="text-base font-semibold leading-snug text-white sm:text-lg">
-                  Золотая рамка и корона на аватаре
-                </p>
-                <p className="text-sm leading-relaxed text-slate-400">
-                  Заметный статус и приоритетное место за столом.
-                </p>
-                {isVip && vipLeftDays != null && (
-                  <span className="inline-flex w-fit items-center rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200 ring-1 ring-amber-400/30">
-                    Активен ещё {vipLeftDays} дн.
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 px-3 pb-4 pt-2 sm:gap-4 sm:px-4 sm:pb-5 sm:pt-2">
-            {/* Проба */}
-            <div className="relative flex min-h-0 flex-col overflow-hidden rounded-xl border-2 border-amber-400/55 bg-gradient-to-b from-amber-500/[0.1] via-slate-950/92 to-[#070b12] shadow-[0_0_32px_rgba(245,158,11,0.1)]">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-300/30 to-transparent" aria-hidden />
-              <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-5 sm:pb-4 sm:pt-5">
-                <div className="mb-2 flex items-center gap-2 sm:mb-3">
-                  <Sparkles className="h-4 w-4 shrink-0 text-amber-400 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-300 sm:text-xs">
-                    Проба
-                  </span>
-                </div>
-                <p className="text-2xl font-black tracking-tight text-white sm:text-3xl sm:leading-none">3 дня</p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                  Полный доступ бесплатно — один раз на аккаунт.
-                </p>
-              </div>
-              <Button
-                size="lg"
-                disabled={!!isVip || vipTrialUsed}
-                className="mt-auto min-h-12 shrink-0 rounded-none rounded-b-xl border-0 border-t border-amber-400/20 px-4 py-3 text-sm font-bold disabled:!opacity-100"
-                style={
-                  !!isVip || vipTrialUsed
-                    ? {
-                        background: "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
-                        color: "#cbd5e1",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-                      }
-                    : {
-                        background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
-                        color: "#0f172a",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
-                      }
-                }
-                onClick={() => handleActivateVip({ days: 3, cost: 0, isTrial: true })}
-              >
-                {isVip ? (
-                  "Уже VIP"
-                ) : vipTrialUsed ? (
-                  "Проба уже использована"
-                ) : (
-                  "Попробовать бесплатно"
-                )}
-              </Button>
-            </div>
-
-            {/* 7 дней */}
-            <div className="relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-600/70 bg-slate-950/85 backdrop-blur-[2px]">
-              <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-5 sm:pb-4 sm:pt-5">
-                <div className="mb-2 flex items-center gap-2 text-slate-500 sm:mb-3">
-                  <CalendarDays className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] sm:text-xs">
-                    Тариф
-                  </span>
-                </div>
-                <p className="text-2xl font-black tracking-tight text-white sm:text-3xl sm:leading-none">7 дней</p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                  Списание с баланса сердечек в приложении.
-                </p>
-              </div>
-              <Button
-                size="lg"
-                disabled={!!isVip || voiceBalance < 20}
-                className="mt-auto min-h-12 shrink-0 rounded-none rounded-b-xl border-0 border-t border-slate-600/50 px-4 py-3 text-sm font-bold disabled:!opacity-100"
-                style={
-                  !!isVip || voiceBalance < 20
-                    ? {
-                        background: "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
-                        color: "#cbd5e1",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-                      }
-                    : {
-                        background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
-                        color: "#0f172a",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
-                      }
-                }
-                onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
-              >
-                {isVip ? (
-                  "Уже VIP"
-                ) : voiceBalance < 20 ? (
-                  <span className="heart-price heart-price--cta gap-1.5">
-                    Не хватает 20
-                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
-                  </span>
-                ) : (
-                  <span className="heart-price heart-price--cta gap-1">
-                    20
-                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
-                  </span>
-                )}
-              </Button>
-            </div>
-
-            {/* 30 дней */}
-            <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-cyan-500/40 bg-gradient-to-b from-cyan-500/[0.07] via-slate-950/90 to-[#070b12] shadow-[0_0_24px_rgba(34,211,238,0.08)]">
-              <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-4 sm:px-5 sm:pb-4 sm:pt-5">
-                <div className="mb-2 flex items-center gap-2 sm:mb-3">
-                  <CalendarDays className="h-4 w-4 shrink-0 text-cyan-400 sm:h-5 sm:w-5" strokeWidth={mdIconStroke} aria-hidden />
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-cyan-400 sm:text-xs">
-                    Выгодно
-                  </span>
-                </div>
-                <p className="text-2xl font-black tracking-tight text-white sm:text-3xl sm:leading-none">30 дней</p>
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                  Максимум преимуществ на месяц вперёд.
-                </p>
-              </div>
-              <Button
-                size="lg"
-                disabled={!!isVip || voiceBalance < 70}
-                className="mt-auto min-h-12 shrink-0 rounded-none rounded-b-xl border-0 border-t border-cyan-500/25 px-4 py-3 text-sm font-bold disabled:!opacity-100"
-                style={
-                  !!isVip || voiceBalance < 70
-                    ? {
-                        background: "linear-gradient(180deg, #334155 0%, #1e293b 100%)",
-                        color: "#cbd5e1",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-                      }
-                    : {
-                        background: "linear-gradient(90deg, #6ee7f7 0%, #7dd3fc 35%, #818cf8 72%, #6366f1 100%)",
-                        color: "#0f172a",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
-                      }
-                }
-                onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
-              >
-                {isVip ? (
-                  "Уже VIP"
-                ) : voiceBalance < 70 ? (
-                  <span className="heart-price heart-price--cta gap-1.5">
-                    Не хватает 70
-                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
-                  </span>
-                ) : (
-                  <span className="heart-price heart-price--cta gap-1">
-                    70
-                    <Heart className="heart-price__icon h-6 w-6 shrink-0 text-rose-700" strokeWidth={2} fill="currentColor" aria-hidden />
-                  </span>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-        </div>
-
-        {/* Обмен валюты: Сердца ↔ Розы */}
-        <div className="space-y-3">
-          <div className="px-0.5">
-            <p className={sectionLabelClass}>Обмен</p>
-            <h2 className="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">Сердца и розы</h2>
-            <p className="mt-1 text-xs text-slate-500 sm:text-sm">Мгновенная конвертация по фиксированному курсу</p>
-          </div>
-        <div
-          className={`overflow-hidden p-0 ${sectionCardClass} ${
-            layoutDense ? "" : ""
-          }`}
-        >
-          <div
-            className={`border-b border-cyan-400/10 px-4 py-3.5 ${
-              layoutDense ? "flex flex-col items-stretch gap-3" : "flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
-            }`}
+      <footer className="rounded-2xl border border-slate-200 bg-slate-50/95 px-4 py-3 text-center sm:text-left">
+        <p className="text-[11px] leading-relaxed text-slate-500 sm:text-xs">
+          Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. П. 2.3.8{" "}
+          <a
+            href="https://dev.vk.com/ru/mini-apps-rules"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-700 underline decoration-slate-400 underline-offset-2"
           >
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/15 ring-1 ring-cyan-400/25">
-                <ArrowRightLeft className="h-5 w-5 text-cyan-300" strokeWidth={mdIconStroke} aria-hidden />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-300">Курс обмена</p>
-                <p className="text-[11px] text-slate-500 sm:text-xs">Выберите направление ниже</p>
-              </div>
-            </div>
-            <div
-              className={
-                layoutDense
-                  ? "flex flex-wrap items-center gap-2"
-                  : "ml-auto flex shrink-0 flex-nowrap items-center gap-2"
-              }
-            >
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/35 bg-slate-900/90 px-2.5 py-1 text-[12px] font-extrabold text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] sm:px-3 sm:py-1.5 sm:text-sm">
-                <span className="tabular-nums text-base text-cyan-100 sm:text-lg">5</span>
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/30 sm:h-7 sm:w-7">
-                  <Heart className="h-4 w-4 text-rose-300 sm:h-[18px] sm:w-[18px]" strokeWidth={2} fill="currentColor" aria-hidden />
-                </span>
-                <span className="text-slate-500">=</span>
-                <span className="tabular-nums text-fuchsia-100">1</span>
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-fuchsia-500/20 ring-1 ring-fuchsia-400/35 sm:h-6 sm:w-6">
-                  <Flower2 className="h-3 w-3 text-fuchsia-200 sm:h-3.5 sm:w-3.5" strokeWidth={mdIconStroke} aria-hidden />
-                </span>
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/55 bg-slate-900/80 px-2.5 py-1 text-[12px] font-extrabold text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:px-3 sm:py-1.5 sm:text-sm">
-                <span className="tabular-nums text-base sm:text-lg">1</span>
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-fuchsia-500/20 ring-1 ring-fuchsia-400/30 sm:h-7 sm:w-7">
-                  <Flower2 className="h-3.5 w-3.5 text-fuchsia-200 sm:h-4 sm:w-4" strokeWidth={mdIconStroke} aria-hidden />
-                </span>
-                <span className="text-slate-500">=</span>
-                <span className="tabular-nums text-base text-slate-100 sm:text-lg">5</span>
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-cyan-500/15 ring-1 ring-cyan-400/25 sm:h-7 sm:w-7">
-                  <Heart className="h-4 w-4 text-rose-300 sm:h-[18px] sm:w-[18px]" strokeWidth={2} fill="currentColor" aria-hidden />
-                </span>
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-4 px-4 py-4">
-            <div className="space-y-2">
-              <p className="text-[11px] leading-snug text-slate-400 sm:text-xs">
-                Курс:{" "}
-                <span className="tabular-nums text-base font-extrabold text-cyan-100 sm:text-lg">5 ❤</span> ↔{" "}
-                <span className="tabular-nums text-base font-extrabold text-fuchsia-200 sm:text-lg">1 🌹</span>. Выберите вкладку и сумму.
-              </p>
-              <div
-                role="tablist"
-                aria-label="Выбор направления: сердца на розы или розы на сердца"
-                className="flex w-full flex-row gap-2 rounded-2xl bg-slate-950/95 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-slate-600/65"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  id="exchange-tab-hearts"
-                  aria-selected={exchangeTab === "voices-to-roses"}
-                  aria-controls="exchange-panel"
-                  tabIndex={0}
-                  onClick={() => setExchangeTab("voices-to-roses")}
-                  className={`flex min-h-[3rem] flex-1 touch-manipulation items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center transition-all sm:gap-2 sm:px-3 ${
-                    exchangeTab === "voices-to-roses"
-                      ? "bg-gradient-to-r from-cyan-400 via-sky-400 to-cyan-500 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_10px_28px_rgba(34,211,238,0.35)]"
-                      : "border border-slate-600/90 bg-slate-900/95 text-slate-200 hover:border-cyan-500/45 hover:bg-slate-800/90 active:scale-[0.98]"
-                  }`}
-                >
-                  <Heart
-                    className={`h-5 w-5 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-cyan-400"}`}
-                    strokeWidth={2}
-                    fill={exchangeTab === "voices-to-roses" ? "currentColor" : "none"}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 truncate text-center text-[10px] font-bold leading-tight sm:text-sm">
-                    Сердца → Розы
-                  </span>
-                  <Flower2
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "voices-to-roses" ? "text-slate-900" : "text-fuchsia-400"}`}
-                    strokeWidth={mdIconStroke}
-                    aria-hidden
-                  />
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  id="exchange-tab-roses"
-                  aria-selected={exchangeTab === "roses-to-voices"}
-                  aria-controls="exchange-panel"
-                  tabIndex={0}
-                  onClick={() => setExchangeTab("roses-to-voices")}
-                  className={`flex min-h-[3rem] flex-1 touch-manipulation items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-center transition-all sm:gap-2 sm:px-3 ${
-                    exchangeTab === "roses-to-voices"
-                      ? "bg-gradient-to-r from-fuchsia-500 via-pink-500 to-fuchsia-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_10px_28px_rgba(217,70,239,0.35)]"
-                      : "border border-slate-600/90 bg-slate-900/95 text-slate-200 hover:border-fuchsia-500/40 hover:bg-slate-800/90 active:scale-[0.98]"
-                  }`}
-                >
-                  <Flower2
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-white" : "text-fuchsia-400"}`}
-                    strokeWidth={mdIconStroke}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 truncate text-center text-[10px] font-bold leading-tight sm:text-sm">
-                    Розы → Сердца
-                  </span>
-                  <Heart
-                    className={`h-4 w-4 shrink-0 ${exchangeTab === "roses-to-voices" ? "text-white" : "text-cyan-400"}`}
-                    strokeWidth={mdIconStroke}
-                    fill="none"
-                    aria-hidden
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div id="exchange-panel" role="tabpanel" aria-labelledby={exchangeTab === "voices-to-roses" ? "exchange-tab-hearts" : "exchange-tab-roses"}>
-
-            {exchangeTab === "voices-to-roses" ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-600/45 bg-slate-950/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Баланс</span>
-                  <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-100">
-                    <span className="tabular-nums text-xl font-black text-white sm:text-2xl">{voiceBalance}</span>
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/15 ring-1 ring-cyan-400/30">
-                      <Heart className="h-5 w-5 text-rose-200" strokeWidth={2} fill="currentColor" aria-hidden />
-                    </span>
-                  </span>
-                </div>
-                <div
-                  className={
-                    layoutDense ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 gap-2.5 sm:grid-cols-3"
-                  }
-                >
-                  {(
-                    [
-                      { roses: 1, cost: 5 },
-                      { roses: 5, cost: 25 },
-                      { roses: 10, cost: 50 },
-                    ] as const
-                  ).map(({ roses, cost }) => (
-                    <Button
-                      key={roses}
-                      type="button"
-                      variant="outline"
-                      disabled={voiceBalance < cost}
-                      className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-cyan-400/35 bg-slate-950/55 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-cyan-300/50 hover:bg-slate-800/45 hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:bg-slate-950/40 disabled:text-slate-500"
-                      onClick={() => dispatch({ type: "EXCHANGE_VOICES_FOR_ROSES", amount: roses })}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/[0.22] ring-1 ring-fuchsia-400/40 shadow-[0_0_16px_rgba(232,121,249,0.12)]">
-                          <Flower2 className="h-5 w-5 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
-                        </span>
-                        <span className="text-lg font-black tabular-nums tracking-tight text-fuchsia-100">+{roses}</span>
-                      </span>
-                      <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-slate-200 ring-1 ring-slate-600/50">
-                        <span className="tabular-nums">{cost}</span>
-                        <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-600/45 bg-slate-950/55 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Роз в инвентаре</span>
-                  <span className="inline-flex items-center gap-2 text-sm font-bold text-slate-100">
-                    <span className="tabular-nums text-lg">{rosesCount}</span>
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fuchsia-500/20 ring-1 ring-fuchsia-400/35">
-                      <Flower2 className="h-4 w-4 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
-                    </span>
-                  </span>
-                </div>
-                <div
-                  className={
-                    layoutDense ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 gap-2.5 sm:grid-cols-3"
-                  }
-                >
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={rosesCount < 1}
-                    className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-cyan-400/35 bg-slate-950/55 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-cyan-300/50 hover:bg-slate-800/45 hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:bg-slate-950/40 disabled:text-slate-500"
-                    onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 1 })}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/[0.22] ring-1 ring-fuchsia-400/40">
-                        <Flower2 className="h-5 w-5 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
-                      </span>
-                      <span className="text-sm font-black text-fuchsia-100">1 роза</span>
-                    </span>
-                    <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-cyan-100 ring-1 ring-slate-600/50">
-                      <span className="tabular-nums">+5</span>
-                      <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={rosesCount < 5}
-                    className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-cyan-400/35 bg-slate-950/55 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-cyan-300/50 hover:bg-slate-800/45 hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:bg-slate-950/40 disabled:text-slate-500"
-                    onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: 5 })}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/[0.22] ring-1 ring-fuchsia-400/40">
-                        <Flower2 className="h-5 w-5 text-fuchsia-100" strokeWidth={mdIconStroke} aria-hidden />
-                      </span>
-                      <span className="text-sm font-black text-fuchsia-100">5 роз</span>
-                    </span>
-                    <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-cyan-100 ring-1 ring-slate-600/50">
-                      <span className="tabular-nums">+25</span>
-                      <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={rosesCount < 1}
-                    className="flex h-auto min-h-[4.75rem] flex-col items-center justify-center gap-2 rounded-2xl border-violet-400/40 bg-gradient-to-b from-violet-500/[0.14] via-slate-950/60 to-slate-950/80 px-3 py-3.5 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-violet-300/55 hover:from-violet-500/[0.2] hover:shadow-[0_0_26px_rgba(167,139,250,0.15)] disabled:!opacity-100 disabled:border-slate-700/70 disabled:from-transparent disabled:to-slate-950/40 disabled:text-slate-500"
-                    onClick={() => dispatch({ type: "EXCHANGE_ROSES_FOR_VOICES", amount: rosesCount })}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/25 ring-1 ring-violet-400/45">
-                        <Flower2 className="h-5 w-5 text-violet-100" strokeWidth={mdIconStroke} aria-hidden />
-                      </span>
-                      <span className="text-sm font-black text-violet-100">Все розы</span>
-                    </span>
-                    <span className="heart-price heart-price--compact inline-flex items-center gap-1.5 rounded-lg bg-slate-800/70 px-2.5 py-1.5 text-cyan-100 ring-1 ring-slate-600/50">
-                      <span className="tabular-nums">+{rosesCount * 5}</span>
-                      <Heart className="heart-price__icon h-4 w-4 text-rose-300" strokeWidth={2} fill="currentColor" aria-hidden />
-                    </span>
-                  </Button>
-                </div>
-              </div>
-            )}
-            </div>
-          </div>
-        </div>
-        </div>
-
-        <footer className="rounded-2xl border border-slate-700/40 bg-slate-950/50 px-4 py-3 text-center sm:text-left">
-          <p className="text-[11px] leading-relaxed text-slate-500 sm:text-xs">
-            Сердечки — виртуальная игровая валюта, не обмениваются на реальные деньги. П. 2.3.8{" "}
-            <a
-              href="https://dev.vk.com/ru/mini-apps-rules"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-slate-400 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-300"
-            >
-              правил VK Mini Apps
-            </a>
-            .
-          </p>
-        </footer>
+            правил VK Mini Apps
+          </a>
+          .
+        </p>
+      </footer>
     </div>
   )
 
@@ -913,8 +830,10 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         {toast && <InlineToast toast={toast} />}
         <GameSidePanelShell
           title="Магазин"
-          subtitle="Баланс, пакеты, VIP и обмен в одном месте."
+          subtitle=""
           onClose={onClose!}
+          variant="material"
+          overlayClassName="bg-black/65"
         >
           {shopInnerCard}
         </GameSidePanelShell>
@@ -923,7 +842,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   }
 
   return (
-    <div className="relative flex h-app min-h-app max-h-app flex-col overflow-hidden entry-bg-animated">
+    <div className="relative flex h-app min-h-app max-h-app flex-col overflow-hidden bg-gradient-to-b from-[#111827] via-[#0f172a] to-[#020617] entry-bg-animated">
       {toast && <InlineToast toast={toast} />}
       <div className="game-particles game-particles--dust" aria-hidden="true">
         {shopParticles.map((d, idx) => {

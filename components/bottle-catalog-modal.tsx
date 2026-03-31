@@ -178,8 +178,7 @@ export function BottleCatalogModal({
   ])
 
   const free = entries.filter((e) => isClassicId(e.skin.id))
-  const vip = entries.filter((e) => isVipId(e.skin.id))
-  const premium = entries.filter((e) => isPremiumFortuneId(e.skin.id))
+  const vip = entries.filter((e) => isVipId(e.skin.id) || isPremiumFortuneId(e.skin.id))
   const rest = entries.filter((e) => !isClassicId(e.skin.id) && !isVipId(e.skin.id) && !isPremiumFortuneId(e.skin.id))
 
   const Section = ({ title, items }: { title: string; items: typeof entries }) => (
@@ -337,7 +336,6 @@ export function BottleCatalogModal({
           <Section title="Бесплатно" items={free} />
           <Section title="Доступно" items={rest} />
           <Section title="VIP" items={vip} />
-          <Section title="Премиум" items={premium} />
         </div>
       </div>
     </div>

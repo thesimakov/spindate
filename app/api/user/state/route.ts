@@ -65,6 +65,10 @@ export async function PUT(req: Request) {
     Array.isArray(body?.inventory) && body.inventory.length >= 0
       ? body.inventory
       : undefined
+  const status =
+    typeof body?.status === "string"
+      ? body.status.trim().slice(0, 15)
+      : undefined
 
   const db = getDb()
   const now = Date.now()
@@ -101,6 +105,14 @@ export async function PUT(req: Request) {
            updated_at = excluded.updated_at`,
       ).run(vkUserId, nextBalance, nextInventoryJson, now)
     }
+  }
+
+  if (userId && status !== undefined) {
+    db.prepare(
+      `UPDATE player_profiles
+       SET status = ?, updated_at = ?
+       WHERE user_id = ?`,
+    ).run(status, now, userId)
   }
 
   return NextResponse.json({ ok: true })

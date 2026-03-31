@@ -57,6 +57,7 @@ export function RegistrationScreen() {
     gender: Gender
     age: number
     purpose: Purpose
+    status?: string
     authProvider?: "vk" | "login"
   }) => {
     dispatch({ type: "SET_USER", user })
@@ -204,6 +205,7 @@ export function RegistrationScreen() {
           username?: string
           displayName?: string
           avatarUrl?: string
+          status?: string
           gender?: string
           age?: number
           purpose?: string
@@ -224,6 +226,7 @@ export function RegistrationScreen() {
         purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
           ? u.purpose
           : defaultPurpose) as Purpose,
+        status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
         authProvider: (typeof u.vkUserId === "number" ? "vk" : "login") as "vk" | "login",
         authUserId: typeof u.vkUserId === "number" ? undefined : u.id,
         vkUserId: typeof u.vkUserId === "number" ? u.vkUserId : undefined,
@@ -299,6 +302,7 @@ export function RegistrationScreen() {
             username?: string
             displayName?: string
             avatarUrl?: string
+            status?: string
             gender?: string
             age?: number
             purpose?: string
@@ -327,6 +331,7 @@ export function RegistrationScreen() {
             purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
               ? u.purpose
               : defaultPurpose) as Purpose,
+            status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
             authProvider: "vk" as const,
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
@@ -413,6 +418,7 @@ export function RegistrationScreen() {
             username?: string
             displayName?: string
             avatarUrl?: string
+            status?: string
             gender?: string
             age?: number
             purpose?: string
@@ -434,6 +440,7 @@ export function RegistrationScreen() {
             gender: genderValue,
             age: typeof u.age === "number" ? u.age : ageNum,
             purpose: defaultPurpose,
+            status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
             authProvider: "vk" as const,
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
@@ -480,13 +487,15 @@ export function RegistrationScreen() {
       if (data?.user) {
         if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
         const u = data.user
+        const genderValue = (u.gender === "female" ? "female" : "male") as Gender
         const user = {
           id: userIdToNumber(u.id),
           name: u.displayName ?? u.username,
-          avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
-          gender: (u.gender === "female" ? "female" : "male") as Gender,
+          avatar: u.avatarUrl ?? (genderValue === "female" ? "/assets/avatar-female.svg" : "/assets/avatar-male.svg"),
+          gender: genderValue,
           age: u.age ?? 25,
           purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
+          status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
           authProvider: "login" as const,
           authUserId: u.id,
         }
@@ -544,13 +553,15 @@ export function RegistrationScreen() {
       if (data?.user) {
         if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
         const u = data.user
+        const genderValue = (u.gender === "female" ? "female" : "male") as Gender
         const user = {
           id: userIdToNumber(u.id),
           name: (u.displayName ?? displayName.trim()) || u.username,
-          avatar: u.avatarUrl ?? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(login)}`,
-          gender: (u.gender === "female" ? "female" : "male") as Gender,
+          avatar: u.avatarUrl ?? (genderValue === "female" ? "/assets/avatar-female.svg" : "/assets/avatar-male.svg"),
+          gender: genderValue,
           age: u.age ?? ageNum,
           purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose) ? u.purpose : defaultPurpose) as Purpose,
+          status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
           authProvider: "login" as const,
           authUserId: u.id,
         }

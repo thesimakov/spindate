@@ -40,10 +40,10 @@ export async function GET(req: Request) {
 
   const profile = db
     .prepare(
-      `SELECT display_name, avatar_url, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
+      `SELECT display_name, avatar_url, status, gender, age, purpose FROM player_profiles WHERE user_id = ?`,
     )
     .get(session.user_id) as
-    | { display_name: string; avatar_url: string; gender: string; age: number; purpose: string }
+    | { display_name: string; avatar_url: string; status: string; gender: string; age: number; purpose: string }
     | undefined
 
   const displayName = profile?.display_name ?? userRow.username
@@ -53,6 +53,7 @@ export async function GET(req: Request) {
   const gender = profile?.gender ?? "male"
   const age = profile?.age ?? 25
   const purpose = profile?.purpose ?? "communication"
+  const status = profile?.status ?? ""
 
   return NextResponse.json({
     ok: true,
@@ -64,6 +65,7 @@ export async function GET(req: Request) {
       gender,
       age,
       purpose,
+      status,
       ...(userRow.vk_user_id != null ? { vkUserId: userRow.vk_user_id } : {}),
     },
   })
