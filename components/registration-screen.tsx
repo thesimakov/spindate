@@ -640,6 +640,7 @@ export function RegistrationScreen() {
           title="Вход…"
           subtitle="Подключаем профиль ВКонтакте"
           hint="Крути и знакомься"
+          showDailyQuote
         />
       </div>
     )

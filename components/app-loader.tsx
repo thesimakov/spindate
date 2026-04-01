@@ -1,14 +1,25 @@
 "use client"
 
+import { useMemo } from "react"
+import { getDailyLoveQuote } from "@/lib/love-quotes"
+
 interface AppLoaderProps {
   title?: string
   subtitle?: string
   hint?: string
   className?: string
+  showDailyQuote?: boolean
 }
 
 /** Живой лоадер: спиннер + пульсирующие точки + текст */
-export function AppLoader({ title = "Загрузка...", subtitle, hint, className = "" }: AppLoaderProps) {
+export function AppLoader({
+  title = "Загрузка...",
+  subtitle,
+  hint,
+  className = "",
+  showDailyQuote = false,
+}: AppLoaderProps) {
+  const quote = useMemo(() => (showDailyQuote ? getDailyLoveQuote(new Date()) : null), [showDailyQuote])
   return (
     <div
       className={`flex min-h-app flex-col items-center justify-center gap-8 px-6 bg-slate-900/98 text-slate-100 ${className}`}
@@ -60,6 +71,14 @@ export function AppLoader({ title = "Загрузка...", subtitle, hint, class
         </div>
         {hint && <p className="text-[11px] text-slate-500 pt-1">{hint}</p>}
       </div>
+
+      {quote && (
+        <div className="w-full max-w-xl rounded-2xl border border-amber-300/30 bg-slate-800/55 px-5 py-4 text-left shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-200/90">Цитата дня</p>
+          <p className="text-sm italic leading-relaxed text-slate-100">{quote.text}</p>
+          <p className="mt-2 text-xs text-slate-300">— {quote.author}</p>
+        </div>
+      )}
 
       {/* Полоска прогресса (бесконечная анимация) */}
       <div className="h-1 w-full max-w-[14rem] rounded-full bg-slate-700/80 overflow-hidden">

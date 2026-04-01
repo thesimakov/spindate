@@ -493,8 +493,13 @@ export function GameRoom() {
   } = useSyncEngine()
   const playersRef = useRef(players)
   useEffect(() => { playersRef.current = players }, [players])
+  const spinResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const spinSessionRef = useRef<string>("")
 
   const [tableLoading, setTableLoading] = useState(true)
+  const [bankHeartPulseActive, setBankHeartPulseActive] = useState(false)
+  const prevVoiceBalanceRef = useRef<number | null>(null)
+  const bankHeartPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isRoundDriver = useMemo(() => {
     if (!currentUser) return false
     const liveIds = players
@@ -516,6 +521,37 @@ export function GameRoom() {
   })
 
   const { toast, showToast } = useInlineToast(2000)
+
+  useEffect(() => {
+    if (bankHeartPulseTimeoutRef.current) {
+      clearTimeout(bankHeartPulseTimeoutRef.current)
+      bankHeartPulseTimeoutRef.current = null
+    }
+    prevVoiceBalanceRef.current = voiceBalance
+    setBankHeartPulseActive(false)
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    const prev = prevVoiceBalanceRef.current
+    prevVoiceBalanceRef.current = voiceBalance
+    if (prev == null) return
+    if (voiceBalance <= prev) return
+    setBankHeartPulseActive(true)
+    if (bankHeartPulseTimeoutRef.current) {
+      clearTimeout(bankHeartPulseTimeoutRef.current)
+    }
+    bankHeartPulseTimeoutRef.current = setTimeout(() => {
+      bankHeartPulseTimeoutRef.current = null
+      setBankHeartPulseActive(false)
+    }, 1400)
+  }, [voiceBalance])
+
+  useEffect(() => {
+    return () => {
+      if (bankHeartPulseTimeoutRef.current) clearTimeout(bankHeartPulseTimeoutRef.current)
+      if (spinResolveTimeoutRef.current) clearTimeout(spinResolveTimeoutRef.current)
+    }
+  }, [])
 
   const {
     wheelTickets,
@@ -1405,13 +1441,22 @@ export function GameRoom() {
     if (targetIdx === -1) return
     const segmentDeg = 360 / players.length
     const targetDeg = -90 + segmentDeg * targetIdx
-    const totalAngle = 360 * 5 + targetDeg + 90
+    const desiredAngle = ((targetDeg + 90) % 360 + 360) % 360
+    const currentAngle = ((bottleAngle % 360) + 360) % 360
+    const deltaToTarget = (desiredAngle - currentAngle + 360) % 360
+    const totalAngle = bottleAngle + 360 * 5 + deltaToTarget
+    const spinSessionKey = `${tableId}:${roundNumber}:${currentTurnIndex}:${spinner.id}`
+    spinSessionRef.current = spinSessionKey
 
     dispatch({ type: "END_PREDICTION_PHASE" })
     dispatch({ type: "START_SPIN", angle: totalAngle, target: target, target2: spinner })
 
-    setTimeout(() => {
-      if (!currentTurnPlayer) return
+    if (spinResolveTimeoutRef.current) {
+      clearTimeout(spinResolveTimeoutRef.current)
+      spinResolveTimeoutRef.current = null
+    }
+    spinResolveTimeoutRef.current = setTimeout(() => {
+      if (spinSessionRef.current !== spinSessionKey) return
 
       if (!CASUAL_MODE) {
         const aliveIds = new Set(players.map((p) => p.id))
@@ -1531,13 +1576,13 @@ export function GameRoom() {
       else if (combo === "MM") defaultAction = "beer"
       else if (combo === "FF") defaultAction = "cocktail"
 
-      const spinnerIsBot = !!currentTurnPlayer.isBot
+      const spinnerIsBot = !!spinner.isBot
 
       if (spinnerIsBot) {
         // Для ботов всё происходит автоматически
         dispatch({ type: "STOP_SPIN", action: defaultAction })
 
-        const spinnerIdx = players.findIndex((p) => p.id === currentTurnPlayer.id)
+        const spinnerIdx = players.findIndex((p) => p.id === spinner.id)
         const emojiMap: Record<string, string> = {
           kiss: "\uD83D\uDC8B",
           skip: "",
@@ -1559,7 +1604,7 @@ export function GameRoom() {
           entry: {
             id: generateLogId(),
             type: defaultAction as GameLogEntry["type"],
-            fromPlayer: currentTurnPlayer,
+            fromPlayer: spinner,
             toPlayer: target,
             text: `Выпала пара: ${pairText}`,
             timestamp: Date.now(),
@@ -1572,7 +1617,16 @@ export function GameRoom() {
       }
     }, 6000)
      
-  }, [players, currentTurnPlayer, dispatch, launchEmoji, launchEmotionGiftImage, playEmotionSound, predictions, bets, pot, currentUser])
+  }, [players, currentTurnPlayer, dispatch, launchEmoji, launchEmotionGiftImage, playEmotionSound, predictions, bets, pot, currentUser, bottleAngle, tableId, roundNumber, currentTurnIndex])
+
+  useEffect(() => {
+    if (isSpinning) return
+    spinSessionRef.current = ""
+    if (spinResolveTimeoutRef.current) {
+      clearTimeout(spinResolveTimeoutRef.current)
+      spinResolveTimeoutRef.current = null
+    }
+  }, [isSpinning, roundNumber, currentTurnIndex])
 
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
@@ -3439,7 +3493,7 @@ export function GameRoom() {
               }
             >
               <Heart
-                className="bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]"
+                className={`${bankHeartPulseActive ? "bank-heart-beat" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
                 style={{ color: "#fde68a" }}
                 fill="currentColor"
               />
