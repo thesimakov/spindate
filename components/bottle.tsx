@@ -258,7 +258,7 @@ export function Bottle({
               <stop offset="0.85" stopColor="#be123c" />
               <stop offset="1" stopColor="#7f1d1d" />
             </linearGradient>
-            {/* neon blue / виски */}
+            {/* neon blue / квас */}
             <linearGradient id="bodyGrad_neon" x1="38" y1="50" x2="82" y2="50" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#022c5f" />
               <stop offset="0.2" stopColor="#0369a1" />
@@ -267,7 +267,7 @@ export function Bottle({
               <stop offset="0.85" stopColor="#0ea5e9" />
               <stop offset="1" stopColor="#022c5f" />
             </linearGradient>
-            {/* frost / шампанское */}
+            {/* frost / закваска */}
             <linearGradient id="bodyGrad_frost" x1="38" y1="50" x2="82" y2="50" gradientUnits="userSpaceOnUse">
               <stop offset="0" stopColor="#e5e7eb" />
               <stop offset="0.2" stopColor="#f3f4f6" />

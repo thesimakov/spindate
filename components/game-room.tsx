@@ -2313,7 +2313,7 @@ export function GameRoom() {
         ).length
       : 0
 
-  /** Эмоции/действия: поцелуй, пиво, коктейль, цветы, бриллиант, баня, инструменты, помада */
+  /** Эмоции/действия: поцелуй, квас, закваска, цветы, бриллиант, баня, инструменты, помада */
   const EMOTION_LOG_TYPES = new Set([
     "kiss", "beer", "cocktail", "flowers", "diamond", "banya", "tools", "lipstick",
   ])

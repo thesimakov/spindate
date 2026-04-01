@@ -8,8 +8,8 @@
 |------|------------------|
 | `b_standart_v2.webp` | Классическая |
 | `b_lemonade_v2.webp` | Лимонад |
-| `b_jackdaniels_v3-*.webp` | Виски |
-| `b_champagne_v3-*.webp` | Шампанское |
+| `b_jackdaniels_v3-*.webp` | Квас |
+| `b_champagne_v3-*.webp` | Закваска |
 | `b_baby.webp` | Детская |
 | `b_vip_v2.webp` | VIP-бутылка |
 | `b_milk_v2.webp` | Молочная |
@@ -37,8 +37,8 @@
 | `kiss_mkqxy6eu.mp3` | Поцелуй |
 | `001_38372.mp3` | Бриллиант |
 | `546546745.mp3` | Цветы |
-| `dne-can-open-medium.mp3` | Пиво |
-| `9160bfefbb62e94654645.mp3` | Коктейль |
+| `dne-can-open-medium.mp3` | Квас |
+| `9160bfefbb62e94654645.mp3` | Закваска |
 | `2de04e7deb74c4b.mp3` | Баня (веники) |
 | `power_tool_electric_screwdriver_2.mp3` | Инструменты |
 

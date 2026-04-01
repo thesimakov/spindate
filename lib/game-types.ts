@@ -208,7 +208,7 @@ export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "dai
 /** Сколько последних записей лога стола храним на клиенте (эмоции с дневным лимитом считаются отдельно). */
 export const GAME_TABLE_LOG_MAX_ENTRIES = 400
 
-/** Счётчики лимитированных эмоций (поцелуй / пиво / коктейль) за календарный день по игроку. */
+/** Счётчики лимитированных эмоций (поцелуй / квас / закваска) за календарный день по игроку. */
 export interface EmotionUseTodayBucket {
   dateKey: string
   kiss: number
@@ -291,7 +291,7 @@ export interface GameState {
   generalChatMessages?: GeneralChatMessage[]
   /** Межигровой (глобальный) чат приложения. */
   intergameChatMessages?: GeneralChatMessage[]
-  /** Доп. лимиты эмоций на сегодня (поцелуй / пиво / коктейль). */
+  /** Доп. лимиты эмоций на сегодня (поцелуй / квас / закваска). */
   emotionDailyBoost?: {
     dateKey: string
     /** Общая добавка ко всем трём типам (старые покупки). */
