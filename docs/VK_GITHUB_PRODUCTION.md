@@ -18,14 +18,14 @@
 
 ## 2. «Сломанные» стили (чёрный экран, голый HTML, системные кнопки)
 
-**GitHub Pages** ([thesimakov.github.io/spindate](https://thesimakov.github.io/spindate/)) собирается как **статический сайт** — файлы лежат на CDN как обычные `.css`/`.js`, без Node на сервере. **Свой домен (VPS)** отдаёт приложение через **`next start`** и **Nginx**: если Nginx проксирует не на тот порт, что в `ecosystem.config.cjs` (по умолчанию **3001**), в Network часто видны **500/502** на чанки и стили «пропадают». Подробный чеклист: [TROUBLESHOOT_LEMNITY.md §0](./TROUBLESHOOT_LEMNITY.md).
+**GitHub Pages** ([thesimakov.github.io/spindate](https://thesimakov.github.io/spindate/)) собирается как **статический сайт** — файлы лежат на CDN как обычные `.css`/`.js`, без Node на сервере. **Свой домен (VPS)** отдаёт приложение через **`next start`** и **Nginx**: если Nginx проксирует не на тот порт, что в `ecosystem.config.cjs` (для spindate сейчас **3002**), в Network часто видны **500/502** на чанки и стили «пропадают». Подробный чеклист: [TROUBLESHOOT_LEMNITY.md §0](./TROUBLESHOOT_LEMNITY.md).
 
 Нормальная страница подгружает CSS с путей вида `/_next/static/css/....css`. Если стили не применились, чаще всего:
 
 | Причина | Что сделать |
 |--------|-------------|
 | **Закэширован старый HTML** после деплоя, а новые файлы в `/_next/static/` уже другие | Жёсткое обновление (Ctrl+F5), режим инкогнито. В проекте для `/` выставлен `Cache-Control: no-store`, но прокси/CDN может кэшировать иначе. |
-| **Nginx смотрит не на тот порт**, где слушает Node (в `ecosystem.config.cjs` по умолчанию **3001**) | В `proxy_pass` должен быть тот же порт, что у `PORT` в PM2. См. [DOMAIN_NEW_SERVER.md](./DOMAIN_NEW_SERVER.md). |
+| **Nginx смотрит не на тот порт**, где слушает Node (в `ecosystem.config.cjs` для spindate **3002**) | В `proxy_pass` должен быть тот же порт, что у `PORT` в PM2. См. [DOMAIN_NEW_SERVER.md](./DOMAIN_NEW_SERVER.md). |
 | **Nginx отдаёт не тот корень** (например `try_files` к статике вместо прокси на Next) | Для SPA-заглушек так не делают: весь сайт, включая `/_next/static/`, должен идти на `next start`. |
 | Собрали с **`BUILD_FOR_PAGES=true`** (GitHub Pages) и выкладываете на **свой домен** без подпапки | Для VPS нужна обычная сборка **без** этого флага (как в `deploy-server.yml`). |
 
