@@ -18,8 +18,11 @@ export async function GET(req: Request) {
 
   try {
     const db = getDb()
+    const userCols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>
+    const hasVkUserId = userCols.some((c) => c.name === "vk_user_id")
+    const vkUserIdSelect = hasVkUserId ? "u.vk_user_id" : "NULL AS vk_user_id"
     const rows = db.prepare(
-      `SELECT u.id as user_id, u.username, u.vk_user_id, p.display_name, p.avatar_url, p.gender, p.age, p.purpose,
+      `SELECT u.id as user_id, u.username, ${vkUserIdSelect}, p.display_name, p.avatar_url, p.gender, p.age, p.purpose,
               s.voice_balance
        FROM users u
        LEFT JOIN player_profiles p ON p.user_id = u.id

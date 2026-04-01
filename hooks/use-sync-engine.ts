@@ -355,10 +355,11 @@ export function useSyncEngine(): SyncEngineResult {
     }
   }, [currentUser, tableId, fetchTableAuthority, tablePaused])
 
-  // Leave table on unmount / page close
+  // Leave table only on real unmount / user switch (not on profile field updates).
+  const currentUserId = currentUser?.id ?? null
   useEffect(() => {
-    if (!currentUser) return
-    const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
+    if (!currentUserId) return
+    const payload = JSON.stringify({ mode: "leave", userId: currentUserId })
     const leave = () => {
       if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
         navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
@@ -379,7 +380,7 @@ export function useSyncEngine(): SyncEngineResult {
       window.removeEventListener("beforeunload", onBeforeUnload)
       leave()
     }
-  }, [currentUser])
+  }, [currentUserId])
 
   return useMemo(() => ({
     dispatch,
