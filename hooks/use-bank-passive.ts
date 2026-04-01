@@ -7,11 +7,19 @@ const INTERVAL_MS = 60_000
 const AMOUNT_PER_TICK = 3
 const STORAGE_KEY_PREFIX = "spindate_bank_passive_v1_"
 
+type UseBankPassiveOptions = {
+  /** false — пауза / ожидание / вне игры: тики не начисляются, без догона после возврата */
+  enabled?: boolean
+}
+
 export function useBankPassive(
   userId: number | undefined,
   dispatch: Dispatch<GameAction>,
   onGrantBurst: () => void,
+  options?: UseBankPassiveOptions,
 ) {
+  const enabled = options?.enabled !== false
+  const lastSnapRef = useRef<{ uid?: number; en?: boolean }>({})
   const lastMsRef = useRef(0)
   const [tick, setTick] = useState(0)
   const onGrantRef = useRef(onGrantBurst)
@@ -20,27 +28,61 @@ export function useBankPassive(
   useLayoutEffect(() => {
     if (userId == null) {
       lastMsRef.current = 0
+      lastSnapRef.current = {}
       return
     }
+
     const key = `${STORAGE_KEY_PREFIX}${userId}`
-    let last = Date.now()
-    try {
-      const raw = localStorage.getItem(key)
-      if (raw) {
-        const j = JSON.parse(raw) as { lastTickMs?: number }
-        if (typeof j.lastTickMs === "number" && j.lastTickMs > 0) last = j.lastTickMs
-      } else {
-        localStorage.setItem(key, JSON.stringify({ lastTickMs: last }))
+    const now = Date.now()
+    const prev = lastSnapRef.current
+    const userChanged = prev.uid !== userId
+    const resumedAfterDisable = prev.en === false && enabled === true && !userChanged
+
+    if (!enabled) {
+      lastMsRef.current = now
+      try {
+        localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
+      } catch {
+        /* ignore */
       }
-    } catch {
-      last = Date.now()
+      lastSnapRef.current = { uid: userId, en: false }
+      setTick((t) => t + 1)
+      return
     }
-    lastMsRef.current = last
-    setTick((t) => t + 1)
-  }, [userId])
+
+    if (resumedAfterDisable) {
+      lastMsRef.current = now
+      try {
+        localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
+      } catch {
+        /* ignore */
+      }
+      lastSnapRef.current = { uid: userId, en: true }
+      setTick((t) => t + 1)
+      return
+    }
+
+    if (userChanged) {
+      let last = now
+      try {
+        const raw = localStorage.getItem(key)
+        if (raw) {
+          const j = JSON.parse(raw) as { lastTickMs?: number }
+          if (typeof j.lastTickMs === "number" && j.lastTickMs > 0) last = j.lastTickMs
+        } else {
+          localStorage.setItem(key, JSON.stringify({ lastTickMs: last }))
+        }
+      } catch {
+        last = now
+      }
+      lastMsRef.current = last
+      lastSnapRef.current = { uid: userId, en: true }
+      setTick((t) => t + 1)
+    }
+  }, [userId, enabled])
 
   useEffect(() => {
-    if (userId == null) return
+    if (userId == null || !enabled) return
 
     const key = `${STORAGE_KEY_PREFIX}${userId}`
     const id = window.setInterval(() => {
@@ -67,14 +109,26 @@ export function useBankPassive(
     }, 1000)
 
     return () => window.clearInterval(id)
-  }, [userId, dispatch])
+  }, [userId, dispatch, enabled])
+
+  useEffect(() => {
+    return () => {
+      if (userId == null) return
+      const key = `${STORAGE_KEY_PREFIX}${userId}`
+      try {
+        localStorage.setItem(key, JSON.stringify({ lastTickMs: Date.now() }))
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [userId])
 
   const msUntilNext = useMemo(() => {
-    if (userId == null) return 0
+    if (userId == null || !enabled) return 0
     return Math.max(0, lastMsRef.current + INTERVAL_MS - Date.now())
-  }, [userId, tick])
+  }, [userId, enabled, tick])
 
-  return { msUntilNext }
+  return { msUntilNext, passiveRefillActive: enabled && userId != null }
 }
 
 export function formatBankPassiveCountdown(ms: number): string {

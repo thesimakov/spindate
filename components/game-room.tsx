@@ -2717,7 +2717,12 @@ export function GameRoom() {
     }
     setBankPassiveBurstKey((k) => k + 1)
   }, [])
-  const { msUntilNext: msUntilNextBank } = useBankPassive(currentUser?.id, dispatch, triggerBankPassiveBurst)
+  const { msUntilNext: msUntilNextBank, passiveRefillActive: bankPassiveRefillActive } = useBankPassive(
+    currentUser?.id,
+    dispatch,
+    triggerBankPassiveBurst,
+    { enabled: !tablePaused && !tableLoading && seatConfirmed },
+  )
   const handlePauseGame = useCallback(() => {
     if (!currentUser) return
     // Явно освобождаем место за live-столом и отключаем синхронизацию, пока пользователь не возобновит.
@@ -3500,6 +3505,7 @@ export function GameRoom() {
               <BankHeartBalanceTooltip
                 voiceBalance={voiceBalance}
                 msUntilNext={msUntilNextBank}
+                passiveRefillActive={bankPassiveRefillActive}
                 onOpenShop={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
                 className="inline-flex shrink-0 items-baseline"
                 tabularClassName="text-[15px] font-black tabular-nums leading-none text-white sm:text-base"
@@ -4766,6 +4772,7 @@ export function GameRoom() {
                     <BankHeartBalanceTooltip
                       voiceBalance={voiceBalance}
                       msUntilNext={msUntilNextBank}
+                      passiveRefillActive={bankPassiveRefillActive}
                       onOpenShop={() => {
                         dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
                         setShowMobileMoreMenu(false)

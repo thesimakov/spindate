@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 type BankHeartBalanceTooltipProps = {
   voiceBalance: number
   msUntilNext: number
+  /** false — пассив +3❤/мин на паузе (ожидание, выход со стола и т.д.) */
+  passiveRefillActive?: boolean
   onOpenShop: () => void
   className?: string
   tabularClassName?: string
@@ -16,17 +18,21 @@ type BankHeartBalanceTooltipProps = {
 export function BankHeartBalanceTooltip({
   voiceBalance,
   msUntilNext,
+  passiveRefillActive = true,
   onOpenShop,
   className,
   tabularClassName,
 }: BankHeartBalanceTooltipProps) {
   const t = formatBankPassiveCountdown(msUntilNext)
+  const titleText = passiveRefillActive
+    ? `Следующие 3 сердечка через ${t}. Нажмите для подсказки.`
+    : "Пассивное пополнение на паузе, пока вы не в игре."
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           className={cn("cursor-help tabular-nums", className)}
-          title={`Следующие 3 сердечка через ${t}. Нажмите для подсказки.`}
+          title={titleText}
         >
           <span className={tabularClassName}>{voiceBalance}</span>
         </span>
@@ -37,8 +43,16 @@ export function BankHeartBalanceTooltip({
         className="max-w-[18rem] border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 shadow-xl"
       >
         <p className="text-xs font-medium leading-snug">
-          Следующие 3 сердечка через{" "}
-          <span className="font-black tabular-nums text-cyan-300">{t}</span>
+          {passiveRefillActive ? (
+            <>
+              Следующие 3 сердечка через{" "}
+              <span className="font-black tabular-nums text-cyan-300">{t}</span>
+            </>
+          ) : (
+            <>
+              Пассивное пополнение (+3❤/мин) стоит на паузе, пока вы не в активной игре (нет места за столом, загрузка, пауза или другой экран).
+            </>
+          )}
         </p>
         <button
           type="button"
