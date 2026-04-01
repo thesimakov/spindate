@@ -297,7 +297,14 @@ export function useSyncEngine(): SyncEngineResult {
         if (typeof data.tablesCount === "number") {
           dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
         }
-        await fetchTableAuthority(nextTableId)
+        // Первый вход/смена стола: сразу тянем authority.
+        // Обычные sync-тиki не должны каждый раз дублировать /api/table/state,
+        // этим занимается отдельный authority-poller.
+        const shouldFetchAuthorityNow =
+          mode === "join" || forceNew || tableActuallyChanged || !tableAuthorityReady
+        if (shouldFetchAuthorityNow) {
+          await fetchTableAuthority(nextTableId)
+        }
         setTableLiveReady(true)
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
@@ -306,7 +313,7 @@ export function useSyncEngine(): SyncEngineResult {
         liveSyncInFlightRef.current = false
       }
     },
-    [currentUser, composePlayersFromLive, dispatch, fetchTableAuthority],
+    [currentUser, composePlayersFromLive, dispatch, fetchTableAuthority, tableAuthorityReady],
   )
 
   // Live polling: join then sync every 3s
@@ -322,8 +329,9 @@ export function useSyncEngine(): SyncEngineResult {
     const tick = async () => {
       if (cancelled) return
       if (!initialJoinDoneRef.current) {
-        initialJoinDoneRef.current = true
-        await syncLiveTable("join")
+        const joined = await syncLiveTable("join")
+        // Переключаемся на обычный sync только после успешного join.
+        if (joined) initialJoinDoneRef.current = true
       } else {
         await syncLiveTable("sync")
       }
@@ -356,9 +364,9 @@ export function useSyncEngine(): SyncEngineResult {
     return () => void clearInterval(id)
   }, [currentUser, tablePaused, seatConfirmed, syncLiveTable])
 
-  // Authority polling: every 800ms
+  // Authority polling: после подтверждения места за столом.
   useEffect(() => {
-    if (!currentUser || tablePaused) return
+    if (!currentUser || tablePaused || !seatConfirmed) return
     let cancelled = false
 
     const poll = async () => {
@@ -382,7 +390,7 @@ export function useSyncEngine(): SyncEngineResult {
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [currentUser, tableId, fetchTableAuthority, tablePaused])
+  }, [currentUser, tableId, fetchTableAuthority, tablePaused, seatConfirmed])
 
   // Leave table only on real unmount / user switch (not on profile field updates).
   const currentUserId = currentUser?.id ?? null
