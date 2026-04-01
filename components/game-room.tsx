@@ -1628,6 +1628,16 @@ export function GameRoom() {
     }
   }, [isSpinning, roundNumber, currentTurnIndex])
 
+  /** Если STOP_SPIN не пришёл (рассинхрон authority / таймер), снимаем зависший спин. */
+  const SPIN_STUCK_MS = 7500
+  useEffect(() => {
+    if (!isSpinning || showResult) return
+    const id = window.setTimeout(() => {
+      dispatch({ type: "STOP_SPIN", action: "skip" })
+    }, SPIN_STUCK_MS)
+    return () => window.clearTimeout(id)
+  }, [isSpinning, showResult, dispatch])
+
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
 
@@ -3498,7 +3508,7 @@ export function GameRoom() {
               }
             >
               <Heart
-                className={`${bankHeartPulseActive ? "bank-heart-beat" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
+                className={`bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)] ${bankHeartPulseActive ? "brightness-125" : ""}`}
                 style={{ color: "#fde68a" }}
                 fill="currentColor"
               />
@@ -4768,7 +4778,11 @@ export function GameRoom() {
                   }}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
+                    <Heart
+                      className={`bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)] ${bankHeartPulseActive ? "brightness-125" : ""}`}
+                      style={{ color: "#fde68a" }}
+                      fill="currentColor"
+                    />
                     <BankHeartBalanceTooltip
                       voiceBalance={voiceBalance}
                       msUntilNext={msUntilNextBank}

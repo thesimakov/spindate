@@ -1002,7 +1002,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      const keepLocalAngle = state.isSpinning && !p.isSpinning
+      /** Серверный снимок может отставать: локально уже START_SPIN, в payload ещё false — иначе затирается угол и спин «зависает».
+       * Если на сервере уже есть результат пары — не держим устаревший локальный спин. */
+      const keepLocalSpin = state.isSpinning && !p.isSpinning && !p.showResult
+      /** Оба true, но угол на клиенте анимируется — не подменять bottleAngle снимком (рывок / стоп кадра). */
+      const bothSpinning = state.isSpinning && p.isSpinning
       const localById = new Map(state.players.map((pl) => [pl.id, pl]))
       const mergedPlayers = p.players.map((pl) => {
         const prev = localById.get(pl.id)
@@ -1017,16 +1021,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         players: mergedPlayers,
         currentTurnIndex: p.currentTurnIndex,
-        isSpinning: p.isSpinning,
-        countdown: p.countdown,
-        bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,
+        isSpinning: keepLocalSpin ? state.isSpinning : p.isSpinning,
+        countdown: keepLocalSpin ? state.countdown : p.countdown,
+        bottleAngle: keepLocalSpin || bothSpinning ? state.bottleAngle : p.bottleAngle,
         bottleSkin: p.bottleSkin ?? state.bottleSkin ?? "classic",
         bottleDonorId: p.bottleDonorId,
         bottleDonorName: p.bottleDonorName,
-        targetPlayer: p.targetPlayer,
-        targetPlayer2: p.targetPlayer2,
-        showResult: p.showResult,
-        resultAction: p.resultAction,
+        targetPlayer: keepLocalSpin ? state.targetPlayer : p.targetPlayer,
+        targetPlayer2: keepLocalSpin ? state.targetPlayer2 : p.targetPlayer2,
+        showResult: keepLocalSpin ? state.showResult : p.showResult,
+        resultAction: keepLocalSpin ? state.resultAction : p.resultAction,
         roundNumber: p.roundNumber,
         predictionPhase: p.predictionPhase,
         currentTurnDidSpin: p.currentTurnDidSpin,
