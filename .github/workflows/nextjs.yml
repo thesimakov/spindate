@@ -42,6 +42,8 @@ jobs:
       NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
       # Публичный URL мини-сайта (metadata, OG) — должен совпадать с доменом Pages
       NEXT_PUBLIC_APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+      # Статический фронт на Pages: все Route Handlers на прод-сервере (нужен CORS в middleware.ts).
+      NEXT_PUBLIC_API_BASE_URL: https://spindate.lemnity.ru
     steps:
       - name: Checkout
         uses: actions/checkout@v5

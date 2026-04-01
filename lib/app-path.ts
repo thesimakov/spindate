@@ -15,13 +15,14 @@ export const API_BASE_ORIGIN = (typeof process !== "undefined" && process.env.NE
   : ""
 ).trim()
 
-/** Абсолютный путь внутри приложения, с учётом basePath (для fetch к Route Handlers). */
+/**
+ * Абсолютный URL или путь: страницы — с basePath (GitHub Pages), API при NEXT_PUBLIC_API_BASE_URL — на бэкенд в корне `/api/...` (без basePath).
+ */
 export function appPath(href: string): string {
   if (href.startsWith("http://") || href.startsWith("https://")) return href
   const path = href.startsWith("/") ? href : `/${href}`
-  const relative = `${APP_BASE_PATH}${path}`
   if (API_BASE_ORIGIN && path.startsWith("/api/")) {
-    return `${API_BASE_ORIGIN}${relative}`
+    return `${API_BASE_ORIGIN}${path}`
   }
-  return relative
+  return `${APP_BASE_PATH}${path}`
 }

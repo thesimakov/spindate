@@ -6,6 +6,7 @@ import { useGame, getBotResponse, generateMessageId } from "@/lib/game-context"
 import type { ChatMessage, Player } from "@/lib/game-types"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { markChatRead } from "@/lib/use-pm-notifications"
+import { apiFetch } from "@/lib/api-fetch"
 
 const GIFTS = [
   { name: "Цветок", icon: Flower2, price: 5, emoji: "flower" },
@@ -44,7 +45,7 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
           b: String(player.id),
           since: String(since),
         })
-        const res = await fetch(`/api/chat/private?${params}`, { cache: "no-store" })
+        const res = await apiFetch(`/api/chat/private?${params}`, { cache: "no-store" })
         if (!res.ok) return
         const data = await res.json()
         if (!data.ok || !Array.isArray(data.messages)) return
@@ -83,10 +84,11 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
 
   const sendToServer = async (msg: ChatMessage) => {
     try {
-      await fetch("/api/chat/private", {
+      await apiFetch("/api/chat/private", {
         method: "POST",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           id: msg.id,
           senderId: msg.senderId,

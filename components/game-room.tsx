@@ -43,6 +43,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
+import { appPath } from "@/lib/app-path"
 import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
@@ -2415,7 +2416,7 @@ export function GameRoom() {
     const payload = JSON.stringify({ mode: "leave", userId: currentUser.id })
     try {
       if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-        navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
+        navigator.sendBeacon(appPath("/api/table/live"), new Blob([payload], { type: "application/json" }))
       } else {
         void apiFetch("/api/table/live", {
           method: "POST",

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import type { Player } from "@/lib/game-types"
+import { apiFetch } from "@/lib/api-fetch"
 
 const POLL_INTERVAL = 4000
 const LS_PREFIX = "spindate_pm_read_"
@@ -61,7 +62,7 @@ export function usePmNotifications(
         peers: peerIds.join(","),
         since: String(minSince),
       })
-      const res = await fetch(`/api/chat/unread?${params}`, { cache: "no-store" })
+      const res = await apiFetch(`/api/chat/unread?${params}`, { cache: "no-store" })
       if (!res.ok) return
       const data = await res.json()
       if (!data.ok) return

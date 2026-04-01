@@ -1,5 +1,7 @@
 "use client"
 
+import { appPath } from "@/lib/app-path"
+
 const STORAGE_KEY = "spindate_session"
 
 /** Дублирует httpOnly-cookie: нужен во встроенном VK, если браузер не хранит cookie. */
@@ -13,6 +15,11 @@ export function setClientSessionToken(token: string | null) {
   }
 }
 
+function resolveFetchInput(input: RequestInfo | URL): RequestInfo | URL {
+  if (typeof input === "string") return appPath(input)
+  return input
+}
+
 /** fetch с credentials и заголовком X-Session-Token при наличии токена в sessionStorage. */
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers ?? undefined)
@@ -24,7 +31,7 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
       /* ignore */
     }
   }
-  return fetch(input, {
+  return fetch(resolveFetchInput(input), {
     ...init,
     credentials: init?.credentials ?? "include",
     headers,

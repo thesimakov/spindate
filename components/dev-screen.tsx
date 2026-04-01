@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
+import { apiFetch } from "@/lib/api-fetch"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
@@ -70,11 +71,12 @@ export function DevScreen() {
     try {
       const token = getAdminToken()
       const url = token ? `/api/admin/users?admin_token=${encodeURIComponent(token)}` : "/api/admin/users"
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "GET",
         // иногда прокси режут кастомные headers — дублируем токен в query
         headers: { "X-Admin-Token": token },
         cache: "no-store",
+        credentials: "include",
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok || !Array.isArray(data.users)) {
@@ -164,10 +166,11 @@ export function DevScreen() {
     if (!ok) return
     try {
       setBusyUserId(u.userId)
-      await fetch("/api/admin/user", {
+      await apiFetch("/api/admin/user", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": getAdminToken() },
         cache: "no-store",
+        credentials: "include",
         body: JSON.stringify({
           userId: u.userId,
           vkUserId: u.vkUserId,

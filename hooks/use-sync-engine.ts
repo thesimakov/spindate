@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useGame, generateBots } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
+import { appPath } from "@/lib/app-path"
 import { composeTablePlayers } from "@/lib/table-composition"
 import type { Player, GameAction, TableAuthorityPayload } from "@/lib/game-types"
 
@@ -390,7 +391,7 @@ export function useSyncEngine(): SyncEngineResult {
     const payload = JSON.stringify({ mode: "leave", userId: currentUserId })
     const leave = () => {
       if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-        navigator.sendBeacon("/api/table/live", new Blob([payload], { type: "application/json" }))
+        navigator.sendBeacon(appPath("/api/table/live"), new Blob([payload], { type: "application/json" }))
       } else {
         void apiFetch("/api/table/live", {
           method: "POST",
