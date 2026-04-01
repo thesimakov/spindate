@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useGame } from "@/lib/game-context"
-import { initVkResilient, isVkMiniApp, resizeVkWindowToViewport, subscribeVkViewportResize } from "@/lib/vk-bridge"
+import { initVkResilient, isVkMiniApp, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { getLayoutConstraintDebug } from "@/lib/use-media-query"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
@@ -54,9 +54,6 @@ export function GameApp() {
     ;(async () => {
       await initVkResilient()
       if (cancelled) return
-      if (isVkMiniApp()) {
-        await resizeVkWindowToViewport()
-      }
     })()
     const unsub = isVkMiniApp() ? subscribeVkViewportResize() : () => {}
     return () => {

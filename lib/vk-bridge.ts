@@ -161,39 +161,6 @@ export function isVkMiniApp(): boolean {
   return false
 }
 
-/** Максимальная высота iframe: в панели VK «Размер iframe» до 4500 px (см. dev.vk.com games → Отображение). */
-const VK_IFRAME_MAX_HEIGHT = 4500
-
-/** Размер видимой области для передачи в VKWebAppResizeWindow (вкладка / окно / visualViewport). */
-export function getViewportSizeForVk(): { width: number; height: number } {
-  if (typeof window === "undefined") return { width: 800, height: 600 }
-  const vv = window.visualViewport
-  const w = Math.max(1, Math.round(vv?.width ?? window.innerWidth))
-  const rawH = vv?.height ?? window.innerHeight
-  const h = Math.max(1, Math.min(Math.round(rawH), VK_IFRAME_MAX_HEIGHT))
-  return { width: w, height: h }
-}
-
-/**
- * Подгоняет размер iframe под окно (VKWebAppResizeWindow).
- * Ширина вкладки на десктопе учитывается, если в панели VK включён широкоформатный режим;
- * иначе ширина ограничена настройкой «Размер iframe» (до 1000 px) — см. документацию VK.
- * На части мобильных клиентов метод недоступен — ошибка игнорируется.
- * @see https://dev.vk.com/bridge/VKWebAppResizeWindow
- * @see https://dev.vk.com/ru/games/settings/general/display
- */
-export async function resizeVkWindowToViewport(): Promise<boolean> {
-  const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return false
-  const { width, height } = getViewportSizeForVk()
-  try {
-    await b.send("VKWebAppResizeWindow", { width, height })
-    return true
-  } catch {
-    return false
-  }
-}
-
 /**
  * Просим ВК развернуть мини-приложение до максимально доступной области.
  * В части клиентов помогает убрать боковые поля/ограничения контейнера.
@@ -221,7 +188,6 @@ export function subscribeVkViewportResize(): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
   const run = () => {
     void requestVkExpand()
-    void resizeVkWindowToViewport()
   }
   const schedule = () => {
     if (timer != null) clearTimeout(timer)
@@ -273,7 +239,6 @@ export async function initVk(): Promise<void> {
   }
   await requestVkExpand()
   await requestVkWidescreen()
-  await resizeVkWindowToViewport()
 }
 
 const VK_INIT_TIMEOUT_MS = 8000
@@ -504,8 +469,6 @@ export const vkBridge = {
   ensureVkLaunchSearch,
   ensureVkLaunchSearchResilient,
   getVkLaunchSearchFromLocation,
-  getViewportSizeForVk,
-  resizeVkWindowToViewport,
   subscribeVkViewportResize,
   requestVkExpand,
   VK_ITEM_IDS,

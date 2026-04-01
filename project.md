@@ -313,7 +313,7 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
 
 ### Жизненный цикл VK Mini App
 
-`GameApp` при монтировании вызывает `initVkResilient()`, при необходимости подгоняет размер окна под viewport (`resizeVkWindowToViewport`, подписка на ресайз). Это отделяет **платформенные** concern’ы от игровой логики. Регистрация (`RegistrationScreen`) опирается на `vk-bridge` для тихого входа и сочетает email/пароль с VK — многоуровневый вход отражён в состоянии и API `/api/auth/*`.
+`GameApp` при монтировании вызывает `initVkResilient()`, а затем поддерживает платформенные VK-вызовы через подписку на ресайз (`subscribeVkViewportResize`, `VKWebAppExpand`). Это отделяет **платформенные** concern’ы от игровой логики. Регистрация (`RegistrationScreen`) опирается на `vk-bridge` для тихого входа и сочетает email/пароль с VK — многоуровневый вход отражён в состоянии и API `/api/auth/*`.
 
 ### Таймеры и побочные эффекты
 
