@@ -57,11 +57,8 @@ export async function GET(req: Request) {
 
     const out = rows.map((r) => {
       const flags = getAdminFlagsForUserId(r.user_id)
-      // Live-ключ может быть и по UUID (authUserId), и по vk — учитываем оба при привязке presence
-      const live =
-        (r.vk_user_id != null ? liveByUserKey.get(`vk:${r.vk_user_id}`) : null) ??
-        liveByUserKey.get(`u:${r.user_id}`) ??
-        null
+      const key = r.vk_user_id != null ? `vk:${r.vk_user_id}` : `u:${r.user_id}`
+      const live = liveByUserKey.get(key) ?? null
       return {
         userId: r.user_id,
         isDbUser: true,
@@ -81,58 +78,10 @@ export async function GET(req: Request) {
     // Добавить live-only игроков (тестовые, офлайн-VK, и т.п.), которых нет в users таблице
     const knownKeys = new Set<string>()
     for (const r of rows) {
-      knownKeys.add(`u:${r.user_id}`)
-      if (r.vk_user_id != null) knownKeys.add(`vk:${r.vk_user_id}`)
+      knownKeys.add(r.vk_user_id != null ? `vk:${r.vk_user_id}` : `u:${r.user_id}`)
     }
     for (const [key, live] of liveByUserKey.entries()) {
       if (knownKeys.has(key)) continue
-      // Тот же человек мог зайти по VK с live-ключом vk:…, а в users ещё не заполнен vk_user_id — пробуем связать по vk
-      if (key.startsWith("vk:") && hasVkUserId) {
-        const vkNum = Number(key.slice(3))
-        if (Number.isInteger(vkNum) && vkNum > 0) {
-          const resolved = db
-            .prepare(
-              `SELECT u.id as user_id, u.username, u.vk_user_id, p.display_name, p.avatar_url, p.gender, p.age, p.purpose,
-                      s.voice_balance
-               FROM users u
-               LEFT JOIN player_profiles p ON p.user_id = u.id
-               LEFT JOIN user_game_state s ON s.user_id = u.id
-               WHERE u.vk_user_id = ?`,
-            )
-            .get(vkNum) as
-            | {
-                user_id: string
-                username: string
-                vk_user_id: number | null
-                display_name: string | null
-                avatar_url: string | null
-                gender: string | null
-                age: number | null
-                purpose: string | null
-                voice_balance: number | null
-              }
-            | undefined
-          if (resolved) {
-            knownKeys.add(key)
-            const flags = getAdminFlagsForUserId(resolved.user_id)
-            out.push({
-              userId: resolved.user_id,
-              isDbUser: true,
-              username: resolved.username,
-              vkUserId: resolved.vk_user_id ?? vkNum,
-              displayName: resolved.display_name ?? resolved.username,
-              avatarUrl: resolved.avatar_url ?? undefined,
-              gender: resolved.gender ?? undefined,
-              age: resolved.age ?? undefined,
-              purpose: resolved.purpose ?? undefined,
-              voiceBalance: resolved.voice_balance ?? 0,
-              flags,
-              live,
-            })
-            continue
-          }
-        }
-      }
       out.push({
         userId: `live:${key}`, // синтетический id, только для отображения
         isDbUser: false,

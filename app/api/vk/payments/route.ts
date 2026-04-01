@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { payVotesForPack } from "@/lib/heart-shop-pricing"
 import { verifyVkPaymentsSig } from "@/lib/vk-payments-sign"
+import { getDb } from "@/lib/db"
 
 /** Защищённый ключ приложения (совпадает с полем в настройках VK). Обязателен для проверки sig в продакшене. */
 const VK_PAYMENTS_SECRET = process.env.VK_PAYMENTS_SECRET ?? ""
@@ -20,6 +21,7 @@ const VK_PAYMENT_ITEMS = {
   hearts_5: { title: "5 сердец", price: payVotesForPack(5) },
   hearts_50: { title: "50 сердец", price: payVotesForPack(50) },
   hearts_150: { title: "150 сердец", price: payVotesForPack(150) },
+  hearts_200: { title: "200 сердец", price: payVotesForPack(200) },
   hearts_500: { title: "500 сердец", price: payVotesForPack(500) },
   hearts_1000: { title: "1000 сердец", price: payVotesForPack(1000) },
   hearts_5000: { title: "5000 сердец", price: payVotesForPack(5000) },
@@ -76,7 +78,60 @@ function handleGetItem(itemKey: string): NextResponse {
 }
 
 /** order_status_change — подтверждение обработки заказа; в ответе — order_id (число). */
-function handleOrderStatusChange(orderIdRaw: string, itemKey: string): NextResponse {
+function parseVkUserId(params: URLSearchParams): number | null {
+  const raw =
+    params.get("user_id") ??
+    params.get("receiver_id") ??
+    params.get("vk_user_id") ??
+    params.get("uid") ??
+    ""
+  const id = Number.parseInt(String(raw), 10)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
+function heartsByItem(itemKey: string): number {
+  const m = /^hearts_(\d+)$/i.exec(itemKey)
+  if (!m) return 0
+  const n = Number.parseInt(m[1], 10)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function isGrantableOrderStatus(statusRaw: string): boolean {
+  const s = statusRaw.trim().toLowerCase()
+  if (!s) return true
+  return s === "chargeable" || s === "success" || s === "paid" || s === "charged"
+}
+
+function grantHeartsByVkUser(vkUserId: number, hearts: number): void {
+  if (hearts <= 0) return
+  const db = getDb()
+  const now = Date.now()
+
+  const linkedUser = db
+    .prepare(`SELECT id FROM users WHERE vk_user_id = ?`)
+    .get(vkUserId) as { id: string } | undefined
+
+  if (linkedUser?.id) {
+    db.prepare(
+      `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
+       VALUES (?, ?, '[]', ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         voice_balance = user_game_state.voice_balance + excluded.voice_balance,
+         updated_at = excluded.updated_at`,
+    ).run(linkedUser.id, hearts, now)
+    return
+  }
+
+  db.prepare(
+    `INSERT INTO vk_user_game_state (vk_user_id, voice_balance, inventory_json, updated_at)
+     VALUES (?, ?, '[]', ?)
+     ON CONFLICT(vk_user_id) DO UPDATE SET
+       voice_balance = vk_user_game_state.voice_balance + excluded.voice_balance,
+       updated_at = excluded.updated_at`,
+  ).run(vkUserId, hearts, now)
+}
+
+function handleOrderStatusChange(params: URLSearchParams, orderIdRaw: string, itemKey: string): NextResponse {
   const orderId = Number.parseInt(orderIdRaw, 10)
   if (!orderIdRaw || Number.isNaN(orderId)) {
     return vkError(11, "Invalid order_id", true)
@@ -88,6 +143,54 @@ function handleOrderStatusChange(orderIdRaw: string, itemKey: string): NextRespo
   if (!item) {
     return vkError(20, "Product does not exist", true)
   }
+
+  const vkUserId = parseVkUserId(params)
+  if (!vkUserId) {
+    return vkError(11, "Missing user_id", true)
+  }
+
+  const paymentStatus = String(params.get("status") ?? params.get("order_status") ?? "")
+  const grantable = isGrantableOrderStatus(paymentStatus)
+  const now = Date.now()
+  const providerOrderId = String(orderId)
+  const notificationType = String(params.get("notification_type") ?? "order_status_change")
+  const payloadJson = JSON.stringify(Object.fromEntries(params.entries()))
+  const db = getDb()
+
+  const tx = db.transaction(() => {
+    const exists = db
+      .prepare(`SELECT processed FROM vk_payment_orders WHERE provider_order_id = ?`)
+      .get(providerOrderId) as { processed: number } | undefined
+    if (exists?.processed === 1) return
+
+    db.prepare(
+      `INSERT INTO vk_payment_orders (
+         provider_order_id, vk_user_id, item_id, notification_type, status, processed, payload_json, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)
+       ON CONFLICT(provider_order_id) DO UPDATE SET
+         vk_user_id = excluded.vk_user_id,
+         item_id = excluded.item_id,
+         notification_type = excluded.notification_type,
+         status = excluded.status,
+         payload_json = excluded.payload_json,
+         updated_at = excluded.updated_at`,
+    ).run(providerOrderId, vkUserId, itemKey, notificationType, paymentStatus || null, payloadJson, now, now)
+
+    if (grantable) {
+      const hearts = heartsByItem(itemKey)
+      if (hearts > 0) {
+        grantHeartsByVkUser(vkUserId, hearts)
+      }
+      db.prepare(
+        `UPDATE vk_payment_orders
+         SET processed = 1, updated_at = ?
+         WHERE provider_order_id = ?`,
+      ).run(Date.now(), providerOrderId)
+    }
+  })
+
+  tx()
+
   return vkJson({ response: { order_id: orderId } })
 }
 
@@ -113,7 +216,7 @@ export async function POST(req: NextRequest) {
     if (baseType === "order_status_change") {
       const orderId = String(params.get("order_id") ?? "")
       const itemKey = String(params.get("item_id") ?? params.get("item") ?? "")
-      return handleOrderStatusChange(orderId, itemKey)
+      return handleOrderStatusChange(params, orderId, itemKey)
     }
 
     return vkError(1, `${notificationType || "empty"} not processed`, true)

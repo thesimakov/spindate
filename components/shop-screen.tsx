@@ -304,6 +304,40 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
   }, [currentUser, dispatch])
 
+  /**
+   * Ждём серверное подтверждение оплаты VK (callback order_status_change может прийти не мгновенно).
+   * Возвращает true, если баланс вырос минимум на expectedDelta.
+   */
+  const waitForServerTopUp = useCallback(
+    async (baselineBalance: number, expectedDelta: number): Promise<boolean> => {
+      if (!currentUser) return false
+      const endpoint =
+        currentUser.authProvider === "vk"
+          ? `/api/user/state?vk_user_id=${encodeURIComponent(String(currentUser.id))}`
+          : "/api/user/state"
+      const deadline = Date.now() + 25_000
+      while (Date.now() < deadline) {
+        try {
+          const res = await apiFetch(endpoint, { credentials: "include" })
+          const data = (await res.json()) as { ok?: boolean; voiceBalance?: number; inventory?: unknown[] }
+          if (data.ok && typeof data.voiceBalance === "number") {
+            dispatch({
+              type: "RESTORE_GAME_STATE",
+              voiceBalance: data.voiceBalance,
+              inventory: Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
+            })
+            if (data.voiceBalance >= baselineBalance + expectedDelta) return true
+          }
+        } catch {
+          // ignore transient network error
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      }
+      return false
+    },
+    [currentUser, dispatch],
+  )
+
   const handleActivateVip = async ({
     days,
     cost,
@@ -334,11 +368,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       showToast("Пробный VIP уже использован", "info")
       return
     }
-    if (cost > 0 && voiceBalance < cost) {
-      showToast("Недостаточно сердец для VIP", "error")
-      return
-    }
-
     if (!currentUser) return
 
     if (cost > 0) {
@@ -354,7 +383,6 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       }
     }
 
-    if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
     const base = vipUntilTs && vipUntilTs > Date.now() ? vipUntilTs : Date.now()
     const until = base + days * 24 * 60 * 60 * 1000
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true, vipUntilTs: until })
@@ -378,11 +406,12 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
     setVipLevel((prev) => (prev >= targetLevel ? prev : targetLevel))
     showToast(`VIP активирован на ${days} дн.`, "success")
-    window.setTimeout(() => void syncVoiceFromServer(), 2500)
+    window.setTimeout(() => void syncVoiceFromServer(), 1800)
   }
 
   const handleTopUp = async (amount: number, votes: number, itemId: string) => {
     if (!currentUser) return
+    const baseline = voiceBalance
     const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
     const ok = await vkBridge.showPaymentWall(votes, itemId, {
       userId: String(currentUser.id),
@@ -393,9 +422,13 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       showToast("Пополнение отменено", "error")
       return
     }
-    dispatch({ type: "PAY_VOICES", amount: -amount })
-    showToast(`Баланс пополнен на ${amount} ❤`, "success")
-    window.setTimeout(() => void syncVoiceFromServer(), 2500)
+    const confirmed = await waitForServerTopUp(baseline, amount)
+    if (confirmed) {
+      showToast(`Баланс пополнен на ${amount} ❤`, "success")
+    } else {
+      showToast("Платёж принят. Начисление может занять до 1 минуты.", "info")
+      window.setTimeout(() => void syncVoiceFromServer(), 4000)
+    }
   }
 
   if (!currentUser) return null
@@ -633,11 +666,11 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">20 голосов</p>
             <button
               type="button"
-              disabled={voiceBalance < 20 || vipLevel === 2 || vipLevel === 3}
+              disabled={vipLevel === 2 || vipLevel === 3}
               onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
                 className={`mt-2 w-full rounded-full border border-rose-600/45 bg-gradient-to-b from-rose-400 to-pink-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.42)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
             >
-              {voiceBalance < 20 ? "Недостаточно ❤" : vipLevel === 2 || vipLevel === 3 ? "Недоступно" : "Купить"}
+              {vipLevel === 2 || vipLevel === 3 ? "Недоступно" : "Купить"}
             </button>
           </div>
         </div>
@@ -657,11 +690,11 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">70 голосов</p>
             <button
               type="button"
-              disabled={voiceBalance < 70 || vipLevel === 3}
+              disabled={vipLevel === 3}
               onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
                 className={`mt-2 w-full rounded-full border border-rose-600/45 bg-gradient-to-b from-rose-400 to-pink-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.42)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
             >
-              {voiceBalance < 70 ? "Недостаточно ❤" : vipLevel === 3 ? "Недоступно" : "Купить"}
+              {vipLevel === 3 ? "Недоступно" : "Купить"}
             </button>
           </div>
           </div>

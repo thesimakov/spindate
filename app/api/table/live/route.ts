@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { Player } from "@/lib/game-types"
 import { joinOrSyncLiveTable, leaveLiveTable } from "@/lib/live-tables-server"
 import { ensureTableAuthority } from "@/lib/table-authority-server"
+import { loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { getDb } from "@/lib/db"
 import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 
@@ -108,20 +109,38 @@ export async function POST(req: Request) {
   const requestedTableIdRaw = Number(body?.tableId)
   const requestedTableId = Number.isInteger(requestedTableIdRaw) ? requestedTableIdRaw : null
   const forceNew = body?.forceNew === true
+  const reg = await loadRoomRegistry()
+
+  if (requestedTableId != null) {
+    const exists = reg.rooms.some((r) => r.roomId === requestedTableId)
+    if (!exists) {
+      return NextResponse.json(
+        { ok: false, error: "Комната больше не активна (TTL 24ч). Выберите другой стол." },
+        { status: 410, headers: NO_CACHE },
+      )
+    }
+  }
 
   const result = await joinOrSyncLiveTable({
     player,
     maxTableSize,
-    requestedTableId: mode === "sync" ? requestedTableId : undefined,
+    requestedTableId: requestedTableId ?? undefined,
     forceNew: mode === "join" ? forceNew : false,
   })
 
   await ensureTableAuthority(result.tableId)
+
+  const meta = reg.rooms.find((r) => r.roomId === result.tableId)
+  const createdByUserId =
+    typeof meta?.createdByUserId === "number" && Number.isFinite(meta.createdByUserId)
+      ? meta.createdByUserId
+      : null
 
   return NextResponse.json({
     ok: true,
     tableId: result.tableId,
     livePlayers: result.livePlayers.map((p) => ({ ...p, isBot: false })),
     tablesCount: result.tablesCount,
+    createdByUserId,
   }, { headers: NO_CACHE })
 }

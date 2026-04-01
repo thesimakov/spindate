@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 import { FortuneWheelStatic, FortuneWheelArrow } from "@/components/fortune-wheel-bottle-visual"
 
@@ -43,6 +43,8 @@ export function Bottle({
   fortuneSegmentCount,
 }: BottleProps) {
   const [imgError, setImgError] = useState(false)
+  const [renderAngle, setRenderAngle] = useState(angle)
+  const prevAngleRef = useRef(angle)
 
   const skinToImg: Record<BottleSkinWithImage, string> = {
     classic: assetUrl(BOTTLE_IMAGES.classic),
@@ -71,6 +73,25 @@ export function Bottle({
   useEffect(() => {
     setImgError(false)
   }, [skin, imgSrc])
+
+  useEffect(() => {
+    const prevAngle = prevAngleRef.current
+    prevAngleRef.current = angle
+
+    if (!isSpinning) {
+      if (prevAngle !== angle) setRenderAngle(angle)
+      return
+    }
+
+    // Если сервер прислал тот же angle, всё равно перезапускаем transition:
+    // даём микросдвиг, затем в следующий кадр возвращаем целевой угол.
+    const fromAngle = prevAngle === angle ? prevAngle - 0.01 : prevAngle
+    setRenderAngle(fromAngle)
+    const raf = window.requestAnimationFrame(() => {
+      setRenderAngle(angle)
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [angle, isSpinning])
 
   const [wasSpinning, setWasSpinning] = useState(false)
   useEffect(() => {
@@ -114,7 +135,7 @@ export function Bottle({
           <div
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
             style={{
-              transform: `rotate(${angle}deg)`,
+              transform: `rotate(${renderAngle}deg)`,
         transition: spinTransition,
         willChange: "transform",
       }}
@@ -125,7 +146,7 @@ export function Bottle({
       ) : (
       <div
         style={{
-          transform: `rotate(${angle}deg)`,
+          transform: `rotate(${renderAngle}deg)`,
           transition: spinTransition,
           filter: bottleShadow,
           opacity: 1,

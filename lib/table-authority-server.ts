@@ -31,6 +31,52 @@ function targetsForTable(maxTableSize: number): { males: number; females: number
   return maxTableSize <= 6 ? { males: 3, females: 3 } : { males: 5, females: 5 }
 }
 
+const SPIN_STUCK_MS = 16_000
+
+/**
+ * Server-side watchdog: если спин завис, аккуратно переводим стол на следующий ход.
+ * Это защищает комнату от вечного состояния «Крутится...».
+ */
+function stabilizeAuthoritySnapshot(
+  snapshot: TableAuthorityPayload,
+  nowMs = Date.now(),
+): { snapshot: TableAuthorityPayload; changed: boolean } {
+  let next = snapshot
+  let changed = false
+
+  if (next.isSpinning) {
+    const started =
+      typeof next.spinStartedAtMs === "number" && Number.isFinite(next.spinStartedAtMs)
+        ? next.spinStartedAtMs
+        : 0
+
+    if (started <= 0) {
+      next = { ...next, spinStartedAtMs: nowMs }
+      changed = true
+    } else if (nowMs - started >= SPIN_STUCK_MS) {
+      const recoveredBase: TableAuthorityPayload = {
+        ...next,
+        isSpinning: false,
+        spinStartedAtMs: null,
+        countdown: null,
+        showResult: false,
+        targetPlayer: null,
+        targetPlayer2: null,
+        resultAction: null,
+        // Считаем, что игрок крутил: watchdog не должен штрафовать skip-ом.
+        currentTurnDidSpin: true,
+      }
+      next = applyTableAuthorityAction(recoveredBase, { type: "NEXT_TURN" }) ?? recoveredBase
+      changed = true
+    }
+  } else if (next.spinStartedAtMs != null) {
+    next = { ...next, spinStartedAtMs: null }
+    changed = true
+  }
+
+  return { snapshot: next, changed }
+}
+
 function computeEnsureAuthority(
   prev: TableAuthorityPayload | null,
   info: { livePlayers: Player[]; maxTableSize: number },
@@ -81,8 +127,13 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
     await readModifyWriteKey(redis, key, (raw) => {
       const prev = raw ? (JSON.parse(raw) as TableAuthorityPayload) : null
       const next = computeEnsureAuthority(prev, info, tid)
-      out = next
-      return next ? JSON.stringify(next) : null
+      if (!next) {
+        out = null
+        return null
+      }
+      const stabilized = stabilizeAuthoritySnapshot(next)
+      out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot
+      return JSON.stringify(out)
     })
     return out
   }
@@ -90,23 +141,41 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
   const store = getMemoryStore()
   const prev = store.get(tid) ?? null
   const next = computeEnsureAuthority(prev, info, tid)
-  if (next) store.set(tid, next)
-  return next
+  if (!next) return null
+  const stabilized = stabilizeAuthoritySnapshot(next)
+  const out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot
+  store.set(tid, out)
+  return out
 }
 
 export async function getTableAuthoritySnapshot(tableId: number): Promise<TableAuthorityPayload | null> {
   const tid = Math.floor(tableId)
   const redis = getRedis()
   if (redis) {
-    const raw = await redis.get(authorityRedisKey(tid))
-    if (!raw) return null
-    try {
-      return JSON.parse(raw) as TableAuthorityPayload
-    } catch {
-      return null
-    }
+    let out: TableAuthorityPayload | null = null
+    await readModifyWriteKey(redis, authorityRedisKey(tid), (raw) => {
+      if (!raw) {
+        out = null
+        return null
+      }
+      try {
+        const snap = JSON.parse(raw) as TableAuthorityPayload
+        const stabilized = stabilizeAuthoritySnapshot(snap)
+        out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
+        return JSON.stringify(out)
+      } catch {
+        out = null
+        return null
+      }
+    })
+    return out
   }
-  return getMemoryStore().get(tid) ?? null
+  const snap = getMemoryStore().get(tid) ?? null
+  if (!snap) return null
+  const stabilized = stabilizeAuthoritySnapshot(snap)
+  const out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
+  if (stabilized.changed) getMemoryStore().set(tid, out)
+  return out
 }
 
 /**
@@ -126,7 +195,12 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
       const snap = JSON.parse(raw) as TableAuthorityPayload
       const applied = applyTableAuthorityAction(snap, action)
       if (!applied) return raw
-      out = { ...applied, revision: snap.revision + 1 }
+      let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
+      const stabilized = stabilizeAuthoritySnapshot(next)
+      if (stabilized.changed) {
+        next = { ...stabilized.snapshot, revision: next.revision + 1 }
+      }
+      out = next
       return JSON.stringify(out)
     })
     return out
@@ -137,7 +211,11 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
   if (!snap) return null
   const applied = applyTableAuthorityAction(snap, action)
   if (!applied) return null
-  const next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
+  let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
+  const stabilized = stabilizeAuthoritySnapshot(next)
+  if (stabilized.changed) {
+    next = { ...stabilized.snapshot, revision: next.revision + 1 }
+  }
   store.set(tid, next)
   return next
 }

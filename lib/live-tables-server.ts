@@ -8,6 +8,12 @@ export async function joinOrSyncLiveTable(args: Parameters<typeof memory.joinOrS
   return memory.joinOrSyncLiveTableMemory(args)
 }
 
+export async function joinSpecificRoom(args: Parameters<typeof memory.joinSpecificRoomMemory>[0]) {
+  const r = getRedis()
+  if (r) return redis.joinSpecificRoomRedis(r, args)
+  return memory.joinSpecificRoomMemory(args)
+}
+
 export async function leaveLiveTable(userId: number) {
   const r = getRedis()
   if (r) return redis.leaveLiveTableRedis(r, userId)

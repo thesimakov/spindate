@@ -27,7 +27,7 @@ export function applyTableAuthorityAction(
       return { ...snapshot, generalChatMessages: list.slice(-50) }
     }
     case "START_COUNTDOWN":
-      return { ...snapshot, countdown: 3 }
+      return { ...snapshot, countdown: 3, spinStartedAtMs: null }
     case "TICK_COUNTDOWN":
       return {
         ...snapshot,
@@ -42,6 +42,7 @@ export function applyTableAuthorityAction(
       return {
         ...snapshot,
         isSpinning: true,
+        spinStartedAtMs: Date.now(),
         countdown: null,
         bottleAngle: action.angle,
         targetPlayer: t1,
@@ -52,7 +53,7 @@ export function applyTableAuthorityAction(
       }
     }
     case "STOP_SPIN":
-      return { ...snapshot, isSpinning: false, showResult: true, resultAction: action.action }
+      return { ...snapshot, isSpinning: false, spinStartedAtMs: null, showResult: true, resultAction: action.action }
     case "NEXT_TURN": {
       if (snapshot.players.length === 0) {
         return {
@@ -96,6 +97,8 @@ export function applyTableAuthorityAction(
         currentTurnDidSpin: false,
         currentTurnIndex: nextIndex,
         showResult: false,
+        isSpinning: false,
+        spinStartedAtMs: null,
         targetPlayer: null,
         targetPlayer2: null,
         resultAction: null,
@@ -142,6 +145,7 @@ export function applyTableAuthorityAction(
         targetPlayer2: null,
         resultAction: null,
         isSpinning: false,
+        spinStartedAtMs: null,
       }
     case "SET_BOTTLE_COOLDOWN_UNTIL":
       return snapshot

@@ -298,6 +298,7 @@ export const VK_ITEM_IDS = {
   hearts_5: "hearts_5",
   hearts_50: "hearts_50",
   hearts_150: "hearts_150",
+  hearts_200: "hearts_200",
   hearts_500: "hearts_500",
   hearts_1000: "hearts_1000",
   hearts_5000: "hearts_5000",
@@ -422,6 +423,11 @@ export async function showPaymentWall(
   }
 }
 
+/** Покупка 200 сердец (9 голосов). */
+export async function buyHearts200(): Promise<boolean> {
+  return showPaymentWall(payVotesForPack(200), VK_ITEM_IDS.hearts_200)
+}
+
 /** Покупка пака сердец (500). Для уведомлений VK вызывает get_item/order_status_change на сервер. */
 export async function buyHearts500(): Promise<boolean> {
   return showPaymentWall(payVotesForPack(500), VK_ITEM_IDS.hearts_500)
@@ -459,6 +465,7 @@ export async function inviteFriends(): Promise<boolean> {
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
+  buyHearts200,
   buyHearts500,
   buyHearts1000,
   buyVip,

@@ -41,27 +41,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, generateBots, randomAvatarFrame } from "@/lib/game-context"
+import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
+import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
 import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
-import { DailyStreakBonusDialog } from "@/components/daily-streak-bonus-dialog"
 import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
 import { BankHeartBalanceTooltip } from "@/components/bank-heart-balance-tooltip"
-import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
 import { useBankPassive } from "@/hooks/use-bank-passive"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
-import { composeTablePlayers } from "@/lib/table-composition"
 import { useSyncEngine } from "@/hooks/use-sync-engine"
 import { useGameTimers } from "@/hooks/use-game-timers"
 import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
+import { RoomChannelChat } from "@/components/room-channel-chat"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
@@ -76,6 +75,7 @@ import {
 import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
+import { roomNameForDisplay } from "@/lib/rooms/room-names"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -447,6 +447,7 @@ export function GameRoom() {
     bonusBalance: _bonusBalance,
     currentUser,
     tableId,
+    roomCreatorPlayerId,
     tablesCount,
     gameLog,
     predictions,
@@ -476,6 +477,7 @@ export function GameRoom() {
     gameSidePanel,
     admirers,
   } = state
+  const currentRoomName = roomNameForDisplay("", tableId)
 
   const gameRoomDustParticles = useMemo(
     () => buildGameRoomDustParticles(8 + (GAME_ROOM_DUST_SEED % 19), GAME_ROOM_DUST_SEED),
@@ -664,7 +666,6 @@ export function GameRoom() {
 
   useEffect(() => {
     if (!playerMenuTarget) {
-      setShowRosesReceivedPopover(false)
       setShowFramePicker(false)
       setSelectedFrameForGift(null)
     } else {
@@ -672,196 +673,13 @@ export function GameRoom() {
     }
   }, [playerMenuTarget])
 
-  // Приветственный подарок при первом заходе (по пользователю в localStorage)
-  const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
-  const [showWelcomeGift, setShowWelcomeGift] = useState(false)
-  const [welcomeClaimedForSession, setWelcomeClaimedForSession] = useState(false)
-
-  const welcomeComplete = useMemo(() => {
-    if (!currentUser) return false
-    try {
-      const raw = localStorage.getItem(WELCOME_GIFT_KEY)
-      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
-      return !!stored[String(currentUser.id)]
-    } catch {
-      return false
-    }
-  }, [currentUser?.id, welcomeClaimedForSession])
-
-  useEffect(() => {
-    if (!currentUser || tableLoading) return
-    try {
-      const raw = localStorage.getItem(WELCOME_GIFT_KEY)
-      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
-      // Пользователи по логину получают стартовые 150 сердец сразу при входе.
-      if (currentUser.authProvider === "login" && voiceBalance >= 150) {
-        if (!stored[String(currentUser.id)]) {
-          stored[String(currentUser.id)] = true
-          localStorage.setItem(WELCOME_GIFT_KEY, JSON.stringify(stored))
-        }
-        return
-      }
-      if (!stored[String(currentUser.id)]) {
-        setShowWelcomeGift(true)
-      }
-    } catch {
-      setShowWelcomeGift(true)
-    }
-  }, [currentUser?.id, currentUser?.authProvider, voiceBalance, tableLoading])
-
-  // Daily bonus (client-only, saved in localStorage)
-  const [, setDailyOpen] = useState(false)
-  const [dailyDay, setDailyDay] = useState(1)
-  const [dailyClaimedToday, setDailyClaimedToday] = useState(false)
-
-  const dailyBonusTodayKey = useMemo(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString().slice(0, 10)
-  }, [])
-
-  const dailyBonusYesterdayKey = useMemo(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - 1)
-    return d.toISOString().slice(0, 10)
-  }, [])
-
-  useEffect(() => {
-    if (!currentUser || tableLoading) return
-    try {
-      // Сначала показываем приветственный подарок при первом заходе
-      const welcomeRaw = localStorage.getItem(WELCOME_GIFT_KEY)
-      const welcomeStored = welcomeRaw ? (JSON.parse(welcomeRaw) as Record<string, boolean>) : {}
-      if (!welcomeStored[String(currentUser.id)]) {
-        setDailyOpen(false)
-        return
-      }
-
-      const raw = localStorage.getItem("botl_daily_bonus_v1")
-      const parsed = raw ? (JSON.parse(raw) as { lastClaimDate?: string; streakDay?: number }) : {}
-      const last = parsed.lastClaimDate
-      const streak = typeof parsed.streakDay === "number" ? parsed.streakDay : 0
-
-      if (last === dailyBonusTodayKey) {
-        setDailyDay(computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey))
-        setDailyClaimedToday(true)
-        setDailyOpen(false)
-        return
-      }
-
-      const nextDay = computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey)
-      setDailyDay(nextDay)
-      setDailyClaimedToday(false)
-      setDailyOpen(false)
-    } catch {
-      setDailyDay(1)
-      setDailyClaimedToday(false)
-      setDailyOpen(false)
-    }
-  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession, tableLoading])
-
-  const handleClaimStreakBonus = useCallback(() => {
-    if (dailyClaimedToday || !currentUser) return
-    const spec = getDailyStreakReward(dailyDay)
-    if (!spec) return
-    if (spec.kind === "hearts") {
-      dispatch({ type: "PAY_VOICES", amount: -spec.amount })
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} сердец`,
-          timestamp: Date.now(),
-        },
-      })
-    } else if (spec.kind === "roses") {
-      const base = Date.now()
-      for (let i = 0; i < spec.amount; i++) {
-        dispatch({
-          type: "ADD_INVENTORY_ITEM",
-          item: {
-            type: "rose",
-            fromPlayerId: 0,
-            fromPlayerName: "Ежедневный бонус",
-            timestamp: base + i,
-          },
-        })
-      }
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} роз`,
-          timestamp: Date.now(),
-        },
-      })
-    } else {
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: супер-рамка (награда будет начислена позже)`,
-          timestamp: Date.now(),
-        },
-      })
-    }
-    try {
-      const raw = localStorage.getItem(WELCOME_GIFT_KEY)
-      const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
-      if (!stored[String(currentUser.id)]) {
-        stored[String(currentUser.id)] = true
-        localStorage.setItem(WELCOME_GIFT_KEY, JSON.stringify(stored))
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      localStorage.setItem(
-        "botl_daily_bonus_v1",
-        JSON.stringify({ lastClaimDate: dailyBonusTodayKey, streakDay: dailyDay }),
-      )
-    } catch {
-      // ignore
-    }
-    setDailyClaimedToday(true)
-    setShowWelcomeGift(false)
-    setWelcomeClaimedForSession(true)
-    setDailyOpen(false)
-  }, [dailyClaimedToday, dailyDay, dailyBonusTodayKey, dispatch, currentUser])
-
-  const showStreakDialog =
-    !!currentUser &&
-    !tableLoading &&
-    !dailyClaimedToday &&
-    (showWelcomeGift || welcomeComplete)
-
   // Result UI state (for center overlay)
-  const [, setResultChosenAction] = useState<string | null>(null)
-  const [, setResultSwap] = useState(false)
-
-  useEffect(() => {
-    if (!showResult) {
-      setResultChosenAction(null)
-      setResultSwap(false)
-      return
-    }
-    setResultChosenAction(null)
-    setResultSwap(Math.random() < 0.5)
-  }, [showResult, roundNumber])
 
   const [showBottleCatalog, setShowBottleCatalog] = useState(false)
-  const [_showRosesReceivedPopover, setShowRosesReceivedPopover] = useState(false)
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
   const [showChatListModal, setShowChatListModal] = useState(false)
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
+  const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
   /** Планшет (md–lg): узкая колонка иконок; по нажатию — полная панель */
@@ -870,8 +688,6 @@ export function GameRoom() {
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
-  const [paymentLoading, setPaymentLoading] = useState(false)
   const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
   const [emotionPurchasePick, setEmotionPurchasePick] = useState({
     kiss: true,
@@ -889,7 +705,6 @@ export function GameRoom() {
   // Prediction state
   const [predictionTarget, setPredictionTarget] = useState<Player | null>(null)
   const [predictionTarget2, setPredictionTarget2] = useState<Player | null>(null)
-  const [showPredictionPicker, setShowPredictionPicker] = useState(false)
   const [predictionMade, setPredictionMade] = useState(false)
   const [predictionResult, setPredictionResult] = useState<"correct" | "wrong" | null>(null)
 
@@ -931,8 +746,6 @@ export function GameRoom() {
   // те двое, на кого указывает бутылка (горлышко и дно).
   const resolvedTargetPlayer = targetPlayer
   const resolvedTargetPlayer2 = targetPlayer2
-
-  const _userPrediction = predictions.find(p => p.playerId === currentUser?.id)
 
   const cooldownLeftMs = useMemo(() => {
     if (!bottleCooldownUntil) return 0
@@ -1066,20 +879,6 @@ export function GameRoom() {
         .filter((e) => bigTypes.includes(e.type as BigGiftType) && e.toPlayer?.id === playerId)
         .sort((a, b) => a.timestamp - b.timestamp)
         .map((e) => e.type as BigGiftType)
-    },
-    [gameLog],
-  )
-
-  // Сколько сердечек игрок потратил на платные подарки (по логам и PAIR_ACTIONS)
-  const _getGiftSpentForPlayer = useCallback(
-    (playerId: number) => {
-      const giftIds = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "tools", "lipstick"])
-      return gameLog.reduce((sum, entry) => {
-        if (entry.fromPlayer?.id !== playerId) return sum
-        if (!giftIds.has(entry.type)) return sum
-        const action = PAIR_ACTIONS.find((a) => a.id === entry.type)
-        return sum + (action?.cost ?? 0)
-      }, 0)
     },
     [gameLog],
   )
@@ -1628,16 +1427,6 @@ export function GameRoom() {
     }
   }, [isSpinning, roundNumber, currentTurnIndex])
 
-  /** Если STOP_SPIN не пришёл (рассинхрон authority / таймер), снимаем зависший спин. */
-  const SPIN_STUCK_MS = 7500
-  useEffect(() => {
-    if (!isSpinning || showResult) return
-    const id = window.setTimeout(() => {
-      dispatch({ type: "STOP_SPIN", action: "skip" })
-    }, SPIN_STUCK_MS)
-    return () => window.clearTimeout(id)
-  }, [isSpinning, showResult, dispatch])
-
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
 
@@ -1699,8 +1488,6 @@ export function GameRoom() {
     const tp = resolvedTargetPlayer
     const tp2 = resolvedTargetPlayer2
     if (!currentTurnPlayer || !tp || !tp2) return
-
-    setResultChosenAction(actionId)
 
     const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
     if (!actionDef) return
@@ -2023,36 +1810,6 @@ export function GameRoom() {
     })
   }, [showResult, currentTurnPlayer, targetPlayer, targetPlayer2, roundNumber])
 
-  /* ---- prediction submit ---- */
-  const _handleSubmitPrediction = () => {
-    if (CASUAL_MODE) return
-    if (!predictionTarget || !predictionTarget2 || !currentUser) return
-    if (predictionTarget.id === predictionTarget2.id) return
-
-    const pair = sortPair(predictionTarget.id, predictionTarget2.id)
-    dispatch({
-      type: "ADD_PREDICTION",
-      prediction: {
-        playerId: currentUser.id,
-        playerName: currentUser.name,
-        targetPair: pair,
-      },
-    })
-    setPredictionMade(true)
-    setShowPredictionPicker(false)
-
-    dispatch({
-      type: "ADD_LOG",
-      entry: {
-        id: generateLogId(),
-        type: "prediction",
-        fromPlayer: currentUser,
-        text: `${currentUser.name} сделал(а) прогноз`,
-        timestamp: Date.now(),
-      },
-    })
-  }
-
   /* ---- bet submit ---- */
   const handleSubmitBet = () => {
     if (CASUAL_MODE) return
@@ -2093,86 +1850,23 @@ export function GameRoom() {
       showToast("Недостаточно сердец для приглашения", "error")
       return
     }
-    setPaymentLoading(true)
-    try {
-      if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
-      if (resultTimerRef.current) clearInterval(resultTimerRef.current)
-      dispatch({ type: "PAY_VOICES", amount: 5 })
-      dispatch({ type: "ADD_FAVORITE", player: tp })
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "invite",
-          fromPlayer: currentUser!,
-          toPlayer: tp,
-          text: `${currentUser!.name} приглашает ${tp.name} общаться`,
-          timestamp: Date.now(),
-        },
-      })
-      setShowPaymentDialog(false)
-      dispatch({ type: "OPEN_CHAT", player: tp })
-      showToast("Приглашение отправлено", "success")
-    } finally {
-      setPaymentLoading(false)
-    }
-  }
-
-  const _handleMutualInvite = () => {
-    const tp = resolvedTargetPlayer
-    const tp2 = resolvedTargetPlayer2
-    if (!currentUser || !tp || !tp2) return
     if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
     if (resultTimerRef.current) clearInterval(resultTimerRef.current)
-
-    const combo = getPairGenderCombo(tp, tp2)
-    const mutualActionId = combo === "MF" ? "kiss" : combo === "MM" ? "beer" : "cocktail"
-
-    const otherPlayer =
-      currentUser.id === tp.id ? tp2
-      : currentUser.id === tp2.id ? tp
-      : tp
-
-    const fromIdx = players.findIndex((p) => p.id === currentUser.id)
-    const toIdx = players.findIndex((p) => p.id === otherPlayer.id)
-    const mutualEmoji: Record<string, string> = {
-      kiss: "\uD83D\uDC8B",
-      lipstick: "\uD83D\uDC84",
-    }
-    if (fromIdx !== -1 && toIdx !== -1 && mutualActionId === "cocktail") {
-      launchEmotionGiftImage(fromIdx, toIdx)
-      playEmotionSound(mutualActionId)
-    } else if (fromIdx !== -1 && toIdx !== -1 && mutualActionId === "beer") {
-      launchEmoji(fromIdx, toIdx, undefined, assetUrl("kvas-big.svg"))
-      playEmotionSound(mutualActionId)
-    } else if (fromIdx !== -1 && toIdx !== -1 && mutualEmoji[mutualActionId]) {
-      launchEmoji(fromIdx, toIdx, mutualEmoji[mutualActionId])
-      playEmotionSound(mutualActionId)
-    }
-    if (mutualActionId === "beer") {
-      dispatch({ type: "ADD_DRUNK_TIME", playerId: currentUser.id, ms: 60_000 })
-    }
-
-    dispatch({ type: "ADD_FAVORITE", player: otherPlayer })
+    dispatch({ type: "PAY_VOICES", amount: 5 })
+    dispatch({ type: "ADD_FAVORITE", player: tp })
     dispatch({
       type: "ADD_LOG",
       entry: {
         id: generateLogId(),
-        type: mutualActionId as GameLogEntry["type"],
-        fromPlayer: currentUser,
-        toPlayer: otherPlayer,
-        text: `${mutualActionId === "kiss"
-            ? `${currentUser.name} поцеловал(а) в ответ ${otherPlayer.name}`
-            : mutualActionId === "beer"
-              ? `${currentUser.name} предложил(а) по квасику ${otherPlayer.name}`
-              : mutualActionId === "cocktail"
-                ? `${currentUser.name} дарит сладкое ${otherPlayer.name}`
-                : `${currentUser.name} подарил(а) помаду ${otherPlayer.name}`}`,
+        type: "invite",
+        fromPlayer: currentUser!,
+        toPlayer: tp,
+        text: `${currentUser!.name} приглашает ${tp.name} общаться`,
         timestamp: Date.now(),
       },
     })
-    setShowPaymentDialog(false)
-    dispatch({ type: "OPEN_CHAT", player: otherPlayer })
+    dispatch({ type: "OPEN_CHAT", player: tp })
+    showToast("Приглашение отправлено", "success")
   }
 
   /* ---- send chat message ---- */
@@ -2346,18 +2040,14 @@ export function GameRoom() {
                 currentUser.id === resolvedTargetPlayer2.id)))),
     )
 
-  const todayKey = useMemo(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d.toISOString().slice(0, 10)
-  }, [])
-
-  // ---- DAILY QUESTS (computed from today's gameLog) ----
   const todayStart = useMemo(() => {
-    const d = new Date()
+    const d = new Date(now)
     d.setHours(0, 0, 0, 0)
     return d.getTime()
-  }, [])
+  }, [now])
+  const todayKey = useMemo(() => new Date(todayStart).toISOString().slice(0, 10), [todayStart])
+
+  // ---- DAILY QUESTS (computed from today's gameLog) ----
 
   const todayEntries = useMemo(
     () => gameLog.filter((e) => e.timestamp >= todayStart),
@@ -2689,30 +2379,21 @@ export function GameRoom() {
     ],
   )
 
-  /* ---- смена стола ---- */
+  /* ---- смена стола → лобби выбора комнаты ---- */
   const handleChangeTable = async () => {
     if (!currentUser) return
-
-    const changed = await syncLiveTable("join", true)
-    if (changed) {
-      showToast("Стол обновлён — живые игроки подключаются автоматически", "success")
-      return
+    try {
+      await apiFetch("/api/rooms/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: currentUser.id }),
+      })
+    } catch {
+      // при размонтировании GameRoom всё равно уйдёт leave через sync-engine
     }
-
-    // Фолбэк на локальный режим, если API временно недоступно.
-    const localBots = generateBots(220, currentUser.gender)
-    const localPlayers = composeTablePlayers({
-      currentUser: { ...currentUser, isBot: false },
-      livePlayers: [{ ...currentUser, isBot: false }],
-      existingPlayers: players,
-      maxTableSize: 10,
-      targetMales: 5,
-      targetFemales: 5,
-      botPool: localBots,
-    }).sort(() => Math.random() - 0.5)
-    dispatch({ type: "SET_TABLE", players: localPlayers, tableId: 7000 + Math.floor(Math.random() * 1000) })
-    dispatch({ type: "SET_TABLES_COUNT", tablesCount: tablesCount ?? 1 })
-    showToast("Сервер недоступен — включён локальный стол", "info")
+    dispatch({ type: "SET_SCREEN", screen: "lobby" })
+    showToast("Выберите другой стол", "info")
   }
 
   /* Пассивное пополнение банка: +3 ❤ / мин */
@@ -2727,12 +2408,7 @@ export function GameRoom() {
     }
     setBankPassiveBurstKey((k) => k + 1)
   }, [])
-  const { msUntilNext: msUntilNextBank, passiveRefillActive: bankPassiveRefillActive } = useBankPassive(
-    currentUser?.id,
-    dispatch,
-    triggerBankPassiveBurst,
-    { enabled: !tablePaused && !tableLoading && seatConfirmed },
-  )
+  const { msUntilNext: msUntilNextBank } = useBankPassive(currentUser?.id, dispatch, triggerBankPassiveBurst)
   const handlePauseGame = useCallback(() => {
     if (!currentUser) return
     // Явно освобождаем место за live-столом и отключаем синхронизацию, пока пользователь не возобновит.
@@ -2761,13 +2437,8 @@ export function GameRoom() {
   return (
     <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
       {toast && <InlineToast toast={toast} />}
+      {currentUser ? <RoomChannelChat tableId={tableId} currentUser={currentUser} /> : null}
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
-      <DailyStreakBonusDialog
-        open={showStreakDialog}
-        onOpenChange={() => {}}
-        streakDay={dailyDay}
-        onClaim={handleClaimStreakBonus}
-      />
 
       <TableLoaderOverlay
         visible={tableLoading}
@@ -3508,14 +3179,13 @@ export function GameRoom() {
               }
             >
               <Heart
-                className={`bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)] ${bankHeartPulseActive ? "brightness-125" : ""}`}
+                className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
                 style={{ color: "#fde68a" }}
                 fill="currentColor"
               />
               <BankHeartBalanceTooltip
                 voiceBalance={voiceBalance}
                 msUntilNext={msUntilNextBank}
-                passiveRefillActive={bankPassiveRefillActive}
                 onOpenShop={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
                 className="inline-flex shrink-0 items-baseline"
                 tabularClassName="text-[15px] font-black tabular-nums leading-none text-white sm:text-base"
@@ -3671,21 +3341,22 @@ export function GameRoom() {
             </button>
           </div>
 
-          {/* Количество столов */}
+          {/* Текущий стол + счётчик */}
           <div
             className={
               "flex items-center gap-2 rounded-[999px] px-3 py-2 min-h-[40px]" +
               (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2" : "")
             }
             style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}
-            title={!leftSideMenuExpanded ? `Столов в игре: ${tablesCount ?? "—"}` : undefined}
+            title={!leftSideMenuExpanded ? `${currentRoomName} — ${liveHumanCount}/10` : undefined}
           >
             <RotateCw className="h-3 w-3 shrink-0" style={{ color: "#94a3b8" }} />
             <span
               className={"text-[11px] leading-none " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
               style={{ color: "#94a3b8" }}
             >
-              {"Столов в игре: "}{tablesCount ?? "—"}
+              {currentRoomName}{" "}
+              <span className="tabular-nums text-cyan-300/70">{liveHumanCount}/10</span>
             </span>
           </div>
               </>
@@ -3756,7 +3427,6 @@ export function GameRoom() {
                       className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-600/50"
                     >
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-slate-500">
-                        { }
                         <img src={player.avatar} alt="" className="h-full w-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -4152,10 +3822,16 @@ export function GameRoom() {
             const steamBorder = steamAvatarSize <= 52 ? 3 : 4
             const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
             const avatarMenuOpenUpward = pos.y >= 50
+            const isRoomCreator =
+              roomCreatorPlayerId != null && player.id === roomCreatorPlayerId
             return (
               <div
                 key={player.id}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 ${isAvatarMenuOpen ? "z-50" : "z-10"}`}
+                className={cn(
+                  "absolute -translate-x-1/2 -translate-y-1/2",
+                  isAvatarMenuOpen ? "z-50" : "z-10",
+                  isRoomCreator && "group",
+                )}
                 style={{
                   left: `${pos.x}%`,
                   top: `${pos.y}%`,
@@ -4168,6 +3844,7 @@ export function GameRoom() {
                 onClick={() => handlePlayerClick(player)}
               >
                 <div className="relative inline-flex flex-col items-center">
+                  {isRoomCreator ? <CreatorTableHostAura steamOuterPx={steamOuterPx} /> : null}
                   <PlayerAvatar
                     player={player}
                     tableRingLayout
@@ -4579,126 +4256,121 @@ export function GameRoom() {
       {/* ---- RIGHT PANEL: на ПК — ~20% ширины (инфо + чат); на планшете — прежняя колонка ---- */}
       <div
         className={cn(
-          "relative z-20 min-h-0 flex-col border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
-          isPcLayout ? "flex" : "hidden md:flex",
+          "relative z-20 flex min-h-0 flex-row border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
+          isPcLayout ? "" : "hidden md:flex",
           isPcLayout
-            ? rightPanelCollapsed
-              ? "w-14 shrink-0 flex-none"
+            ? chatPanelCollapsed
+              ? "w-auto shrink-0 flex-none"
               : "flex min-h-0 min-w-0 flex-1 basis-0"
-            : rightPanelCollapsed
-              ? "w-14 shrink-0 flex-none"
+            : chatPanelCollapsed
+              ? "w-auto shrink-0 flex-none"
               : "w-[264px] shrink-0 flex-none",
         )}
       >
-        {rightPanelCollapsed ? (
+        {chatPanelCollapsed ? (
           <button
             type="button"
-            onClick={() => setRightPanelCollapsed(false)}
-            className="flex flex-col items-center justify-center gap-1.5 py-6 px-2 w-14 min-h-[100px] rounded-l-xl transition-colors hover:bg-slate-800/60"
+            onClick={() => setChatPanelCollapsed(false)}
+            className="flex w-14 shrink-0 flex-col items-center justify-start gap-2 self-stretch rounded-l-xl px-2 pt-1.5 pb-2 transition-colors hover:bg-slate-800/60"
             style={{ borderRight: "1px solid rgba(71, 85, 105, 0.5)" }}
-            aria-label="Развернуть панель"
+            aria-label="Развернуть чат"
           >
             <MessageCircle className="h-5 w-5 shrink-0" style={{ color: "#e8c06a" }} />
-            <span className="text-[9px] font-medium text-slate-300 text-center leading-tight">Развернуть</span>
             <ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" />
           </button>
         ) : (
-        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-hidden pt-2 pb-3 pr-2 pl-1">
-          {/* Заголовок панели с кнопкой свернуть */}
-          <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 rounded-t-lg px-2 py-1.5" style={{ background: "rgba(15, 23, 42, 0.9)", borderBottom: "1px solid rgba(56, 189, 248, 0.35)" }}>
-            <span className="text-xs font-bold truncate" style={{ color: "#e8c06a" }}>Свернуть</span>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1.5">
             <button
               type="button"
-              onClick={() => setRightPanelCollapsed(true)}
-              className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 transition-colors"
+              onClick={() => setChatPanelCollapsed(true)}
+              className="mb-1.5 flex shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-200"
               aria-label="Свернуть панель"
             >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        {/* Угадай-ка — кнопка мини-игры с лампочками по всему периметру (казино) */}
-        <div className="relative mx-2 py-2 px-1">
-          {/* Лампочки по всему периметру рамки */}
-          <div className="absolute inset-0 rounded-2xl pointer-events-none" aria-hidden>
-            {/* Верх */}
-            <div className="absolute top-0 left-0 right-0 flex justify-between px-1 pt-0.5">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <span key={`t-${i}`} className="ugadaika-casino-bulb" />
-              ))}
-            </div>
-            {/* Низ */}
-            <div className="absolute bottom-0 left-0 right-0 flex justify-between px-1 pb-0.5">
-              {Array.from({ length: 14 }).map((_, i) => (
-                <span key={`b-${i}`} className="ugadaika-casino-bulb" />
-              ))}
-            </div>
-            {/* Лево */}
-            <div className="absolute top-0 bottom-0 left-0 flex flex-col justify-between py-1.5 pl-0.5">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <span key={`l-${i}`} className="ugadaika-casino-bulb" />
-              ))}
-            </div>
-            {/* Право */}
-            <div className="absolute top-0 bottom-0 right-0 flex flex-col justify-between py-1.5 pr-0.5">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <span key={`r-${i}`} className="ugadaika-casino-bulb" />
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
-            className="ugadaika-sidebar-btn ugadaika-block-pulse group relative w-full flex items-center justify-center overflow-hidden rounded-2xl px-2 py-2 min-h-[90px] transition-all duration-300 hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
-            style={{
-              background: "linear-gradient(135deg, rgba(190, 24, 93, 0.35) 0%, rgba(136, 19, 55, 0.5) 50%, rgba(88, 28, 135, 0.4) 100%)",
-              border: "1px solid rgba(251, 113, 133, 0.5)",
-              boxShadow: "0 4px 24px rgba(190, 24, 93, 0.4), 0 0 16px rgba(251, 113, 133, 0.15), inset 0 1px 0 rgba(255,255,255,0.08)",
-            }}
-          >
-            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
-            { }
-            <img src={assetUrl("Frame 1171276192.webp")} alt="Угадай-ка" className="relative w-full h-full max-h-[76px] object-contain" />
-          </button>
-        </div>
-
-        {/* Колесо фортуны — между Угадай-ка и чатом (панель: FORTUNE_WHEEL_ENABLED) */}
-        {currentUser && (
-          <div className="mx-2 shrink-0 px-1">
-            <button
-              type="button"
-              disabled={!FORTUNE_WHEEL_ENABLED}
-              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
-              className={cn(
-                "flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100",
-              )}
-              style={{
-                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(56,189,248,0.28)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-                color: "#f0e0c8",
-              }}
-              title={!FORTUNE_WHEEL_ENABLED ? "Скоро будет доступно" : "Колесо фортуны"}
-            >
-              <span className="text-xl leading-none" aria-hidden>
-                {"🎡"}
+              <span className="text-left text-[11px] font-semibold tracking-wide text-slate-400">
+                Свернуть панель
               </span>
-              <span>Колесо фортуны</span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
+            <TableChatPanel
+              gameLog={gameLog}
+              chatInput={chatInput}
+              setChatInput={setChatInput}
+              onSend={handleSendChat}
+              logEndRef={logEndRef}
+              currentUserId={currentUser?.id}
+              chatDisabled={tablePaused}
+              className="flex min-h-0 flex-1 flex-col"
+            />
           </div>
         )}
 
-        {/* Лог и чат за столом */}
-        <TableChatPanel
-          gameLog={gameLog}
-          chatInput={chatInput}
-          setChatInput={setChatInput}
-          onSend={handleSendChat}
-          logEndRef={logEndRef}
-          currentUserId={currentUser?.id}
-          chatDisabled={tablePaused}
-          className="mx-2 flex min-h-0 flex-1 flex-col"
-        />
-        </div>
-        )}
+        {/* Статичная полоса мини-игр на всю высоту (не сворачивается вместе с чатом) */}
+        <aside
+          className="flex w-[52px] shrink-0 flex-col items-stretch self-stretch border-l border-cyan-400/20 bg-slate-950/50 py-2"
+          style={{ boxShadow: "inset 1px 0 0 rgba(255,255,255,0.04)" }}
+          aria-label="Мини-игры"
+        >
+          <p className="pointer-events-none shrink-0 px-1 pb-2 text-center text-[8px] font-bold uppercase leading-tight tracking-wide text-slate-500">
+            Игры
+          </p>
+          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overscroll-contain px-1.5">
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fuchsia-400/35 bg-fuchsia-900/25 transition-all hover:scale-105 hover:border-fuchsia-300/55 active:scale-95"
+                  aria-label="Открыть мини-игру Угадай-ка"
+                >
+                  <img src={assetUrl("Frame 1171276192.webp")} alt="" className="h-8 w-8 object-contain" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="left"
+                sideOffset={8}
+                className="max-w-[14rem] border border-fuchsia-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
+              >
+                <span className="font-semibold text-fuchsia-200">Угадай-ка</span>
+                {" — "}
+                мини-игра со слотами: угадывайте пары и крутите барабан за столом.
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <span className="inline-flex shrink-0">
+                  <button
+                    type="button"
+                    disabled={!FORTUNE_WHEEL_ENABLED}
+                    onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/35 bg-cyan-900/20 text-lg transition-all hover:scale-105 hover:border-cyan-300/55 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                    aria-label="Открыть мини-игру Колесо фортуны"
+                  >
+                    <span aria-hidden>{"🎡"}</span>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent
+                side="left"
+                sideOffset={8}
+                className="max-w-[14rem] border border-cyan-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
+              >
+                {FORTUNE_WHEEL_ENABLED ? (
+                  <>
+                    <span className="font-semibold text-cyan-200">Колесо фортуны</span>
+                    {" — "}
+                    крутите колесо и выигрывайте призы за столом.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-cyan-200/80">Колесо фортуны</span>
+                    {" — "}
+                    скоро появится в комнате.
+                  </>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </aside>
       </div>
 
       {/* ---- МОБИЛЬНАЯ НИЖНЯЯ НАВИГАЦИЯ ---- */}
@@ -4778,15 +4450,10 @@ export function GameRoom() {
                   }}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <Heart
-                      className={`bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)] ${bankHeartPulseActive ? "brightness-125" : ""}`}
-                      style={{ color: "#fde68a" }}
-                      fill="currentColor"
-                    />
+                    <Heart className="bank-heart-beat h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
                     <BankHeartBalanceTooltip
                       voiceBalance={voiceBalance}
                       msUntilNext={msUntilNextBank}
-                      passiveRefillActive={bankPassiveRefillActive}
                       onOpenShop={() => {
                         dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
                         setShowMobileMoreMenu(false)
@@ -4885,7 +4552,8 @@ export function GameRoom() {
                   style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)", color: "#94a3b8" }}
                 >
                   <RotateCw className="h-3.5 w-3.5 shrink-0" />
-                  Столов в игре: {tablesCount ?? "—"}
+                  {currentRoomName}{" "}
+                  <span className="tabular-nums text-cyan-300/70">{liveHumanCount}/10</span>
                 </div>
                 {!isMyTurn && !isSpinning && !showResult && countdown === null && (
                   <button
@@ -5066,69 +4734,6 @@ export function GameRoom() {
         </GameSidePanelShell>
       )}
 
-      {/* ---- PREDICTION PICKER MODAL ---- */}
-      {!CASUAL_MODE && showPredictionPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200">
-          <div
-            className="w-full max-w-xs rounded-2xl p-4 shadow-2xl animate-in zoom-in-95 duration-300"
-            style={{
-              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-              border: "2px solid #475569",
-            }}
-          >
-            <h3 className="mb-3 text-sm font-bold" style={{ color: "#f0e0c8" }}>
-              {"Выбери пару для прогноза"}
-            </h3>
-            <p className="mb-2 text-[10px]" style={{ color: "#94a3b8" }}>
-              {predictionTarget ? "Выбери второго игрока:" : "Выбери первого игрока:"}
-            </p>
-            <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto">
-              {players
-                .filter(p => p.id !== currentUser?.id)
-                .filter(p => !predictionTarget || p.id !== predictionTarget.id)
-                .map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      if (!predictionTarget) {
-                        setPredictionTarget(p)
-                      } else {
-                        setPredictionTarget2(p)
-                        setShowPredictionPicker(false)
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-center transition-all hover:brightness-110"
-                    style={{
-                      background: "rgba(60, 35, 20, 0.8)",
-                      border: "1px solid #334155",
-                    }}
-                  >
-                    <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569" }}>
-                      { }
-                      <img src={p.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
-                    </div>
-                    <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
-                    <span className="text-[9px] ml-auto" style={{ color: "#94a3b8" }}>
-                      {p.gender === "male" ? "M" : "F"}{", "}{p.age}
-                    </span>
-                  </button>
-                ))}
-            </div>
-            <button
-              onClick={() => { setShowPredictionPicker(false); setPredictionTarget(null); setPredictionTarget2(null) }}
-              className="mt-3 w-full rounded-lg px-3 py-2 text-[11px] font-bold transition-all hover:brightness-110"
-              style={{
-                background: "transparent",
-                color: "#94a3b8",
-                border: "1px solid #334155",
-              }}
-            >
-              {"Отмена"}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ---- BET PICKER MODAL ---- */}
       {!CASUAL_MODE && showBetPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200">
@@ -5167,7 +4772,6 @@ export function GameRoom() {
                     }}
                   >
                     <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569" }}>
-                      { }
                       <img src={p.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
                     </div>
                     <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
@@ -5260,7 +4864,7 @@ export function GameRoom() {
                   <div className="relative z-[1] mt-3 grid w-full min-w-0 grid-cols-[1fr_auto] items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowRosesReceivedPopover((v) => !v)}
+                      onClick={() => {}}
                       className="group flex h-11 min-w-0 flex-row flex-nowrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:bg-slate-50 sm:h-12 sm:gap-2.5 sm:px-4"
                       aria-label="Сколько роз получил игрок"
                     >
@@ -5761,8 +5365,8 @@ export function GameRoom() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-5 sm:pt-4">
-              <div className="player-menu-catalog flex min-h-0 w-full flex-1 flex-col gap-4">
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-5 sm:pt-4">
+              <div className="player-menu-catalog flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
                 <div className="shrink-0 px-0.5">
                   <div className="flex items-start gap-2">
                     <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500/25 to-amber-500/20 ring-1 ring-rose-400/20">
@@ -5784,7 +5388,7 @@ export function GameRoom() {
                   </div>
                 </div>
                 <div
-                  className="flex min-h-0 flex-1 flex-col rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
+                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
                   style={{
                     background:
                       "linear-gradient(165deg, rgba(30,41,59,0.55) 0%, rgba(15,23,42,0.92) 45%, rgba(15,23,42,0.98) 100%)",
@@ -5792,7 +5396,7 @@ export function GameRoom() {
                       "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(251,191,36,0.06)",
                   }}
                 >
-                  <div className="player-menu-gifts-scroll max-h-[min(62dvh,520px)] min-h-0 flex-1 space-y-6 overflow-y-auto overflow-x-hidden py-1 sm:max-h-[min(68dvh,560px)]">
+                  <div className="player-menu-gifts-scroll min-h-0 flex-1 space-y-6 overflow-y-auto overflow-x-hidden py-1">
                     {(
                       [
                         {
@@ -5945,65 +5549,6 @@ export function GameRoom() {
         </div>
       )}
 
-      {/* ---- PAYMENT DIALOG ---- */}
-      {showPaymentDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200">
-          <div
-            className="w-full max-w-xs rounded-2xl p-5 shadow-2xl animate-in zoom-in-95 duration-300"
-            style={{
-              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
-              border: "2px solid #475569",
-            }}
-          >
-            <h3 className="mb-2 text-base font-bold" style={{ color: "#f0e0c8" }}>
-              {"Пригласить общаться?"}
-            </h3>
-            <p className="mb-4 text-sm" style={{ color: "#94a3b8" }}>
-              {"Списать 5 сердец для общения с "}
-              <strong style={{ color: "#e8c06a" }}>{targetPlayer?.name}</strong>{"?"}
-            </p>
-            <div
-              className="mb-3 flex items-center gap-2 rounded-lg px-3 py-2"
-              style={{ background: "rgba(0,0,0,0.3)", border: "1px solid #334155" }}
-            >
-              <Coins className="h-4 w-4" style={{ color: "#e8c06a" }} />
-              <span className="text-sm" style={{ color: "#f0e0c8" }}>
-                {"Баланс: "}{voiceBalance}{" сердец"}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleInvite}
-                disabled={paymentLoading || voiceBalance < 5}
-                className="flex-1 rounded-xl text-sm font-bold"
-                style={{
-                  background: "linear-gradient(180deg, #2ecc71 0%, #27ae60 100%)",
-                  color: "#fff",
-                  border: "2px solid #1e8449",
-                }}
-              >
-                {paymentLoading ? "Оплата..." : "Пригласить"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowPaymentDialog(false)
-                  autoAdvanceRef.current = setTimeout(() => dispatch({ type: "NEXT_TURN" }), 3000)
-                }}
-                variant="outline"
-                className="flex-1 rounded-xl text-sm"
-                style={{
-                  background: "transparent",
-                  color: "#94a3b8",
-                  border: "2px solid #334155",
-                }}
-              >
-                {"Отмена"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* магазин теперь отдельным экраном (ShopScreen) */}
     </div>
   )
@@ -6033,39 +5578,22 @@ function TableChatPanel({
 }) {
   const chatEntries = gameLog.filter((entry) => entry.type === "chat")
   return (
-    <div
-      className={cn("flex min-h-0 flex-col rounded-2xl overflow-hidden", className)}
-      style={{
-        border: "1px solid rgba(56, 189, 248, 0.24)",
-        background: "linear-gradient(180deg, rgba(2,6,23,0.7) 0%, rgba(2,6,23,0.5) 100%)",
-        boxShadow: "0 10px 24px rgba(2,6,23,0.6)",
-      }}
+    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-xl", className)}
+      style={{ background: "rgba(2,6,23,0.45)" }}
     >
-      <div
-        className="flex shrink-0 flex-col gap-0.5 rounded-t-lg px-3 py-2"
-        style={{
-          background: "linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.9) 100%)",
-          borderBottom: "1px solid rgba(56,189,248,0.35)",
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-          <span className="text-sm font-bold" style={{ color: "#f0e0c8" }}>
-            Сообщения за столом
-          </span>
-        </div>
-        <span className="text-[10px] leading-tight" style={{ color: "#64748b" }}>
-          История ходов и реплик в этом раунде
-        </span>
+      {/* Header */}
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <MessageCircle className="h-4 w-4 shrink-0 text-cyan-400/70 md:h-[1.125rem] md:w-[1.125rem]" />
+        <span className="text-sm font-bold tracking-tight text-slate-200 md:text-base">Чат комнаты</span>
+        <span className="ml-auto text-[10px] tabular-nums text-slate-600">{chatEntries.length}</span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1 overscroll-contain">
+      {/* Messages */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-1">
         {chatEntries.length === 0 && (
-          <p className="py-6 text-center text-[11px]" style={{ color: "#94a3b8" }}>
-            {"Игра начинается..."}
-          </p>
+          <p className="py-8 text-center text-[11px] text-slate-600">Игра начинается...</p>
         )}
-        <div className="flex flex-col gap-2.5 px-0.5 py-1">
+        <div className="flex flex-col gap-2 px-0.5 py-0.5">
           {chatEntries.map((entry) => (
             <ChatBubble key={entry.id} entry={entry} currentUserId={currentUserId} />
           ))}
@@ -6073,44 +5601,37 @@ function TableChatPanel({
         </div>
       </div>
 
-      <div
-        className="shrink-0 px-2 pb-2 pt-1.5"
-        style={{ borderTop: "1px solid rgba(92,58,36,0.6)" }}
-      >
-        <div className="flex items-center gap-1.5">
+      {/* Input */}
+      <div className="shrink-0 px-2 pb-2 pt-1" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        <div
+          className="flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-cyan-500/35 bg-slate-900/90 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_1px_0_rgba(0,0,0,0.2)] transition-[border-color,box-shadow] focus-within:border-cyan-400/60 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(34,211,238,0.2)]"
+          role="group"
+          aria-label="Поле ввода сообщения"
+        >
           <TableChatEmojiPicker
             disabled={chatDisabled}
             onEmojiSelect={(emoji) => setChatInput((prev) => prev + emoji)}
           />
           <input
             type="text"
-            placeholder={chatDisabled ? "Пауза — чат недоступен" : "Введите сообщение..."}
+            inputMode="text"
+            autoComplete="off"
+            placeholder={chatDisabled ? "Чат на паузе" : "Введите текст сообщения…"}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSend()
-            }}
+            onKeyDown={(e) => { if (e.key === "Enter") onSend() }}
             disabled={chatDisabled}
-            className="flex-1 min-w-0 px-1.5 py-1.5 text-[11px] focus:outline-none disabled:opacity-50"
-            style={{
-              backgroundColor: "transparent",
-              border: "none",
-              borderBottom: "1px solid rgba(92,58,36,0.8)",
-              color: "#f0e0c8",
-            }}
-            aria-label="Поле чата стола"
+            className="min-w-0 flex-1 bg-transparent py-1.5 text-[12px] leading-snug text-slate-100 placeholder:text-slate-500 placeholder:italic focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Введите сообщение для чата комнаты"
           />
           <button
             type="button"
             onClick={onSend}
             disabled={chatDisabled}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 disabled:opacity-40"
-            style={{
-              background: "linear-gradient(180deg, #3498db 0%, #2980b9 100%)",
-            }}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-600 text-white shadow-[0_2px_8px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-500 hover:brightness-105 disabled:opacity-30"
             aria-label="Отправить сообщение в чат"
           >
-            <Send className="h-3.5 w-3.5" style={{ color: "#fff" }} />
+            <Send className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -6123,84 +5644,62 @@ function TableChatPanel({
 /* ------------------------------------------------------------------ */
 function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUserId?: number }) {
   const isOwn = entry.fromPlayer?.id === currentUserId
-  const colorMap: Record<string, string> = {
-    kiss: "#e74c3c",
-    beer: "#5d4037",
-    skip: "#94a3b8",
-    invite: "#e8c06a",
-    join: "#2ecc71",
-    system: "#38bdf8",
-    chat: "#38bdf8",
-    hug: "#2ecc71",
-    selfie: "#38bdf8",
-    flowers: "#e74c3c",
-    song: "#9b59b6",
-    rose: "#e74c3c",
-    prediction: "#e8c06a",
-    bottle_thanks: "#facc15",
-  }
-  const accentColor = colorMap[entry.type] ?? "#94a3b8"
   const isChat = entry.type === "chat"
 
   if (isChat) {
     return (
-      <div
-        className={cn(
-          "flex max-w-[95%] gap-2.5 rounded-2xl px-3 py-2.5 shadow-[0_2px_12px_rgba(0,0,0,0.35)] transition-colors",
-          isOwn
-            ? "ml-auto flex-row-reverse border-r-[3px] border-sky-400 bg-[linear-gradient(135deg,rgba(28,32,42,0.95)_0%,rgba(18,22,30,0.98)_100%)]"
-            : "mr-auto border-l-[3px] border-sky-500 bg-[linear-gradient(135deg,rgba(32,28,24,0.96)_0%,rgba(20,18,16,0.98)_100%)]",
-        )}
-      >
-        {entry.fromPlayer && (
-          <div
-            className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-sky-500/45 ring-offset-1 ring-offset-[rgba(12,10,9,0.6)]"
-            style={{ boxShadow: `0 0 0 1px ${accentColor}33` }}
-          >
+      <div className={cn("flex items-end gap-1.5", isOwn ? "flex-row-reverse" : "flex-row")}>
+        {entry.fromPlayer && !isOwn && (
+          <div className="mb-0.5 h-6 w-6 shrink-0 overflow-hidden rounded-full">
             <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
           </div>
         )}
-        <div className="min-w-0 flex-1 text-left">
-          {entry.fromPlayer && (
-            <div className={cn("mb-0.5 text-xs font-semibold tracking-tight text-sky-300", isOwn && "text-sky-200")}>
+        <div className={cn("max-w-[80%] min-w-0", isOwn ? "items-end" : "items-start")}>
+          {entry.fromPlayer && !isOwn && (
+            <p className="mb-0.5 px-2 text-[10px] font-medium text-slate-500">
               {entry.fromPlayer.name}
-            </div>
+            </p>
           )}
-          <p
-            className="text-[13px] leading-snug text-[#d8c9a8]"
-            style={{ wordBreak: "break-word" }}
+          <div
+            className={cn(
+              "rounded-2xl px-3 py-1.5 shadow-sm",
+              isOwn
+                ? "rounded-br-md bg-emerald-700/80 text-emerald-50"
+                : "rounded-bl-md bg-slate-700/70 text-slate-100",
+            )}
           >
-            {entry.text}
-          </p>
+            <p className="text-[12px] leading-relaxed" style={{ wordBreak: "break-word" }}>
+              {entry.text}
+            </p>
+          </div>
         </div>
       </div>
     )
   }
 
+  const colorMap: Record<string, string> = {
+    kiss: "#e74c3c", beer: "#5d4037", skip: "#94a3b8", invite: "#e8c06a",
+    join: "#2ecc71", system: "#38bdf8", hug: "#2ecc71", selfie: "#38bdf8",
+    flowers: "#e74c3c", song: "#9b59b6", rose: "#e74c3c", prediction: "#e8c06a",
+    bottle_thanks: "#facc15",
+  }
+  const accentColor = colorMap[entry.type] ?? "#94a3b8"
+
   return (
-    <div
-      className="rounded-lg px-2.5 py-1.5 transition-colors"
-      style={{
-        background: isOwn ? "rgba(196, 148, 58, 0.15)" : "rgba(60, 35, 20, 0.6)",
-        borderLeft: `3px solid ${accentColor}`,
-      }}
-    >
-      {entry.fromPlayer && (
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <div
-            className="h-4 w-4 shrink-0 overflow-hidden rounded-full"
-            style={{ border: `1.5px solid ${accentColor}` }}
-          >
+    <div className="flex justify-center px-1">
+      <div
+        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+        style={{ background: "rgba(255,255,255,0.05)" }}
+      >
+        {entry.fromPlayer && (
+          <div className="h-3.5 w-3.5 shrink-0 overflow-hidden rounded-full">
             <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
           </div>
-          <span className="text-[10px] font-bold" style={{ color: accentColor }}>
-            {entry.fromPlayer.name}
-          </span>
-        </div>
-      )}
-      <p className="text-[10px] leading-tight" style={{ color: "#c0a070" }}>
-        {entry.text}
-      </p>
+        )}
+        <p className="text-[10px] leading-tight" style={{ color: accentColor }}>
+          {entry.text}
+        </p>
+      </div>
     </div>
   )
 }

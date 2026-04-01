@@ -10,6 +10,7 @@ const PAY_VOTES_BY_PACK: Record<number, number> = {
   5: 1,
   50: 3,
   150: 8,
+  200: 9,
   500: 26,
   1000: 48,
   5000: 210,

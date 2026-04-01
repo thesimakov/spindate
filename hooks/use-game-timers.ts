@@ -10,7 +10,8 @@ const RESULT_TICK_MS = 1000
 const TURN_TICK_MS = 250
 const STEAM_FOG_TICK_MS = 400
 const PREDICTION_DURATION = 10
-const AFK_SKIP_MS = 18_000
+/** Небольшой запас только на тик/рендер: визуальный 0 = почти мгновенный автопасс. */
+const AFK_SKIP_MS = TURN_MS + TURN_TICK_MS
 
 export interface AvatarSteamFog {
   until: number
@@ -181,7 +182,7 @@ export function useGameTimers({
         },
       })
       dispatch({ type: "NEXT_TURN" })
-    }, TURN_MS + 25)
+    }, TURN_MS + TURN_TICK_MS)
 
     return () => {}
   }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading])

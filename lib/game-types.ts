@@ -92,6 +92,8 @@ export interface TableAuthorityPayload {
   players: Player[]
   currentTurnIndex: number
   isSpinning: boolean
+  /** Когда сервер зафиксировал START_SPIN; используется watchdog для восстановления зависшего вращения. */
+  spinStartedAtMs?: number | null
   countdown: number | null
   bottleAngle: number
   /** Скин бутылки на столе — общий для всех игроков за столом */
@@ -217,7 +219,18 @@ export interface EmotionUseTodayBucket {
 }
 
 export interface GameState {
-  screen: "registration" | "payment" | "game" | "chat" | "favorites" | "shop" | "profile" | "ugadaika" | "intergame-chat"
+  screen:
+    | "registration"
+    | "daily-streak"
+    | "lobby"
+    | "payment"
+    | "game"
+    | "chat"
+    | "favorites"
+    | "shop"
+    | "profile"
+    | "ugadaika"
+    | "intergame-chat"
   currentUser: Player | null
   players: Player[]
   currentTurnIndex: number
@@ -237,6 +250,8 @@ export interface GameState {
   voiceBalance: number
   bonusBalance: number
   tableId: number
+  /** id игрока-создателя пользовательской комнаты (совпадает с createdByUserId в реестре); null — нет или обычная комната */
+  roomCreatorPlayerId?: number | null
   gameLog: GameLogEntry[]
   // Prediction & Betting
   predictions: Prediction[]
@@ -322,7 +337,7 @@ export type GameAction =
   | { type: "ADD_DRUNK_TIME"; playerId: number; ms: number }
   | { type: "SET_PLAYERS"; players: Player[] }
   | { type: "SET_TABLE_ID"; tableId: number }
-  | { type: "SET_TABLE"; players: Player[]; tableId: number }
+  | { type: "SET_TABLE"; players: Player[]; tableId: number; roomCreatorPlayerId?: number | null }
   | { type: "SET_TABLES_COUNT"; tablesCount: number }
   | { type: "START_COUNTDOWN" }
   | { type: "TICK_COUNTDOWN" }

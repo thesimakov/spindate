@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useLayoutEffect, type CSSProperties } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame, generateBots } from "@/lib/game-context"
+import { useGame } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import {
   vkBridge,
@@ -14,14 +14,13 @@ import {
 } from "@/lib/vk-bridge"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
-import { composeTablePlayers } from "@/lib/table-composition"
 import { AppLoader } from "@/components/app-loader"
 import { Spinner } from "@/components/ui/spinner"
 import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
-  const { layoutMobile: isMobile, isDesktopUser } = useGameLayoutMode()
+  const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Узкая карточка по центру на всех размерах экрана */
   const entryCardMax = "w-full max-w-sm sm:max-w-md"
   const loginModalMax = !isMobile ? "max-w-xl" : "max-w-sm"
@@ -61,91 +60,7 @@ export function RegistrationScreen() {
     authProvider?: "vk" | "login"
   }) => {
     dispatch({ type: "SET_USER", user })
-
-    const desktopGame = isDesktopUser
-    const maxTableSize = desktopGame ? 10 : 6
-    const targetMales = desktopGame ? 5 : 3
-    const targetFemales = desktopGame ? 5 : 3
-
-    let tableId = 7000 + Math.floor(Math.random() * 1000)
-    let livePlayers: typeof user[] = [user]
-    let tablesCount = 1
-    try {
-      const res = await apiFetch("/api/table/live", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          mode: "join",
-          user,
-          maxTableSize,
-        }),
-      })
-      const data = await res.json().catch(() => null)
-      if (res.ok && data?.ok && Array.isArray(data.livePlayers)) {
-        tableId = typeof data.tableId === "number" ? data.tableId : tableId
-        livePlayers = data.livePlayers
-        tablesCount = typeof data.tablesCount === "number" ? data.tablesCount : tablesCount
-      }
-      // Если сервер вернул только текущего пользователя - пробуем forceNew для нового стола
-      if (livePlayers.length <= 1) {
-        try {
-          const res2 = await apiFetch("/api/table/live", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              mode: "join",
-              user,
-              maxTableSize,
-              forceNew: true,
-            }),
-          })
-          const data2 = await res2.json().catch(() => null)
-          if (res2.ok && data2?.ok && Array.isArray(data2.livePlayers) && data2.livePlayers.length > livePlayers.length) {
-            tableId = typeof data2.tableId === "number" ? data2.tableId : tableId
-            livePlayers = data2.livePlayers
-            tablesCount = typeof data2.tablesCount === "number" ? data2.tablesCount : tablesCount
-          }
-        } catch {
-          // ignore retry error
-        }
-      }
-    } catch {
-      // если сервер недоступен, оставляем локальный стол
-    }
-
-    const allBots = generateBots(220, user.gender)
-    const finalPlayersAtTableBase = composeTablePlayers({
-      currentUser: { ...user, isBot: false },
-      livePlayers: livePlayers.map((p) => ({ ...p, isBot: false })),
-      existingPlayers: [],
-      maxTableSize,
-      targetMales,
-      targetFemales,
-      botPool: allBots,
-    })
-    // Перемешиваем порядок за столом, чтобы мужчины/женщины
-    // не сидели всегда по разным сторонам.
-    const finalPlayersAtTable = [...finalPlayersAtTableBase].sort(() => Math.random() - 0.5)
-
-    dispatch({ type: "SET_TABLE", players: finalPlayersAtTable, tableId })
-    dispatch({ type: "SET_TABLES_COUNT", tablesCount })
-    try {
-      const st = await apiFetch("/api/table/state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ tableId, sinceRevision: 0 }),
-      })
-      const stData = await st.json().catch(() => null)
-      if (st.ok && stData?.snapshot) {
-        dispatch({ type: "SYNC_TABLE_AUTHORITY", payload: stData.snapshot })
-      }
-    } catch {
-      // сервер недоступен — остаёмся на локальном столе
-    }
-    dispatch({ type: "SET_SCREEN", screen: "game" })
+    dispatch({ type: "SET_SCREEN", screen: "daily-streak" })
   }
 
   /** Вход по данным bridge без подписанных launch params (как при нажатии «Войти через VK» в офлайне). */

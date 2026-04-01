@@ -379,7 +379,6 @@ export function PlayerAvatar({
           >
             {/* Photo container */}
             <div className="h-full w-full overflow-hidden rounded-full">
-              { }
               <img
                 src={player.avatar}
                 alt={player.name}

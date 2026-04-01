@@ -84,6 +84,7 @@ export function buildInitialAuthoritySnapshot(players: Player[], tableId: number
     spinSkips,
     currentTurnDidSpin: false,
     isSpinning: false,
+    spinStartedAtMs: null,
     countdown: null,
     bottleAngle,
     bottleSkin: "classic",

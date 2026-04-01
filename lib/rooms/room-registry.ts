@@ -1,0 +1,206 @@
+import { getRedis } from "@/lib/redis"
+import type { RoomMeta, RoomRegistryState } from "@/lib/rooms/types"
+import { roomsRegistryKey, userRoomVotesKey } from "@/lib/rooms/keys"
+import { getTableInfo, leaveLiveTable } from "@/lib/live-tables-server"
+
+const SEED_COUNT = 10
+const USER_ROOM_TTL_MS = 24 * 60 * 60 * 1000
+
+declare global {
+  var __spindateRoomRegistryMemory: RoomRegistryState | undefined
+}
+
+function defaultSeed(): RoomRegistryState {
+  const rooms: RoomMeta[] = []
+  for (let i = 1; i <= SEED_COUNT; i++) {
+    rooms.push({ roomId: i, name: `Игровой стол #${i}` })
+  }
+  return { rooms, nextRoomId: SEED_COUNT + 1 }
+}
+
+function migrateLegacyRoomNames(state: RoomRegistryState): RoomRegistryState {
+  let changed = false
+  for (const r of state.rooms) {
+    if (/^Room #\d+$/.test(r.name)) {
+      r.name = r.name.replace(/^Room #/, "Игровой стол #")
+      changed = true
+    } else if (/^Комната #\d+$/.test(r.name)) {
+      r.name = r.name.replace(/^Комната #/, "Игровой стол #")
+      changed = true
+    } else if (/^Игровые столы #\d+$/.test(r.name)) {
+      r.name = r.name.replace(/^Игровые столы #/, "Игровой стол #")
+      changed = true
+    }
+  }
+  if (changed) {
+    void saveRoomRegistry(state)
+  }
+  return state
+}
+
+function ensureUserRoomCreatedAt(state: RoomRegistryState, now: number): boolean {
+  let changed = false
+  for (const room of state.rooms) {
+    if (!room.isUserRoom) continue
+    if (typeof room.createdAtMs === "number" && Number.isFinite(room.createdAtMs)) continue
+    room.createdAtMs = now
+    changed = true
+  }
+  return changed
+}
+
+function extractExpiredUserRoomIds(state: RoomRegistryState, now: number): number[] {
+  const out: number[] = []
+  for (const room of state.rooms) {
+    if (!room.isUserRoom) continue
+    if (typeof room.createdAtMs !== "number" || !Number.isFinite(room.createdAtMs)) continue
+    if (now - room.createdAtMs >= USER_ROOM_TTL_MS) out.push(room.roomId)
+  }
+  return out
+}
+
+function removeRoomsByIds(state: RoomRegistryState, ids: number[]): boolean {
+  if (ids.length === 0) return false
+  const drop = new Set(ids)
+  const next = state.rooms.filter((r) => !drop.has(r.roomId))
+  if (next.length === state.rooms.length) return false
+  state.rooms = next
+  return true
+}
+
+async function evictExpiredRooms(roomIds: number[]): Promise<void> {
+  for (const roomId of roomIds) {
+    const info = await getTableInfo(roomId)
+    const users = info?.livePlayers ?? []
+    for (const p of users) {
+      await leaveLiveTable(p.id)
+    }
+  }
+}
+
+async function normalizeAndCleanupRegistry(state: RoomRegistryState): Promise<RoomRegistryState> {
+  const now = Date.now()
+  const migrated = migrateLegacyRoomNames(state)
+  const changedCreatedAt = ensureUserRoomCreatedAt(migrated, now)
+  const expiredIds = extractExpiredUserRoomIds(migrated, now)
+  const changedExpired = removeRoomsByIds(migrated, expiredIds)
+
+  if (changedCreatedAt || changedExpired) {
+    await saveRoomRegistry(migrated)
+  }
+  if (expiredIds.length > 0) {
+    await evictExpiredRooms(expiredIds)
+  }
+  return migrated
+}
+
+function mem(): RoomRegistryState {
+  if (!globalThis.__spindateRoomRegistryMemory) {
+    globalThis.__spindateRoomRegistryMemory = defaultSeed()
+  }
+  return globalThis.__spindateRoomRegistryMemory
+}
+
+export async function loadRoomRegistry(): Promise<RoomRegistryState> {
+  const r = getRedis()
+  if (r) {
+    const raw = await r.get(roomsRegistryKey())
+    if (!raw) {
+      const init = defaultSeed()
+      await r.set(roomsRegistryKey(), JSON.stringify(init))
+      return normalizeAndCleanupRegistry(init)
+    }
+    try {
+      const o = JSON.parse(raw) as RoomRegistryState
+      if (!Array.isArray(o.rooms) || typeof o.nextRoomId !== "number") {
+        return normalizeAndCleanupRegistry(defaultSeed())
+      }
+      return normalizeAndCleanupRegistry(o)
+    } catch {
+      return normalizeAndCleanupRegistry(defaultSeed())
+    }
+  }
+  return normalizeAndCleanupRegistry(mem())
+}
+
+export async function saveRoomRegistry(state: RoomRegistryState): Promise<void> {
+  const r = getRedis()
+  if (r) {
+    await r.set(roomsRegistryKey(), JSON.stringify(state))
+    return
+  }
+  globalThis.__spindateRoomRegistryMemory = state
+}
+
+export async function addUserRoom(name: string, createdByUserId: number): Promise<RoomMeta | null> {
+  const state = await loadRoomRegistry()
+  const votesKey = userRoomVotesKey(createdByUserId)
+  const r = getRedis()
+  let votes = 0
+  if (r) {
+    const v = await r.get(votesKey)
+    votes = v ? Number(v) : 0
+  } else {
+    votes = Number((globalThis as unknown as { __votes?: Record<number, number> }).__votes?.[createdByUserId] ?? 0)
+  }
+  if (votes < 20) return null
+
+  const roomId = state.nextRoomId++
+  const trimmed = name.trim().slice(0, 64) || `Игровой стол #${roomId}`
+  const meta: RoomMeta = {
+    roomId,
+    name: trimmed,
+    isUserRoom: true,
+    createdByUserId,
+    createdAtMs: Date.now(),
+  }
+  state.rooms.push(meta)
+  await saveRoomRegistry(state)
+  if (r) {
+    await r.decrby(votesKey, 20)
+  } else {
+    const g = ((globalThis as unknown as { __votes?: Record<number, number> }).__votes ??= {})
+    g[createdByUserId] = Math.max(0, votes - 20)
+  }
+  return meta
+}
+
+const CHEAP_TIER_LIMIT = 20
+const CHEAP_COST = 100
+const EXPENSIVE_COST = 300
+
+/** Цена создания следующего пользовательского стола (первые 20 — 100❤, далее — 300❤). */
+export async function getCreateRoomCost(): Promise<number> {
+  const state = await loadRoomRegistry()
+  const userRoomCount = state.rooms.filter((r) => r.isUserRoom).length
+  return userRoomCount < CHEAP_TIER_LIMIT ? CHEAP_COST : EXPENSIVE_COST
+}
+
+/** Создание пользовательской комнаты без оплаты «голосами» (оплата сердцами — в API). */
+export async function createUserRoomPaid(name: string, createdByUserId: number): Promise<RoomMeta> {
+  const state = await loadRoomRegistry()
+  const roomId = state.nextRoomId++
+  const trimmed = name.trim().slice(0, 64) || `Мой стол #${roomId}`
+  const meta: RoomMeta = {
+    roomId,
+    name: trimmed,
+    isUserRoom: true,
+    createdByUserId,
+    createdAtMs: Date.now(),
+  }
+  state.rooms.push(meta)
+  await saveRoomRegistry(state)
+  return meta
+}
+
+/** Тест/админ: начислить «голоса» для создания комнаты */
+export async function grantRoomVotes(userId: number, amount: number): Promise<void> {
+  const r = getRedis()
+  const key = userRoomVotesKey(userId)
+  if (r) {
+    await r.incrby(key, amount)
+    return
+  }
+  const g = ((globalThis as unknown as { __votes?: Record<number, number> }).__votes ??= {})
+  g[userId] = (g[userId] ?? 0) + amount
+}

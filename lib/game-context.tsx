@@ -43,6 +43,7 @@ const initialState: GameState = {
   voiceBalance: 0,
   bonusBalance: 0,
   tableId: Math.floor(Math.random() * 9999) + 1,
+  roomCreatorPlayerId: null,
   gameLog: [],
   // Prediction & Betting
   predictions: [],
@@ -220,7 +221,76 @@ function bumpEmotionUseForLogEntry(
   return { ...(prevMap ?? {}), [pid]: base }
 }
 
-function gameReducer(state: GameState, action: GameAction): GameState {
+const ECONOMY_MUTATION_ACTIONS = new Set<GameAction["type"]>([
+  "PAY_VOICES",
+  "ADD_VOICES",
+  "RESTORE_GAME_STATE",
+  "ADD_BONUS",
+  "BUY_EMOTION_PACK",
+  "BUY_EMOTION_QUOTA_SELECTION",
+  "PLACE_BET",
+  "ADD_INVENTORY_ITEM",
+  "GIVE_ROSE",
+  "EXCHANGE_ROSES_FOR_VOICES",
+  "EXCHANGE_VOICES_FOR_ROSES",
+  "REMOVE_INVENTORY_ROSES",
+  "UGADAIKA_ADD_ROUND_WON",
+])
+
+function clampBalance(v: number): number {
+  if (!Number.isFinite(v)) return 0
+  return Math.max(0, Math.floor(v))
+}
+
+function inventoryEquals(a: InventoryItem[], b: InventoryItem[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]
+    const y = b[i]
+    if (
+      x.type !== y.type ||
+      x.fromPlayerId !== y.fromPlayerId ||
+      x.fromPlayerName !== y.fromPlayerName ||
+      x.timestamp !== y.timestamp ||
+      x.toPlayerId !== y.toPlayerId
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Экономическая защита:
+ * - неэкономические экшены (UI/дизайн/навигация/синк стола) не могут менять банк/инвентарь;
+ * - баланс всегда неотрицательный и конечный.
+ */
+function protectEconomy(prev: GameState, next: GameState, action: GameAction): GameState {
+  let protectedState = next
+
+  const nextVoice = clampBalance(next.voiceBalance)
+  const nextBonus = clampBalance(next.bonusBalance)
+  if (nextVoice !== next.voiceBalance || nextBonus !== next.bonusBalance) {
+    protectedState = { ...protectedState, voiceBalance: nextVoice, bonusBalance: nextBonus }
+  }
+
+  if (ECONOMY_MUTATION_ACTIONS.has(action.type)) return protectedState
+
+  const voiceChanged = protectedState.voiceBalance !== prev.voiceBalance
+  const bonusChanged = protectedState.bonusBalance !== prev.bonusBalance
+  const inventoryChanged = !inventoryEquals(protectedState.inventory, prev.inventory)
+  if (!voiceChanged && !bonusChanged && !inventoryChanged) return protectedState
+
+  return {
+    ...protectedState,
+    voiceBalance: prev.voiceBalance,
+    bonusBalance: prev.bonusBalance,
+    inventory: prev.inventory,
+  }
+}
+
+function gameReducerCore(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "SET_GAME_SIDE_PANEL":
       return {
@@ -301,6 +371,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         players: [],
         admirers: [],
         tableId: Math.floor(Math.random() * 9999) + 1,
+        roomCreatorPlayerId: null,
         gameSidePanel: null,
       }
     case "ADD_DRUNK_TIME": {
@@ -498,10 +569,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const nextSpinSkips: Record<number, number> = {}
         nextPlayers.forEach((p) => { nextSpinSkips[p.id] = 0 })
 
+        let nextRoomCreator = state.roomCreatorPlayerId ?? null
+        if (action.roomCreatorPlayerId !== undefined) {
+          nextRoomCreator = action.roomCreatorPlayerId
+        } else if (action.tableId !== state.tableId) {
+          nextRoomCreator = null
+        }
+
         return {
         ...state,
         players: nextPlayers,
         tableId: action.tableId,
+        roomCreatorPlayerId: nextRoomCreator,
         currentTurnIndex: spinnerIdx,
         spinSkips: nextSpinSkips,
         currentTurnDidSpin: false,
@@ -1002,11 +1081,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      /** Серверный снимок может отставать: локально уже START_SPIN, в payload ещё false — иначе затирается угол и спин «зависает».
-       * Если на сервере уже есть результат пары — не держим устаревший локальный спин. */
-      const keepLocalSpin = state.isSpinning && !p.isSpinning && !p.showResult
-      /** Оба true, но угол на клиенте анимируется — не подменять bottleAngle снимком (рывок / стоп кадра). */
-      const bothSpinning = state.isSpinning && p.isSpinning
+      const keepLocalAngle = state.isSpinning && !p.isSpinning
       const localById = new Map(state.players.map((pl) => [pl.id, pl]))
       const mergedPlayers = p.players.map((pl) => {
         const prev = localById.get(pl.id)
@@ -1021,16 +1096,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         players: mergedPlayers,
         currentTurnIndex: p.currentTurnIndex,
-        isSpinning: keepLocalSpin ? state.isSpinning : p.isSpinning,
-        countdown: keepLocalSpin ? state.countdown : p.countdown,
-        bottleAngle: keepLocalSpin || bothSpinning ? state.bottleAngle : p.bottleAngle,
+        isSpinning: p.isSpinning,
+        countdown: p.countdown,
+        bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,
         bottleSkin: p.bottleSkin ?? state.bottleSkin ?? "classic",
         bottleDonorId: p.bottleDonorId,
         bottleDonorName: p.bottleDonorName,
-        targetPlayer: keepLocalSpin ? state.targetPlayer : p.targetPlayer,
-        targetPlayer2: keepLocalSpin ? state.targetPlayer2 : p.targetPlayer2,
-        showResult: keepLocalSpin ? state.showResult : p.showResult,
-        resultAction: keepLocalSpin ? state.resultAction : p.resultAction,
+        targetPlayer: p.targetPlayer,
+        targetPlayer2: p.targetPlayer2,
+        showResult: p.showResult,
+        resultAction: p.resultAction,
         roundNumber: p.roundNumber,
         predictionPhase: p.predictionPhase,
         currentTurnDidSpin: p.currentTurnDidSpin,
@@ -1053,6 +1128,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     default:
       return state
   }
+}
+
+function gameReducer(state: GameState, action: GameAction): GameState {
+  return protectEconomy(state, gameReducerCore(state, action), action)
 }
 
 const GameContext = createContext<{

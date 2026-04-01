@@ -8,6 +8,8 @@ import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
 import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
+import { RoomLobbyScreen } from "@/components/room-lobby-screen"
+import { DailyStreakGateScreen } from "@/components/daily-streak-gate-screen"
 import { GameRoom } from "@/components/game-room"
 import { ChatScreen } from "@/components/chat-screen"
 import { FavoritesScreen } from "@/components/favorites-screen"
@@ -21,12 +23,8 @@ import { PmNotificationToasts } from "@/components/pm-notification-toast"
 import { RatingLeaderboardBody } from "@/components/rating-screen"
 import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
 
-/** Задержка после готовности стола, чтобы интерфейс успел стабилизироваться */
-const NORMALIZE_DELAY_MS = 200
-
 export function GameApp() {
   const { state, dispatch } = useGame()
-  const [, setNormalized] = useState(false)
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
   const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
   const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)
@@ -114,7 +112,10 @@ export function GameApp() {
   }, [])
 
   useEffect(() => {
-    if (state.screen !== "game" || !state.currentUser) {
+    if (
+      (state.screen !== "game" && state.screen !== "lobby" && state.screen !== "daily-streak") ||
+      !state.currentUser
+    ) {
       setBlockStatus(null)
       return
     }
@@ -130,16 +131,6 @@ export function GameApp() {
     }
     setBlockStatus(null)
   }, [state.screen, state.currentUser?.id])
-
-  useEffect(() => {
-    if (state.screen !== "game") {
-      setNormalized(false)
-      return
-    }
-    if (!tableReady) return
-    const t = setTimeout(() => setNormalized(true), NORMALIZE_DELAY_MS)
-    return () => clearTimeout(t)
-  }, [state.screen, tableReady])
 
   // Лоадер с цитатой находится внутри GameRoom (tableLoading), поэтому
   // общий AppLoader показываем только до появления пользователя.
@@ -191,6 +182,10 @@ export function GameApp() {
   switch (state.screen) {
     case "registration":
       return <RegistrationScreen />
+    case "daily-streak":
+      return <DailyStreakGateScreen />
+    case "lobby":
+      return <RoomLobbyScreen />
     case "game":
       return (
         <>

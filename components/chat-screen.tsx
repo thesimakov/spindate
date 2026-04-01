@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react"
 import { ArrowLeft, Send, Gift, Flower2, Heart, Frown, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame, getBotResponse, generateMessageId } from "@/lib/game-context"
-import { vkBridge } from "@/lib/vk-bridge"
 import type { ChatMessage, GameLogEntry, Player } from "@/lib/game-types"
 
 const GIFTS = [
@@ -71,11 +70,7 @@ export function ChatScreen() {
     if (giftPrice > 0 && voiceBalance < giftPrice) return
 
     if (giftPrice > 0) {
-      const success = await vkBridge.showPaymentWall(giftPrice, undefined, {
-        userId: String(currentUser.id),
-        description: `Подарок в чате: ${giftName}`,
-      })
-      if (!success) return
+      // Подарки в приватном чате тратят только внутриигровые сердца (без вызова VK оплаты).
       dispatch({ type: "PAY_VOICES", amount: giftPrice })
     }
 

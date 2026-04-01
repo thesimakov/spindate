@@ -30,7 +30,7 @@ function isTableSyncedAction(action: GameAction): boolean {
 }
 
 const LIVE_POLL_MS = 3000
-const AUTHORITY_POLL_MS = 800
+const AUTHORITY_POLL_MS = 1200
 const MAX_TABLE_SIZE = 10
 const TARGET_MALES = 5
 const TARGET_FEMALES = 5
@@ -100,10 +100,13 @@ export function useSyncEngine(): SyncEngineResult {
   const lastSyncAppliedAtRef = useRef(0)
   const pendingSyncRef = useRef<TableAuthorityPayload | null>(null)
   const syncDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const liveSyncInFlightRef = useRef(false)
+  const authorityPollInFlightRef = useRef(false)
   const SYNC_DEBOUNCE_MS = 500
 
   const doApply = useCallback(
     (payload: TableAuthorityPayload) => {
+      if (payload.revision <= lastAuthorityRevisionRef.current) return
       lastAuthorityRevisionRef.current = payload.revision
       lastSyncAppliedAtRef.current = Date.now()
       pendingSyncRef.current = null
@@ -119,6 +122,7 @@ export function useSyncEngine(): SyncEngineResult {
 
   const applyAuthoritySnapshot = useCallback(
     (payload: TableAuthorityPayload) => {
+      if (payload.revision <= lastAuthorityRevisionRef.current) return
       const elapsed = Date.now() - lastSyncAppliedAtRef.current
       if (elapsed >= SYNC_DEBOUNCE_MS) {
         doApply(payload)
@@ -128,7 +132,9 @@ export function useSyncEngine(): SyncEngineResult {
       if (syncDebounceTimerRef.current) return
       syncDebounceTimerRef.current = setTimeout(() => {
         syncDebounceTimerRef.current = null
-        if (pendingSyncRef.current) doApply(pendingSyncRef.current)
+        if (pendingSyncRef.current && pendingSyncRef.current.revision > lastAuthorityRevisionRef.current) {
+          doApply(pendingSyncRef.current)
+        }
       }, SYNC_DEBOUNCE_MS - elapsed)
     },
     [doApply],
@@ -167,35 +173,40 @@ export function useSyncEngine(): SyncEngineResult {
 
   const fetchTableAuthority = useCallback(
     async (tid: number) => {
-      const since = lastAuthorityRevisionRef.current
+      if (authorityPollInFlightRef.current) return
+      authorityPollInFlightRef.current = true
       const maxAttempts = 12
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const res = await apiFetch("/api/table/state", {
-            method: "POST",
-            cache: "no-store" as RequestCache,
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ tableId: tid, sinceRevision: since }),
-          })
-          const data = await res.json().catch(() => null)
-          if (res.ok && data?.ok && data.snapshot) {
-            const snap = data.snapshot as TableAuthorityPayload
-            if (snap.revision > since) {
-              applyAuthoritySnapshot(snap)
+      try {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          try {
+            const res = await apiFetch("/api/table/state", {
+              method: "POST",
+              cache: "no-store" as RequestCache,
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ tableId: tid, sinceRevision: lastAuthorityRevisionRef.current }),
+            })
+            const data = await res.json().catch(() => null)
+            if (res.ok && data?.ok && data.snapshot) {
+              const snap = data.snapshot as TableAuthorityPayload
+              if (snap.revision > lastAuthorityRevisionRef.current) {
+                applyAuthoritySnapshot(snap)
+              }
+              setTableAuthorityReady(true)
+              return
             }
-            setTableAuthorityReady(true)
-            return
+          } catch {
+            // retry
           }
-        } catch {
-          // retry
+          if (attempt < maxAttempts - 1) {
+            await new Promise((r) => setTimeout(r, 80 + attempt * 40))
+          }
         }
-        if (attempt < maxAttempts - 1) {
-          await new Promise((r) => setTimeout(r, 80 + attempt * 40))
-        }
+        // Не блокируем вход навсегла: следующий poll подтянет снимок.
+        setTableAuthorityReady(true)
+      } finally {
+        authorityPollInFlightRef.current = false
       }
-      // Не блокируем вход навсегла: следующий poll подтянет снимок.
-      setTableAuthorityReady(true)
     },
     [applyAuthoritySnapshot],
   )
@@ -223,6 +234,8 @@ export function useSyncEngine(): SyncEngineResult {
   const syncLiveTable = useCallback(
     async (mode: "join" | "sync", forceNew = false) => {
       if (!currentUser) return null
+      if (liveSyncInFlightRef.current) return null
+      liveSyncInFlightRef.current = true
       const currentTableId = tableIdRef.current
       try {
         const res = await apiFetch("/api/table/live", {
@@ -239,6 +252,10 @@ export function useSyncEngine(): SyncEngineResult {
           }),
         })
         const data = await res.json().catch(() => null)
+        if (res.status === 410) {
+          dispatch({ type: "SET_SCREEN", screen: "lobby" })
+          return null
+        }
         if (!res.ok || !data?.ok || !Array.isArray(data.livePlayers)) return null
         const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
         const seated = livePlayers.some((p: Player) => p.id === currentUser.id)
@@ -261,8 +278,17 @@ export function useSyncEngine(): SyncEngineResult {
         const nextPlayers = composePlayersFromLive(livePlayers)
         const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
         const tableActuallyChanged = nextTableId !== currentTableId
+        const createdByUserId =
+          typeof data.createdByUserId === "number" && Number.isFinite(data.createdByUserId)
+            ? data.createdByUserId
+            : null
         if (tableActuallyChanged || forceNew) {
-          dispatch({ type: "SET_TABLE", players: nextPlayers, tableId: nextTableId })
+          dispatch({
+            type: "SET_TABLE",
+            players: nextPlayers,
+            tableId: nextTableId,
+            roomCreatorPlayerId: createdByUserId,
+          })
           lastAuthorityRevisionRef.current = 0
         } else {
           dispatch({ type: "SET_PLAYERS", players: nextPlayers })
@@ -275,6 +301,8 @@ export function useSyncEngine(): SyncEngineResult {
         return { tableId: nextTableId, liveCount: livePlayers.length }
       } catch {
         return null
+      } finally {
+        liveSyncInFlightRef.current = false
       }
     },
     [currentUser, composePlayersFromLive, dispatch, fetchTableAuthority],

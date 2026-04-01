@@ -3,6 +3,7 @@ import {
   createEmptyLiveTablesState,
   type LiveTablesState,
   joinOrSyncLiveTableOnState,
+  joinSpecificRoomOnState,
   leaveLiveTableOnState,
   getTableInfoFromState,
   serializeLiveTablesState,
@@ -30,6 +31,14 @@ export async function joinOrSyncLiveTableMemory(args: {
   forceNew?: boolean
 }) {
   return joinOrSyncLiveTableOnState(getMemoryState(), args)
+}
+
+export async function joinSpecificRoomMemory(args: {
+  player: LivePlayer
+  roomId: number
+  maxTableSize: number
+}) {
+  return joinSpecificRoomOnState(getMemoryState(), args)
 }
 
 export async function leaveLiveTableMemory(userId: number) {

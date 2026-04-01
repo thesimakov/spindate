@@ -20,32 +20,13 @@ export async function POST(req: Request) {
   if (denied) return denied
 
   const body = await req.json().catch(() => null)
-  let userId = typeof body?.userId === "string" ? body.userId : ""
+  const userId = typeof body?.userId === "string" ? body.userId : ""
   const vkUserId = Number.isInteger(Number(body?.vkUserId)) ? Math.floor(Number(body?.vkUserId)) : null
   const action = body?.action as Action | undefined
   const playerId = Number.isInteger(Number(body?.playerId)) ? Math.floor(Number(body?.playerId)) : null
 
   if (!userId || !action) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400, headers: NO_CACHE })
-  }
-
-  // Старый список мог слать live:vk:… — подставляем реальный users.id, если аккаунт есть в БД
-  if (userId.startsWith("live:vk:")) {
-    const n = Number(userId.slice("live:vk:".length))
-    if (Number.isInteger(n) && n > 0) {
-      const db = getDb()
-      const cols = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
-      if (cols.some((c) => c.name === "vk_user_id")) {
-        const row = db.prepare(`SELECT id FROM users WHERE vk_user_id = ?`).get(n) as { id: string } | undefined
-        if (row) userId = row.id
-      }
-    }
-  }
-  if (userId.startsWith("live:")) {
-    return NextResponse.json(
-      { ok: false, error: "no_db_user" },
-      { status: 400, headers: NO_CACHE },
-    )
   }
 
   const now = Date.now()

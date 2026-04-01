@@ -5,7 +5,12 @@ import Database from "better-sqlite3"
 let db: Database.Database | null = null
 
 function ensureDataDir() {
-  const dir = path.join(process.cwd(), "data")
+  const configured = (process.env.SPINDATE_DATA_DIR ?? "").trim()
+  const dir = configured
+    ? path.isAbsolute(configured)
+      ? configured
+      : path.resolve(process.cwd(), configured)
+    : path.join(process.cwd(), "data")
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return dir
 }
@@ -59,9 +64,22 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS vk_payment_orders (
+      provider_order_id TEXT PRIMARY KEY,
+      vk_user_id INTEGER NOT NULL,
+      item_id TEXT NOT NULL,
+      notification_type TEXT NOT NULL,
+      status TEXT,
+      processed INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_vk_payment_orders_vk_user_id ON vk_payment_orders(vk_user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_vk_user_id_unique ON users(vk_user_id);
 
     CREATE TABLE IF NOT EXISTS user_admin_flags (

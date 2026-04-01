@@ -83,7 +83,7 @@ tar -xzvf /var/www/spindate.tar.gz -C /var/www/spindate
 
 ---
 
-## 5. Переменные окружения (опционально)
+## 5. Переменные окружения (рекомендуется)
 
 Если нужен свой URL приложения (для VK Mini App или ссылок):
 
@@ -96,9 +96,23 @@ nano .env.local
 
 ```env
 NEXT_PUBLIC_APP_URL=https://ваш-домен.ru
+# КРИТИЧНО для сохранности данных между релизами:
+# вынести SQLite в отдельную папку вне кода
+SPINDATE_DATA_DIR=/var/spindate-data
 # Опционально, если используете VK Mini App:
 # NEXT_PUBLIC_VK_APP_ID=12345678
 ```
+
+Создайте папку и права заранее:
+
+```bash
+mkdir -p /var/spindate-data
+chown -R root:root /var/spindate-data
+chmod 755 /var/spindate-data
+```
+
+Теперь файл базы (`auth.sqlite`) будет жить в `/var/spindate-data`, а не в папке релиза.  
+Это защищает аккаунты, банк, сердца и инвентарь от потери при `git pull`, пересборке и замене кода.
 
 На сервере при запуске через PM2 переменные из `.env.local` Next.js подхватывает сам при `next start`. Если нужно задать их в PM2 — см. раздел 7.
 

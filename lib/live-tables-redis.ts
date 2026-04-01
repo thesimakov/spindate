@@ -2,6 +2,7 @@ import type { LivePlayer } from "@/lib/live-tables-core"
 import {
   deserializeLiveTablesState,
   joinOrSyncLiveTableOnState,
+  joinSpecificRoomOnState,
   leaveLiveTableOnState,
   getTableInfoFromState,
   LIVE_TABLES_REDIS_KEY,
@@ -27,6 +28,19 @@ export async function joinOrSyncLiveTableRedis(
   await readModifyWriteKey(redis, LIVE_TABLES_REDIS_KEY, (raw) => {
     const state = deserializeLiveTablesState(raw)
     result = joinOrSyncLiveTableOnState(state, args)
+    return serializeLiveTablesState(state)
+  })
+  return result
+}
+
+export async function joinSpecificRoomRedis(
+  redis: Redis,
+  args: { player: LivePlayer; roomId: number; maxTableSize: number },
+) {
+  let result!: ReturnType<typeof joinSpecificRoomOnState>
+  await readModifyWriteKey(redis, LIVE_TABLES_REDIS_KEY, (raw) => {
+    const state = deserializeLiveTablesState(raw)
+    result = joinSpecificRoomOnState(state, args)
     return serializeLiveTablesState(state)
   })
   return result

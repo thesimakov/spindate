@@ -84,7 +84,8 @@ function selectTargetTable(
 
   if (!forceNew && currentTableId != null) {
     const set = state.tableUsers.get(currentTableId)
-    if (set && set.size < maxTableSize && isCompatibleTable(currentTableId)) return currentTableId
+    const currentSize = set?.size ?? 0
+    if (currentSize < maxTableSize) return currentTableId
   }
 
   if (forceNew) {
@@ -144,20 +145,17 @@ export function joinOrSyncLiveTableOnState(
     removeFromTable(state, userId, existing.tableId)
   }
 
-  // При sync (requestedTableId задан) сохраняем стол, даже если игрок
-  // был на нём последним — иначе стол удаляется и создаётся новый,
-  // что сбрасывает клиентское состояние игры.
   const maxTS = Math.max(1, args.maxTableSize)
   const reqTable = args.requestedTableId ?? null
-  const stayOnSameTable =
-    !args.forceNew &&
-    reqTable != null &&
-    reqTable === previousTableId &&
-    !state.tableUsers.has(reqTable)
 
-  const targetTableId = stayOnSameTable
-    ? reqTable!
-    : selectTargetTable(state, maxTS, reqTable, !!args.forceNew)
+  let targetTableId: number
+  if (!args.forceNew && reqTable != null) {
+    // Для комнатного режима экосистемы не пересаживаем между столами:
+    // если клиент запросил roomId/tableId, остаёмся строго в нём.
+    targetTableId = reqTable
+  } else {
+    targetTableId = selectTargetTable(state, maxTS, reqTable, !!args.forceNew)
+  }
 
   const nextPresence: Presence = {
     player: args.player,
@@ -182,6 +180,58 @@ export function leaveLiveTableOnState(state: LiveTablesState, userId: number) {
   if (!presence) return
   state.playersById.delete(userId)
   removeFromTable(state, userId, presence.tableId)
+}
+
+/**
+ * Строгий вход в конкретную комнату (стол) по roomId/tableId.
+ * Если мест нет — возвращает full, игрок остаётся на прежнем столе (если был).
+ */
+export function joinSpecificRoomOnState(
+  state: LiveTablesState,
+  args: {
+    player: LivePlayer
+    roomId: number
+    maxTableSize: number
+  },
+):
+  | { ok: true; tableId: number; livePlayers: LivePlayer[]; tablesCount: number }
+  | { ok: false; reason: "full" } {
+  const now = Date.now()
+  cleanupStale(state, now)
+  const userId = args.player.id
+  const tid = Math.floor(args.roomId)
+  if (!Number.isInteger(tid) || tid <= 0) {
+    return { ok: false, reason: "full" }
+  }
+  const maxTS = Math.max(1, args.maxTableSize)
+  const existing = state.playersById.get(userId)
+  const set = state.tableUsers.get(tid) ?? new Set<number>()
+  const alreadyOnTarget = existing?.tableId === tid
+  if (!alreadyOnTarget && set.size >= maxTS) {
+    return { ok: false, reason: "full" }
+  }
+
+  if (existing && !alreadyOnTarget) {
+    removeFromTable(state, userId, existing.tableId)
+  }
+
+  const nextPresence: Presence = {
+    player: args.player,
+    tableId: tid,
+    maxTableSize: maxTS,
+    updatedAt: now,
+  }
+  state.playersById.set(userId, nextPresence)
+  const nextSet = state.tableUsers.get(tid) ?? new Set<number>()
+  nextSet.add(userId)
+  state.tableUsers.set(tid, nextSet)
+
+  return {
+    tableId: tid,
+    livePlayers: tableLivePlayers(state, tid),
+    tablesCount: state.tableUsers.size,
+    ok: true,
+  }
 }
 
 export function getTableInfoFromState(
