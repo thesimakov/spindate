@@ -79,7 +79,6 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_vk_payment_orders_vk_user_id ON vk_payment_orders(vk_user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_vk_user_id_unique ON users(vk_user_id);
 
     CREATE TABLE IF NOT EXISTS user_admin_flags (
@@ -104,6 +103,16 @@ function migrate(database: Database.Database) {
   if (!profileCols.some((c) => c.name === "status")) {
     database.exec(`ALTER TABLE player_profiles ADD COLUMN status TEXT NOT NULL DEFAULT ''`)
   }
+
+  // Старые инсталляции: vk_payment_orders могла быть создана без vk_user_id — IF NOT EXISTS таблицу не пересоздаёт.
+  const paymentCols = database.prepare(`PRAGMA table_info(vk_payment_orders)`).all() as { name: string }[]
+  if (paymentCols.length > 0 && !paymentCols.some((c) => c.name === "vk_user_id")) {
+    database.exec(`ALTER TABLE vk_payment_orders ADD COLUMN vk_user_id INTEGER NOT NULL DEFAULT 0`)
+  }
+  // После гарантии колонки (в т.ч. для старых БД) — индекс вне первого exec, иначе при отсутствии колонки весь блок миграции падал.
+  database.exec(
+    `CREATE INDEX IF NOT EXISTS idx_vk_payment_orders_vk_user_id ON vk_payment_orders(vk_user_id)`,
+  )
 }
 
 export function getDb() {
