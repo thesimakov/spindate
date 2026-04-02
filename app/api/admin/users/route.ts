@@ -80,6 +80,35 @@ export async function GET(req: Request) {
     for (const r of rows) {
       knownKeys.add(r.vk_user_id != null ? `vk:${r.vk_user_id}` : `u:${r.user_id}`)
     }
+
+    // Добавить VK-пользователей, которые есть только в vk_user_game_state
+    // (например, вход в dev-режиме без серверной VK-сессии).
+    const vkStateRows = db.prepare(
+      `SELECT vk_user_id, voice_balance, updated_at
+       FROM vk_user_game_state
+       ORDER BY updated_at DESC
+       LIMIT 500`,
+    ).all() as Array<{ vk_user_id: number; voice_balance: number; updated_at: number }>
+    for (const r of vkStateRows) {
+      const key = `vk:${r.vk_user_id}`
+      if (knownKeys.has(key)) continue
+      knownKeys.add(key)
+      out.push({
+        userId: `vk:${r.vk_user_id}`,
+        isDbUser: false,
+        username: `vk_${r.vk_user_id}`,
+        vkUserId: r.vk_user_id,
+        displayName: `VK пользователь ${r.vk_user_id}`,
+        avatarUrl: undefined,
+        gender: undefined,
+        age: undefined,
+        purpose: undefined,
+        voiceBalance: r.voice_balance ?? 0,
+        flags: null,
+        live: liveByUserKey.get(key) ?? null,
+      })
+    }
+
     for (const [key, live] of liveByUserKey.entries()) {
       if (knownKeys.has(key)) continue
       const vkFromKey = key.startsWith("vk:") ? Number(key.slice(3)) : null
