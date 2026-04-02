@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
 import { createUserRoomPaid, getCreateRoomCost } from "@/lib/rooms/room-registry"
+import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
 
 export const dynamic = "force-dynamic"
 
@@ -41,6 +42,8 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => null)
     const name = typeof body?.name === "string" ? body.name : ""
+    const bottleSkin = normalizeRoomBottleSkin(body?.bottleSkin)
+    const tableStyle = normalizeRoomTableStyle(body?.tableStyle)
 
     const db = getDb()
     const now = Date.now()
@@ -90,7 +93,7 @@ export async function POST(req: Request) {
     }
 
     try {
-      const room = await createUserRoomPaid(name, createdById)
+      const room = await createUserRoomPaid(name, createdById, { bottleSkin, tableStyle })
       return NextResponse.json(
         { ok: true, room, voiceBalance: nextBalance, cost: COST_HEARTS },
         { headers: NO_CACHE },

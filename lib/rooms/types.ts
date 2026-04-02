@@ -1,9 +1,13 @@
 import type { GeneralChatMessage, Player, TableAuthorityPayload } from "@/lib/game-types"
+import type { BottleSkin } from "@/lib/game-types"
+import type { RoomTableStyle } from "@/lib/rooms/room-appearance"
 
 /** Метаданные комнаты в лобби (стол = roomId из live-tables / authority) */
 export interface RoomMeta {
   roomId: number
   name: string
+  bottleSkin?: BottleSkin
+  tableStyle?: RoomTableStyle
   /** Создана пользователем после 20 голосов */
   isUserRoom?: boolean
   createdByUserId?: number
@@ -20,6 +24,8 @@ export interface RoomRegistryState {
 export interface LobbyRoomRow {
   roomId: number
   name: string
+  bottleSkin?: BottleSkin
+  tableStyle?: RoomTableStyle
   livePlayerCount: number
   maxPlayers: number
 }

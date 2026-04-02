@@ -7,6 +7,8 @@ import { mergeLivePlayersIntoAuthority } from "@/lib/table-authority-merge"
 import { applyTableAuthorityAction } from "@/lib/table-authority-apply"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
+import { loadRoomRegistry } from "@/lib/rooms/room-registry"
+import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
 
 declare global {
   var __spindateTableAuthorityMemory: Map<number, TableAuthorityPayload> | undefined
@@ -81,6 +83,7 @@ function computeEnsureAuthority(
   prev: TableAuthorityPayload | null,
   info: { livePlayers: Player[]; maxTableSize: number },
   tid: number,
+  roomDefaults: { bottleSkin: TableAuthorityPayload["bottleSkin"]; tableStyle: TableAuthorityPayload["tableStyle"] },
 ): TableAuthorityPayload | null {
   const anchor: Player = { ...info.livePlayers[0], isBot: false }
   const { males, females } = targetsForTable(info.maxTableSize)
@@ -98,7 +101,10 @@ function computeEnsureAuthority(
 
   if (!prev) {
     const shuffled = [...composed].sort(() => Math.random() - 0.5)
-    const init = buildInitialAuthoritySnapshot(shuffled, tid)
+    const init = buildInitialAuthoritySnapshot(shuffled, tid, {
+      bottleSkin: roomDefaults.bottleSkin,
+      tableStyle: roomDefaults.tableStyle,
+    })
     return { ...init, revision: 1 }
   }
 
@@ -106,6 +112,8 @@ function computeEnsureAuthority(
   const idsChanged = playerIdsKey(mergedCore.players) !== playerIdsKey(prev.players)
   return {
     ...mergedCore,
+    bottleSkin: mergedCore.bottleSkin ?? roomDefaults.bottleSkin ?? "classic",
+    tableStyle: roomDefaults.tableStyle ?? prev.tableStyle ?? "classic_night",
     revision: idsChanged ? prev.revision + 1 : prev.revision,
   }
 }
@@ -118,6 +126,12 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
   if (!Number.isInteger(tid) || tid <= 0) return null
   const info = await getTableInfo(tid)
   if (!info || info.livePlayers.length === 0) return null
+  const reg = await loadRoomRegistry()
+  const meta = reg.rooms.find((r) => r.roomId === tid)
+  const roomDefaults = {
+    bottleSkin: normalizeRoomBottleSkin(meta?.bottleSkin),
+    tableStyle: normalizeRoomTableStyle(meta?.tableStyle),
+  } satisfies { bottleSkin: TableAuthorityPayload["bottleSkin"]; tableStyle: TableAuthorityPayload["tableStyle"] }
 
   const redis = getRedis()
   const key = authorityRedisKey(tid)
@@ -126,7 +140,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
     let out: TableAuthorityPayload | null = null
     await readModifyWriteKey(redis, key, (raw) => {
       const prev = raw ? (JSON.parse(raw) as TableAuthorityPayload) : null
-      const next = computeEnsureAuthority(prev, info, tid)
+      const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
       if (!next) {
         out = null
         return null
@@ -140,7 +154,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
 
   const store = getMemoryStore()
   const prev = store.get(tid) ?? null
-  const next = computeEnsureAuthority(prev, info, tid)
+  const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
   if (!next) return null
   const stabilized = stabilizeAuthoritySnapshot(next)
   const out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot

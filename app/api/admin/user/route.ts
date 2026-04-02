@@ -20,13 +20,28 @@ export async function POST(req: Request) {
   if (denied) return denied
 
   const body = await req.json().catch(() => null)
-  const userId = typeof body?.userId === "string" ? body.userId : ""
+  const rawUserId = typeof body?.userId === "string" ? body.userId : ""
   const vkUserId = Number.isInteger(Number(body?.vkUserId)) ? Math.floor(Number(body?.vkUserId)) : null
   const action = body?.action as Action | undefined
   const playerId = Number.isInteger(Number(body?.playerId)) ? Math.floor(Number(body?.playerId)) : null
 
-  if (!userId || !action) {
+  if (!action) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400, headers: NO_CACHE })
+  }
+
+  const db = getDb()
+  let userId = rawUserId
+  const looksSynthetic = userId.startsWith("live:")
+  if (!userId || looksSynthetic) {
+    if (vkUserId != null && vkUserId > 0) {
+      const row = db
+        .prepare(`SELECT id FROM users WHERE vk_user_id = ? LIMIT 1`)
+        .get(vkUserId) as { id: string } | undefined
+      if (row?.id) userId = row.id
+    }
+  }
+  if (!userId || userId.startsWith("live:")) {
+    return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404, headers: NO_CACHE })
   }
 
   const now = Date.now()
@@ -46,7 +61,6 @@ export async function POST(req: Request) {
       await leaveLiveTable(playerId)
     }
     // Удалить активные сессии (чтобы сразу «вылетело» при следующих запросах)
-    const db = getDb()
     db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId)
     // На всякий случай — если это VK, почистить сохранённое состояние «вк-таблицы»
     if (vkUserId != null && vkUserId > 0) {

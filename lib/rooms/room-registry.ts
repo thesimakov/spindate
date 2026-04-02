@@ -1,5 +1,11 @@
 import { getRedis } from "@/lib/redis"
 import type { RoomMeta, RoomRegistryState } from "@/lib/rooms/types"
+import {
+  DEFAULT_ROOM_BOTTLE_SKIN,
+  DEFAULT_ROOM_TABLE_STYLE,
+  normalizeRoomBottleSkin,
+  normalizeRoomTableStyle,
+} from "@/lib/rooms/room-appearance"
 import { roomsRegistryKey, userRoomVotesKey } from "@/lib/rooms/keys"
 import { getTableInfo, leaveLiveTable } from "@/lib/live-tables-server"
 
@@ -13,7 +19,12 @@ declare global {
 function defaultSeed(): RoomRegistryState {
   const rooms: RoomMeta[] = []
   for (let i = 1; i <= SEED_COUNT; i++) {
-    rooms.push({ roomId: i, name: `Игровой стол #${i}` })
+    rooms.push({
+      roomId: i,
+      name: `Игровой стол #${i}`,
+      bottleSkin: DEFAULT_ROOM_BOTTLE_SKIN,
+      tableStyle: DEFAULT_ROOM_TABLE_STYLE,
+    })
   }
   return { rooms, nextRoomId: SEED_COUNT + 1 }
 }
@@ -45,6 +56,23 @@ function ensureUserRoomCreatedAt(state: RoomRegistryState, now: number): boolean
     if (typeof room.createdAtMs === "number" && Number.isFinite(room.createdAtMs)) continue
     room.createdAtMs = now
     changed = true
+  }
+  return changed
+}
+
+function ensureRoomAppearanceDefaults(state: RoomRegistryState): boolean {
+  let changed = false
+  for (const room of state.rooms) {
+    const nextBottle = normalizeRoomBottleSkin(room.bottleSkin)
+    const nextStyle = normalizeRoomTableStyle(room.tableStyle)
+    if (room.bottleSkin !== nextBottle) {
+      room.bottleSkin = nextBottle
+      changed = true
+    }
+    if (room.tableStyle !== nextStyle) {
+      room.tableStyle = nextStyle
+      changed = true
+    }
   }
   return changed
 }
@@ -82,10 +110,11 @@ async function normalizeAndCleanupRegistry(state: RoomRegistryState): Promise<Ro
   const now = Date.now()
   const migrated = migrateLegacyRoomNames(state)
   const changedCreatedAt = ensureUserRoomCreatedAt(migrated, now)
+  const changedAppearance = ensureRoomAppearanceDefaults(migrated)
   const expiredIds = extractExpiredUserRoomIds(migrated, now)
   const changedExpired = removeRoomsByIds(migrated, expiredIds)
 
-  if (changedCreatedAt || changedExpired) {
+  if (changedCreatedAt || changedExpired || changedAppearance) {
     await saveRoomRegistry(migrated)
   }
   if (expiredIds.length > 0) {
@@ -177,13 +206,19 @@ export async function getCreateRoomCost(): Promise<number> {
 }
 
 /** Создание пользовательской комнаты без оплаты «голосами» (оплата сердцами — в API). */
-export async function createUserRoomPaid(name: string, createdByUserId: number): Promise<RoomMeta> {
+export async function createUserRoomPaid(
+  name: string,
+  createdByUserId: number,
+  options?: { bottleSkin?: RoomMeta["bottleSkin"]; tableStyle?: RoomMeta["tableStyle"] },
+): Promise<RoomMeta> {
   const state = await loadRoomRegistry()
   const roomId = state.nextRoomId++
   const trimmed = name.trim().slice(0, 64) || `Мой стол #${roomId}`
   const meta: RoomMeta = {
     roomId,
     name: trimmed,
+    bottleSkin: normalizeRoomBottleSkin(options?.bottleSkin),
+    tableStyle: normalizeRoomTableStyle(options?.tableStyle),
     isUserRoom: true,
     createdByUserId,
     createdAtMs: Date.now(),

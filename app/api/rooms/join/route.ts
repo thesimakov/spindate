@@ -5,6 +5,7 @@ import { parsePlayerFromClientBody } from "@/lib/rooms/parse-live-player"
 import { getTableInfo } from "@/lib/live-tables-server"
 import { getDb } from "@/lib/db"
 import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
 
 export const dynamic = "force-dynamic"
 
@@ -68,6 +69,8 @@ export async function POST(req: Request) {
     typeof meta?.createdByUserId === "number" && Number.isFinite(meta.createdByUserId)
       ? meta.createdByUserId
       : undefined
+  const bottleSkin = normalizeRoomBottleSkin(meta?.bottleSkin)
+  const tableStyle = normalizeRoomTableStyle(meta?.tableStyle)
   return NextResponse.json(
     {
       ok: true,
@@ -75,6 +78,8 @@ export async function POST(req: Request) {
       roomId: result.roomId,
       tablesCount: result.tablesCount,
       livePlayers: info?.livePlayers ?? [],
+      bottleSkin,
+      tableStyle,
       ...(createdByUserId != null ? { createdByUserId } : {}),
     },
     { headers: NO_CACHE },

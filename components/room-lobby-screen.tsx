@@ -5,6 +5,7 @@ import { Heart, Loader2, Sparkles, ShoppingCart } from "lucide-react"
 import { useGame, generateBots } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { composeTablePlayers } from "@/lib/table-composition"
+import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,17 +16,48 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { InventoryItem, Player } from "@/lib/game-types"
+import type { BottleSkin, InventoryItem, Player } from "@/lib/game-types"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
+import {
+  DEFAULT_ROOM_BOTTLE_SKIN,
+  DEFAULT_ROOM_TABLE_STYLE,
+  ROOM_TABLE_STYLE_OPTIONS,
+  type RoomTableStyle,
+} from "@/lib/rooms/room-appearance"
 import { buyHearts200 } from "@/lib/vk-bridge"
 
-type LobbyRow = { roomId: number; name: string; livePlayerCount: number; maxPlayers: number }
+type LobbyRow = {
+  roomId: number
+  name: string
+  bottleSkin?: BottleSkin
+  tableStyle?: RoomTableStyle
+  livePlayerCount: number
+  maxPlayers: number
+}
 
 const DEFAULT_CREATE_COST = 100
 const BUY_HEARTS_AMOUNT = 200
 const BUY_HEARTS_VOTES = 9
+const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"
+const VISITED_TTL_MS = 24 * 60 * 60 * 1000
+
+const CREATE_BOTTLE_OPTIONS: Array<{ id: BottleSkin; name: string; img: string }> = [
+  { id: "classic", name: "Классика", img: assetUrl(BOTTLE_IMAGES.classic) },
+  { id: "ruby", name: "Лимонад", img: assetUrl(BOTTLE_IMAGES.ruby) },
+  { id: "neon", name: "Виски", img: assetUrl(BOTTLE_IMAGES.neon) },
+  { id: "frost", name: "Шампанское", img: assetUrl(BOTTLE_IMAGES.frost) },
+  { id: "milk", name: "Молочная", img: assetUrl(BOTTLE_IMAGES.milk) },
+  { id: "baby", name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby) },
+]
+
+const TABLE_STYLE_PREVIEW: Record<RoomTableStyle, string> = {
+  classic_night: "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.92))",
+  sunset_lounge: "linear-gradient(135deg, rgba(146,64,14,0.92), rgba(219,39,119,0.88))",
+  ocean_breeze: "linear-gradient(135deg, rgba(8,145,178,0.92), rgba(29,78,216,0.88))",
+  violet_dream: "linear-gradient(135deg, rgba(91,33,182,0.92), rgba(147,51,234,0.88))",
+}
 
 /** VK: query нужен, если нет cookie-сессии (мини-приложение). */
 function vkUserIdForApi(user: Player): number | undefined {
@@ -46,6 +78,44 @@ function createRoomApiUrl(user: Player): string {
   return "/api/rooms/create"
 }
 
+function visitedStorageKey(user: Player): string {
+  const vk = vkUserIdForApi(user)
+  return `${LOBBY_VISITED_KEY_PREFIX}${vk != null ? `vk:${vk}` : `u:${user.id}`}`
+}
+
+function readVisitedRooms(user: Player): Record<string, number> {
+  if (typeof window === "undefined") return {}
+  const key = visitedStorageKey(user)
+  try {
+    const raw = window.localStorage.getItem(key)
+    const now = Date.now()
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {}
+    const clean: Record<string, number> = {}
+    for (const [roomId, ts] of Object.entries(parsed)) {
+      if (typeof ts === "number" && now - ts < VISITED_TTL_MS) clean[roomId] = ts
+    }
+    if (JSON.stringify(clean) !== JSON.stringify(parsed)) {
+      window.localStorage.setItem(key, JSON.stringify(clean))
+    }
+    return clean
+  } catch {
+    return {}
+  }
+}
+
+function markRoomVisited(user: Player, roomId: number) {
+  if (typeof window === "undefined") return
+  const key = visitedStorageKey(user)
+  const now = Date.now()
+  const current = readVisitedRooms(user)
+  current[String(roomId)] = now
+  try {
+    window.localStorage.setItem(key, JSON.stringify(current))
+  } catch {
+    // ignore
+  }
+}
+
 export function RoomLobbyScreen() {
   const { state, dispatch } = useGame()
   const { isDesktopUser } = useGameLayoutMode()
@@ -62,8 +132,11 @@ export function RoomLobbyScreen() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [createName, setCreateName] = useState("Мой стол")
+  const [createBottleSkin, setCreateBottleSkin] = useState<BottleSkin>(DEFAULT_ROOM_BOTTLE_SKIN)
+  const [createTableStyle, setCreateTableStyle] = useState<RoomTableStyle>(DEFAULT_ROOM_TABLE_STYLE)
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState("")
+  const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
 
   const fetchLobby = useCallback(async () => {
     try {
@@ -111,9 +184,24 @@ export function RoomLobbyScreen() {
     }
   }, [user?.id, user?.authProvider, user?.vkUserId, dispatch])
 
+  useEffect(() => {
+    if (!user) {
+      setVisitedRooms({})
+      return
+    }
+    setVisitedRooms(readVisitedRooms(user))
+  }, [user?.id, user?.authProvider, user?.vkUserId])
+
   const enterGameAfterJoin = async (
     player: Player,
-    data: { roomId: number; livePlayers: Player[]; tablesCount?: number; createdByUserId?: number },
+    data: {
+      roomId: number
+      livePlayers: Player[]
+      tablesCount?: number
+      createdByUserId?: number
+      bottleSkin?: BottleSkin
+      tableStyle?: RoomTableStyle
+    },
   ) => {
     const maxTableSize = isDesktopUser ? 10 : 6
     const targetMales = isDesktopUser ? 5 : 3
@@ -135,6 +223,8 @@ export function RoomLobbyScreen() {
       tableId: data.roomId,
       roomCreatorPlayerId:
         typeof data.createdByUserId === "number" ? data.createdByUserId : null,
+      bottleSkin: data.bottleSkin,
+      tableStyle: data.tableStyle,
     })
     dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount ?? 1 })
     try {
@@ -182,7 +272,10 @@ export function RoomLobbyScreen() {
         livePlayers: Array.isArray(data.livePlayers) ? data.livePlayers : [],
         tablesCount: data.tablesCount,
         createdByUserId: typeof data.createdByUserId === "number" ? data.createdByUserId : undefined,
+        bottleSkin: typeof data.bottleSkin === "string" ? (data.bottleSkin as BottleSkin) : undefined,
+        tableStyle: typeof data.tableStyle === "string" ? (data.tableStyle as RoomTableStyle) : undefined,
       })
+      markRoomVisited(user, data.roomId)
     } catch {
       setError("Сеть недоступна")
     }
@@ -215,7 +308,11 @@ export function RoomLobbyScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: createName }),
+        body: JSON.stringify({
+          name: createName,
+          bottleSkin: createBottleSkin,
+          tableStyle: createTableStyle,
+        }),
       })
       const data = await res.json().catch(() => null)
       if (res.status === 401) {
@@ -344,6 +441,12 @@ export function RoomLobbyScreen() {
               {rows.map((r) => {
                 const isFull = r.livePlayerCount >= r.maxPlayers
                 const fillPct = r.maxPlayers > 0 ? Math.min(100, Math.round((r.livePlayerCount / r.maxPlayers) * 100)) : 0
+                const wasHere = typeof visitedRooms[String(r.roomId)] === "number"
+                const roomStyle = r.tableStyle ?? DEFAULT_ROOM_TABLE_STYLE
+                const roomBottle = r.bottleSkin ?? DEFAULT_ROOM_BOTTLE_SKIN
+                const bottleOption = CREATE_BOTTLE_OPTIONS.find((o) => o.id === roomBottle) ?? CREATE_BOTTLE_OPTIONS[0]
+                const styleName =
+                  ROOM_TABLE_STYLE_OPTIONS.find((s) => s.id === roomStyle)?.name ?? ROOM_TABLE_STYLE_OPTIONS[0].name
                 return (
                   <li
                     key={r.roomId}
@@ -358,6 +461,23 @@ export function RoomLobbyScreen() {
                       <span className="block truncate font-medium text-slate-100">
                         {roomNameForDisplay(r.name, r.roomId)}
                       </span>
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-300">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-slate-900/50 px-2 py-0.5">
+                          <img
+                            src={bottleOption.img}
+                            alt={bottleOption.name}
+                            className="h-4 w-4 rounded-full object-contain"
+                            loading="lazy"
+                          />
+                          {bottleOption.name}
+                        </span>
+                        <span
+                          className="inline-flex items-center rounded-full border border-white/15 px-2 py-0.5"
+                          style={{ background: TABLE_STYLE_PREVIEW[roomStyle] }}
+                        >
+                          {styleName}
+                        </span>
+                      </div>
                       <div className="mt-1.5 flex items-center gap-2">
                         <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-700/60">
                           <div
@@ -378,26 +498,33 @@ export function RoomLobbyScreen() {
                         )}
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={joiningId !== null || isFull}
-                      onClick={() => void handleJoin(r.roomId)}
-                      className={cn(
-                        "shrink-0 rounded-full px-5 font-semibold text-white",
-                        isFull
-                          ? "cursor-not-allowed bg-slate-600 opacity-50"
-                          : "bg-emerald-600 shadow-[0_4px_14px_rgba(22,163,74,0.45)] hover:bg-emerald-500",
+                    <div className="flex flex-col items-end gap-1.5">
+                      {wasHere && (
+                        <span className="rounded-full border border-cyan-300/35 bg-cyan-400/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
+                          Вы были здесь
+                        </span>
                       )}
-                    >
-                      {joiningId === r.roomId ? (
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                      ) : isFull ? (
-                        "Занят"
-                      ) : (
-                        "Войти"
-                      )}
-                    </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={joiningId !== null || isFull}
+                        onClick={() => void handleJoin(r.roomId)}
+                        className={cn(
+                          "shrink-0 rounded-full px-5 font-semibold text-white",
+                          isFull
+                            ? "cursor-not-allowed bg-slate-600 opacity-50"
+                            : "bg-emerald-600 shadow-[0_4px_14px_rgba(22,163,74,0.45)] hover:bg-emerald-500",
+                        )}
+                      >
+                        {joiningId === r.roomId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                        ) : isFull ? (
+                          "Занят"
+                        ) : (
+                          "Войти"
+                        )}
+                      </Button>
+                    </div>
                   </li>
                 )
               })}
@@ -425,6 +552,8 @@ export function RoomLobbyScreen() {
                   onClick={() => {
                     setCreateError("")
                     setCreateName("Мой стол")
+                    setCreateBottleSkin(DEFAULT_ROOM_BOTTLE_SKIN)
+                    setCreateTableStyle(DEFAULT_ROOM_TABLE_STYLE)
                     setCreateOpen(true)
                   }}
                   className={cn(
@@ -490,6 +619,57 @@ export function RoomLobbyScreen() {
               maxLength={64}
               className="border-slate-600 bg-slate-900"
             />
+            <div className="mt-2 space-y-2">
+              <p className="text-sm text-slate-300">Бутылочка стола</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {CREATE_BOTTLE_OPTIONS.map((opt) => {
+                  const selected = createBottleSkin === opt.id
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setCreateBottleSkin(opt.id)}
+                      className={cn(
+                        "flex items-center gap-2 rounded-xl border px-2 py-2 text-left text-xs transition",
+                        selected
+                          ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
+                          : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500",
+                      )}
+                    >
+                      <img src={opt.img} alt={opt.name} className="h-8 w-8 object-contain" loading="lazy" />
+                      <span className="truncate">{opt.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="mt-2 space-y-2">
+              <p className="text-sm text-slate-300">Стилистика стола</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {ROOM_TABLE_STYLE_OPTIONS.map((opt) => {
+                  const selected = createTableStyle === opt.id
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setCreateTableStyle(opt.id)}
+                      className={cn(
+                        "rounded-xl border p-2 text-left text-xs transition",
+                        selected
+                          ? "border-cyan-300 bg-cyan-500/15 text-cyan-100"
+                          : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500",
+                      )}
+                    >
+                      <span
+                        className="mb-1.5 block h-6 rounded-md border border-white/20"
+                        style={{ background: TABLE_STYLE_PREVIEW[opt.id] }}
+                      />
+                      {opt.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">

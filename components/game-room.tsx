@@ -424,6 +424,15 @@ const MOBILE_EMOTION_STRIP_BTN =
 
 
 const GAME_ROOM_DUST_SEED = 0x51ab1e
+const TABLE_STYLE_BACKGROUNDS: Record<
+  "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream",
+  string
+> = {
+  classic_night: "linear-gradient(180deg, rgba(3,8,18,0.72) 0%, rgba(15,23,42,0.52) 40%, rgba(2,6,23,0.72) 100%)",
+  sunset_lounge: "linear-gradient(180deg, rgba(120,53,15,0.52) 0%, rgba(190,24,93,0.40) 40%, rgba(30,41,59,0.70) 100%)",
+  ocean_breeze: "linear-gradient(180deg, rgba(8,145,178,0.45) 0%, rgba(29,78,216,0.35) 45%, rgba(15,23,42,0.72) 100%)",
+  violet_dream: "linear-gradient(180deg, rgba(91,33,182,0.50) 0%, rgba(147,51,234,0.36) 44%, rgba(15,23,42,0.72) 100%)",
+}
 
 export function GameRoom() {
   const { state } = useGame()
@@ -438,6 +447,7 @@ export function GameRoom() {
     countdown,
     bottleAngle,
     bottleSkin,
+    tableStyle,
     ownedBottleSkins,
     bottleCooldownUntil,
     targetPlayer,
@@ -2441,8 +2451,10 @@ export function GameRoom() {
   /* ================================================================ */
   /*  RENDER                                                          */
   /* ================================================================ */
+  const tableStyleOverlay = TABLE_STYLE_BACKGROUNDS[tableStyle ?? "classic_night"]
   return (
     <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
+      <div className="pointer-events-none absolute inset-0 z-0" style={{ background: tableStyleOverlay }} />
       {toast && <InlineToast toast={toast} />}
       {currentUser ? <RoomChannelChat tableId={tableId} currentUser={currentUser} /> : null}
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />

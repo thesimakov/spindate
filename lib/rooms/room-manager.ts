@@ -5,6 +5,12 @@ import { ensureTableAuthority, getTableAuthoritySnapshot } from "@/lib/table-aut
 import { loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
 import type { LobbyRoomRow, RoomStatePayload } from "@/lib/rooms/types"
+import {
+  DEFAULT_ROOM_BOTTLE_SKIN,
+  DEFAULT_ROOM_TABLE_STYLE,
+  normalizeRoomBottleSkin,
+  normalizeRoomTableStyle,
+} from "@/lib/rooms/room-appearance"
 import { QueueManager } from "@/lib/rooms/queue-manager"
 import { ROOM_MAX_PLAYERS } from "@/lib/rooms/bot-manager"
 
@@ -29,6 +35,8 @@ export class RoomManager {
       rows.push({
         roomId: m.roomId,
         name: roomNameForDisplay(m.name, m.roomId),
+        bottleSkin: normalizeRoomBottleSkin(m.bottleSkin ?? DEFAULT_ROOM_BOTTLE_SKIN),
+        tableStyle: normalizeRoomTableStyle(m.tableStyle ?? DEFAULT_ROOM_TABLE_STYLE),
         livePlayerCount: n,
         maxPlayers: ROOM_MAX_PLAYERS,
       })

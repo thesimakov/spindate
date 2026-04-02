@@ -98,6 +98,8 @@ export interface TableAuthorityPayload {
   bottleAngle: number
   /** Скин бутылки на столе — общий для всех игроков за столом */
   bottleSkin?: BottleSkin
+  /** Визуальная стилистика стола (общая для всей комнаты). */
+  tableStyle?: TableStyle
   /** Кто последним купил бутылочку для стола (баннер «Спасибо») */
   bottleDonorId?: number
   bottleDonorName?: string
@@ -141,6 +143,8 @@ export type BottleSkin =
   | "frame_79"
   | "frame_80"
   | "fortune_wheel"
+
+export type TableStyle = "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream"
 
 /* ---- Prediction system ---- */
 export interface Prediction {
@@ -238,6 +242,7 @@ export interface GameState {
   countdown: number | null
   bottleAngle: number
   bottleSkin?: BottleSkin
+  tableStyle?: TableStyle
   targetPlayer: Player | null
   targetPlayer2: Player | null  // second target (bottle bottom)
   showResult: boolean
@@ -337,7 +342,14 @@ export type GameAction =
   | { type: "ADD_DRUNK_TIME"; playerId: number; ms: number }
   | { type: "SET_PLAYERS"; players: Player[] }
   | { type: "SET_TABLE_ID"; tableId: number }
-  | { type: "SET_TABLE"; players: Player[]; tableId: number; roomCreatorPlayerId?: number | null }
+  | {
+      type: "SET_TABLE"
+      players: Player[]
+      tableId: number
+      roomCreatorPlayerId?: number | null
+      bottleSkin?: BottleSkin
+      tableStyle?: TableStyle
+    }
   | { type: "SET_TABLES_COUNT"; tablesCount: number }
   | { type: "START_COUNTDOWN" }
   | { type: "TICK_COUNTDOWN" }

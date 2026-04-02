@@ -82,11 +82,21 @@ export async function GET(req: Request) {
     }
     for (const [key, live] of liveByUserKey.entries()) {
       if (knownKeys.has(key)) continue
+      const vkFromKey = key.startsWith("vk:") ? Number(key.slice(3)) : null
+      const linkedDbUser =
+        vkFromKey != null && Number.isFinite(vkFromKey)
+          ? (db
+              .prepare(`SELECT id, username FROM users WHERE vk_user_id = ? LIMIT 1`)
+              .get(vkFromKey) as { id: string; username: string } | undefined)
+          : undefined
+      const resolvedUserId = linkedDbUser?.id ?? `live:${key}`
+      const resolvedFlags = linkedDbUser?.id ? getAdminFlagsForUserId(linkedDbUser.id) : null
       out.push({
-        userId: `live:${key}`, // синтетический id, только для отображения
-        isDbUser: false,
-        username: "—",
-        vkUserId: key.startsWith("vk:") ? Number(key.slice(3)) : undefined,
+        userId: resolvedUserId,
+        // Если user в live присутствии появился раньше, чем в выборке rows, но в users уже есть запись — модерировать можно.
+        isDbUser: Boolean(linkedDbUser),
+        username: linkedDbUser?.username ?? "—",
+        vkUserId: vkFromKey ?? undefined,
         displayName: (() => {
           const pid = live.playerId
           const pres = state.playersById.get(pid as any)
@@ -97,7 +107,7 @@ export async function GET(req: Request) {
         age: undefined,
         purpose: undefined,
         voiceBalance: 0,
-        flags: null,
+        flags: resolvedFlags,
         live,
       })
     }

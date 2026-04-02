@@ -5,7 +5,11 @@ import { getPairGenderCombo } from "@/lib/pair-utils"
 /**
  * Начальное состояние стола (аналог SET_TABLE в gameReducer), без currentUser-зависимых текстов.
  */
-export function buildInitialAuthoritySnapshot(players: Player[], tableId: number): TableAuthorityPayload {
+export function buildInitialAuthoritySnapshot(
+  players: Player[],
+  tableId: number,
+  options?: { bottleSkin?: TableAuthorityPayload["bottleSkin"]; tableStyle?: TableAuthorityPayload["tableStyle"] },
+): TableAuthorityPayload {
   const now = Date.now()
   const nextPlayers = players
   const spinnerIdx = nextPlayers.length > 0 ? Math.floor(Math.random() * nextPlayers.length) : 0
@@ -87,7 +91,8 @@ export function buildInitialAuthoritySnapshot(players: Player[], tableId: number
     spinStartedAtMs: null,
     countdown: null,
     bottleAngle,
-    bottleSkin: "classic",
+    bottleSkin: options?.bottleSkin ?? "classic",
+    tableStyle: options?.tableStyle ?? "classic_night",
     targetPlayer,
     targetPlayer2,
     showResult,

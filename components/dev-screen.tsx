@@ -157,6 +157,7 @@ export function DevScreen() {
     action: string,
   ) => {
     if (busyUserId != null) return
+    setServerError("")
     const ok =
       typeof window === "undefined"
         ? true
@@ -166,7 +167,7 @@ export function DevScreen() {
     if (!ok) return
     try {
       setBusyUserId(u.userId)
-      await apiFetch("/api/admin/user", {
+      const res = await apiFetch("/api/admin/user", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Admin-Token": getAdminToken() },
         cache: "no-store",
@@ -178,8 +179,14 @@ export function DevScreen() {
           action,
         }),
       })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok) {
+        setServerError(
+          `Действие не выполнено: ${res.status} ${(data?.error as string) ?? "unknown_error"}`.trim(),
+        )
+      }
     } catch {
-      // ignore
+      setServerError("Ошибка сети при выполнении действия модерации")
     } finally {
       setBusyUserId(null)
       await refresh()
