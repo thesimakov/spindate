@@ -32,6 +32,16 @@ export const BOTTLE_CATALOG_SKINS: BottleCatalogSkinRow[] = [
   { id: "fortune_wheel", name: "Колесо фортуны", img: "", cost: 300 },
 ]
 
+/**
+ * Временная модерация: алкогольные скины скрыты из каталога.
+ * Вернуть после модерации: удалить id из этого Set.
+ */
+export const TEMP_HIDDEN_BOTTLE_SKINS = new Set<BottleSkin>(["neon", "frost"])
+
+export const VISIBLE_BOTTLE_CATALOG_SKINS: BottleCatalogSkinRow[] = BOTTLE_CATALOG_SKINS.filter(
+  (row) => !TEMP_HIDDEN_BOTTLE_SKINS.has(row.id),
+)
+
 export function getBottleCatalogCost(id: BottleSkin): number {
   return BOTTLE_CATALOG_SKINS.find((r) => r.id === id)?.cost ?? 0
 }

@@ -9,7 +9,7 @@ import {
   type PointerEvent,
 } from "react"
 import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
-import { BOTTLE_CATALOG_SKINS } from "@/lib/bottle-catalog"
+import { VISIBLE_BOTTLE_CATALOG_SKINS } from "@/lib/bottle-catalog"
 import { generateLogId } from "@/lib/game-context"
 import type { BottleSkin, GameAction, Player } from "@/lib/game-types"
 import { cn } from "@/lib/utils"
@@ -80,7 +80,7 @@ export function BottleCatalogModal({
   const isPremiumFortuneId = (id: BottleSkin) => id === "fortune_wheel"
 
   const entries = useMemo(() => {
-    return BOTTLE_CATALOG_SKINS.map((skin) => {
+    return VISIBLE_BOTTLE_CATALOG_SKINS.map((skin) => {
       const owned = ownedSet.has(skin.id)
       const selected = bottleSkin === skin.id
       const cooldownActive = cooldownLeftMs > 0
