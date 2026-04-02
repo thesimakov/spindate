@@ -14,6 +14,7 @@ export function useBankPassive(
   enabled = true,
 ) {
   const lastMsRef = useRef(0)
+  const prevEnabledRef = useRef(enabled)
   const [tick, setTick] = useState(0)
   const onGrantRef = useRef(onGrantBurst)
   onGrantRef.current = onGrantBurst
@@ -21,24 +22,22 @@ export function useBankPassive(
   useLayoutEffect(() => {
     if (userId == null) {
       lastMsRef.current = 0
+      prevEnabledRef.current = enabled
       return
     }
     const key = `${STORAGE_KEY_PREFIX}${userId}`
-    let last = Date.now()
+    // На любом новом входе пользователя стартуем таймер "сейчас",
+    // чтобы никогда не было догоняющих начислений за прошлые сессии/паузы.
+    const now = Date.now()
+    lastMsRef.current = now
+    prevEnabledRef.current = enabled
     try {
-      const raw = localStorage.getItem(key)
-      if (raw) {
-        const j = JSON.parse(raw) as { lastTickMs?: number }
-        if (typeof j.lastTickMs === "number" && j.lastTickMs > 0) last = j.lastTickMs
-      } else {
-        localStorage.setItem(key, JSON.stringify({ lastTickMs: last }))
-      }
+      localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
     } catch {
-      last = Date.now()
+      // ignore
     }
-    lastMsRef.current = last
     setTick((t) => t + 1)
-  }, [userId])
+  }, [userId, enabled])
 
   useEffect(() => {
     if (userId == null) return
@@ -48,6 +47,7 @@ export function useBankPassive(
     if (!enabled) {
       const now = Date.now()
       lastMsRef.current = now
+      prevEnabledRef.current = false
       try {
         localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
       } catch {
@@ -56,26 +56,31 @@ export function useBankPassive(
       setTick((t) => t + 1)
       return
     }
+    // При возврате с паузы/away стартуем новый цикл "сейчас",
+    // чтобы не докидывать сердца за время отсутствия.
+    if (prevEnabledRef.current === false) {
+      const now = Date.now()
+      lastMsRef.current = now
+      try {
+        localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
+      } catch {
+        // ignore
+      }
+    }
+    prevEnabledRef.current = true
 
     const id = window.setInterval(() => {
       const now = Date.now()
-      let last = lastMsRef.current
-      let n = 0
-      while (now - last >= INTERVAL_MS) {
-        last += INTERVAL_MS
-        n++
-      }
-      if (n > 0) {
-        lastMsRef.current = last
+      // Без catch-up: максимум одно начисление за тик, даже если вкладка была заморожена.
+      if (now - lastMsRef.current >= INTERVAL_MS) {
+        lastMsRef.current = now
         try {
-          localStorage.setItem(key, JSON.stringify({ lastTickMs: last }))
+          localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
         } catch {
           // ignore
         }
-        dispatch({ type: "PAY_VOICES", amount: -AMOUNT_PER_TICK * n })
-        for (let i = 0; i < n; i++) {
-          window.setTimeout(() => onGrantRef.current(), i * 400)
-        }
+        dispatch({ type: "PAY_VOICES", amount: -AMOUNT_PER_TICK })
+        onGrantRef.current()
       }
       setTick((t) => t + 1)
     }, 1000)
