@@ -972,14 +972,13 @@ export function GameRoom() {
   }, [roundNumber])
 
   const handleSpin = useCallback(() => {
-    // Живой игрок управляет своим ходом; для ботов — только водитель (min id).
-    const canSpin = currentTurnPlayer?.isBot ? isRoundDriver : isMyTurn
-    if (!canSpin) return
+    // Раунд запускает только один клиент-ведущий, чтобы не было гонки событий.
+    if (!isRoundDriver) return
     if (!CASUAL_MODE) {
       dispatch({ type: "END_PREDICTION_PHASE" })
     }
     dispatch({ type: "START_COUNTDOWN" })
-  }, [dispatch, isRoundDriver, isMyTurn, currentTurnPlayer?.isBot])
+  }, [dispatch, isRoundDriver])
 
   const {
     turnTimer,
@@ -1062,9 +1061,7 @@ export function GameRoom() {
   /* ---- countdown tick ---- */
   useEffect(() => {
     if (tableLoading) return
-    // Живой игрок тикает свой отсчёт; для ботов — водитель.
-    const shouldTick = currentTurnPlayer?.isBot ? isRoundDriver : isMyTurn
-    if (!shouldTick) return
+    if (!isRoundDriver) return
     if (countdown === null || countdown <= 0) return
     const timer = setTimeout(() => {
       if (countdown > 1) {
@@ -1076,7 +1073,7 @@ export function GameRoom() {
     }, 800)
     return () => clearTimeout(timer)
      
-  }, [countdown, dispatch, tableLoading, isRoundDriver, isMyTurn, currentTurnPlayer?.isBot])
+  }, [countdown, dispatch, tableLoading, isRoundDriver])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
   const playEmotionSound = useCallback((actionId: string) => {
@@ -1214,7 +1211,7 @@ export function GameRoom() {
       song: "\uD83C\uDFB5",
       rose: "\uD83C\uDF39",
     }
-    const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya", "cocktail", "beer"])
+    const EMOTION_TYPES = new Set([...Object.keys(EMOTION_EMOJI_MAP), "banya", "cocktail"])
 
     type QueuedEmotion = {
       fromIdx: number
@@ -1276,35 +1273,35 @@ export function GameRoom() {
       }
     }
 
-    // Stagger animations; keep old timers running to avoid losing
-    // queued animations when the effect re-fires on the next poll cycle.
+    // Stagger animations so multiple emotions don't overlap into one blob
     const STAGGER_MS = 350
-    if (queue.length > 0) {
-      queue.forEach((item, i) => {
-        const t = setTimeout(() => {
-          if (item.thanksTriple) {
-            for (let j = 0; j < 3; j++) {
-              setTimeout(
-                () =>
-                  launchEmoji(
-                    item.fromIdx,
-                    item.toIdx,
-                    item.emoji,
-                    item.imgSrc,
-                    item.thanksCloud === true,
-                  ),
-                j * 120,
-              )
-            }
-          } else {
-            launchEmoji(item.fromIdx, item.toIdx, item.emoji, item.imgSrc)
-            if (item.type === "banya") launchSteam(item.toIdx)
-            playEmotionSound(item.type)
+    for (const prev of remoteEmotionTimersRef.current) clearTimeout(prev)
+    remoteEmotionTimersRef.current = []
+
+    queue.forEach((item, i) => {
+      const t = setTimeout(() => {
+        if (item.thanksTriple) {
+          for (let j = 0; j < 3; j++) {
+            setTimeout(
+              () =>
+                launchEmoji(
+                  item.fromIdx,
+                  item.toIdx,
+                  item.emoji,
+                  item.imgSrc,
+                  item.thanksCloud === true,
+                ),
+              j * 120,
+            )
           }
-        }, i * STAGGER_MS)
-        remoteEmotionTimersRef.current.push(t)
-      })
-    }
+        } else {
+          launchEmoji(item.fromIdx, item.toIdx, item.emoji, item.imgSrc)
+          if (item.type === "banya") launchSteam(item.toIdx)
+          playEmotionSound(item.type)
+        }
+      }, i * STAGGER_MS)
+      remoteEmotionTimersRef.current.push(t)
+    })
 
     if (seen.size > 500) {
       const ids = Array.from(seen)
@@ -3468,7 +3465,6 @@ export function GameRoom() {
           players={players}
           ownedBottleSkins={ownedBottleSkins}
           bottleSkin={bottleSkin}
-          effectiveBottleSkin={effectiveBottleSkin}
           voiceBalance={voiceBalance}
           bottleCooldownUntil={bottleCooldownUntil}
           currentUser={currentUser}
@@ -3821,13 +3817,7 @@ export function GameRoom() {
           {players.map((player, i) => {
             const pos = positions[i]
             const playerFrameId = avatarFrames?.[player.id]
-            const playerFrameMeta = playerFrameId
-              ? frameMetaById.get(playerFrameId)
-                ?? (() => {
-                  const row = frameCatalogRows.find((r) => r.id === playerFrameId)
-                  return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
-                })()
-              : undefined
+            const playerFrameMeta = playerFrameId ? frameMetaById.get(playerFrameId) : undefined
             const isAvatarMenuOpen = sidebarTargetPlayer?.id === player.id
             const isClickableForPrediction =
               predictionPhase && !predictionMade && !isSpinning && !showResult &&
@@ -4258,11 +4248,9 @@ export function GameRoom() {
             )}
           </div>
         </div>
-        </div>
 
-        {/* Тикер и чат вне flex-1 justify-center — стол центрируется в оставшейся высоте */}
         <div
-          className="sticky bottom-0 z-40 mx-auto w-full shrink-0 px-1 pb-1"
+          className="mx-auto mt-2 mb-1 w-full shrink-0 px-1"
           style={
             isMobile
               ? {
@@ -4290,6 +4278,8 @@ export function GameRoom() {
             className="w-full max-w-[min(95vw,720px)] mx-auto mt-2 mb-1 shrink-0 max-h-[min(38vh,320px)] min-h-[140px]"
           />
         )}
+
+        </div>
 
       </div>
 
@@ -4889,10 +4879,6 @@ export function GameRoom() {
                   {(() => {
                     const menuFrameId = avatarFrames?.[playerMenuTarget.id] || "none"
                     const menuFrameMeta = frameMetaById.get(menuFrameId)
-                      ?? (() => {
-                        const row = frameCatalogRows.find((r) => r.id === menuFrameId)
-                        return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
-                      })()
                     return (
                   <PlayerAvatar
                     player={playerMenuTarget}
