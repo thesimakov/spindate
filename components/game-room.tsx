@@ -3465,6 +3465,7 @@ export function GameRoom() {
           players={players}
           ownedBottleSkins={ownedBottleSkins}
           bottleSkin={bottleSkin}
+          effectiveBottleSkin={effectiveBottleSkin}
           voiceBalance={voiceBalance}
           bottleCooldownUntil={bottleCooldownUntil}
           currentUser={currentUser}
