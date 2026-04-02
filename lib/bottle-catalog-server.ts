@@ -107,3 +107,20 @@ export function updateBottleCatalogEntry(input: {
   ).run(nextName, nextImg, nextSection, nextCost, nextPublished, nextDeleted, now, safeId)
 }
 
+export function deleteBottleCatalogEntry(id: string): { removedImagePath: string | null } {
+  if (typeof id !== "string" || !id.trim()) throw new Error("bad_bottle_id")
+  const safeId = id.trim()
+  const db = getDb()
+  const existing = db
+    .prepare(`SELECT id, img FROM bottle_catalog WHERE id = ? LIMIT 1`)
+    .get(safeId) as { id: string; img: string } | undefined
+  if (!existing) return { removedImagePath: null }
+  db.prepare(`DELETE FROM bottle_catalog WHERE id = ?`).run(safeId)
+  const pathTrimmed = typeof existing.img === "string" ? existing.img.trim() : ""
+  if (!pathTrimmed) return { removedImagePath: null }
+  const stillUsed = db
+    .prepare(`SELECT 1 FROM bottle_catalog WHERE img = ? LIMIT 1`)
+    .get(pathTrimmed) as { 1: number } | undefined
+  return { removedImagePath: stillUsed ? null : pathTrimmed }
+}
+

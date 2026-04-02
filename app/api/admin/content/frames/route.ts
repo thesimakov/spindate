@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/admin-auth"
-import { listFrameCatalogRows, updateFrameCatalogEntry } from "@/lib/frame-catalog-server"
+import { removeAdminUploadedAssetIfExists } from "@/lib/admin-upload-cleanup"
+import { deleteFrameCatalogEntry, listFrameCatalogRows, updateFrameCatalogEntry } from "@/lib/frame-catalog-server"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +28,12 @@ export async function POST(req: Request) {
     if (!id) {
       return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400, headers: NO_CACHE })
     }
+    if (body?.deleted === true) {
+      const { removedAssetPath } = deleteFrameCatalogEntry(id)
+      if (removedAssetPath) await removeAdminUploadedAssetIfExists(removedAssetPath)
+      const rows = listFrameCatalogRows({ includeDeleted: true })
+      return NextResponse.json({ ok: true, rows }, { headers: NO_CACHE })
+    }
     updateFrameCatalogEntry({
       id,
       section: body?.section === "free" || body?.section === "paid" || body?.section === "vip" ? body.section : undefined,
@@ -37,7 +44,6 @@ export async function POST(req: Request) {
       svgPath: typeof body?.svgPath === "string" ? body.svgPath : undefined,
       cost: typeof body?.cost === "number" ? body.cost : undefined,
       published: typeof body?.published === "boolean" ? body.published : undefined,
-      deleted: typeof body?.deleted === "boolean" ? body.deleted : undefined,
     })
     const rows = listFrameCatalogRows({ includeDeleted: true })
     return NextResponse.json({ ok: true, rows }, { headers: NO_CACHE })

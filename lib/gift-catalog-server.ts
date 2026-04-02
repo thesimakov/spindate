@@ -93,3 +93,10 @@ export function updateGiftCatalogEntry(input: {
      WHERE id = ?`,
   ).run(nextSection, nextName, nextEmoji, nextCost, nextPublished, nextDeleted, now, safeId)
 }
+
+export function deleteGiftCatalogEntry(id: string) {
+  if (typeof id !== "string" || !id.trim()) throw new Error("bad_gift_id")
+  const safeId = id.trim()
+  const db = getDb()
+  db.prepare(`DELETE FROM gift_catalog WHERE id = ?`).run(safeId)
+}

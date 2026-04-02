@@ -462,10 +462,10 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
                 <button
                   type="button"
                   disabled={busyId === row.id}
-                  onClick={() => void postUpdate(row.id, { deleted: !row.deleted })}
+                  onClick={() => void postUpdate(row.id, { deleted: true })}
                   className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 px-2.5 py-1.5 text-xs font-medium text-fuchsia-100 hover:bg-fuchsia-500/25 disabled:opacity-50"
                 >
-                  {row.deleted ? "Восстановить" : "Удалить"}
+                  Удалить
                 </button>
               </div>
             </article>

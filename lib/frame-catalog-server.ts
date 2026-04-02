@@ -127,3 +127,20 @@ export function updateFrameCatalogEntry(input: {
     safeId,
   )
 }
+
+export function deleteFrameCatalogEntry(id: string): { removedAssetPath: string | null } {
+  if (typeof id !== "string" || !id.trim()) throw new Error("bad_frame_id")
+  const safeId = id.trim()
+  const db = getDb()
+  const existing = db
+    .prepare(`SELECT id, svg_path FROM frame_catalog WHERE id = ? LIMIT 1`)
+    .get(safeId) as { id: string; svg_path: string } | undefined
+  if (!existing) return { removedAssetPath: null }
+  db.prepare(`DELETE FROM frame_catalog WHERE id = ?`).run(safeId)
+  const pathTrimmed = typeof existing.svg_path === "string" ? existing.svg_path.trim() : ""
+  if (!pathTrimmed) return { removedAssetPath: null }
+  const stillUsed = db
+    .prepare(`SELECT 1 FROM frame_catalog WHERE svg_path = ? LIMIT 1`)
+    .get(pathTrimmed) as { 1: number } | undefined
+  return { removedAssetPath: stillUsed ? null : pathTrimmed }
+}
