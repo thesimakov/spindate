@@ -9,7 +9,7 @@ export interface DailyStreakBonusDialogProps {
   onOpenChange: (open: boolean) => void
   /** Текущий день серии 1–8. */
   streakDay: number
-  onClaim: () => void
+  onClaim: () => void | Promise<void>
 }
 
 /** Акценты: фиолет + бирюза (без оранжевого) */
@@ -158,8 +158,7 @@ export function DailyStreakBonusDialog({ open, onOpenChange, streakDay, onClaim 
             <button
               type="button"
               onClick={() => {
-                onClaim()
-                onOpenChange(false)
+                void Promise.resolve(onClaim()).finally(() => onOpenChange(false))
               }}
               className={`mt-5 w-full rounded-full border-2 border-violet-400/85 bg-gradient-to-b ${acc.grad} py-3.5 text-center text-base font-extrabold text-white shadow-[0_6px_0_#4c1d95,0_16px_36px_rgba(139,92,246,0.38),inset_0_2px_0_rgba(255,255,255,0.4)] [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition hover:brightness-[1.06] active:translate-y-1 active:shadow-[0_3px_0_#4c1d95,0_10px_24px_rgba(139,92,246,0.35)]`}
             >

@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db"
 import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
 import { createUserRoomPaid, getCreateRoomCost } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
+import { getBottleCatalogCost } from "@/lib/bottle-catalog"
 
 export const dynamic = "force-dynamic"
 
@@ -48,6 +49,8 @@ export async function POST(req: Request) {
     const db = getDb()
     const now = Date.now()
     const COST_HEARTS = await getCreateRoomCost()
+    const bottlePremiumHearts = getBottleCatalogCost(bottleSkin)
+    const TOTAL_HEARTS = COST_HEARTS + bottlePremiumHearts
 
     const existing = userId
       ? (db
@@ -58,17 +61,20 @@ export async function POST(req: Request) {
           .get(vkUserId) as { voice_balance: number; inventory_json: string } | undefined)
 
     const balance = existing?.voice_balance ?? 0
-    if (balance < COST_HEARTS) {
+    if (balance < TOTAL_HEARTS) {
       return NextResponse.json(
         {
           ok: false,
-          error: `На сервере ${balance} ❤, нужно ${COST_HEARTS}. Откройте игру и дождитесь сохранения баланса.`,
+          error:
+            bottlePremiumHearts > 0
+              ? `На сервере ${balance} ❤, нужно ${TOTAL_HEARTS} ❤ (${COST_HEARTS} за стол + ${bottlePremiumHearts} за скин). Откройте игру и дождитесь сохранения баланса.`
+              : `На сервере ${balance} ❤, нужно ${TOTAL_HEARTS} ❤. Откройте игру и дождитесь сохранения баланса.`,
         },
         { status: 400, headers: NO_CACHE },
       )
     }
 
-    const nextBalance = balance - COST_HEARTS
+    const nextBalance = balance - TOTAL_HEARTS
     const createdById = userId ? hashUserIdToPositiveNumber(userId) : vkUserId!
     const invJson = existing?.inventory_json ?? "[]"
 
@@ -95,7 +101,14 @@ export async function POST(req: Request) {
     try {
       const room = await createUserRoomPaid(name, createdById, { bottleSkin, tableStyle })
       return NextResponse.json(
-        { ok: true, room, voiceBalance: nextBalance, cost: COST_HEARTS },
+        {
+          ok: true,
+          room,
+          voiceBalance: nextBalance,
+          cost: TOTAL_HEARTS,
+          createRoomCost: COST_HEARTS,
+          bottlePremiumHearts,
+        },
         { headers: NO_CACHE },
       )
     } catch (roomErr) {

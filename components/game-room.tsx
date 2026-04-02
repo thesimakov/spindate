@@ -61,11 +61,9 @@ import { useSyncEngine } from "@/hooks/use-sync-engine"
 import { useGameTimers } from "@/hooks/use-game-timers"
 import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
-import { RoomChannelChat } from "@/components/room-channel-chat"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
-import { SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON } from "@/lib/side-menu-flags"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -690,7 +688,6 @@ export function GameRoom() {
   const [showBottleCatalog, setShowBottleCatalog] = useState(false)
   const [showFramePicker, setShowFramePicker] = useState(false)
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
-  const [showChatListModal, setShowChatListModal] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false)
@@ -1877,7 +1874,6 @@ export function GameRoom() {
         timestamp: Date.now(),
       },
     })
-    dispatch({ type: "OPEN_CHAT", player: tp })
     showToast("Приглашение отправлено", "success")
   }
 
@@ -2457,7 +2453,6 @@ export function GameRoom() {
     <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
       <div className="pointer-events-none absolute inset-0 z-0" style={{ background: tableStyleOverlay }} />
       {toast && <InlineToast toast={toast} />}
-      {currentUser ? <RoomChannelChat tableId={tableId} currentUser={currentUser} /> : null}
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
 
       <TableLoaderOverlay
@@ -3345,23 +3340,6 @@ export function GameRoom() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON && (
-            <div className="lg:hidden w-full">
-              <button
-                onClick={() => setShowChatListModal(true)}
-                className={`${sideBtnClass} w-full justify-start`}
-                style={{
-                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-                }}
-              >
-                <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-                <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
-              </button>
-            </div>
-          )}
-
           {/* Текущий стол + счётчик */}
           <div
             className={
@@ -3401,76 +3379,6 @@ export function GameRoom() {
           onBuyTickets={handleBuyWheelTickets}
         />
       )}
-      {/* Модалка: выбор собеседника для приватного чата */}
-      {showChatListModal && currentUser && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
-          onClick={() => setShowChatListModal(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
-            style={{
-              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
-              border: "2px solid rgba(251, 191, 36, 0.25)",
-              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "rgba(71, 85, 105, 0.5)" }}>
-              <div className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5" style={{ color: "#fcd34d" }} />
-                <span className="font-bold text-slate-100">Сообщения</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowChatListModal(false)}
-                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-600/50 hover:text-slate-200"
-                aria-label="Закрыть"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="px-4 pt-2 pb-1 text-xs text-slate-400">Выберите, кому написать</p>
-            <div className="max-h-72 overflow-y-auto px-2 pb-3">
-              {players
-                .filter((p) => p.id !== currentUser.id)
-                .map((player) => {
-                  const msgCount = (state.chatMessages[player.id] ?? []).length
-                  return (
-                    <button
-                      key={player.id}
-                      type="button"
-                      onClick={() => {
-                        dispatch({ type: "OPEN_CHAT", player })
-                        setShowChatListModal(false)
-                      }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-600/50"
-                    >
-                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-slate-500">
-                        <img src={player.avatar} alt="" className="h-full w-full object-cover" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-100">{player.name}</p>
-                        <p className="text-xs text-slate-400">
-                          {player.gender === "female" ? "Ж" : "М"}, {player.age} лет
-                          {msgCount > 0 && ` · ${msgCount} сообщ.`}
-                        </p>
-                      </div>
-                      <span className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium" style={{ background: "rgba(251, 191, 36, 0.2)", color: "#fcd34d" }}>
-                        Написать
-                      </span>
-                    </button>
-                  )
-                })}
-              {players.filter((p) => p.id !== currentUser.id).length === 0 && (
-                <p className="py-6 text-center text-sm text-slate-400">Нет других игроков за столом</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {showBottleCatalog && (
         <BottleCatalogModal
           onClose={() => setShowBottleCatalog(false)}
@@ -4274,7 +4182,7 @@ export function GameRoom() {
 
       </div>
 
-      {/* ---- RIGHT PANEL: на ПК — ~20% ширины (инфо + чат); на планшете — прежняя колонка ---- */}
+      {/* ---- RIGHT PANEL: резиновая ширина (чем шире экран, тем шире чат) ---- */}
       <div
         className={cn(
           "relative z-20 flex min-h-0 flex-row border-l border-cyan-400/20 bg-gradient-to-b from-slate-900/55 to-slate-950/65",
@@ -4282,10 +4190,10 @@ export function GameRoom() {
           isPcLayout
             ? chatPanelCollapsed
               ? "w-auto shrink-0 flex-none"
-              : "flex min-h-0 min-w-0 flex-1 basis-0"
+              : "w-[clamp(200px,24vw,560px)] shrink-0 flex-none"
             : chatPanelCollapsed
               ? "w-auto shrink-0 flex-none"
-              : "w-[264px] shrink-0 flex-none",
+              : "w-[clamp(200px,30vw,380px)] shrink-0 flex-none",
         )}
       >
         {chatPanelCollapsed ? (
@@ -4547,15 +4455,6 @@ export function GameRoom() {
                 >
                   <span aria-hidden>💕</span>
                   Угадай-ка
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowChatListModal(true); setShowMobileMoreMenu(false) }}
-                  className="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-medium transition-colors hover:bg-white/10"
-                  style={{ color: "#f0e0c8" }}
-                >
-                  <MessageCircle className="h-4 w-4 shrink-0" />
-                  Сообщения
                 </button>
                 {currentUser && (
                   <button

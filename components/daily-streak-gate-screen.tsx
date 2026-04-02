@@ -5,6 +5,8 @@ import { useGame, generateLogId } from "@/lib/game-context"
 import { DailyStreakBonusDialog } from "@/components/daily-streak-bonus-dialog"
 import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
 import { AppLoader } from "@/components/app-loader"
+import { persistUserGameState } from "@/lib/persist-user-game-state"
+import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 
 const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
 
@@ -15,6 +17,7 @@ export function DailyStreakGateScreen() {
   const { state, dispatch } = useGame()
   const currentUser = state.currentUser
   const voiceBalance = state.voiceBalance ?? 0
+  const inventory = state.inventory
 
   const [hydrated, setHydrated] = useState(false)
   /** Сдвиг после записи welcome в LS — чтобы welcomeComplete пересчитался (логин +150 ❤). */
@@ -121,11 +124,17 @@ export function DailyStreakGateScreen() {
     }
   }, [hydrated, dailyClaimedToday, showWelcomeGift, welcomeComplete, goLobby])
 
-  const handleClaimStreakBonus = useCallback(() => {
+  const handleClaimStreakBonus = useCallback(async () => {
     if (dailyClaimedToday || !currentUser) return
     const spec = getDailyStreakReward(dailyDay)
     if (!spec) return
+
+    const vb = voiceBalance
+    let nextVoice = vb
+    let nextInventory: InventoryItem[] = inventory
+
     if (spec.kind === "hearts") {
+      nextVoice = vb + spec.amount
       dispatch({ type: "PAY_VOICES", amount: -spec.amount })
       dispatch({
         type: "ADD_LOG",
@@ -135,20 +144,19 @@ export function DailyStreakGateScreen() {
           fromPlayer: currentUser,
           text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} сердец`,
           timestamp: Date.now(),
-        },
+        } satisfies GameLogEntry,
       })
     } else if (spec.kind === "roses") {
       const base = Date.now()
-      for (let i = 0; i < spec.amount; i++) {
-        dispatch({
-          type: "ADD_INVENTORY_ITEM",
-          item: {
-            type: "rose",
-            fromPlayerId: 0,
-            fromPlayerName: "Ежедневный бонус",
-            timestamp: base + i,
-          },
-        })
+      const newRoses: InventoryItem[] = Array.from({ length: spec.amount }, (_, i) => ({
+        type: "rose" as const,
+        fromPlayerId: 0,
+        fromPlayerName: "Ежедневный бонус",
+        timestamp: base + i,
+      }))
+      nextInventory = [...inventory, ...newRoses]
+      for (const item of newRoses) {
+        dispatch({ type: "ADD_INVENTORY_ITEM", item })
       }
       dispatch({
         type: "ADD_LOG",
@@ -158,7 +166,7 @@ export function DailyStreakGateScreen() {
           fromPlayer: currentUser,
           text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} роз`,
           timestamp: Date.now(),
-        },
+        } satisfies GameLogEntry,
       })
     } else {
       dispatch({
@@ -169,9 +177,10 @@ export function DailyStreakGateScreen() {
           fromPlayer: currentUser,
           text: `${currentUser.name} получил(а) ежедневный бонус: супер-рамка (награда будет начислена позже)`,
           timestamp: Date.now(),
-        },
+        } satisfies GameLogEntry,
       })
     }
+
     try {
       const raw = localStorage.getItem(WELCOME_GIFT_KEY)
       const stored = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
@@ -190,11 +199,23 @@ export function DailyStreakGateScreen() {
     } catch {
       // ignore
     }
+
+    await persistUserGameState(currentUser, nextVoice, nextInventory)
+
     setDailyClaimedToday(true)
     setShowWelcomeGift(false)
     setWelcomeClaimedForSession(true)
     goLobby()
-  }, [dailyClaimedToday, dailyDay, dailyBonusTodayKey, dispatch, currentUser, goLobby])
+  }, [
+    dailyClaimedToday,
+    dailyDay,
+    dailyBonusTodayKey,
+    dispatch,
+    currentUser,
+    goLobby,
+    voiceBalance,
+    inventory,
+  ])
 
   const showStreakDialog =
     !!currentUser &&

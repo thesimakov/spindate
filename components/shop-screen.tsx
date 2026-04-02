@@ -11,7 +11,8 @@ import { apiFetch } from "@/lib/api-fetch"
 import { vkBridge } from "@/lib/vk-bridge"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
-import type { InventoryItem } from "@/lib/game-types"
+import { persistUserGameState } from "@/lib/persist-user-game-state"
+import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 
 type ShopScreenProps = {
   variant?: "page" | "panel"
@@ -189,11 +190,17 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     }
   }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey])
 
-  const handleClaimDailyBonus = useCallback(() => {
+  const handleClaimDailyBonus = useCallback(async () => {
     if (!currentUser || !welcomeGiftDone || dailyClaimedToday) return
     const spec = getDailyStreakReward(dailyDay)
     if (!spec) return
+
+    const vb = voiceBalance ?? 0
+    let nextVoice = vb
+    let nextInventory: InventoryItem[] = inventory
+
     if (spec.kind === "hearts") {
+      nextVoice = vb + spec.amount
       dispatch({ type: "PAY_VOICES", amount: -spec.amount })
       dispatch({
         type: "ADD_LOG",
@@ -203,21 +210,20 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           fromPlayer: currentUser,
           text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} сердец`,
           timestamp: Date.now(),
-        },
+        } satisfies GameLogEntry,
       })
       showToast(`+${spec.amount} сердец в подарок`, "success")
     } else if (spec.kind === "roses") {
       const base = Date.now()
-      for (let i = 0; i < spec.amount; i++) {
-        dispatch({
-          type: "ADD_INVENTORY_ITEM",
-          item: {
-            type: "rose",
-            fromPlayerId: 0,
-            fromPlayerName: "Ежедневный бонус",
-            timestamp: base + i,
-          },
-        })
+      const newRoses: InventoryItem[] = Array.from({ length: spec.amount }, (_, i) => ({
+        type: "rose" as const,
+        fromPlayerId: 0,
+        fromPlayerName: "Ежедневный бонус",
+        timestamp: base + i,
+      }))
+      nextInventory = [...inventory, ...newRoses]
+      for (const item of newRoses) {
+        dispatch({ type: "ADD_INVENTORY_ITEM", item })
       }
       dispatch({
         type: "ADD_LOG",
@@ -227,7 +233,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           fromPlayer: currentUser,
           text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} роз`,
           timestamp: Date.now(),
-        },
+        } satisfies GameLogEntry,
       })
       showToast(`+${spec.amount} роз в инвентарь`, "success")
     } else {
@@ -239,7 +245,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           fromPlayer: currentUser,
           text: `${currentUser.name} получил(а) ежедневный бонус: супер-рамка (награда будет начислена позже)`,
           timestamp: Date.now(),
-        },
+        } satisfies GameLogEntry,
       })
       showToast("Супер-рамка — скоро в профиле", "success")
     }
@@ -251,8 +257,20 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     } catch {
       // ignore
     }
+
+    await persistUserGameState(currentUser, nextVoice, nextInventory)
     setDailyClaimedToday(true)
-  }, [currentUser, welcomeGiftDone, dailyClaimedToday, dailyDay, dispatch, dailyBonusTodayKey, showToast])
+  }, [
+    currentUser,
+    welcomeGiftDone,
+    dailyClaimedToday,
+    dailyDay,
+    dispatch,
+    dailyBonusTodayKey,
+    showToast,
+    voiceBalance,
+    inventory,
+  ])
 
   const runLiveKeepAlive = async (user: typeof currentUser, ms: number) => {
     if (!user) return () => {}
@@ -526,7 +544,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         <button
           type="button"
           disabled={!welcomeGiftDone || dailyClaimedToday}
-          onClick={handleClaimDailyBonus}
+          onClick={() => void handleClaimDailyBonus()}
           className="relative inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-violet-400/85 bg-gradient-to-b from-violet-400 via-fuchsia-500 to-purple-700 px-3 py-2 text-xs font-extrabold text-white shadow-[0_4px_0_#4c1d95,0_10px_22px_rgba(139,92,246,0.35),inset_0_2px_0_rgba(255,255,255,0.35)] [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition hover:brightness-[1.06] active:translate-y-px active:shadow-[0_2px_0_#4c1d95,0_8px_18px_rgba(139,92,246,0.3)] disabled:cursor-not-allowed disabled:border-slate-500 disabled:from-slate-400 disabled:via-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none disabled:hover:brightness-100"
         >
           {!dailyClaimedToday && welcomeGiftDone && (

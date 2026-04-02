@@ -34,6 +34,7 @@ import {
   ROOM_TABLE_STYLE_OPTIONS,
   type RoomTableStyle,
 } from "@/lib/rooms/room-appearance"
+import { formatBottleCatalogPrice, getBottleCatalogCost } from "@/lib/bottle-catalog"
 import { buyHearts200 } from "@/lib/vk-bridge"
 
 type LobbyRow = {
@@ -58,7 +59,7 @@ const CREATE_BOTTLE_OPTIONS: Array<{ id: BottleSkin; name: string; img?: string 
   { id: "milk", name: "Молоко", img: assetUrl(BOTTLE_IMAGES.milk) },
   { id: "baby", name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby) },
   { id: "vip", name: "Праздничная", img: assetUrl(BOTTLE_IMAGES.vip) },
-  { id: "frame_72", name: "Ягодный сок", img: assetUrl(BOTTLE_IMAGES.frame_72) },
+  { id: "frame_72", name: "Кетчуп", img: assetUrl(BOTTLE_IMAGES.frame_72) },
   { id: "frame_75", name: "Тропический микс", img: assetUrl(BOTTLE_IMAGES.frame_75) },
   { id: "fortune_wheel", name: "Колесо фортуны" },
 ]
@@ -336,8 +337,14 @@ export function RoomLobbyScreen() {
           inventory: (Array.isArray(syncData.inventory) ? syncData.inventory : []) as InventoryItem[],
         })
       }
-      if (balance < createCost) {
-        setCreateError(`Нужно ${createCost} ❤. На сервере сейчас ${balance} ❤.`)
+      const bottlePremium = getBottleCatalogCost(createBottleSkin)
+      const totalCharge = createCost + bottlePremium
+      if (balance < totalCharge) {
+        setCreateError(
+          bottlePremium > 0
+            ? `Нужно ${totalCharge} ❤ (${createCost} стол + ${bottlePremium} скин). На сервере ${balance} ❤.`
+            : `Нужно ${totalCharge} ❤. На сервере сейчас ${balance} ❤.`,
+        )
         setCreateLoading(false)
         return
       }
@@ -370,7 +377,7 @@ export function RoomLobbyScreen() {
           inventory: state.inventory ?? [],
         })
       } else {
-        dispatch({ type: "PAY_VOICES", amount: createCost })
+        dispatch({ type: "PAY_VOICES", amount: totalCharge })
       }
       setCreateOpen(false)
       void fetchLobby()
@@ -412,7 +419,9 @@ export function RoomLobbyScreen() {
     return null
   }
 
-  const canAffordCreate = voiceBalance >= createCost
+  const createBottlePremiumHearts = getBottleCatalogCost(createBottleSkin)
+  const totalCreateCost = createCost + createBottlePremiumHearts
+  const canAffordCreate = voiceBalance >= totalCreateCost
 
   return (
     <div className="relative flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden">
@@ -602,7 +611,7 @@ export function RoomLobbyScreen() {
                   )}
                 >
                   <Heart className="mr-1.5 h-4 w-4 shrink-0 fill-white/25 text-emerald-950 drop-shadow-sm sm:h-5 sm:w-5" aria-hidden />
-                  Создать стол — {createCost} ❤
+                  Создать стол — {totalCreateCost} ❤
                 </Button>
                 {!canAffordCreate && (
                   <Button
@@ -629,7 +638,7 @@ export function RoomLobbyScreen() {
               </div>
               {!canAffordCreate ? (
                 <p className="text-center text-xs text-amber-200/90">
-                  Нужно ещё {createCost - voiceBalance} ❤
+                  Нужно ещё {Math.max(0, totalCreateCost - voiceBalance)} ❤
                 </p>
               ) : null}
             </div>
@@ -638,85 +647,149 @@ export function RoomLobbyScreen() {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="border-slate-700 bg-slate-950 text-slate-100 sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Новый стол</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              С вашего баланса спишется {createCost} ❤. Стол появится в списке для всех игроков.
+        <DialogContent className="border-slate-600/90 bg-slate-950 text-slate-100 shadow-2xl sm:max-w-lg">
+          <DialogHeader className="space-y-1.5 text-left">
+            <DialogTitle className="text-lg font-bold tracking-tight text-slate-50">Новый стол</DialogTitle>
+            <DialogDescription asChild>
+              <p className="text-sm leading-relaxed text-slate-400">
+                {createBottlePremiumHearts > 0 ? (
+                  <>
+                    С баланса спишется{" "}
+                    <span className="font-bold tabular-nums text-amber-200/95">{totalCreateCost} ❤</span>
+                    : {createCost} ❤ за стол +{" "}
+                    <span className="font-semibold tabular-nums text-amber-200/80">
+                      {createBottlePremiumHearts} ❤
+                    </span>{" "}
+                    за выбранный скин.
+                  </>
+                ) : (
+                  <>
+                    Создание стола —{" "}
+                    <span className="font-semibold text-amber-200/90">{createCost} ❤</span> с баланса.
+                  </>
+                )}{" "}
+                Стол сразу виден всем в лобби.
+              </p>
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <label htmlFor="room-name" className="text-sm text-slate-300">
-              Название
-            </label>
-            <Input
-              id="room-name"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              placeholder="Например: Вечеринка у бассейна"
-              maxLength={64}
-              className="border-slate-600 bg-slate-900"
-            />
-            <div className="mt-2 space-y-2">
-              <label htmlFor="create-room-bottle" className="text-sm text-slate-300">
-                Бутылочка стола
+
+          <div className="grid gap-5 py-1">
+            <div className="space-y-2">
+              <label htmlFor="room-name" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Название
               </label>
-              <Select
-                value={createBottleSkin}
-                onValueChange={(v) => setCreateBottleSkin(v as BottleSkin)}
-              >
-                <SelectTrigger
-                  id="create-room-bottle"
-                  className="h-auto min-h-10 w-full border-slate-600 bg-slate-900 py-2 text-slate-100 shadow-none hover:bg-slate-800/80"
-                >
-                  <SelectValue placeholder="Выберите вариант" />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  className="z-[200] max-h-[min(320px,var(--radix-select-content-available-height))] border-slate-600 bg-slate-950 text-slate-100"
-                >
-                  {CREATE_BOTTLE_OPTIONS.map((opt) => (
-                    <SelectItem
-                      key={opt.id}
-                      value={opt.id}
-                      className="cursor-pointer py-2 focus:bg-slate-800 focus:text-slate-50"
-                    >
-                      <span className="flex items-center gap-2">
-                        <CreateBottleOptionPreview opt={opt} />
-                        <span>{opt.name}</span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="room-name"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="Например: Вечеринка у бассейна"
+                maxLength={64}
+                className="h-11 rounded-xl border-slate-600 bg-slate-900/90 text-[15px] placeholder:text-slate-600 focus-visible:border-violet-400/50 focus-visible:ring-violet-500/25"
+              />
             </div>
-            <div className="mt-2 space-y-2">
-              <p className="text-sm text-slate-300">Стилистика стола</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {ROOM_TABLE_STYLE_OPTIONS.map((opt) => {
-                  const selected = createTableStyle === opt.id
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setCreateTableStyle(opt.id)}
-                      className={cn(
-                        "rounded-xl border p-2 text-left text-xs transition",
-                        selected
-                          ? "border-cyan-300 bg-cyan-500/15 text-cyan-100"
-                          : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500",
-                      )}
-                    >
-                      <span
-                        className="mb-1.5 block h-6 rounded-md border border-white/20"
-                        style={{ background: TABLE_STYLE_PREVIEW[opt.id] }}
-                      />
-                      {opt.name}
-                    </button>
-                  )
-                })}
+
+            <div
+              className="rounded-2xl border border-slate-700/90 bg-gradient-to-b from-slate-900/80 to-slate-950/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              role="group"
+              aria-label="Оформление стола"
+            >
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">Оформление стола</p>
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+                  <label htmlFor="create-room-bottle" className="text-sm font-semibold text-slate-200">
+                    Бутылочка
+                  </label>
+                  <span id="create-room-bottle-hint" className="text-[11px] text-slate-500">
+                    Скин в центре · цены как при покупке в каталоге
+                  </span>
+                </div>
+                <Select
+                  value={createBottleSkin}
+                  onValueChange={(v) => setCreateBottleSkin(v as BottleSkin)}
+                >
+                  <SelectTrigger
+                    id="create-room-bottle"
+                    aria-describedby="create-room-bottle-hint"
+                    aria-label="Выбор скина бутылочки, открыть список"
+                    className={cn(
+                      "h-auto min-h-[3.25rem] w-full gap-3 rounded-xl border border-slate-600/90 bg-slate-950/60 px-3 py-2.5 text-left text-slate-100 shadow-sm transition-all",
+                      "hover:border-slate-500 hover:bg-slate-900/70",
+                      "focus-visible:border-violet-400/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
+                      "data-[state=open]:border-violet-400/50 data-[state=open]:bg-slate-900/80 data-[state=open]:shadow-[0_0_20px_-4px_rgba(167,139,250,0.35)]",
+                      "data-[state=open]:[&_svg:last-child]:border-white",
+                      "[&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:flex-1",
+                      "[&_svg:last-child]:ml-auto [&_svg:last-child]:size-6 [&_svg:last-child]:shrink-0 [&_svg:last-child]:rounded-full [&_svg:last-child]:border-2 [&_svg:last-child]:border-white/90 [&_svg:last-child]:bg-slate-950 [&_svg:last-child]:p-1 [&_svg:last-child]:!text-white [&_svg:last-child]:opacity-100 [&_svg:last-child]:[stroke-width:3]",
+                    )}
+                  >
+                    <SelectValue placeholder="Выберите скин" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    sideOffset={6}
+                    className="z-[200] max-h-[min(340px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-violet-500/20 bg-slate-950 p-1.5 text-slate-100 shadow-2xl shadow-black/50"
+                  >
+                    {CREATE_BOTTLE_OPTIONS.map((opt) => {
+                      const cost = getBottleCatalogCost(opt.id)
+                      return (
+                        <SelectItem
+                          key={opt.id}
+                          value={opt.id}
+                          className="cursor-pointer rounded-lg py-2 pl-2 pr-10 focus:bg-violet-950/50 focus:text-slate-50 data-[highlighted]:bg-slate-800/80"
+                        >
+                          <span className="flex w-full min-w-0 items-center gap-2.5">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-900/80">
+                              <CreateBottleOptionPreview opt={opt} className="!h-7 !w-7" />
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">
+                              {opt.name}
+                            </span>
+                            <span
+                              className="shrink-0 text-xs font-bold tabular-nums text-amber-200/90"
+                              title="Цена в каталоге бутылочек"
+                            >
+                              {formatBottleCatalogPrice(cost)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="my-4 h-px bg-gradient-to-r from-transparent via-slate-600/80 to-transparent" aria-hidden />
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-200">Стилистика стола</p>
+                <p className="text-[11px] leading-snug text-slate-500">Фон и атмосфера комнаты для всех игроков</p>
+                <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+                  {ROOM_TABLE_STYLE_OPTIONS.map((opt) => {
+                    const selected = createTableStyle === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setCreateTableStyle(opt.id)}
+                        className={cn(
+                          "rounded-xl border p-2.5 text-left text-xs font-medium transition-all",
+                          selected
+                            ? "border-cyan-400/70 bg-cyan-500/12 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                            : "border-slate-700/90 bg-slate-950/50 text-slate-300 hover:border-slate-500 hover:bg-slate-900/60",
+                        )}
+                      >
+                        <span
+                          className="mb-2 block h-7 rounded-lg border border-white/15 shadow-inner"
+                          style={{ background: TABLE_STYLE_PREVIEW[opt.id] }}
+                        />
+                        {opt.name}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
+
             {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -729,7 +802,11 @@ export function RoomLobbyScreen() {
               onClick={() => void handleCreateRoom()}
               className="bg-gradient-to-r from-emerald-500 to-teal-500 font-semibold text-emerald-950 hover:from-emerald-400 hover:to-teal-400"
             >
-              {createLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : `Создать за ${createCost} ❤`}
+              {createLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                `Создать за ${totalCreateCost} ❤`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
