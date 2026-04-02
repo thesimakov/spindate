@@ -198,10 +198,8 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
 ]
 
-const FRAME_ID_SET = new Set<string>(DEFAULT_FRAME_CATALOG_ROWS.map((row) => row.id))
-
 export function isFrameCatalogId(value: string): value is FrameCatalogId {
-  return FRAME_ID_SET.has(value)
+  return typeof value === "string" && value.trim().length > 0
 }
 
 export function normalizeFrameCatalogRows(

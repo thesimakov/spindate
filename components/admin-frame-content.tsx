@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
 import { assetUrl } from "@/lib/assets"
-import { isFrameCatalogId } from "@/lib/frame-catalog"
 
 type AdminFrameContentProps = { token: string }
 
@@ -28,7 +27,7 @@ function parseRows(rows: unknown): RowDraft[] {
   for (const row of rows) {
     if (!row || typeof row !== "object") continue
     const rec = row as Partial<RowDraft> & { id?: string; section?: string }
-    if (typeof rec.id !== "string" || !isFrameCatalogId(rec.id)) continue
+    if (typeof rec.id !== "string" || !rec.id.trim()) continue
     parsed.push({
       id: rec.id,
       section: rec.section === "premium" ? "premium" : "free",
@@ -45,23 +44,22 @@ function parseRows(rows: unknown): RowDraft[] {
   return parsed
 }
 
-const FRAME_ID_CANDIDATES: string[] = [
-  "none",
-  "gold",
-  "silver",
-  "hearts",
-  "roses",
-  "gradient",
-  "neon",
-  "snow",
-  "rabbit",
-  "fairy",
-  "fox",
-  "mag",
-  "malif",
-  "mir",
-  "vesna",
-]
+function normalizeCatalogId(value: string, fallback: string): string {
+  const cleaned = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+  return cleaned || fallback
+}
+
+function makeUniqueId(baseId: string, existingIds: Set<string>): string {
+  if (!existingIds.has(baseId)) return baseId
+  let idx = 2
+  while (existingIds.has(`${baseId}-${idx}`)) idx += 1
+  return `${baseId}-${idx}`
+}
 
 export function AdminFrameContent({ token }: AdminFrameContentProps) {
   const [rows, setRows] = useState<RowDraft[]>([])
@@ -71,7 +69,7 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [addTier, setAddTier] = useState<ShowcaseTier>("free")
   const [addDraft, setAddDraft] = useState<RowDraft>({
-    id: "none",
+    id: "new_frame",
     section: "free",
     name: "Новая рамка",
     border: "2px solid #475569",
@@ -174,34 +172,12 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
   )
 
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
-  const availableIdsForAdd = useMemo(
-    () => FRAME_ID_CANDIDATES.filter((id) => !rows.some((row) => row.id === id)),
-    [rows],
-  )
   const addBusyKey = "__new_frame__"
 
-  const pickAvailableIdByTier = useCallback(
-    (tier: ShowcaseTier): string | null => {
-      const byTier = (id: string): boolean => {
-        const defaults = rows.find((row) => row.id === id)
-        const fallbackIsPremium = id !== "none" && id !== "silver" && id !== "gold"
-        const isPremium = defaults ? defaults.section === "premium" : fallbackIsPremium
-        if (tier === "free") return !isPremium
-        if (tier === "vip") return isPremium
-        return isPremium
-      }
-      const scoped = availableIdsForAdd.filter(byTier)
-      return scoped[0] ?? availableIdsForAdd[0] ?? null
-    },
-    [availableIdsForAdd, rows],
-  )
-
   const createFromAddDraft = useCallback(async () => {
-    const id = pickAvailableIdByTier(addTier)
-    if (!id) {
-      setError("Свободных слотов больше нет. Можно редактировать уже существующие рамки.")
-      return
-    }
+    const existingIds = new Set(rows.map((row) => row.id))
+    const baseId = normalizeCatalogId(addDraft.id || addDraft.name, "frame")
+    const id = makeUniqueId(baseId, existingIds)
     const nextSection: "free" | "premium" = addTier === "free" ? "free" : "premium"
     const nextCost = addTier === "free" ? 0 : addDraft.cost
     await postUpdate(id, {
@@ -212,7 +188,17 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
       published: true,
       deleted: false,
     })
-  }, [addDraft, addTier, pickAvailableIdByTier, postUpdate])
+    setAddDraft((prev) => ({
+      ...prev,
+      id: "",
+      name: "Новая рамка",
+      border: "2px solid #475569",
+      shadow: "none",
+      animationClass: "",
+      svgPath: "",
+      cost: addTier === "free" ? 0 : prev.cost,
+    }))
+  }, [addDraft, addTier, postUpdate, rows])
 
   const uploadNewFrameAsset = useCallback(
     async (file: File) => {
@@ -277,6 +263,16 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-200">Добавление рамки</p>
           <div className="grid gap-2 md:grid-cols-4">
             <label className="text-[11px] text-slate-400">
+              ID
+              <input
+                type="text"
+                value={addDraft.id}
+                onChange={(e) => setAddDraft((p) => ({ ...p, id: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                placeholder="new_frame"
+              />
+            </label>
+            <label className="text-[11px] text-slate-400">
               Витрина
               <select
                 value={addTier}
@@ -335,7 +331,7 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
               </div>
             </label>
           </div>
-          <p className="mt-2 text-xs text-slate-400">Слот ID для новой рамки подбирается автоматически по витрине.</p>
+          <p className="mt-2 text-xs text-slate-400">ID можно задать вручную, если оставить пустым - сформируется автоматически.</p>
           <button
             type="button"
             onClick={() => void createFromAddDraft()}

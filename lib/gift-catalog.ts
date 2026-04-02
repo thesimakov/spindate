@@ -12,18 +12,6 @@ export type GiftCatalogRow = {
   deleted?: boolean
 }
 
-const GIFT_CATALOG_IDS: Array<InventoryItem["type"]> = [
-  "toy_bear",
-  "plush_heart",
-  "toy_car",
-  "toy_ball",
-  "souvenir_magnet",
-  "souvenir_keychain",
-  "chocolate_box",
-]
-
-const GIFT_CATALOG_ID_SET = new Set<string>(GIFT_CATALOG_IDS)
-
 export const DEFAULT_GIFT_CATALOG_ROWS: GiftCatalogRow[] = [
   { id: "toy_bear", section: "premium", name: "Плюшевый мишка", emoji: "🧸", cost: 10, published: true },
   { id: "plush_heart", section: "premium", name: "Подушка-сердце", emoji: "❤️", cost: 8, published: true },
@@ -35,7 +23,7 @@ export const DEFAULT_GIFT_CATALOG_ROWS: GiftCatalogRow[] = [
 ]
 
 export function isGiftCatalogId(value: string): value is InventoryItem["type"] {
-  return GIFT_CATALOG_ID_SET.has(value)
+  return typeof value === "string" && value.trim().length > 0
 }
 
 export function normalizeGiftCatalogRows(

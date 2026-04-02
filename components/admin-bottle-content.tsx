@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
-import { DEFAULT_BOTTLE_CATALOG_ROWS, isBottleSkin, toBottleImageUrl } from "@/lib/bottle-catalog"
+import { toBottleImageUrl } from "@/lib/bottle-catalog"
 
 type AdminBottleContentProps = {
   token: string
@@ -32,7 +32,7 @@ function parseAdminRows(rows: unknown): RowDraft[] {
       published?: boolean
       deleted?: boolean
     }
-    if (typeof rec.id !== "string" || !isBottleSkin(rec.id)) continue
+    if (typeof rec.id !== "string" || !rec.id.trim()) continue
     parsed.push({
       id: rec.id,
       name: typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : rec.id,
@@ -45,6 +45,23 @@ function parseAdminRows(rows: unknown): RowDraft[] {
   return parsed
 }
 
+function normalizeCatalogId(value: string, fallback: string): string {
+  const cleaned = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+  return cleaned || fallback
+}
+
+function makeUniqueId(baseId: string, existingIds: Set<string>): string {
+  if (!existingIds.has(baseId)) return baseId
+  let idx = 2
+  while (existingIds.has(`${baseId}-${idx}`)) idx += 1
+  return `${baseId}-${idx}`
+}
+
 export function AdminBottleContent({ token }: AdminBottleContentProps) {
   const [rows, setRows] = useState<RowDraft[]>([])
   const [loading, setLoading] = useState(false)
@@ -53,7 +70,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [addTier, setAddTier] = useState<ShowcaseTier>("free")
   const [addDraft, setAddDraft] = useState<RowDraft>({
-    id: "classic",
+    id: "new_bottle",
     name: "Новая бутылочка",
     img: "",
     cost: 0,
@@ -154,31 +171,12 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
 
   const total = rows.length
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
-  const availableIdsForAdd = useMemo(
-    () => DEFAULT_BOTTLE_CATALOG_ROWS.map((r) => r.id).filter((id) => !rows.some((row) => row.id === id)),
-    [rows],
-  )
   const addBusyKey = "__new_bottle__"
 
-  const pickAvailableIdByTier = useCallback(
-    (tier: ShowcaseTier): string | null => {
-      const byTier = (id: string): boolean => {
-        if (tier === "free") return id === "classic"
-        if (tier === "vip") return id === "vip"
-        return id !== "classic" && id !== "vip"
-      }
-      const scoped = availableIdsForAdd.filter(byTier)
-      return scoped[0] ?? availableIdsForAdd[0] ?? null
-    },
-    [availableIdsForAdd],
-  )
-
   const createFromAddDraft = useCallback(async () => {
-    const id = pickAvailableIdByTier(addTier)
-    if (!id) {
-      setError("Свободных слотов больше нет. Можно редактировать уже существующие бутылочки.")
-      return
-    }
+    const existingIds = new Set(rows.map((row) => row.id))
+    const baseId = normalizeCatalogId(addDraft.id || addDraft.name, "bottle")
+    const id = makeUniqueId(baseId, existingIds)
     const nextCost = addTier === "free" ? 0 : addDraft.cost
     await postUpdate(id, {
       ...addDraft,
@@ -187,7 +185,8 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
       published: true,
       deleted: false,
     })
-  }, [addDraft, addTier, pickAvailableIdByTier, postUpdate])
+    setAddDraft((prev) => ({ ...prev, id: "", name: "Новая бутылочка", img: "", cost: addTier === "free" ? 0 : prev.cost }))
+  }, [addDraft, addTier, postUpdate, rows])
 
   const uploadNewBottleImage = useCallback(
     async (file: File) => {
@@ -251,6 +250,16 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-200">Добавление бутылочки</p>
           <div className="grid gap-2 md:grid-cols-4">
             <label className="text-[11px] text-slate-400">
+              ID
+              <input
+                type="text"
+                value={addDraft.id}
+                onChange={(e) => setAddDraft((p) => ({ ...p, id: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                placeholder="new_bottle"
+              />
+            </label>
+            <label className="text-[11px] text-slate-400">
               Витрина
               <select
                 value={addTier}
@@ -310,7 +319,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
             </label>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            Слот для новой бутылочки подбирается автоматически по выбранной витрине.
+            ID можно задать вручную, если оставить пустым - сформируется автоматически.
           </p>
           <button
             type="button"

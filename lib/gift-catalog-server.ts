@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db"
-import { isGiftCatalogId, type GiftCatalogRow } from "@/lib/gift-catalog"
+import { type GiftCatalogRow } from "@/lib/gift-catalog"
 
 type GiftCatalogDbRow = {
   id: string
@@ -26,17 +26,15 @@ export function listGiftCatalogRows(options?: { includeDeleted?: boolean; onlyPu
     )
     .all() as GiftCatalogDbRow[]
 
-  return rows
-    .filter((row) => isGiftCatalogId(row.id))
-    .map((row) => ({
-      id: row.id as GiftCatalogRow["id"],
-      section: row.section === "free" ? "free" : "premium",
-      name: row.name,
-      emoji: row.emoji || "🎁",
-      cost: Math.max(0, row.cost | 0),
-      published: row.published === 1,
-      deleted: row.deleted === 1,
-    }))
+  return rows.map((row) => ({
+    id: row.id as GiftCatalogRow["id"],
+    section: row.section === "free" ? "free" : "premium",
+    name: row.name,
+    emoji: row.emoji || "🎁",
+    cost: Math.max(0, row.cost | 0),
+    published: row.published === 1,
+    deleted: row.deleted === 1,
+  }))
 }
 
 export function updateGiftCatalogEntry(input: {
@@ -48,12 +46,13 @@ export function updateGiftCatalogEntry(input: {
   published?: boolean
   deleted?: boolean
 }) {
-  if (!isGiftCatalogId(input.id)) throw new Error("unknown_gift_id")
+  if (typeof input.id !== "string" || !input.id.trim()) throw new Error("bad_gift_id")
+  const safeId = input.id.trim()
   const db = getDb()
   const now = Date.now()
   const existing = db
     .prepare(`SELECT id, section, name, emoji, cost, published, deleted FROM gift_catalog WHERE id = ? LIMIT 1`)
-    .get(input.id) as Omit<GiftCatalogDbRow, never> | undefined
+    .get(safeId) as Omit<GiftCatalogDbRow, never> | undefined
   if (!existing) {
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM gift_catalog`).get() as {
       next: number
@@ -62,9 +61,9 @@ export function updateGiftCatalogEntry(input: {
       `INSERT INTO gift_catalog (id, section, name, emoji, cost, published, deleted, sort_order, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      input.id,
+      safeId,
       input.section ?? "premium",
-      input.name?.trim() || input.id,
+      input.name?.trim() || safeId,
       input.emoji?.trim() || "🎁",
       Math.max(0, Math.floor(Number(input.cost) || 0)),
       input.published === false ? 0 : 1,
@@ -86,5 +85,5 @@ export function updateGiftCatalogEntry(input: {
     `UPDATE gift_catalog
      SET section = ?, name = ?, emoji = ?, cost = ?, published = ?, deleted = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(nextSection, nextName, nextEmoji, nextCost, nextPublished, nextDeleted, now, input.id)
+  ).run(nextSection, nextName, nextEmoji, nextCost, nextPublished, nextDeleted, now, safeId)
 }

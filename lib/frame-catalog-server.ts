@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db"
-import { isFrameCatalogId, type FrameCatalogRow } from "@/lib/frame-catalog"
+import { type FrameCatalogRow } from "@/lib/frame-catalog"
 
 type FrameCatalogDbRow = {
   id: string
@@ -29,20 +29,18 @@ export function listFrameCatalogRows(options?: { includeDeleted?: boolean; onlyP
     )
     .all() as FrameCatalogDbRow[]
 
-  return rows
-    .filter((row) => isFrameCatalogId(row.id))
-    .map((row) => ({
-      id: row.id as FrameCatalogRow["id"],
-      section: row.section === "free" ? "free" : "premium",
-      name: row.name,
-      border: row.border,
-      shadow: row.shadow,
-      animationClass: row.animation_class ?? "",
-      svgPath: row.svg_path ?? "",
-      cost: Math.max(0, row.cost | 0),
-      published: row.published === 1,
-      deleted: row.deleted === 1,
-    }))
+  return rows.map((row) => ({
+    id: row.id as FrameCatalogRow["id"],
+    section: row.section === "free" ? "free" : "premium",
+    name: row.name,
+    border: row.border,
+    shadow: row.shadow,
+    animationClass: row.animation_class ?? "",
+    svgPath: row.svg_path ?? "",
+    cost: Math.max(0, row.cost | 0),
+    published: row.published === 1,
+    deleted: row.deleted === 1,
+  }))
 }
 
 export function updateFrameCatalogEntry(input: {
@@ -57,7 +55,8 @@ export function updateFrameCatalogEntry(input: {
   published?: boolean
   deleted?: boolean
 }) {
-  if (!isFrameCatalogId(input.id)) throw new Error("unknown_frame_id")
+  if (typeof input.id !== "string" || !input.id.trim()) throw new Error("bad_frame_id")
+  const safeId = input.id.trim()
   const db = getDb()
   const now = Date.now()
   const existing = db
@@ -66,7 +65,7 @@ export function updateFrameCatalogEntry(input: {
        FROM frame_catalog
        WHERE id = ? LIMIT 1`,
     )
-    .get(input.id) as (FrameCatalogDbRow & { sort_order: number }) | undefined
+    .get(safeId) as (FrameCatalogDbRow & { sort_order: number }) | undefined
 
   if (!existing) {
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM frame_catalog`).get() as {
@@ -77,9 +76,9 @@ export function updateFrameCatalogEntry(input: {
          id, section, name, border, shadow, animation_class, svg_path, cost, published, deleted, sort_order, updated_at
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      input.id,
+      safeId,
       input.section ?? "free",
-      input.name?.trim() || input.id,
+      input.name?.trim() || safeId,
       input.border?.trim() || "2px solid #475569",
       input.shadow?.trim() || "none",
       input.animationClass?.trim() || "",
@@ -119,6 +118,6 @@ export function updateFrameCatalogEntry(input: {
     nextPublished,
     nextDeleted,
     now,
-    input.id,
+    safeId,
   )
 }

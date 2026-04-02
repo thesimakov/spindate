@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db"
-import { isBottleSkin, toBottleImageUrl, type BottleCatalogSkinRow } from "@/lib/bottle-catalog"
+import { toBottleImageUrl, type BottleCatalogSkinRow } from "@/lib/bottle-catalog"
 import type { BottleSkin } from "@/lib/game-types"
 
 type BottleCatalogDbRow = {
@@ -31,16 +31,14 @@ export function listBottleCatalogRows(options?: {
     )
     .all() as BottleCatalogDbRow[]
 
-  return rows
-    .filter((row) => isBottleSkin(row.id))
-    .map((row) => ({
-      id: row.id as BottleSkin,
-      name: row.name,
-      img: options?.resolveImage === false ? row.img : toBottleImageUrl(row.img),
-      cost: Math.max(0, row.cost | 0),
-      published: row.published === 1,
-      deleted: row.deleted === 1,
-    }))
+  return rows.map((row) => ({
+    id: row.id as BottleSkin,
+    name: row.name,
+    img: options?.resolveImage === false ? row.img : toBottleImageUrl(row.img),
+    cost: Math.max(0, row.cost | 0),
+    published: row.published === 1,
+    deleted: row.deleted === 1,
+  }))
 }
 
 export function getBottleCatalogCostServer(id: BottleSkin): number {
@@ -59,14 +57,13 @@ export function updateBottleCatalogEntry(input: {
   published?: boolean
   deleted?: boolean
 }) {
-  if (!isBottleSkin(input.id)) {
-    throw new Error("unknown_bottle_id")
-  }
+  if (typeof input.id !== "string" || !input.id.trim()) throw new Error("bad_bottle_id")
+  const safeId = input.id.trim()
   const db = getDb()
   const now = Date.now()
   const existing = db
     .prepare(`SELECT id, name, img, cost, published, deleted FROM bottle_catalog WHERE id = ? LIMIT 1`)
-    .get(input.id) as Omit<BottleCatalogDbRow, "sort_order"> | undefined
+    .get(safeId) as Omit<BottleCatalogDbRow, "sort_order"> | undefined
   if (!existing) {
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM bottle_catalog`).get() as {
       next: number
@@ -75,8 +72,8 @@ export function updateBottleCatalogEntry(input: {
       `INSERT INTO bottle_catalog (id, name, img, cost, published, deleted, sort_order, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      input.id,
-      input.name?.trim() || input.id,
+      safeId,
+      input.name?.trim() || safeId,
       input.img?.trim() || "",
       Math.max(0, Math.floor(Number(input.cost) || 0)),
       input.published === false ? 0 : 1,
@@ -96,6 +93,6 @@ export function updateBottleCatalogEntry(input: {
     `UPDATE bottle_catalog
      SET name = ?, img = ?, cost = ?, published = ?, deleted = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(nextName, nextImg, nextCost, nextPublished, nextDeleted, now, input.id)
+  ).run(nextName, nextImg, nextCost, nextPublished, nextDeleted, now, safeId)
 }
 

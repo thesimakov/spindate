@@ -36,11 +36,8 @@ export const DEFAULT_BOTTLE_CATALOG_SKINS: BottleCatalogDefaultRow[] = [
   { id: "fortune_wheel", name: "Колесо фортуны", imgPath: "", cost: 300, published: true },
 ]
 
-const BOTTLE_SKIN_IDS: BottleSkin[] = DEFAULT_BOTTLE_CATALOG_SKINS.map((row) => row.id)
-const BOTTLE_SKIN_ID_SET = new Set<string>(BOTTLE_SKIN_IDS)
-
 export function isBottleSkin(value: string): value is BottleSkin {
-  return BOTTLE_SKIN_ID_SET.has(value)
+  return typeof value === "string" && value.trim().length > 0
 }
 
 export function toBottleImageUrl(raw: string): string {

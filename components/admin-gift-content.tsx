@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
-import { DEFAULT_GIFT_CATALOG_ROWS, isGiftCatalogId, type GiftCatalogSection } from "@/lib/gift-catalog"
+import { type GiftCatalogSection } from "@/lib/gift-catalog"
 
 type AdminGiftContentProps = {
   token: string
@@ -34,7 +34,7 @@ function parseRows(rows: unknown): RowDraft[] {
       published?: boolean
       deleted?: boolean
     }
-    if (typeof rec.id !== "string" || !isGiftCatalogId(rec.id)) continue
+    if (typeof rec.id !== "string" || !rec.id.trim()) continue
     parsed.push({
       id: rec.id,
       section: rec.section === "free" ? "free" : "premium",
@@ -48,6 +48,23 @@ function parseRows(rows: unknown): RowDraft[] {
   return parsed
 }
 
+function normalizeCatalogId(value: string, fallback: string): string {
+  const cleaned = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+  return cleaned || fallback
+}
+
+function makeUniqueId(baseId: string, existingIds: Set<string>): string {
+  if (!existingIds.has(baseId)) return baseId
+  let idx = 2
+  while (existingIds.has(`${baseId}-${idx}`)) idx += 1
+  return `${baseId}-${idx}`
+}
+
 export function AdminGiftContent({ token }: AdminGiftContentProps) {
   const [rows, setRows] = useState<RowDraft[]>([])
   const [loading, setLoading] = useState(false)
@@ -56,7 +73,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [addTier, setAddTier] = useState<ShowcaseTier>("paid")
   const [addDraft, setAddDraft] = useState<RowDraft>({
-    id: "toy_bear",
+    id: "new_gift",
     section: "premium",
     name: "Новый подарок",
     emoji: "🎁",
@@ -125,32 +142,10 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
 
   const total = rows.length
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
-  const availableIdsForAdd = useMemo(
-    () => DEFAULT_GIFT_CATALOG_ROWS.map((r) => r.id).filter((id) => !rows.some((row) => row.id === id)),
-    [rows],
-  )
-
-  const pickAvailableIdByTier = useCallback(
-    (tier: ShowcaseTier): string | null => {
-      const byTier = (id: string): boolean => {
-        const defaults = DEFAULT_GIFT_CATALOG_ROWS.find((row) => row.id === id)
-        if (!defaults) return false
-        if (tier === "free") return defaults.section === "free"
-        if (tier === "vip") return defaults.section === "premium" && defaults.cost >= 10
-        return defaults.section === "premium" && defaults.cost < 10
-      }
-      const scoped = availableIdsForAdd.filter(byTier)
-      return scoped[0] ?? availableIdsForAdd[0] ?? null
-    },
-    [availableIdsForAdd],
-  )
-
   const createFromAddDraft = useCallback(async () => {
-    const id = pickAvailableIdByTier(addTier)
-    if (!id) {
-      setError("Свободных слотов больше нет. Можно редактировать уже существующие подарки.")
-      return
-    }
+    const existingIds = new Set(rows.map((row) => row.id))
+    const baseId = normalizeCatalogId(addDraft.id || addDraft.name, "gift")
+    const id = makeUniqueId(baseId, existingIds)
     const nextSection: GiftCatalogSection = addTier === "free" ? "free" : "premium"
     const nextCost = addTier === "free" ? 0 : addDraft.cost
     await postUpdate(id, {
@@ -161,7 +156,8 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       published: true,
       deleted: false,
     })
-  }, [addDraft, addTier, pickAvailableIdByTier, postUpdate])
+    setAddDraft((prev) => ({ ...prev, id: "", name: "Новый подарок", emoji: "🎁", cost: addTier === "free" ? 0 : prev.cost }))
+  }, [addDraft, addTier, postUpdate, rows])
 
   return (
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
@@ -194,6 +190,16 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
         <div className="mb-4 rounded-xl border border-violet-500/35 bg-violet-950/20 p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-200">Добавление подарка</p>
           <div className="grid gap-2 md:grid-cols-4">
+            <label className="text-[11px] text-slate-400">
+              ID
+              <input
+                type="text"
+                value={addDraft.id}
+                onChange={(e) => setAddDraft((p) => ({ ...p, id: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                placeholder="new_gift"
+              />
+            </label>
             <label className="text-[11px] text-slate-400">
               Витрина
               <select
@@ -236,7 +242,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
               />
             </label>
           </div>
-          <p className="mt-2 text-xs text-slate-400">Слот ID подбирается автоматически по выбранной витрине.</p>
+          <p className="mt-2 text-xs text-slate-400">ID можно задать вручную, если оставить пустым - сформируется автоматически.</p>
           <button
             type="button"
             onClick={() => void createFromAddDraft()}
