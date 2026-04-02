@@ -168,7 +168,6 @@ export function useGameTimers({
 
     if (turnGuardRef.current.skipTimeout) clearTimeout(turnGuardRef.current.skipTimeout)
     turnGuardRef.current.skipTimeout = setTimeout(() => {
-      if (!isRoundDriver()) return
       if (turnGuardRef.current.key !== key) return
       if (!currentTurnPlayer) return
       dispatch({
@@ -326,7 +325,6 @@ export function useGameTimers({
             clearInterval(turnTimerRef.current)
             turnTimerRef.current = null
           }
-          if (!isRoundDriver()) return
           dispatch({
             type: "ADD_LOG",
             entry: {
