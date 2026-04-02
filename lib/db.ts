@@ -1,6 +1,8 @@
 import fs from "node:fs"
 import path from "node:path"
 import Database from "better-sqlite3"
+import { DEFAULT_BOTTLE_CATALOG_SKINS } from "@/lib/bottle-catalog"
+import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
 
 let db: Database.Database | null = null
 
@@ -90,6 +92,31 @@ function migrate(database: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_user_admin_flags_blocked_until ON user_admin_flags(blocked_until);
     CREATE INDEX IF NOT EXISTS idx_user_admin_flags_banned_until ON user_admin_flags(banned_until);
+
+    CREATE TABLE IF NOT EXISTS bottle_catalog (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      img TEXT NOT NULL DEFAULT '',
+      cost INTEGER NOT NULL DEFAULT 0,
+      published INTEGER NOT NULL DEFAULT 1,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_bottle_catalog_published ON bottle_catalog(published, deleted, sort_order);
+
+    CREATE TABLE IF NOT EXISTS gift_catalog (
+      id TEXT PRIMARY KEY,
+      section TEXT NOT NULL DEFAULT 'premium',
+      name TEXT NOT NULL,
+      emoji TEXT NOT NULL DEFAULT '🎁',
+      cost INTEGER NOT NULL DEFAULT 0,
+      published INTEGER NOT NULL DEFAULT 1,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_gift_catalog_published ON gift_catalog(published, deleted, sort_order);
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
@@ -114,6 +141,25 @@ function migrate(database: Database.Database) {
   database.exec(
     `CREATE INDEX IF NOT EXISTS idx_vk_payment_orders_vk_user_id ON vk_payment_orders(vk_user_id)`,
   )
+
+  const now = Date.now()
+  const insertBottle = database.prepare(
+    `INSERT INTO bottle_catalog (id, name, img, cost, published, deleted, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
+  )
+  DEFAULT_BOTTLE_CATALOG_SKINS.forEach((row, index) => {
+    insertBottle.run(row.id, row.name, row.imgPath, row.cost, row.published ? 1 : 0, index, now)
+  })
+
+  const insertGift = database.prepare(
+    `INSERT INTO gift_catalog (id, section, name, emoji, cost, published, deleted, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
+  )
+  DEFAULT_GIFT_CATALOG_ROWS.forEach((row, index) => {
+    insertGift.run(row.id, row.section, row.name, row.emoji, row.cost, row.published ? 1 : 0, index, now)
+  })
 }
 
 export function getDb() {

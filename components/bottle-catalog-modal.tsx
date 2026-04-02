@@ -9,9 +9,10 @@ import {
   type PointerEvent,
 } from "react"
 import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
-import { VISIBLE_BOTTLE_CATALOG_SKINS } from "@/lib/bottle-catalog"
+import { DEFAULT_BOTTLE_CATALOG_ROWS } from "@/lib/bottle-catalog"
 import { generateLogId } from "@/lib/game-context"
 import type { BottleSkin, GameAction, Player } from "@/lib/game-types"
+import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { cn } from "@/lib/utils"
 
 function formatCooldown(ms: number) {
@@ -47,6 +48,7 @@ export function BottleCatalogModal({
   showToast,
 }: BottleCatalogModalProps) {
   const [tick, setTick] = useState(0)
+  const { rows: catalogRows } = useBottleCatalog()
 
   useEffect(() => {
     const t = window.setInterval(() => setTick((n) => n + 1), 1000)
@@ -80,7 +82,8 @@ export function BottleCatalogModal({
   const isPremiumFortuneId = (id: BottleSkin) => id === "fortune_wheel"
 
   const entries = useMemo(() => {
-    return VISIBLE_BOTTLE_CATALOG_SKINS.map((skin) => {
+    const sourceRows = catalogRows.length > 0 ? catalogRows : DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published)
+    return sourceRows.map((skin) => {
       const owned = ownedSet.has(skin.id)
       const selected = bottleSkin === skin.id
       const cooldownActive = cooldownLeftMs > 0
@@ -140,6 +143,7 @@ export function BottleCatalogModal({
       return { skin, owned, selected, disabled, notEnough, purchaseLocked, vipLocked, status, handleClick }
     })
   }, [
+    catalogRows,
     ownedSet,
     bottleSkin,
     cooldownLeftMs,

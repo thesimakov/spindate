@@ -70,12 +70,13 @@ import {
   type Player,
   type GameLogEntry,
   type PairGenderCombo,
-  type InventoryItem,
 } from "@/lib/game-types"
 import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
+import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
+import { useGiftCatalog } from "@/lib/use-gift-catalog"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -141,28 +142,7 @@ function shouldShowActionCostBadge(actionId: string, actionCost: number): boolea
   return actionCost > 0
 }
 
-/** Каталог подарков у аватара: бесплатные (0 ❤) и премиум */
-type GiftCatalogDef = {
-  id: InventoryItem["type"]
-  name: string
-  emoji: string
-  cost: number
-}
-
-/** Бесплатные — добавляйте записи; новые `id` согласуйте с `InventoryItem` в game-types */
-const GIFT_CATALOG_FREE: GiftCatalogDef[] = []
-
 // Table loader constants moved to components/table-loader-overlay.tsx
-
-const GIFT_CATALOG_PREMIUM: GiftCatalogDef[] = [
-  { id: "toy_bear", name: "Плюшевый мишка", emoji: "🧸", cost: 10 },
-  { id: "plush_heart", name: "Подушка-сердце", emoji: "❤️", cost: 8 },
-  { id: "toy_car", name: "Игрушечная машинка", emoji: "🚗", cost: 7 },
-  { id: "toy_ball", name: "Футбольный мяч", emoji: "⚽️", cost: 6 },
-  { id: "souvenir_magnet", name: "Магнитик на холодильник", emoji: "🧲", cost: 3 },
-  { id: "souvenir_keychain", name: "Брелок-сувенир", emoji: "🔑", cost: 5 },
-  { id: "chocolate_box", name: "Коробка конфет", emoji: "🍫", cost: 4 },
-]
 
 const BG_PARTICLE_EASE = [
   "cubic-bezier(0.45, 0.02, 0.29, 0.98)",
@@ -435,6 +415,7 @@ const TABLE_STYLE_BACKGROUNDS: Record<
 
 export function GameRoom() {
   const { state } = useGame()
+  const { rows: giftCatalogRows } = useGiftCatalog()
   useTheme()
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Только два режима: телефон (`isMobile`) и ПК (`isPcLayout`), без отдельного «планшетного» слоя по max-md/md/lg. */
@@ -488,6 +469,18 @@ export function GameRoom() {
     admirers,
   } = state
   const currentRoomName = roomNameForDisplay("", tableId)
+  const giftCatalogSource = useMemo(
+    () => (giftCatalogRows.length > 0 ? giftCatalogRows : DEFAULT_GIFT_CATALOG_ROWS),
+    [giftCatalogRows],
+  )
+  const giftCatalogFree = useMemo(
+    () => giftCatalogSource.filter((row) => row.section === "free" && row.published && !row.deleted),
+    [giftCatalogSource],
+  )
+  const giftCatalogPremium = useMemo(
+    () => giftCatalogSource.filter((row) => row.section === "premium" && row.published && !row.deleted),
+    [giftCatalogSource],
+  )
 
   const gameRoomDustParticles = useMemo(
     () => buildGameRoomDustParticles(8 + (GAME_ROOM_DUST_SEED % 19), GAME_ROOM_DUST_SEED),
@@ -5322,14 +5315,14 @@ export function GameRoom() {
                         {
                           key: "free",
                           title: "Бесплатные",
-                          gifts: GIFT_CATALOG_FREE,
+                          gifts: giftCatalogFree,
                           emptyHint: "Скоро добавим подарки",
                           accent: "sky" as const,
                         },
                         {
                           key: "premium",
                           title: "Премиум",
-                          gifts: GIFT_CATALOG_PREMIUM,
+                          gifts: giftCatalogPremium,
                           accent: "amber" as const,
                         },
                       ] as const

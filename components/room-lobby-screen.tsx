@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { Heart, Loader2, Sparkles, ShoppingCart } from "lucide-react"
 import { useGame, generateBots } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { composeTablePlayers } from "@/lib/table-composition"
-import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -34,7 +33,13 @@ import {
   ROOM_TABLE_STYLE_OPTIONS,
   type RoomTableStyle,
 } from "@/lib/rooms/room-appearance"
-import { formatBottleCatalogPrice, getBottleCatalogCost } from "@/lib/bottle-catalog"
+import {
+  DEFAULT_BOTTLE_CATALOG_ROWS,
+  formatBottleCatalogPrice,
+  getBottleCatalogCostFromRows,
+  getBottleCatalogRowById,
+} from "@/lib/bottle-catalog"
+import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { buyHearts200 } from "@/lib/vk-bridge"
 
 type LobbyRow = {
@@ -52,21 +57,9 @@ const BUY_HEARTS_VOTES = 9
 const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"
 const VISITED_TTL_MS = 24 * 60 * 60 * 1000
 
-/** Варианты бутылочки при создании стола: без алкогольных скинов, с колесом фортуны. */
-const CREATE_BOTTLE_OPTIONS: Array<{ id: BottleSkin; name: string; img?: string }> = [
-  { id: "classic", name: "Классика", img: assetUrl(BOTTLE_IMAGES.classic) },
-  { id: "ruby", name: "Лимонад", img: assetUrl(BOTTLE_IMAGES.ruby) },
-  { id: "milk", name: "Молоко", img: assetUrl(BOTTLE_IMAGES.milk) },
-  { id: "baby", name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby) },
-  { id: "vip", name: "Праздничная", img: assetUrl(BOTTLE_IMAGES.vip) },
-  { id: "frame_72", name: "Кетчуп", img: assetUrl(BOTTLE_IMAGES.frame_72) },
-  { id: "frame_75", name: "Тропический микс", img: assetUrl(BOTTLE_IMAGES.frame_75) },
-  { id: "fortune_wheel", name: "Колесо фортуны" },
-]
+type CreateBottleOption = { id: BottleSkin; name: string; img?: string; cost: number }
 
-const CREATE_BOTTLE_IDS = new Set(CREATE_BOTTLE_OPTIONS.map((o) => o.id))
-
-function CreateBottleOptionPreview({ opt, className }: { opt: (typeof CREATE_BOTTLE_OPTIONS)[0]; className?: string }) {
+function CreateBottleOptionPreview({ opt, className }: { opt: CreateBottleOption; className?: string }) {
   if (opt.id === "fortune_wheel") {
     return (
       <FortuneWheelBottleVisual
@@ -74,6 +67,9 @@ function CreateBottleOptionPreview({ opt, className }: { opt: (typeof CREATE_BOT
         className={cn("h-8 w-8 shrink-0 object-contain pointer-events-none select-none", className)}
       />
     )
+  }
+  if (!opt.img) {
+    return <span className={cn("h-8 w-8 shrink-0 rounded-full bg-slate-700/70", className)} aria-hidden />
   }
   return (
     <img
@@ -154,6 +150,7 @@ export function RoomLobbyScreen() {
   const { isDesktopUser } = useGameLayoutMode()
   const user = state.currentUser
   const voiceBalance = state.voiceBalance ?? 0
+  const { rows: catalogRows } = useBottleCatalog()
 
   const [rows, setRows] = useState<LobbyRow[]>([])
   const [lobbyLoaded, setLobbyLoaded] = useState(false)
@@ -171,11 +168,44 @@ export function RoomLobbyScreen() {
   const [createError, setCreateError] = useState("")
   const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
 
-  useEffect(() => {
-    if (!CREATE_BOTTLE_IDS.has(createBottleSkin)) {
-      setCreateBottleSkin(DEFAULT_ROOM_BOTTLE_SKIN)
+  const fallbackCreateOption = useMemo<CreateBottleOption>(() => {
+    const classic = getBottleCatalogRowById("classic")
+    return {
+      id: "classic",
+      name: classic?.name ?? "Классическая",
+      img: classic?.img,
+      cost: classic?.cost ?? 0,
     }
-  }, [createBottleSkin])
+  }, [])
+
+  const availableCatalogRows = useMemo(
+    () =>
+      (catalogRows.length > 0 ? catalogRows : DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published)).filter(
+        (row) => row.published,
+      ),
+    [catalogRows],
+  )
+
+  const createBottleOptions = useMemo<CreateBottleOption[]>(
+    () => {
+      const mapped = availableCatalogRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        img: row.img,
+        cost: row.cost,
+      }))
+      return mapped.length > 0 ? mapped : [fallbackCreateOption]
+    },
+    [availableCatalogRows, fallbackCreateOption],
+  )
+
+  const createBottleIds = useMemo(() => new Set(createBottleOptions.map((o) => o.id)), [createBottleOptions])
+
+  useEffect(() => {
+    if (!createBottleIds.has(createBottleSkin)) {
+      setCreateBottleSkin(createBottleOptions[0]?.id ?? DEFAULT_ROOM_BOTTLE_SKIN)
+    }
+  }, [createBottleIds, createBottleOptions, createBottleSkin])
 
   const fetchLobby = useCallback(async () => {
     try {
@@ -337,7 +367,7 @@ export function RoomLobbyScreen() {
           inventory: (Array.isArray(syncData.inventory) ? syncData.inventory : []) as InventoryItem[],
         })
       }
-      const bottlePremium = getBottleCatalogCost(createBottleSkin)
+      const bottlePremium = getBottleCatalogCostFromRows(availableCatalogRows, createBottleSkin)
       const totalCharge = createCost + bottlePremium
       if (balance < totalCharge) {
         setCreateError(
@@ -419,7 +449,7 @@ export function RoomLobbyScreen() {
     return null
   }
 
-  const createBottlePremiumHearts = getBottleCatalogCost(createBottleSkin)
+  const createBottlePremiumHearts = getBottleCatalogCostFromRows(availableCatalogRows, createBottleSkin)
   const totalCreateCost = createCost + createBottlePremiumHearts
   const canAffordCreate = voiceBalance >= totalCreateCost
 
@@ -491,7 +521,10 @@ export function RoomLobbyScreen() {
                 const wasHere = typeof visitedRooms[String(r.roomId)] === "number"
                 const roomStyle = r.tableStyle ?? DEFAULT_ROOM_TABLE_STYLE
                 const roomBottle = r.bottleSkin ?? DEFAULT_ROOM_BOTTLE_SKIN
-                const bottleOption = CREATE_BOTTLE_OPTIONS.find((o) => o.id === roomBottle) ?? CREATE_BOTTLE_OPTIONS[0]
+                const bottleOption =
+                  createBottleOptions.find((o) => o.id === roomBottle) ??
+                  getBottleCatalogRowById(roomBottle) ??
+                  fallbackCreateOption
                 const styleName =
                   ROOM_TABLE_STYLE_OPTIONS.find((s) => s.id === roomStyle)?.name ?? ROOM_TABLE_STYLE_OPTIONS[0].name
                 return (
@@ -510,12 +543,7 @@ export function RoomLobbyScreen() {
                       </span>
                       <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-300">
                         <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-slate-900/50 px-2 py-0.5">
-                          <img
-                            src={bottleOption.img}
-                            alt={bottleOption.name}
-                            className="h-4 w-4 rounded-full object-contain"
-                            loading="lazy"
-                          />
+                          <CreateBottleOptionPreview opt={bottleOption} className="!h-4 !w-4 rounded-full" />
                           {bottleOption.name}
                         </span>
                         <span
@@ -599,7 +627,7 @@ export function RoomLobbyScreen() {
                   onClick={() => {
                     setCreateError("")
                     setCreateName("Мой стол")
-                    setCreateBottleSkin(DEFAULT_ROOM_BOTTLE_SKIN)
+                    setCreateBottleSkin(createBottleOptions[0]?.id ?? DEFAULT_ROOM_BOTTLE_SKIN)
                     setCreateTableStyle(DEFAULT_ROOM_TABLE_STYLE)
                     setCreateOpen(true)
                   }}
@@ -729,8 +757,8 @@ export function RoomLobbyScreen() {
                     sideOffset={6}
                     className="z-[200] max-h-[min(340px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-violet-500/20 bg-slate-950 p-1.5 text-slate-100 shadow-2xl shadow-black/50"
                   >
-                    {CREATE_BOTTLE_OPTIONS.map((opt) => {
-                      const cost = getBottleCatalogCost(opt.id)
+                    {createBottleOptions.map((opt) => {
+                      const cost = opt.cost
                       return (
                         <SelectItem
                           key={opt.id}

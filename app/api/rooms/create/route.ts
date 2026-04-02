@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db"
 import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
 import { createUserRoomPaid, getCreateRoomCost } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
-import { getBottleCatalogCost } from "@/lib/bottle-catalog"
+import { getBottleCatalogCostServer } from "@/lib/bottle-catalog-server"
 
 export const dynamic = "force-dynamic"
 
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     const db = getDb()
     const now = Date.now()
     const COST_HEARTS = await getCreateRoomCost()
-    const bottlePremiumHearts = getBottleCatalogCost(bottleSkin)
+    const bottlePremiumHearts = getBottleCatalogCostServer(bottleSkin)
     const TOTAL_HEARTS = COST_HEARTS + bottlePremiumHearts
 
     const existing = userId
