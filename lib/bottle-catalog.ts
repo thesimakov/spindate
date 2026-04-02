@@ -36,7 +36,7 @@ export const BOTTLE_CATALOG_SKINS: BottleCatalogSkinRow[] = [
  * Временная модерация: алкогольные скины скрыты из каталога.
  * Вернуть после модерации: удалить id из этого Set.
  */
-export const TEMP_HIDDEN_BOTTLE_SKINS = new Set<BottleSkin>(["neon", "frost"])
+export const TEMP_HIDDEN_BOTTLE_SKINS = new Set<BottleSkin>(["neon", "frost", "vip"])
 
 export const VISIBLE_BOTTLE_CATALOG_SKINS: BottleCatalogSkinRow[] = BOTTLE_CATALOG_SKINS.filter(
   (row) => !TEMP_HIDDEN_BOTTLE_SKINS.has(row.id),

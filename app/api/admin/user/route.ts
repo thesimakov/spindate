@@ -32,39 +32,89 @@ export async function POST(req: Request) {
   const db = getDb()
   let userId = rawUserId
   const looksSynthetic = userId.startsWith("live:")
+  let hasDbUser = false
   if (!userId || looksSynthetic) {
     if (vkUserId != null && vkUserId > 0) {
       const row = db
         .prepare(`SELECT id FROM users WHERE vk_user_id = ? LIMIT 1`)
         .get(vkUserId) as { id: string } | undefined
-      if (row?.id) userId = row.id
+      if (row?.id) {
+        userId = row.id
+        hasDbUser = true
+      }
     }
   }
-  if (!userId || userId.startsWith("live:")) {
-    return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404, headers: NO_CACHE })
+  if (!hasDbUser && userId && !userId.startsWith("live:")) {
+    const row = db.prepare(`SELECT id FROM users WHERE id = ? LIMIT 1`).get(userId) as { id: string } | undefined
+    hasDbUser = Boolean(row?.id)
+  }
+
+  if (!hasDbUser && action !== "delete_forever") {
+    return NextResponse.json(
+      { ok: false, error: "user_not_found_for_action" },
+      { status: 404, headers: NO_CACHE },
+    )
   }
 
   const now = Date.now()
 
   if (action === "block_1w") {
+    if (!hasDbUser) return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404, headers: NO_CACHE })
     upsertAdminFlags({ userId, blockedUntil: now + 7 * 24 * 60 * 60 * 1000 })
   } else if (action === "ban_2h") {
+    if (!hasDbUser) return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404, headers: NO_CACHE })
     upsertAdminFlags({ userId, bannedUntil: now + 2 * 60 * 60 * 1000 })
   } else if (action === "clear_block") {
+    if (!hasDbUser) return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404, headers: NO_CACHE })
     upsertAdminFlags({ userId, blockedUntil: null })
   } else if (action === "clear_ban") {
+    if (!hasDbUser) return NextResponse.json({ ok: false, error: "user_not_found" }, { status: 404, headers: NO_CACHE })
     upsertAdminFlags({ userId, bannedUntil: null })
   } else if (action === "delete_forever") {
-    upsertAdminFlags({ userId, deleted: true, blockedUntil: null, bannedUntil: null })
     // Сразу выкинуть из live-стола, если присутствует
     if (playerId != null && playerId > 0) {
       await leaveLiveTable(playerId)
     }
-    // Удалить активные сессии (чтобы сразу «вылетело» при следующих запросах)
-    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId)
-    // На всякий случай — если это VK, почистить сохранённое состояние «вк-таблицы»
+
+    if (hasDbUser) {
+      // Санкция: пометить удалённым и обнулить все игровые/профильные данные.
+      upsertAdminFlags({ userId, deleted: true, blockedUntil: null, bannedUntil: null })
+
+      db.prepare(
+        `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
+         VALUES (?, 0, '[]', ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           voice_balance = 0,
+           inventory_json = '[]',
+           updated_at = excluded.updated_at`,
+      ).run(userId, now)
+
+      db.prepare(
+        `UPDATE player_profiles
+         SET display_name = 'Удалённый пользователь',
+             avatar_url = '',
+             status = '',
+             gender = 'male',
+             age = 25,
+             purpose = 'communication',
+             updated_at = ?
+         WHERE user_id = ?`,
+      ).run(now, userId)
+
+      // Удалить активные сессии (чтобы сразу «вылетело» при следующих запросах)
+      db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId)
+    }
+
+    // Для VK-only аккаунтов (без users.id) тоже обнуляем состояние.
     if (vkUserId != null && vkUserId > 0) {
-      db.prepare(`DELETE FROM vk_user_game_state WHERE vk_user_id = ?`).run(vkUserId)
+      db.prepare(
+        `INSERT INTO vk_user_game_state (vk_user_id, voice_balance, inventory_json, updated_at)
+         VALUES (?, 0, '[]', ?)
+         ON CONFLICT(vk_user_id) DO UPDATE SET
+           voice_balance = 0,
+           inventory_json = '[]',
+           updated_at = excluded.updated_at`,
+      ).run(vkUserId, now)
     }
   }
 
