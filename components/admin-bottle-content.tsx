@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
-import { isBottleSkin, toBottleImageUrl } from "@/lib/bottle-catalog"
+import { DEFAULT_BOTTLE_CATALOG_ROWS, isBottleSkin, toBottleImageUrl } from "@/lib/bottle-catalog"
 
 type AdminBottleContentProps = {
   token: string
@@ -48,6 +48,15 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [addDraft, setAddDraft] = useState<RowDraft>({
+    id: "classic",
+    name: "Новая бутылочка",
+    img: "",
+    cost: 0,
+    published: true,
+    deleted: false,
+  })
 
   const fetchRows = useCallback(async () => {
     setLoading(true)
@@ -142,6 +151,10 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
 
   const total = rows.length
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
+  const availableIdsForAdd = useMemo(
+    () => DEFAULT_BOTTLE_CATALOG_ROWS.map((r) => r.id).filter((id) => !rows.some((row) => row.id === id)),
+    [rows],
+  )
 
   return (
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
@@ -152,14 +165,72 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
             Всего: {total} · опубликовано: {publishedCount}. После публикации бутылочка сразу появляется в игре.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void fetchRows()}
-          className="rounded-lg border border-slate-500 bg-slate-700/80 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-600"
-        >
-          Обновить каталог
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAdd((v) => !v)}
+            className="rounded-lg border border-violet-500/40 bg-violet-500/15 px-3 py-2 text-xs font-medium text-violet-100 hover:bg-violet-500/25"
+          >
+            Добавить
+          </button>
+          <button
+            type="button"
+            onClick={() => void fetchRows()}
+            className="rounded-lg border border-slate-500 bg-slate-700/80 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-600"
+          >
+            Обновить каталог
+          </button>
+        </div>
       </div>
+
+      {showAdd && (
+        <div className="mb-4 rounded-xl border border-violet-500/35 bg-violet-950/20 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-200">Добавление бутылочки</p>
+          <div className="grid gap-2 md:grid-cols-3">
+            <label className="text-[11px] text-slate-400">
+              ID
+              <select
+                value={addDraft.id}
+                onChange={(e) => setAddDraft((p) => ({ ...p, id: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              >
+                {(availableIdsForAdd.length > 0 ? availableIdsForAdd : DEFAULT_BOTTLE_CATALOG_ROWS.map((r) => r.id)).map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-[11px] text-slate-400">
+              Название
+              <input
+                type="text"
+                value={addDraft.name}
+                onChange={(e) => setAddDraft((p) => ({ ...p, name: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              />
+            </label>
+            <label className="text-[11px] text-slate-400">
+              Стоимость
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={addDraft.cost}
+                onChange={(e) => setAddDraft((p) => ({ ...p, cost: Math.max(0, Math.floor(Number(e.target.value) || 0)) }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={() => void postUpdate(addDraft.id, addDraft)}
+            className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
+          >
+            Создать / добавить
+          </button>
+        </div>
+      )}
 
       {error && <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</div>}
 

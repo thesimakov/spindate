@@ -75,7 +75,9 @@ import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
+import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
+import { useFrameCatalog } from "@/lib/use-frame-catalog"
 import { useGiftCatalog } from "@/lib/use-gift-catalog"
 
 /* ------------------------------------------------------------------ */
@@ -415,6 +417,7 @@ const TABLE_STYLE_BACKGROUNDS: Record<
 
 export function GameRoom() {
   const { state } = useGame()
+  const { rows: frameCatalogRows } = useFrameCatalog()
   const { rows: giftCatalogRows } = useGiftCatalog()
   useTheme()
   const { layoutMobile: isMobile } = useGameLayoutMode()
@@ -469,6 +472,45 @@ export function GameRoom() {
     admirers,
   } = state
   const currentRoomName = roomNameForDisplay("", tableId)
+  const frameCatalogSource = useMemo(
+    () => (frameCatalogRows.length > 0 ? frameCatalogRows : DEFAULT_FRAME_CATALOG_ROWS),
+    [frameCatalogRows],
+  )
+  const giftableFramesFree = useMemo(
+    () =>
+      frameCatalogSource
+        .filter((row) => row.section === "free" && row.published && !row.deleted)
+        .map((row) => ({
+          id: row.id,
+          label: row.name,
+          border: row.border,
+          shadow: row.shadow,
+          svgPath: row.svgPath || null,
+          cost: row.cost,
+        })),
+    [frameCatalogSource],
+  )
+  const giftableFramesPremium = useMemo(
+    () =>
+      frameCatalogSource
+        .filter((row) => row.section === "premium" && row.published && !row.deleted)
+        .map((row) => ({
+          id: row.id,
+          label: row.name,
+          border: row.border,
+          shadow: row.shadow,
+          svgPath: row.svgPath || null,
+          cost: row.cost,
+        })),
+    [frameCatalogSource],
+  )
+  const giftableFrameById = useMemo(() => {
+    const m = new Map<string, { cost: number }>()
+    ;[...giftableFramesFree, ...giftableFramesPremium].forEach((row) => {
+      m.set(row.id, { cost: row.cost })
+    })
+    return m
+  }, [giftableFramesFree, giftableFramesPremium])
   const giftCatalogSource = useMemo(
     () => (giftCatalogRows.length > 0 ? giftCatalogRows : DEFAULT_GIFT_CATALOG_ROWS),
     [giftCatalogRows],
@@ -5144,16 +5186,7 @@ export function GameRoom() {
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
                   <p className="text-[13px] font-semibold text-slate-300">Бесплатные</p>
                   <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none", svgPath: null as string | null, cost: 0 },
-                      { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)", svgPath: null, cost: 0 },
-                      { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)", svgPath: null, cost: 0 },
-                      { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)", svgPath: null, cost: 0 },
-                      { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)", svgPath: null, cost: 0 },
-                      { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)", svgPath: null, cost: 0 },
-                      { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none", svgPath: null, cost: 0 },
-                      { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", svgPath: null, cost: 0 },
-                    ].map((f) => (
+                    {giftableFramesFree.map((f) => (
                       <button
                         key={f.id}
                         type="button"
@@ -5171,17 +5204,9 @@ export function GameRoom() {
                     ))}
                   </div>
 
-                  <p className="text-[13px] font-semibold text-amber-200">Премиум — 5 ❤ за рамку</p>
+                  <p className="text-[13px] font-semibold text-amber-200">Премиум — цены из каталога</p>
                   <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", svgPath: "ram-lis.svg", cost: 5 },
-                      { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", svgPath: "ram-rabbit.svg", cost: 5 },
-                      { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", svgPath: "ram-fea.svg", cost: 5 },
-                      { id: "mag", label: "Маг сердца", border: "2px solid transparent", shadow: "none", svgPath: "ram-mag.svg", cost: 5 },
-                      { id: "malif", label: "Милифисента", border: "2px solid transparent", shadow: "none", svgPath: "ram-malif.svg", cost: 5 },
-                      { id: "mir", label: "Миру мир", border: "2px solid transparent", shadow: "none", svgPath: "ram-mir.svg", cost: 5 },
-                      { id: "vesna", label: "Весна", border: "2px solid transparent", shadow: "none", svgPath: "ram-vesna.svg", cost: 5 },
-                    ].map((f) => {
+                    {giftableFramesPremium.map((f) => {
                       const canAfford = voiceBalance >= f.cost
                       return (
                         <button
@@ -5213,8 +5238,7 @@ export function GameRoom() {
                           showToast("Выберите рамку", "info")
                           return
                         }
-                        const isPremium = ["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift)
-                        const cost = isPremium ? 5 : 0
+                        const cost = giftableFrameById.get(selectedFrameForGift)?.cost ?? 0
                         if (cost > 0 && voiceBalance < cost) {
                           showToast("Недостаточно сердец для рамки", "error")
                           return
@@ -5225,7 +5249,11 @@ export function GameRoom() {
                         setSelectedFrameForGift(null)
                         showToast("Рамка подарена", "success")
                       }}
-                      disabled={selectedFrameForGift == null || (["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift ?? "") && voiceBalance < 5)}
+                      disabled={
+                        selectedFrameForGift == null ||
+                        (selectedFrameForGift != null &&
+                          (giftableFrameById.get(selectedFrameForGift)?.cost ?? 0) > voiceBalance)
+                      }
                       className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold transition-all disabled:opacity-40"
                       style={{
                         background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
@@ -5234,7 +5262,9 @@ export function GameRoom() {
                       }}
                     >
                       <Heart className="h-4 w-4" fill="currentColor" />
-                      {selectedFrameForGift != null && ["fox", "rabbit", "fairy", "mag", "malif", "mir", "vesna"].includes(selectedFrameForGift) ? "Подарить рамку — 5 ❤" : "Подарить рамку"}
+                      {selectedFrameForGift != null
+                        ? `Подарить рамку${(giftableFrameById.get(selectedFrameForGift)?.cost ?? 0) > 0 ? ` — ${giftableFrameById.get(selectedFrameForGift)?.cost ?? 0} ❤` : ""}`
+                        : "Подарить рамку"}
                     </button>
                     <button
                       type="button"

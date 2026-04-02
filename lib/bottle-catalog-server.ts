@@ -68,7 +68,23 @@ export function updateBottleCatalogEntry(input: {
     .prepare(`SELECT id, name, img, cost, published, deleted FROM bottle_catalog WHERE id = ? LIMIT 1`)
     .get(input.id) as Omit<BottleCatalogDbRow, "sort_order"> | undefined
   if (!existing) {
-    throw new Error("not_found")
+    const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM bottle_catalog`).get() as {
+      next: number
+    }
+    db.prepare(
+      `INSERT INTO bottle_catalog (id, name, img, cost, published, deleted, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      input.id,
+      input.name?.trim() || input.id,
+      input.img?.trim() || "",
+      Math.max(0, Math.floor(Number(input.cost) || 0)),
+      input.published === false ? 0 : 1,
+      input.deleted === true ? 1 : 0,
+      sortOrder.next,
+      now,
+    )
+    return
   }
   const nextName = typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing.name
   const nextImg = typeof input.img === "string" ? input.img.trim() : existing.img

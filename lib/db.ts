@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import Database from "better-sqlite3"
 import { DEFAULT_BOTTLE_CATALOG_SKINS } from "@/lib/bottle-catalog"
+import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
 
 let db: Database.Database | null = null
@@ -117,6 +118,22 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_gift_catalog_published ON gift_catalog(published, deleted, sort_order);
+
+    CREATE TABLE IF NOT EXISTS frame_catalog (
+      id TEXT PRIMARY KEY,
+      section TEXT NOT NULL DEFAULT 'free',
+      name TEXT NOT NULL,
+      border TEXT NOT NULL DEFAULT '2px solid #475569',
+      shadow TEXT NOT NULL DEFAULT 'none',
+      animation_class TEXT NOT NULL DEFAULT '',
+      svg_path TEXT NOT NULL DEFAULT '',
+      cost INTEGER NOT NULL DEFAULT 0,
+      published INTEGER NOT NULL DEFAULT 1,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_frame_catalog_published ON frame_catalog(published, deleted, sort_order);
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
@@ -159,6 +176,28 @@ function migrate(database: Database.Database) {
   )
   DEFAULT_GIFT_CATALOG_ROWS.forEach((row, index) => {
     insertGift.run(row.id, row.section, row.name, row.emoji, row.cost, row.published ? 1 : 0, index, now)
+  })
+
+  const insertFrame = database.prepare(
+    `INSERT INTO frame_catalog (
+       id, section, name, border, shadow, animation_class, svg_path, cost, published, deleted, sort_order, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
+  )
+  DEFAULT_FRAME_CATALOG_ROWS.forEach((row, index) => {
+    insertFrame.run(
+      row.id,
+      row.section,
+      row.name,
+      row.border,
+      row.shadow,
+      row.animationClass ?? "",
+      row.svgPath ?? "",
+      row.cost,
+      row.published ? 1 : 0,
+      index,
+      now,
+    )
   })
 }
 

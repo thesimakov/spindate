@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { apiFetch } from "@/lib/api-fetch"
 import { AdminBottleContent } from "@/components/admin-bottle-content"
+import { AdminFrameContent } from "@/components/admin-frame-content"
 import { AdminGiftContent } from "@/components/admin-gift-content"
 import { AdminContentPagePlaceholder } from "@/components/admin-content-page-placeholder"
 
@@ -202,13 +203,13 @@ export function DevScreen() {
 
   return (
     <div
-      className="h-app max-h-app overflow-hidden p-4 pb-12"
+      className="min-h-app overflow-y-auto p-4 pb-12"
       style={{
         background: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
         color: "#e2e8f0",
       }}
     >
-      <div className="mx-auto flex h-full min-h-0 max-w-5xl flex-col">
+      <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-600 pb-4">
           <div>
             <h1 className="text-xl font-bold text-amber-400">Панель разработчика</h1>
@@ -276,7 +277,7 @@ export function DevScreen() {
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="pr-1">
           {activeTab === "users" ? (
             <>
               <div className="max-h-[78dvh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-600 bg-slate-800/40">
@@ -445,12 +446,7 @@ export function DevScreen() {
 
               {contentPage === "bottles" && <AdminBottleContent token={getAdminToken()} />}
               {contentPage === "gifts" && <AdminGiftContent token={getAdminToken()} />}
-              {contentPage === "frames" && (
-                <AdminContentPagePlaceholder
-                  title="Контент: рамки"
-                  description="Отдельная страница под каталог рамок для аватаров."
-                />
-              )}
+              {contentPage === "frames" && <AdminFrameContent token={getAdminToken()} />}
               {contentPage === "emotions" && (
                 <AdminContentPagePlaceholder
                   title="Контент: эмоции"

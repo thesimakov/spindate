@@ -16,12 +16,13 @@ function extensionFromFile(file: File): string {
     "image/jpeg": ".jpg",
     "image/webp": ".webp",
     "image/gif": ".gif",
+    "image/svg+xml": ".svg",
   }
   if (byType[file.type]) return byType[file.type]
   const idx = file.name.lastIndexOf(".")
-  if (idx > -1) {
+    if (idx > -1) {
     const ext = file.name.slice(idx).toLowerCase()
-    if (ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp" || ext === ".gif") {
+      if (ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp" || ext === ".gif" || ext === ".svg") {
       return ext === ".jpeg" ? ".jpg" : ext
     }
   }
@@ -34,6 +35,8 @@ export async function POST(req: Request) {
   try {
     const form = await req.formData()
     const filePart = form.get("file")
+    const rawBucket = typeof form.get("bucket") === "string" ? String(form.get("bucket")) : ""
+    const bucket = rawBucket.replace(/[^a-z0-9_-]/gi, "").toLowerCase() || "misc"
     if (!(filePart instanceof File)) {
       return NextResponse.json({ ok: false, error: "file_required" }, { status: 400, headers: NO_CACHE })
     }
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
 
     const ext = extensionFromFile(filePart)
     const fileName = `catalog-${Date.now()}-${randomUUID().slice(0, 8)}${ext}`
-    const relDir = path.join("assets", "admin-upload")
+    const relDir = path.join("assets", "admin-upload", bucket)
     const absDir = path.join(process.cwd(), "public", relDir)
     await mkdir(absDir, { recursive: true })
 

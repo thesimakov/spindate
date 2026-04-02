@@ -13,6 +13,8 @@ import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
 import { apiFetch } from "@/lib/api-fetch"
+import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
+import { useFrameCatalog } from "@/lib/use-frame-catalog"
 
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
@@ -41,6 +43,7 @@ type ProfileScreenProps = {
 
 export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps = {}) {
   const { state, dispatch } = useGame()
+  const { rows: frameCatalogRows } = useFrameCatalog()
   const {
     currentUser,
     players,
@@ -83,26 +86,23 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
-  const FREE_FRAMES = [
-    { id: "none", label: "Без рамки", border: "2px solid #475569", shadow: "none", animationClass: undefined, svgPath: undefined as string | undefined, cost: 0 },
-    { id: "gold", label: "Золото", border: "3px solid #e8c06a", shadow: "0 0 10px rgba(232,192,106,0.8)", animationClass: "frame-preview-anim-gold", svgPath: undefined, cost: 0 },
-    { id: "silver", label: "Серебро", border: "3px solid #c0c0c0", shadow: "0 0 10px rgba(192,192,192,0.7)", animationClass: "frame-preview-anim-silver", svgPath: undefined, cost: 0 },
-    { id: "hearts", label: "Сердечки", border: "3px solid #e74c3c", shadow: "0 0 12px rgba(231,76,60,0.7)", animationClass: "frame-preview-anim-hearts", svgPath: undefined, cost: 0 },
-    { id: "roses", label: "Розы", border: "3px solid #be123c", shadow: "0 0 12px rgba(190,18,60,0.6)", animationClass: "frame-preview-anim-roses", svgPath: undefined, cost: 0 },
-    { id: "gradient", label: "Градиент", border: "3px solid #8b5cf6", shadow: "0 0 14px rgba(139,92,246,0.6)", animationClass: "frame-preview-anim-gradient", svgPath: undefined, cost: 0 },
-    { id: "neon", label: "Неон", border: "3px solid rgba(0, 255, 255, 0.95)", shadow: "none", animationClass: "frame-preview-anim-neon", svgPath: undefined, cost: 0 },
-    { id: "snow", label: "Снежная", border: "3px solid rgba(186, 230, 253, 0.95)", shadow: "0 0 12px rgba(186, 230, 253, 0.5)", animationClass: "frame-preview-anim-snow", svgPath: undefined, cost: 0 },
-  ] as const
-  const PREMIUM_FRAMES = [
-    { id: "fox", label: "Лиса", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-lis.svg", cost: 5 },
-    { id: "rabbit", label: "Кролик", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-rabbit.svg", cost: 5 },
-    { id: "fairy", label: "Фея", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-fea.svg", cost: 5 },
-    { id: "mag", label: "Маг сердца", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-mag.svg", cost: 5 },
-    { id: "malif", label: "Милифисента", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-malif.svg", cost: 5 },
-    { id: "mir", label: "Миру мир", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-mir.svg", cost: 5 },
-    { id: "vesna", label: "Весна", border: "2px solid transparent", shadow: "none", animationClass: undefined, svgPath: "ram-vesna.svg", cost: 5 },
-  ] as const
-  const PROFILE_FRAMES = [...FREE_FRAMES, ...PREMIUM_FRAMES]
+  const PROFILE_FRAMES = useMemo(() => {
+    const source = frameCatalogRows.length > 0 ? frameCatalogRows : DEFAULT_FRAME_CATALOG_ROWS
+    return source
+      .filter((row) => row.published && !row.deleted)
+      .map((row) => ({
+        id: row.id,
+        label: row.name,
+        border: row.border,
+        shadow: row.shadow,
+        animationClass: row.animationClass || undefined,
+        svgPath: row.svgPath || undefined,
+        cost: row.cost,
+        section: row.section,
+      }))
+  }, [frameCatalogRows])
+  const FREE_FRAMES = PROFILE_FRAMES.filter((row) => row.section === "free")
+  const PREMIUM_FRAMES = PROFILE_FRAMES.filter((row) => row.section === "premium")
 
   const rosesBalance = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,
@@ -379,7 +379,18 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const displayFrameId = frameHoverPreviewId ?? currentFrameId
-  const previewFrameMeta = PROFILE_FRAMES.find((x) => x.id === displayFrameId) ?? FREE_FRAMES[0]
+  const previewFrameMeta =
+    PROFILE_FRAMES.find((x) => x.id === displayFrameId) ??
+    PROFILE_FRAMES[0] ?? {
+      id: "none",
+      label: "Без рамки",
+      border: "2px solid #475569",
+      shadow: "none",
+      animationClass: undefined,
+      svgPath: undefined,
+      cost: 0,
+      section: "free" as const,
+    }
 
   const handleSaveName = () => {
     if (!canSaveName) return
@@ -1273,7 +1284,11 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
             <p className="relative mb-3 flex items-center gap-2 text-[15px] font-black tracking-tight text-amber-300">
               <span>Премиум</span>
-              <span className="text-[15px] font-black text-rose-200/95">5 ❤ за рамку</span>
+              <span className="text-[15px] font-black text-rose-200/95">
+                {PREMIUM_FRAMES.length > 0
+                  ? `${Math.min(...PREMIUM_FRAMES.map((f) => f.cost))} ❤ и выше`
+                  : "цены из каталога"}
+              </span>
             </p>
             <div className="relative grid grid-cols-3 gap-3">
               {PREMIUM_FRAMES.map((f) => {
