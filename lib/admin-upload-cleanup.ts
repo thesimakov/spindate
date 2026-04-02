@@ -7,7 +7,7 @@ function normalizePublicAssetPath(raw: string): string | null {
   const noQuery = value.split("?")[0]?.split("#")[0] ?? value
   const unixPath = noQuery.replaceAll("\\", "/")
   const withLeading = unixPath.startsWith("/") ? unixPath : `/${unixPath}`
-  if (!withLeading.startsWith("/assets/admin-upload/")) return null
+  if (!withLeading.startsWith("/assets/")) return null
   return withLeading
 }
 

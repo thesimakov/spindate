@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 
     const ext = extensionFromFile(filePart)
     const fileName = `catalog-${Date.now()}-${randomUUID().slice(0, 8)}${ext}`
-    const relDir = path.join("assets", "admin-upload", bucket)
+    const relDir = path.join("assets", bucket)
     const absDir = path.join(process.cwd(), "public", relDir)
     await mkdir(absDir, { recursive: true })
 

@@ -40,12 +40,15 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
       <style jsx>{`
         .status-board {
           overflow: hidden;
+          border-radius: 10px;
+          position: relative;
         }
         .status-board-glow {
           position: absolute;
           inset: 0;
           pointer-events: none;
           background:
+            radial-gradient(circle at center, rgba(34, 211, 238, 0.08) 0, rgba(34, 211, 238, 0.08) 1px, transparent 1.2px) 0 0 / 8px 8px,
             linear-gradient(180deg, rgba(34, 211, 238, 0.08) 0%, rgba(15, 23, 42, 0) 36%, rgba(34, 211, 238, 0.06) 100%),
             repeating-linear-gradient(
               0deg,
@@ -54,7 +57,8 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
               rgba(0, 0, 0, 0) 1px,
               rgba(0, 0, 0, 0) 3px
             );
-          animation: board-flicker 2.8s ease-in-out infinite;
+          animation: board-flicker 4.2s ease-in-out infinite;
+          opacity: 0.92;
         }
         .status-pill {
           text-shadow: 0 0 10px rgba(103, 232, 249, 0.65);
@@ -64,14 +68,31 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
         }
         .status-line-text {
           font-family: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-          letter-spacing: 0.04em;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          font-weight: 700;
           text-shadow:
-            0 0 8px rgba(34, 211, 238, 0.45),
+            0 0 3px rgba(34, 211, 238, 0.8),
+            0 0 8px rgba(34, 211, 238, 0.6),
             0 0 18px rgba(34, 211, 238, 0.25);
-          color: #cffafe;
+          color: #67e8f9;
+          filter: saturate(1.15);
+        }
+        .status-line-item {
+          position: relative;
+        }
+        .status-line-item::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: radial-gradient(circle at center, rgba(103, 232, 249, 0.4) 0, rgba(103, 232, 249, 0.4) 0.8px, transparent 1px)
+            0 0 / 6px 6px;
+          mix-blend-mode: screen;
+          opacity: 0.45;
         }
         .status-line-marquee {
-          animation: status-line-marquee 18s linear infinite;
+          animation: status-line-marquee 34s linear infinite;
           will-change: transform;
         }
         @keyframes board-flicker {
