@@ -1,8 +1,13 @@
 "use client"
 
-import { useMemo } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useStatusLine } from "@/lib/use-status-line"
 import { cn } from "@/lib/utils"
+
+/** Целевая скорость ленты (px/s): длинный текст → дольше duration, а не быстрее бег. */
+const MARQUEE_PX_PER_SEC = 42
+const MARQUEE_DURATION_MIN_S = 16
+const MARQUEE_DURATION_MAX_S = 420
 
 type GameStatusTickerProps = {
   className?: string
@@ -12,9 +17,28 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
   const { row } = useStatusLine()
 
   const text = useMemo(() => (row?.text ?? "").trim(), [row?.text])
-  if (!text) return null
+  const marqueeRef = useRef<HTMLDivElement>(null)
+  const [marqueeDurationSec, setMarqueeDurationSec] = useState(34)
 
-  const repeated = `${text}   •   ${text}   •   ${text}   •   `
+  const repeated = useMemo(() => `${text}   •   ${text}   •   ${text}   •   `, [text])
+
+  useLayoutEffect(() => {
+    const el = marqueeRef.current
+    if (!el) return
+    const measure = () => {
+      const total = el.scrollWidth
+      if (total <= 0) return
+      const loopPx = total / 2
+      const sec = loopPx / MARQUEE_PX_PER_SEC
+      setMarqueeDurationSec(Math.min(MARQUEE_DURATION_MAX_S, Math.max(MARQUEE_DURATION_MIN_S, sec)))
+    }
+    measure()
+    const ro = new ResizeObserver(() => measure())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [repeated])
+
+  if (!text) return null
 
   return (
     <div
@@ -29,7 +53,11 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
           Новости
         </span>
         <div className="relative w-full overflow-hidden">
-          <div className="status-line-marquee status-line-text flex w-max whitespace-nowrap text-xs font-medium text-cyan-100 sm:text-sm">
+          <div
+            ref={marqueeRef}
+            className="status-line-marquee status-line-text flex w-max whitespace-nowrap text-xs font-medium text-cyan-100 sm:text-sm"
+            style={{ animationDuration: `${marqueeDurationSec}s` }}
+          >
             <span className="status-line-item pr-8">{repeated}</span>
             <span className="status-line-item pr-8" aria-hidden>
               {repeated}
@@ -92,7 +120,9 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
           opacity: 0.45;
         }
         .status-line-marquee {
-          animation: status-line-marquee 34s linear infinite;
+          animation-name: status-line-marquee;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
           will-change: transform;
         }
         @keyframes board-flicker {

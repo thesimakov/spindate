@@ -392,6 +392,8 @@ export type GameAction =
   | { type: "EXCHANGE_ROSES_FOR_VOICES"; amount: number }
   /** Обменять монеты (сердечки) на розы: 5 сердец = 1 роза. */
   | { type: "EXCHANGE_VOICES_FOR_ROSES"; amount: number }
+  /** Обменять один подарок из магазина на сердца: начисление = цена подарка в ❤ − 1. */
+  | { type: "EXCHANGE_INVENTORY_GIFT_FOR_VOICES"; giftType: InventoryItem["type"] }
   /** Снять розы из инвентаря (например, вход в «Угадай-ка»). */
   | { type: "REMOVE_INVENTORY_ROSES"; amount: number }
   /** Забрать приветственный подарок при первом заходе (150 сердец). */

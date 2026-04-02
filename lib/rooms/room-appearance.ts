@@ -38,8 +38,15 @@ const ROOM_BOTTLE_SKINS: BottleSkin[] = [
 const ROOM_BOTTLE_SET = new Set<string>(ROOM_BOTTLE_SKINS)
 const ROOM_TABLE_STYLE_SET = new Set<string>(ROOM_TABLE_STYLE_OPTIONS.map((s) => s.id))
 
+/** id из админского каталога бутылочек (не только захардкоженный список). */
+const CUSTOM_BOTTLE_SKIN_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
+
 export function normalizeRoomBottleSkin(value: unknown): BottleSkin {
-  if (typeof value === "string" && ROOM_BOTTLE_SET.has(value)) return value as BottleSkin
+  if (typeof value !== "string") return DEFAULT_ROOM_BOTTLE_SKIN
+  const v = value.trim()
+  if (!v) return DEFAULT_ROOM_BOTTLE_SKIN
+  if (ROOM_BOTTLE_SET.has(v)) return v as BottleSkin
+  if (CUSTOM_BOTTLE_SKIN_RE.test(v)) return v as BottleSkin
   return DEFAULT_ROOM_BOTTLE_SKIN
 }
 

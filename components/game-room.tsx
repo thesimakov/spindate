@@ -44,7 +44,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
-import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl } from "@/lib/assets"
+import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
@@ -538,6 +538,17 @@ export function GameRoom() {
     () => giftCatalogSource.filter((row) => row.section !== "free" && row.published && !row.deleted),
     [giftCatalogSource],
   )
+  const giftDisplayById = useMemo(() => {
+    const m = new Map<string, { emoji: string; img: string }>()
+    for (const row of giftCatalogSource) {
+      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim() })
+    }
+    return m
+  }, [giftCatalogSource])
+  const giftCatalogLogTypeIds = useMemo(
+    () => new Set<string>(giftCatalogSource.map((r) => String(r.id))),
+    [giftCatalogSource],
+  )
   const bottleCatalogSource = useMemo(
     () => (bottleCatalogRows.length > 0 ? bottleCatalogRows : DEFAULT_BOTTLE_CATALOG_ROWS),
     [bottleCatalogRows],
@@ -922,32 +933,14 @@ export function GameRoom() {
     [gameLog],
   )
 
-  type BigGiftType =
-    | "toy_bear"
-    | "toy_car"
-    | "toy_ball"
-    | "souvenir_magnet"
-    | "souvenir_keychain"
-    | "plush_heart"
-    | "chocolate_box"
-
   const getBigGiftSequenceForPlayer = useCallback(
-    (playerId: number): BigGiftType[] => {
-      const bigTypes: BigGiftType[] = [
-        "toy_bear",
-        "toy_car",
-        "toy_ball",
-        "souvenir_magnet",
-        "souvenir_keychain",
-        "plush_heart",
-        "chocolate_box",
-      ]
+    (playerId: number): string[] => {
       return gameLog
-        .filter((e) => bigTypes.includes(e.type as BigGiftType) && e.toPlayer?.id === playerId)
+        .filter((e) => giftCatalogLogTypeIds.has(e.type as string) && e.toPlayer?.id === playerId)
         .sort((a, b) => a.timestamp - b.timestamp)
-        .map((e) => e.type as BigGiftType)
+        .map((e) => e.type as string)
     },
-    [gameLog],
+    [gameLog, giftCatalogLogTypeIds],
   )
 
   /* ---- Reset prediction/bet state on new round ---- */
@@ -1231,6 +1224,19 @@ export function GameRoom() {
 
       seen.add(entry.id)
 
+      if (giftCatalogLogTypeIds.has(entry.type as string)) {
+        if (!entry.fromPlayer || !entry.toPlayer) continue
+        if (entry.fromPlayer.id === currentUser.id) continue
+        const fromIdx = players.findIndex((p) => p.id === entry.fromPlayer!.id)
+        const toIdx = players.findIndex((p) => p.id === entry.toPlayer!.id)
+        if (fromIdx === -1 || toIdx === -1) continue
+        const gr = giftDisplayById.get(entry.type as string)
+        const gImg = gr?.img?.trim()
+        if (gImg) queue.push({ fromIdx, toIdx, type: entry.type, imgSrc: gImg })
+        else queue.push({ fromIdx, toIdx, type: entry.type, emoji: gr?.emoji ?? "🎁" })
+        continue
+      }
+
       if (!EMOTION_TYPES.has(entry.type)) continue
       if (entry.fromPlayer?.id === currentUser.id) continue
       if (!entry.fromPlayer || !entry.toPlayer) continue
@@ -1287,7 +1293,7 @@ export function GameRoom() {
       const toRemove = ids.slice(0, ids.length - 200)
       for (const id of toRemove) seen.delete(id)
     }
-  }, [gameLog, currentUser, players, launchEmoji, launchSteam, playEmotionSound])
+  }, [gameLog, currentUser, players, launchEmoji, launchSteam, playEmotionSound, giftCatalogLogTypeIds, giftDisplayById])
 
   /* ---- start the actual spin ---- */
   const startSpin = useCallback(() => {
@@ -3853,6 +3859,7 @@ export function GameRoom() {
                     kissCount={getKissCountForPlayer(player.id)}
                     giftIcons={giftIcons}
                     bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
+                    giftDisplayById={giftDisplayById}
                     frameId={playerFrameId}
                     frameBorder={playerFrameMeta?.border}
                     frameShadow={playerFrameMeta?.shadow}
@@ -5251,7 +5258,7 @@ export function GameRoom() {
                         <div className="relative h-14 w-14 flex-shrink-0">
                           <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
                           {f.svgPath && (
-                            <img src={assetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
+                            <img src={resolveFrameCatalogAssetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
                           )}
                         </div>
                         <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
@@ -5274,7 +5281,7 @@ export function GameRoom() {
                           <div className="relative h-14 w-14 flex-shrink-0">
                             <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
                             {f.svgPath && (
-                              <img src={assetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
+                              <img src={resolveFrameCatalogAssetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
                             )}
                           </div>
                           <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
@@ -5509,8 +5516,17 @@ export function GameRoom() {
                                         : "bg-gradient-to-br from-slate-600/45 to-slate-900/75 group-hover:ring-sky-400/20"
                                     } ${disabled ? "opacity-50 grayscale-[0.35]" : ""}`}
                                   >
-                                    <span className="select-none text-[1.35rem] leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-2xl">
-                                      {gift.emoji}
+                                    <span className="flex select-none items-center justify-center text-[1.35rem] leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-2xl">
+                                      {gift.img?.trim() ? (
+                                        <img
+                                          src={gift.img}
+                                          alt=""
+                                          className="h-9 w-9 object-contain sm:h-10 sm:w-10"
+                                          draggable={false}
+                                        />
+                                      ) : (
+                                        gift.emoji
+                                      )}
                                     </span>
                                   </div>
                                   <span className="line-clamp-2 min-h-[2rem] w-full px-0.5 text-center text-[9px] font-medium leading-tight text-slate-400 group-hover:text-slate-300 sm:min-h-[2.25rem] sm:text-[10px]">

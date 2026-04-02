@@ -8,13 +8,14 @@ import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
-import { assetUrl } from "@/lib/assets"
+import { assetUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
 import { apiFetch } from "@/lib/api-fetch"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
+import { getTableSyncDispatch } from "@/lib/table-sync-registry"
 
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
@@ -47,7 +48,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const {
     currentUser,
     players,
-    tableId,
     tablePaused,
     voiceBalance,
     bonusBalance,
@@ -62,27 +62,13 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     ugadaikaRoundsWon,
   } = state
 
-  const pushAvatarFrameToTable = async (frameId: string) => {
-    if (!currentUser) return
-    if (tablePaused) return
-    // ProfileScreen использует обычный dispatch (без sync-engine), поэтому событие не улетало на сервер.
-    // Для синхронизации рамки вручную пушим table-event.
-    try {
-      await apiFetch("/api/table/events", {
-        method: "POST",
-        cache: "no-store" as RequestCache,
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          mode: "push",
-          tableId,
-          senderId: currentUser.id,
-          action: { type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId },
-        }),
-      })
-    } catch {
-      // ignore: стейт догонится на следующем authority poll у других
-    }
+  /** Рамка на столе: через sync-dispatch из game-room (сервер + остальные игроки), иначе только локально. */
+  const dispatchAvatarFrameSynced = (frameId: string) => {
+    if (!currentUser || tablePaused) return
+    const action = { type: "SET_AVATAR_FRAME" as const, playerId: currentUser.id, frameId }
+    const sync = getTableSyncDispatch()
+    if (sync) sync(action)
+    else dispatch(action)
   }
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
@@ -1249,8 +1235,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                     type="button"
                     onPointerEnter={() => setFrameHoverPreviewId(f.id)}
                     onClick={() => {
-                      currentUser && dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
-                      void pushAvatarFrameToTable(f.id)
+                      if (currentUser) dispatchAvatarFrameSynced(f.id)
                       setShowFramesModal(false)
                       showToast("Рамка применена", "success")
                     }}
@@ -1269,7 +1254,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       />
                       {f.svgPath && (
                         <img
-                          src={assetUrl(f.svgPath)}
+                          src={resolveFrameCatalogAssetUrl(f.svgPath)}
                           alt=""
                           className="pointer-events-none absolute inset-0 h-full w-full object-contain"
                           aria-hidden
@@ -1307,8 +1292,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         return
                       }
                       if (f.cost > 0) dispatch({ type: "PAY_VOICES", amount: f.cost })
-                      dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId: f.id })
-                      void pushAvatarFrameToTable(f.id)
+                      dispatchAvatarFrameSynced(f.id)
                       setShowFramesModal(false)
                       showToast("Рамка применена", "success")
                     }}
@@ -1327,7 +1311,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       />
                       {f.svgPath && (
                         <img
-                          src={assetUrl(f.svgPath)}
+                          src={resolveFrameCatalogAssetUrl(f.svgPath)}
                           alt=""
                           className="pointer-events-none absolute inset-0 h-full w-full object-contain"
                           aria-hidden

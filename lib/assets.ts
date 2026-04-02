@@ -63,6 +63,30 @@ export function publicUrl(path: string): string {
   return fullPath + q
 }
 
+/** Статика из `public/assets/` или загрузки каталога через API (`/api/catalog/upload-asset/...`). */
+export function catalogMediaUrl(path: string): string {
+  const trimmed = String(path ?? "").trim()
+  if (!trimmed) return ""
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  const pathOnly = (trimmed.split("?")[0]?.split("#")[0] ?? trimmed).replaceAll("\\", "/")
+  const normalized = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`
+  if (normalized.startsWith("/api/")) return publicUrl(normalized)
+  return assetUrl(normalized)
+}
+
+/** Путь к картинке/SVG рамки из каталога (статика, загрузка через API или полный URL). */
+export function resolveFrameCatalogAssetUrl(path: string): string {
+  const raw = String(path ?? "").trim()
+  if (!raw) return ""
+  if (/^https?:\/\//i.test(raw)) return raw
+  const p = (raw.split("?")[0]?.split("#")[0] ?? raw).replaceAll("\\", "/")
+  if (p.startsWith("/api/") || p.startsWith("api/")) {
+    return catalogMediaUrl(p.startsWith("/") ? p : `/${p}`)
+  }
+  if (p.startsWith("/")) return catalogMediaUrl(p)
+  return catalogMediaUrl(`/assets/${p}`)
+}
+
 /** Пути к картинкам бутылочек (каталог в игре + отображение на столе). Полный список — public/assets/README.md */
 export const BOTTLE_IMAGES = {
   classic: "/assets/b_standart_v2.webp",

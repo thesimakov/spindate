@@ -2,20 +2,11 @@
 
 import { useEffect, useState } from "react"
 import type { Player } from "@/lib/game-types"
-import { assetUrl, FRAME_SVG } from "@/lib/assets"
+import { assetUrl, FRAME_SVG, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 
-type AvatarBigGiftType =
-  | "toy_bear"
-  | "toy_car"
-  | "toy_ball"
-  | "souvenir_magnet"
-  | "souvenir_keychain"
-  | "plush_heart"
-  | "chocolate_box"
+const EMPTY_BIG_GIFT_SEQ: string[] = []
 
-const EMPTY_BIG_GIFT_SEQ: AvatarBigGiftType[] = []
-
-function bigGiftEmoji(type: AvatarBigGiftType): string {
+function bigGiftEmoji(type: string): string {
   switch (type) {
     case "toy_bear":
       return "🧸"
@@ -64,8 +55,10 @@ interface PlayerAvatarProps {
   compact?: boolean
   kissCount?: number
   giftIcons?: Array<"rose" | "flowers" | "song" | "diamond" | "kiss">
-  /** Все «большие» подарки из инвентаря по порядку; при >1 — по кругу с плавной сменой */
-  bigGiftSequence?: AvatarBigGiftType[]
+  /** Все «большие» подарки из лога по порядку (id из каталога); при >1 — по кругу с плавной сменой */
+  bigGiftSequence?: string[]
+  /** id подарка → emoji и URL картинки (из каталога) для отрисовки вместо только emoji */
+  giftDisplayById?: Map<string, { emoji: string; img: string }>
   /** Рамка на аватарке (подаренная) — отображается на столе */
   frameId?: string
   /** Переопределение бордера рамки из каталога (для кастомных загруженных рамок). */
@@ -100,6 +93,7 @@ export function PlayerAvatar({
   kissCount,
   giftIcons,
   bigGiftSequence,
+  giftDisplayById,
   frameId,
   frameBorder,
   frameShadow,
@@ -120,7 +114,7 @@ export function PlayerAvatar({
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
   const isSvgFrame = frameId && FRAME_SVG_IDS.includes(frameId as keyof typeof FRAME_SVG)
   const svgFrameSrc = frameSvgPath
-    ? assetUrl(frameSvgPath.startsWith("/") ? frameSvgPath : `/assets/${frameSvgPath}`)
+    ? resolveFrameCatalogAssetUrl(frameSvgPath)
     : isSvgFrame && frameId in FRAME_SVG
       ? assetUrl((FRAME_SVG as Record<string, string>)[frameId])
       : null
@@ -562,7 +556,17 @@ export function PlayerAvatar({
               aria-hidden="true"
               style={{ fontSize: "40px", lineHeight: 1 }}
             >
-              {bigGiftEmoji(bigSeq[bigGiftIdx])}
+              {(() => {
+                const gid = bigSeq[bigGiftIdx]
+                const meta = giftDisplayById?.get(gid)
+                const src = meta?.img?.trim()
+                if (src) {
+                  return (
+                    <img src={src} alt="" className="h-14 w-14 object-contain" draggable={false} />
+                  )
+                }
+                return meta?.emoji ?? bigGiftEmoji(gid)
+              })()}
             </span>
           </div>
         )}

@@ -3,6 +3,7 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { mkdir, writeFile } from "node:fs/promises"
 import { requireAdmin } from "@/lib/admin-auth"
+import { catalogUploadPublicPath, getCatalogUploadRoot } from "@/lib/catalog-upload-paths"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -20,9 +21,9 @@ function extensionFromFile(file: File): string {
   }
   if (byType[file.type]) return byType[file.type]
   const idx = file.name.lastIndexOf(".")
-    if (idx > -1) {
+  if (idx > -1) {
     const ext = file.name.slice(idx).toLowerCase()
-      if (ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp" || ext === ".gif" || ext === ".svg") {
+    if (ext === ".png" || ext === ".jpg" || ext === ".jpeg" || ext === ".webp" || ext === ".gif" || ext === ".svg") {
       return ext === ".jpeg" ? ".jpg" : ext
     }
   }
@@ -52,8 +53,7 @@ export async function POST(req: Request) {
 
     const ext = extensionFromFile(filePart)
     const fileName = `catalog-${Date.now()}-${randomUUID().slice(0, 8)}${ext}`
-    const relDir = path.join("assets", bucket)
-    const absDir = path.join(process.cwd(), "public", relDir)
+    const absDir = path.join(getCatalogUploadRoot(), bucket)
     await mkdir(absDir, { recursive: true })
 
     const arrayBuffer = await filePart.arrayBuffer()
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     const absTarget = path.join(absDir, fileName)
     await writeFile(absTarget, buffer)
 
-    const publicPath = `/${relDir.replaceAll("\\", "/")}/${fileName}`
+    const publicPath = catalogUploadPublicPath(bucket, fileName)
     return NextResponse.json({ ok: true, path: publicPath }, { headers: NO_CACHE })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

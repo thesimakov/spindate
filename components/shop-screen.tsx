@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react"
-import { ArrowRightLeft, Coins, Flower2, Heart } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { ArrowRightLeft, ChevronLeft, ChevronRight, Coins, Flower2, Gift, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { generateLogId, useGame } from "@/lib/game-context"
@@ -10,8 +10,9 @@ import { listVotesForPack, payVotesForPack } from "@/lib/heart-shop-pricing"
 import { apiFetch } from "@/lib/api-fetch"
 import { vkBridge } from "@/lib/vk-bridge"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
-import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-rewards"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
+import { heartsFromGiftSellback } from "@/lib/gift-catalog"
+import { useGiftCatalog } from "@/lib/use-gift-catalog"
 import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 
 type ShopScreenProps = {
@@ -24,7 +25,25 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const { currentUser, voiceBalance, players, inventory, tableId } = state
   const { toast, showToast } = useInlineToast(1700)
   const rosesCount = inventory.filter((i) => i.type === "rose").length
-  const [exchangeTab, setExchangeTab] = useState<"voices-to-roses" | "roses-to-voices">("voices-to-roses")
+  const { rows: giftCatalogRows } = useGiftCatalog()
+  const [exchangeTab, setExchangeTab] = useState<
+    "voices-to-roses" | "roses-to-voices" | "gift-to-voices"
+  >("voices-to-roses")
+
+  const giftCounts = useMemo(() => {
+    const m = new Map<InventoryItem["type"], number>()
+    for (const item of inventory) {
+      if (item.type === "rose") continue
+      m.set(item.type, (m.get(item.type) ?? 0) + 1)
+    }
+    return m
+  }, [inventory])
+
+  const exchangeableGiftRows = useMemo(() => {
+    return [...giftCatalogRows]
+      .filter((row) => row.published && !row.deleted && row.cost >= 2)
+      .sort((a, b) => b.cost - a.cost)
+  }, [giftCatalogRows])
   const heartOffers = (
     [
       { hearts: 5, itemId: vkBridge.VK_ITEM_IDS.hearts_5 },
@@ -102,6 +121,40 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const vipLevelKey = currentUser ? `spindate_vip_level_v1_${currentUser.id}` : ""
   const [vipLevel, setVipLevel] = useState<0 | 1 | 2 | 3>(0)
 
+  const vipTariffsScrollRef = useRef<HTMLDivElement>(null)
+  const [vipTariffsScrollEdges, setVipTariffsScrollEdges] = useState({ atStart: true, atEnd: false })
+
+  const updateVipTariffsScrollEdges = useCallback(() => {
+    const el = vipTariffsScrollRef.current
+    if (!el) return
+    const { scrollLeft, scrollWidth, clientWidth } = el
+    setVipTariffsScrollEdges({
+      atStart: scrollLeft <= 4,
+      atEnd: scrollLeft + clientWidth >= scrollWidth - 4,
+    })
+  }, [])
+
+  const scrollVipTariffs = useCallback(
+    (direction: -1 | 1) => {
+      const el = vipTariffsScrollRef.current
+      if (!el) return
+      const firstCard = el.querySelector<HTMLElement>("[data-vip-tariff-card]")
+      const gap = 12
+      const step = (firstCard?.offsetWidth ?? 296) + gap
+      el.scrollBy({ left: direction * step, behavior: "smooth" })
+    },
+    [],
+  )
+
+  useEffect(() => {
+    updateVipTariffsScrollEdges()
+    const el = vipTariffsScrollRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver(() => updateVipTariffsScrollEdges())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [updateVipTariffsScrollEdges])
+
   useEffect(() => {
     try {
       setVipTrialUsed(localStorage.getItem(vipTrialKey) === "1")
@@ -134,7 +187,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   }, [vipLevel, vipLevelKey])
 
   const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
-  const DAILY_BONUS_KEY = "botl_daily_bonus_v1"
+  /** Отдельно от окна ежедневной серии (`botl_daily_bonus_v1` в DailyStreakGateScreen). */
+  const SHOP_DAILY_HEARTS_KEY = "spindate_shop_daily_hearts_v1"
+  const SHOP_DAILY_HEARTS_AMOUNT = 200
 
   const dailyBonusTodayKey = useMemo(() => {
     const d = new Date()
@@ -142,23 +197,12 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     return d.toISOString().slice(0, 10)
   }, [])
 
-  const dailyBonusYesterdayKey = useMemo(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - 1)
-    return d.toISOString().slice(0, 10)
-  }, [])
-
-  const [dailyDay, setDailyDay] = useState(1)
-  const [dailyClaimedToday, setDailyClaimedToday] = useState(false)
+  const [shopDailyClaimedToday, setShopDailyClaimedToday] = useState(false)
   const [welcomeGiftDone, setWelcomeGiftDone] = useState(false)
-
-  const dailyStreakRewardSpec = useMemo(() => getDailyStreakReward(dailyDay), [dailyDay])
 
   useEffect(() => {
     if (!currentUser) {
-      setDailyDay(1)
-      setDailyClaimedToday(false)
+      setShopDailyClaimedToday(false)
       setWelcomeGiftDone(false)
       return
     }
@@ -168,103 +212,53 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       const welcomeOk = !!welcomeStored[String(currentUser.id)]
       setWelcomeGiftDone(welcomeOk)
       if (!welcomeOk) {
-        setDailyDay(1)
-        setDailyClaimedToday(false)
+        setShopDailyClaimedToday(false)
         return
       }
-      const raw = localStorage.getItem(DAILY_BONUS_KEY)
-      const parsed = raw ? (JSON.parse(raw) as { lastClaimDate?: string; streakDay?: number }) : {}
-      const last = parsed.lastClaimDate
-      const streak = typeof parsed.streakDay === "number" ? parsed.streakDay : 0
-      if (last === dailyBonusTodayKey) {
-        setDailyDay(computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey))
-        setDailyClaimedToday(true)
-        return
-      }
-      const nextDay = computeNextStreakDay(last, streak, dailyBonusTodayKey, dailyBonusYesterdayKey)
-      setDailyDay(nextDay)
-      setDailyClaimedToday(false)
+      const shopRaw = localStorage.getItem(SHOP_DAILY_HEARTS_KEY)
+      const byUser = shopRaw ? (JSON.parse(shopRaw) as Record<string, string>) : {}
+      const lastShopClaim = byUser[String(currentUser.id)]
+      setShopDailyClaimedToday(lastShopClaim === dailyBonusTodayKey)
     } catch {
-      setDailyDay(1)
-      setDailyClaimedToday(false)
+      setShopDailyClaimedToday(false)
     }
-  }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey])
+  }, [currentUser, dailyBonusTodayKey])
 
-  const handleClaimDailyBonus = useCallback(async () => {
-    if (!currentUser || !welcomeGiftDone || dailyClaimedToday) return
-    const spec = getDailyStreakReward(dailyDay)
-    if (!spec) return
+  const handleClaimShopDailyHearts = useCallback(async () => {
+    if (!currentUser || !welcomeGiftDone || shopDailyClaimedToday) return
 
+    const amount = SHOP_DAILY_HEARTS_AMOUNT
     const vb = voiceBalance ?? 0
-    let nextVoice = vb
-    let nextInventory: InventoryItem[] = inventory
+    const nextVoice = vb + amount
 
-    if (spec.kind === "hearts") {
-      nextVoice = vb + spec.amount
-      dispatch({ type: "PAY_VOICES", amount: -spec.amount })
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} сердец`,
-          timestamp: Date.now(),
-        } satisfies GameLogEntry,
-      })
-      showToast(`+${spec.amount} сердец в подарок`, "success")
-    } else if (spec.kind === "roses") {
-      const base = Date.now()
-      const newRoses: InventoryItem[] = Array.from({ length: spec.amount }, (_, i) => ({
-        type: "rose" as const,
-        fromPlayerId: 0,
-        fromPlayerName: "Ежедневный бонус",
-        timestamp: base + i,
-      }))
-      nextInventory = [...inventory, ...newRoses]
-      for (const item of newRoses) {
-        dispatch({ type: "ADD_INVENTORY_ITEM", item })
-      }
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: +${spec.amount} роз`,
-          timestamp: Date.now(),
-        } satisfies GameLogEntry,
-      })
-      showToast(`+${spec.amount} роз в инвентарь`, "success")
-    } else {
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "system",
-          fromPlayer: currentUser,
-          text: `${currentUser.name} получил(а) ежедневный бонус: супер-рамка (награда будет начислена позже)`,
-          timestamp: Date.now(),
-        } satisfies GameLogEntry,
-      })
-      showToast("Супер-рамка — скоро в профиле", "success")
-    }
+    dispatch({ type: "PAY_VOICES", amount: -amount })
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: "system",
+        fromPlayer: currentUser,
+        text: `${currentUser.name} получил(а) ежедневный подарок в магазине: +${amount} сердец`,
+        timestamp: Date.now(),
+      } satisfies GameLogEntry,
+    })
+    showToast(`+${amount} сердец в подарок`, "success")
+
     try {
-      localStorage.setItem(
-        DAILY_BONUS_KEY,
-        JSON.stringify({ lastClaimDate: dailyBonusTodayKey, streakDay: dailyDay }),
-      )
+      const shopRaw = localStorage.getItem(SHOP_DAILY_HEARTS_KEY)
+      const byUser = shopRaw ? (JSON.parse(shopRaw) as Record<string, string>) : {}
+      byUser[String(currentUser.id)] = dailyBonusTodayKey
+      localStorage.setItem(SHOP_DAILY_HEARTS_KEY, JSON.stringify(byUser))
     } catch {
       // ignore
     }
 
-    await persistUserGameState(currentUser, nextVoice, nextInventory)
-    setDailyClaimedToday(true)
+    await persistUserGameState(currentUser, nextVoice, inventory)
+    setShopDailyClaimedToday(true)
   }, [
     currentUser,
     welcomeGiftDone,
-    dailyClaimedToday,
-    dailyDay,
+    shopDailyClaimedToday,
     dispatch,
     dailyBonusTodayKey,
     showToast,
@@ -525,33 +519,27 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           <p className="mt-0.5 text-xs font-semibold text-slate-700">
             {!welcomeGiftDone ? (
               <>Доступно раз в день — сначала примите приветственный подарок</>
-            ) : dailyStreakRewardSpec?.kind === "hearts" ? (
+            ) : (
               <>
                 <span className="inline-flex items-center gap-1 rounded-full border border-fuchsia-200/80 bg-white/70 px-2 py-0.5 font-extrabold text-fuchsia-700 shadow-[0_6px_12px_rgba(236,72,153,0.12)]">
-                  +{dailyStreakRewardSpec.amount}
+                  +{SHOP_DAILY_HEARTS_AMOUNT}
                 </span>{" "}
                 сердечек раз в сутки
               </>
-            ) : dailyStreakRewardSpec?.kind === "roses" ? (
-              <>30 роз — награда раз в сутки</>
-            ) : dailyStreakRewardSpec?.kind === "frame" ? (
-              <>Супер-рамка — раз в сутки</>
-            ) : (
-              <>Доступно раз в день</>
             )}
           </p>
         </div>
         <button
           type="button"
-          disabled={!welcomeGiftDone || dailyClaimedToday}
-          onClick={() => void handleClaimDailyBonus()}
+          disabled={!welcomeGiftDone || shopDailyClaimedToday}
+          onClick={() => void handleClaimShopDailyHearts()}
           className="relative inline-flex shrink-0 items-center gap-1.5 rounded-full border-2 border-violet-400/85 bg-gradient-to-b from-violet-400 via-fuchsia-500 to-purple-700 px-3 py-2 text-xs font-extrabold text-white shadow-[0_4px_0_#4c1d95,0_10px_22px_rgba(139,92,246,0.35),inset_0_2px_0_rgba(255,255,255,0.35)] [text-shadow:0_1px_2px_rgba(0,0,0,0.45)] transition hover:brightness-[1.06] active:translate-y-px active:shadow-[0_2px_0_#4c1d95,0_8px_18px_rgba(139,92,246,0.3)] disabled:cursor-not-allowed disabled:border-slate-500 disabled:from-slate-400 disabled:via-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none disabled:hover:brightness-100"
         >
-          {!dailyClaimedToday && welcomeGiftDone && (
+          {!shopDailyClaimedToday && welcomeGiftDone && (
             <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" aria-hidden />
           )}
           <Coins className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
-          {dailyClaimedToday ? "Забрано" : "Забрать"}
+          {shopDailyClaimedToday ? "Забрано" : "Забрать"}
         </button>
       </div>
 
@@ -642,13 +630,45 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       </div>
 
       {/* VIP тарифы */}
-      <div className="space-y-2 px-1">
-        <p className={`${tOverline} ${secLabel}`}>VIP</p>
-        <h2 className={`${tH2} ${secTitle}`}>Тарифы</h2>
+      <div className="px-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <p className={`${tOverline} ${secLabel}`}>VIP</p>
+            <h2 className={`${tH2} ${secTitle}`}>Тарифы</h2>
+          </div>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+            <button
+              type="button"
+              aria-label="Предыдущий тариф"
+              disabled={vipTariffsScrollEdges.atStart}
+              onClick={() => scrollVipTariffs(-1)}
+              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-35 sm:h-10 sm:w-10"
+            >
+              <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.25} aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label="Следующий тариф"
+              disabled={vipTariffsScrollEdges.atEnd}
+              onClick={() => scrollVipTariffs(1)}
+              className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-35 sm:h-10 sm:w-10"
+            >
+              <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.25} aria-hidden />
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="-mx-4 overflow-x-auto overflow-y-visible px-4 pb-4 pt-2 sm:-mx-5 sm:px-5">
-        <div className="flex min-w-max snap-x snap-mandatory gap-3 pr-2 sm:pr-3">
-        <div className="relative w-[18.5rem] shrink-0 snap-start sm:w-[19.5rem]">
+      <div className="-mx-4 px-2 pb-4 pt-2 sm:-mx-5 sm:px-3">
+        <div
+          ref={vipTariffsScrollRef}
+          onScroll={updateVipTariffsScrollEdges}
+          className="overflow-x-auto overflow-y-visible scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <div className="flex min-w-max snap-x snap-mandatory gap-3 pl-3 pt-2 pb-1 pr-2 sm:pl-4 sm:pt-2.5 sm:pr-3">
+        <div
+          data-vip-tariff-card
+          className="relative w-[18.5rem] shrink-0 snap-start sm:w-[19.5rem]"
+        >
           <div className="pointer-events-none absolute -left-1.5 -top-1.5 z-[3] h-[4.6rem] w-[4.6rem] drop-shadow-[0_10px_18px_rgba(0,0,0,0.25)] sm:-left-2 sm:-top-2 sm:h-[5.25rem] sm:w-[5.25rem]" aria-hidden>
             <img src="/assets/green.png" alt="" className="h-full w-full" />
           </div>
@@ -673,7 +693,10 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
         </div>
 
-        <div className="w-[18.5rem] shrink-0 snap-start overflow-hidden rounded-3xl border border-slate-200 bg-[#f4f4f5] shadow-[0_6px_14px_rgba(148,163,184,0.2)] sm:w-[19.5rem]">
+        <div
+          data-vip-tariff-card
+          className="w-[18.5rem] shrink-0 snap-start overflow-hidden rounded-3xl border border-slate-200 bg-[#f4f4f5] shadow-[0_6px_14px_rgba(148,163,184,0.2)] sm:w-[19.5rem]"
+        >
           <div className="px-4 pt-4 text-center">
               <p className={`${tCardTitle} text-rose-500`}>VIP 7 дней</p>
           </div>
@@ -693,7 +716,10 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
         </div>
 
-        <div className="relative w-[18.5rem] shrink-0 snap-start sm:w-[19.5rem]">
+        <div
+          data-vip-tariff-card
+          className="relative w-[18.5rem] shrink-0 snap-start sm:w-[19.5rem]"
+        >
           <div className="pointer-events-none absolute -left-1.5 -top-1.5 z-[3] h-[4.6rem] w-[4.6rem] drop-shadow-[0_10px_18px_rgba(0,0,0,0.25)] sm:-left-2 sm:-top-2 sm:h-[5.25rem] sm:w-[5.25rem]" aria-hidden>
             <img src="/assets/red.png" alt="" className="h-full w-full" />
           </div>
@@ -717,6 +743,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           </div>
         </div>
+          </div>
         </div>
       </div>
 
@@ -730,17 +757,27 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           <div className="flex flex-wrap items-center gap-2">
             <ArrowRightLeft className="h-5 w-5 text-cyan-700" strokeWidth={2} aria-hidden />
             <span className="text-sm font-extrabold text-slate-700">Курс</span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-2 text-xs font-bold text-slate-700">
-              <span className="tabular-nums">5</span>
-              <Heart className="h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
-              <span>=</span>
-              <span>1</span>
-              <Flower2 className="h-4 w-4 text-fuchsia-600" strokeWidth={2} aria-hidden />
-            </span>
+            {exchangeTab === "gift-to-voices" ? (
+              <span className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-2 text-[11px] font-bold leading-snug text-amber-950 sm:text-xs">
+                <Gift className="h-3.5 w-3.5 shrink-0 text-amber-700" strokeWidth={2} aria-hidden />
+                <span>стоимость подарка</span>
+                <span className="tabular-nums">−</span>
+                <span className="tabular-nums">1</span>
+                <Heart className="h-3.5 w-3.5 shrink-0 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-2 text-xs font-bold text-slate-700">
+                <span className="tabular-nums">5</span>
+                <Heart className="h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                <span>=</span>
+                <span>1</span>
+                <Flower2 className="h-4 w-4 text-fuchsia-600" strokeWidth={2} aria-hidden />
+              </span>
+            )}
           </div>
           <div
             role="tablist"
-            className="flex gap-2 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200"
+            className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200 sm:gap-1.5"
             aria-label="Направление обмена"
           >
             <button
@@ -748,15 +785,15 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               role="tab"
               aria-selected={exchangeTab === "voices-to-roses"}
               onClick={() => setExchangeTab("voices-to-roses")}
-              className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-extrabold transition sm:text-sm ${
+              className={`flex min-h-[2.65rem] items-center justify-center gap-0.5 rounded-xl px-1.5 text-[10px] font-extrabold leading-tight transition sm:min-h-[2.75rem] sm:gap-1 sm:px-2 sm:text-[12px] md:text-sm ${
                 exchangeTab === "voices-to-roses"
                   ? "bg-gradient-to-r from-cyan-400 to-sky-500 text-slate-900 shadow"
                   : "text-slate-600 hover:bg-white/70"
               }`}
             >
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex flex-col items-center gap-0 sm:flex-row sm:gap-1">
                 <span className="font-black">Сердце</span>
-                <span className="text-slate-900/60" aria-hidden>
+                <span className="text-slate-900/60 sm:inline" aria-hidden>
                   →
                 </span>
                 <span className="font-black">Роза</span>
@@ -767,18 +804,41 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               role="tab"
               aria-selected={exchangeTab === "roses-to-voices"}
               onClick={() => setExchangeTab("roses-to-voices")}
-              className={`flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-extrabold transition sm:text-sm ${
+              className={`flex min-h-[2.65rem] items-center justify-center gap-0.5 rounded-xl px-1.5 text-[10px] font-extrabold leading-tight transition sm:min-h-[2.75rem] sm:gap-1 sm:px-2 sm:text-[12px] md:text-sm ${
                 exchangeTab === "roses-to-voices"
                   ? "bg-gradient-to-r from-fuchsia-400 to-pink-500 text-white shadow"
                   : "text-slate-600 hover:bg-white/70"
               }`}
             >
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex flex-col items-center gap-0 sm:flex-row sm:gap-1">
                 <span className="font-black">Роза</span>
-                <span className={exchangeTab === "roses-to-voices" ? "text-white/80" : "text-slate-900/60"} aria-hidden>
+                <span className={exchangeTab === "roses-to-voices" ? "text-white/80 sm:inline" : "text-slate-900/60 sm:inline"} aria-hidden>
                   →
                 </span>
                 <span className="font-black">Сердце</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={exchangeTab === "gift-to-voices"}
+              onClick={() => setExchangeTab("gift-to-voices")}
+              title="Подарок из инвентаря в сердца"
+              className={`flex min-h-[2.65rem] items-center justify-center gap-0.5 rounded-xl px-1.5 text-[10px] font-extrabold leading-tight transition sm:min-h-[2.75rem] sm:gap-1 sm:px-2 sm:text-[12px] md:text-sm ${
+                exchangeTab === "gift-to-voices"
+                  ? "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 shadow"
+                  : "text-slate-600 hover:bg-white/70"
+              }`}
+            >
+              <span className="inline-flex flex-col items-center gap-0 sm:flex-row sm:gap-1">
+                <span className="inline-flex items-center gap-0.5 font-black">
+                  <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
+                  <span className="hidden sm:inline">Подарок</span>
+                </span>
+                <span className="text-slate-900/60 sm:inline" aria-hidden>
+                  →
+                </span>
+                <span className="font-black">❤</span>
               </span>
             </button>
           </div>
@@ -821,7 +881,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 ))}
               </div>
             </div>
-          ) : (
+          ) : exchangeTab === "roses-to-voices" ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <span className="text-xs font-bold text-slate-500">Доступные розы</span>
@@ -871,6 +931,57 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   </span>
                 </Button>
               </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="text-xs font-bold text-slate-500">Баланс</span>
+                <span className="inline-flex items-center gap-1 text-lg font-black text-slate-800">
+                  <span className="tabular-nums">{voiceBalance}</span>
+                  <Heart className="h-5 w-5 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
+                </span>
+              </div>
+              <p className="text-center text-[11px] leading-snug text-slate-500 sm:text-xs">
+                Списывается один подарок из инвентаря; сердца = цена подарка в магазине минус один.
+              </p>
+              {exchangeableGiftRows.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-sm text-slate-500">
+                  Нет подарков для обмена в каталоге.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2">
+                  {exchangeableGiftRows.map((row) => {
+                    const count = giftCounts.get(row.id) ?? 0
+                    const gain = heartsFromGiftSellback(row.cost)
+                    return (
+                      <Button
+                        key={row.id}
+                        type="button"
+                        variant="outline"
+                        disabled={count < 1 || gain < 1}
+                        className="flex h-auto min-h-[4.75rem] min-w-0 flex-col gap-1 rounded-2xl border border-amber-200/90 bg-white px-2 py-2.5 text-[11px] font-extrabold text-slate-800 shadow-[0_4px_10px_rgba(180,83,9,0.1)] hover:bg-amber-50/80 disabled:opacity-50 sm:min-h-[5rem] sm:gap-1.5 sm:px-3 sm:py-3 sm:text-sm"
+                        onClick={() => {
+                          if (count < 1 || gain < 1) return
+                          dispatch({ type: "EXCHANGE_INVENTORY_GIFT_FOR_VOICES", giftType: row.id })
+                          showToast(`+${gain} сердец`, "success")
+                        }}
+                      >
+                        <span className="inline-flex items-center justify-center gap-1 text-rose-600 sm:gap-1.5">
+                          <span className="tabular-nums text-base font-black sm:text-lg">+{gain}</span>
+                          <Heart className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={2} fill="currentColor" aria-hidden />
+                        </span>
+                        <span className="flex min-h-[2.25rem] flex-col items-center justify-center gap-0.5 text-center leading-tight">
+                          <span className="text-base leading-none" aria-hidden>
+                            {row.emoji}
+                          </span>
+                          <span className="line-clamp-2 w-full text-[10px] font-bold text-slate-600 sm:text-[11px]">{row.name}</span>
+                        </span>
+                        <span className="mt-0.5 text-[10px] font-semibold text-slate-400 sm:text-[11px]">в наличии: {count}</span>
+                      </Button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

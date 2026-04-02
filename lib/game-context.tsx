@@ -10,6 +10,11 @@ import {
   type GameLogEntry,
   type EmotionUseTodayBucket,
 } from "./game-types"
+import {
+  DEFAULT_GIFT_CATALOG_ROWS,
+  getPublishedShopGiftHeartCost,
+  heartsFromGiftSellback,
+} from "@/lib/gift-catalog"
 import { generateBots as generateBotsImpl, AVATAR_FRAME_IDS, randomAvatarFrame as randomAvatarFrameImpl } from "@/lib/bots"
 import { generateLogId as generateLogIdImpl, generateMessageId as generateMessageIdImpl } from "@/lib/ids"
 import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
@@ -234,6 +239,7 @@ const ECONOMY_MUTATION_ACTIONS = new Set<GameAction["type"]>([
   "GIVE_ROSE",
   "EXCHANGE_ROSES_FOR_VOICES",
   "EXCHANGE_VOICES_FOR_ROSES",
+  "EXCHANGE_INVENTORY_GIFT_FOR_VOICES",
   "REMOVE_INVENTORY_ROSES",
   "UGADAIKA_ADD_ROUND_WON",
 ])
@@ -936,6 +942,21 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         voiceBalance: state.voiceBalance - cost,
         inventory: [...state.inventory, ...newRoses],
+      }
+    }
+    case "EXCHANGE_INVENTORY_GIFT_FOR_VOICES": {
+      const bundledGiftRows = DEFAULT_GIFT_CATALOG_ROWS.filter((r) => r.published && !r.deleted)
+      const cost = getPublishedShopGiftHeartCost(action.giftType, bundledGiftRows)
+      if (cost == null) return state
+      const gain = heartsFromGiftSellback(cost)
+      if (gain < 1) return state
+      const idx = state.inventory.findIndex((i) => i.type === action.giftType)
+      if (idx < 0) return state
+      const nextInventory = state.inventory.filter((_, j) => j !== idx)
+      return {
+        ...state,
+        inventory: nextInventory,
+        voiceBalance: state.voiceBalance + gain,
       }
     }
     case "REMOVE_INVENTORY_ROSES": {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
-import { type GiftCatalogSection } from "@/lib/gift-catalog"
+import { toGiftImageUrl, type GiftCatalogSection } from "@/lib/gift-catalog"
 
 type AdminGiftContentProps = {
   token: string
@@ -13,6 +13,7 @@ type RowDraft = {
   section: GiftCatalogSection
   name: string
   emoji: string
+  img: string
   cost: number
   published: boolean
   deleted: boolean
@@ -30,6 +31,7 @@ function parseRows(rows: unknown): RowDraft[] {
       section?: string
       name?: string
       emoji?: string
+      img?: string
       cost?: number
       published?: boolean
       deleted?: boolean
@@ -46,6 +48,7 @@ function parseRows(rows: unknown): RowDraft[] {
       section,
       name: typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : rec.id,
       emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "🎁",
+      img: typeof rec.img === "string" ? rec.img.trim() : "",
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
       published: rec.published !== false,
       deleted: rec.deleted === true,
@@ -83,6 +86,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     section: "paid",
     name: "Новый подарок",
     emoji: "🎁",
+    img: "",
     cost: 1,
     published: true,
     deleted: false,
@@ -146,6 +150,68 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     [token],
   )
 
+  const uploadGiftImage = useCallback(
+    async (id: string, file: File) => {
+      setBusyId(id)
+      setError("")
+      try {
+        const form = new FormData()
+        form.set("file", file)
+        form.set("bucket", "gift")
+        const res = await apiFetch("/api/admin/content/upload-image", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+          cache: "no-store",
+          credentials: "include",
+          body: form,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || typeof data.path !== "string") {
+          setError(`Не удалось загрузить файл: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+          return
+        }
+        updateRow(id, { img: data.path })
+        await postUpdate(id, { img: data.path })
+      } catch {
+        setError("Ошибка сети при загрузке картинки")
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [token, postUpdate],
+  )
+
+  const addBusyKey = "__new_gift__"
+  const uploadNewGiftImage = useCallback(
+    async (file: File) => {
+      setBusyId(addBusyKey)
+      setError("")
+      try {
+        const form = new FormData()
+        form.set("file", file)
+        form.set("bucket", "gift")
+        const res = await apiFetch("/api/admin/content/upload-image", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+          cache: "no-store",
+          credentials: "include",
+          body: form,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || typeof data.path !== "string") {
+          setError(`Не удалось загрузить файл: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+          return
+        }
+        setAddDraft((prev) => ({ ...prev, img: data.path }))
+      } catch {
+        setError("Ошибка сети при загрузке картинки")
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [token],
+  )
+
   const total = rows.length
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
   const createFromAddDraft = useCallback(async () => {
@@ -162,7 +228,14 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       published: true,
       deleted: false,
     })
-    setAddDraft((prev) => ({ ...prev, id: "", name: "Новый подарок", emoji: "🎁", cost: addTier === "free" ? 0 : prev.cost }))
+    setAddDraft((prev) => ({
+      ...prev,
+      id: "",
+      name: "Новый подарок",
+      emoji: "🎁",
+      img: "",
+      cost: addTier === "free" ? 0 : prev.cost,
+    }))
   }, [addDraft, addTier, postUpdate, rows])
 
   return (
@@ -247,6 +320,32 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
               />
             </label>
+            <label className="text-[11px] text-slate-400 md:col-span-2">
+              Картинка (загрузка файла)
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={addDraft.img}
+                  readOnly
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                />
+                <label className="inline-flex cursor-pointer shrink-0 items-center rounded-lg border border-slate-500 bg-slate-700/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600">
+                  Прикрепить файл
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    className="hidden"
+                    disabled={busyId === addBusyKey}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.currentTarget.value = ""
+                      if (!file) return
+                      void uploadNewGiftImage(file)
+                    }}
+                  />
+                </label>
+              </div>
+            </label>
           </div>
           <p className="mt-2 text-xs text-slate-400">ID можно задать вручную, если оставить пустым - сформируется автоматически.</p>
           <button
@@ -271,7 +370,11 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
             <article key={row.id} className="rounded-xl border border-slate-700/80 bg-slate-900/60 p-3">
               <div className="mb-3 flex items-center gap-3">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-950 text-3xl">
-                  {row.emoji}
+                  {row.img ? (
+                    <img src={toGiftImageUrl(row.img)} alt={row.name} className="h-full w-full object-contain" loading="lazy" />
+                  ) : (
+                    row.emoji
+                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="truncate font-mono text-xs text-slate-400">{row.id}</div>
@@ -290,13 +393,39 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                   />
                 </label>
                 <label className="block text-[11px] text-slate-400">
-                  Картинка (emoji)
+                  Картинка (emoji, если нет файла)
                   <input
                     type="text"
                     value={row.emoji}
                     onChange={(e) => updateRow(row.id, { emoji: e.target.value })}
                     className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
                   />
+                </label>
+                <label className="block text-[11px] text-slate-400">
+                  Картинка (загрузка файла)
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={row.img}
+                      readOnly
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    />
+                    <label className="inline-flex shrink-0 cursor-pointer items-center rounded-lg border border-slate-500 bg-slate-700/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600">
+                      Прикрепить файл
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                        className="hidden"
+                        disabled={busyId === row.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.currentTarget.value = ""
+                          if (!file) return
+                          void uploadGiftImage(row.id, file)
+                        }}
+                      />
+                    </label>
+                  </div>
                 </label>
                 <label className="block text-[11px] text-slate-400">
                   Стоимость, ❤
@@ -320,6 +449,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                       section: row.section,
                       name: row.name,
                       emoji: row.emoji,
+                      img: row.img,
                       cost: row.cost,
                     })
                   }

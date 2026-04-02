@@ -53,7 +53,7 @@ interface GameBoardPlayersProps {
   setGiftCatalogDrawerPlayer: (p: Player | null) => void
   getKissCountForPlayer: (id: number) => number
   getGiftsForPlayer: (id: number) => Array<"kiss" | "flowers" | "song" | "rose" | "diamond">
-  getBigGiftSequenceForPlayer: (id: number) => Array<"toy_bear" | "toy_car" | "toy_ball" | "souvenir_magnet" | "souvenir_keychain" | "plush_heart" | "chocolate_box">
+  getBigGiftSequenceForPlayer: (id: number) => string[]
 }
 
 function GameBoardPlayersInner({

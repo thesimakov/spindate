@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
-import { assetUrl } from "@/lib/assets"
+import { resolveFrameCatalogAssetUrl } from "@/lib/assets"
 
 type AdminFrameContentProps = { token: string }
 
@@ -165,7 +165,7 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
           setError(`Не удалось загрузить файл: ${res.status} ${(data?.error as string) ?? ""}`.trim())
           return
         }
-        const nextPath = data.path.startsWith("/") ? data.path.slice(1) : data.path
+        const nextPath = typeof data.path === "string" && data.path.startsWith("/") ? data.path : `/${String(data.path ?? "")}`
         updateRow(id, { svgPath: nextPath })
         await postUpdate(id, { svgPath: nextPath })
       } catch {
@@ -226,7 +226,7 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
           setError(`Не удалось загрузить файл: ${res.status} ${(data?.error as string) ?? ""}`.trim())
           return
         }
-        const nextPath = data.path.startsWith("/") ? data.path.slice(1) : data.path
+        const nextPath = typeof data.path === "string" && data.path.startsWith("/") ? data.path : `/${String(data.path ?? "")}`
         setAddDraft((prev) => ({ ...prev, svgPath: nextPath }))
       } catch {
         setError("Ошибка сети при загрузке ассета рамки")
@@ -362,7 +362,7 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-slate-900" style={{ border: row.border, boxShadow: row.shadow }}>
                 {row.svgPath ? (
                   <img
-                    src={assetUrl(row.svgPath.startsWith("/") ? row.svgPath : `/assets/${row.svgPath}`)}
+                    src={resolveFrameCatalogAssetUrl(row.svgPath)}
                     alt={row.name}
                     className="pointer-events-none absolute inset-0 h-full w-full object-contain"
                   />

@@ -112,6 +112,7 @@ function migrate(database: Database.Database) {
       section TEXT NOT NULL DEFAULT 'paid',
       name TEXT NOT NULL,
       emoji TEXT NOT NULL DEFAULT '🎁',
+      img TEXT NOT NULL DEFAULT '',
       cost INTEGER NOT NULL DEFAULT 0,
       published INTEGER NOT NULL DEFAULT 1,
       deleted INTEGER NOT NULL DEFAULT 0,
@@ -165,6 +166,10 @@ function migrate(database: Database.Database) {
   }
   database.exec(`UPDATE gift_catalog SET section = 'paid' WHERE section = 'premium'`)
   database.exec(`UPDATE gift_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
+  const giftCols = database.prepare(`PRAGMA table_info(gift_catalog)`).all() as { name: string }[]
+  if (!giftCols.some((c) => c.name === "img")) {
+    database.exec(`ALTER TABLE gift_catalog ADD COLUMN img TEXT NOT NULL DEFAULT ''`)
+  }
   database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)
   database.exec(`UPDATE frame_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
 
@@ -189,12 +194,12 @@ function migrate(database: Database.Database) {
   })
 
   const insertGift = database.prepare(
-    `INSERT INTO gift_catalog (id, section, name, emoji, cost, published, deleted, sort_order, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, published, deleted, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(id) DO NOTHING`,
   )
   DEFAULT_GIFT_CATALOG_ROWS.forEach((row, index) => {
-    insertGift.run(row.id, row.section, row.name, row.emoji, row.cost, row.published ? 1 : 0, index, now)
+    insertGift.run(row.id, row.section, row.name, row.emoji, row.img ?? "", row.cost, row.published ? 1 : 0, index, now)
   })
 
   const insertFrame = database.prepare(

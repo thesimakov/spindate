@@ -1,4 +1,4 @@
-import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
+import { BOTTLE_IMAGES, catalogMediaUrl } from "@/lib/assets"
 import type { BottleSkin } from "@/lib/game-types"
 
 export type BottleCatalogSkinRow = {
@@ -46,9 +46,8 @@ export function toBottleImageUrl(raw: string): string {
   if (!trimmed) return ""
   if (/^https?:\/\//i.test(trimmed)) return trimmed
   const pathOnly = trimmed.split("?")[0]?.split("#")[0] ?? trimmed
-  if (pathOnly.startsWith("/")) return assetUrl(pathOnly)
-  if (pathOnly.startsWith("assets/")) return assetUrl(pathOnly)
-  return assetUrl(`/assets/${pathOnly}`)
+  const withSlash = pathOnly.startsWith("/") ? pathOnly : pathOnly.startsWith("assets/") ? `/${pathOnly}` : `/assets/${pathOnly}`
+  return catalogMediaUrl(withSlash)
 }
 
 export function toBottleCatalogRow(row: BottleCatalogDefaultRow): BottleCatalogSkinRow {

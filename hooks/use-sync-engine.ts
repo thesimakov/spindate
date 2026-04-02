@@ -5,6 +5,7 @@ import { useGame, generateBots } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
 import { composeTablePlayers } from "@/lib/table-composition"
+import { registerTableSyncDispatch } from "@/lib/table-sync-registry"
 import type { Player, GameAction, TableAuthorityPayload } from "@/lib/game-types"
 
 function isTableSyncedAction(action: GameAction): boolean {
@@ -70,9 +71,14 @@ export function useSyncEngine(): SyncEngineResult {
     lastAuthorityRevisionRef.current = 0
   }, [tableId])
 
+  /** Обновляется ниже из seatConfirmed — пушим события только после подтверждённого места за live-столом. */
+  const seatConfirmedRef = useRef(false)
+
   const pushTableAction = useCallback(async (action: GameAction) => {
     const current = syncMetaRef.current
-    if (!current.userId || !current.tableId) return
+    const tid = Math.floor(Number(current.tableId))
+    if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
+    if (!seatConfirmedRef.current) return
     try {
       await apiFetch("/api/table/events", {
         method: "POST",
@@ -81,7 +87,7 @@ export function useSyncEngine(): SyncEngineResult {
         credentials: "include",
         body: JSON.stringify({
           mode: "push",
-          tableId: current.tableId,
+          tableId: tid,
           senderId: current.userId,
           action,
         }),
@@ -97,6 +103,11 @@ export function useSyncEngine(): SyncEngineResult {
     if (!isTableSyncedAction(action)) return
     void pushTableAction(action)
   }, [rawDispatch, pushTableAction])
+
+  useEffect(() => {
+    registerTableSyncDispatch(dispatch)
+    return () => registerTableSyncDispatch(null)
+  }, [dispatch])
 
   const lastSyncAppliedAtRef = useRef(0)
   const pendingSyncRef = useRef<TableAuthorityPayload | null>(null)
@@ -145,6 +156,10 @@ export function useSyncEngine(): SyncEngineResult {
   const [tableAuthorityReady, setTableAuthorityReady] = useState(false)
   const [seatConfirmed, setSeatConfirmed] = useState(false)
   const [liveHumanCount, setLiveHumanCount] = useState(0)
+
+  useEffect(() => {
+    seatConfirmedRef.current = seatConfirmed
+  }, [seatConfirmed])
 
   /** Краткая задержка перед сбросом «места», чтобы не мигало при редком ответе без seated */
   const loseSeatDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
