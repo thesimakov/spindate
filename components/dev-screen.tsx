@@ -417,7 +417,7 @@ export function DevScreen() {
               </p>
             </>
           ) : (
-            <div className="space-y-4 pb-8">
+            <div className="max-h-[78dvh] space-y-4 overflow-y-auto pb-8 pr-1">
               <div className="flex flex-wrap gap-2 rounded-xl border border-slate-700/80 bg-slate-900/50 p-2">
                 {(
                   [

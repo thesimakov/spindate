@@ -18,6 +18,8 @@ type RowDraft = {
   deleted: boolean
 }
 
+type ShowcaseTier = "free" | "paid" | "vip"
+
 function parseRows(rows: unknown): RowDraft[] {
   if (!Array.isArray(rows)) return []
   const parsed: RowDraft[] = []
@@ -52,6 +54,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
   const [error, setError] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [addTier, setAddTier] = useState<ShowcaseTier>("paid")
   const [addDraft, setAddDraft] = useState<RowDraft>({
     id: "toy_bear",
     section: "premium",
@@ -127,6 +130,39 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     [rows],
   )
 
+  const pickAvailableIdByTier = useCallback(
+    (tier: ShowcaseTier): string | null => {
+      const byTier = (id: string): boolean => {
+        const defaults = DEFAULT_GIFT_CATALOG_ROWS.find((row) => row.id === id)
+        if (!defaults) return false
+        if (tier === "free") return defaults.section === "free"
+        if (tier === "vip") return defaults.section === "premium" && defaults.cost >= 10
+        return defaults.section === "premium" && defaults.cost < 10
+      }
+      const scoped = availableIdsForAdd.filter(byTier)
+      return scoped[0] ?? availableIdsForAdd[0] ?? null
+    },
+    [availableIdsForAdd],
+  )
+
+  const createFromAddDraft = useCallback(async () => {
+    const id = pickAvailableIdByTier(addTier)
+    if (!id) {
+      setError("Свободных слотов больше нет. Можно редактировать уже существующие подарки.")
+      return
+    }
+    const nextSection: GiftCatalogSection = addTier === "free" ? "free" : "premium"
+    const nextCost = addTier === "free" ? 0 : addDraft.cost
+    await postUpdate(id, {
+      ...addDraft,
+      id,
+      section: nextSection,
+      cost: Math.max(0, Math.floor(Number(nextCost) || 0)),
+      published: true,
+      deleted: false,
+    })
+  }, [addDraft, addTier, pickAvailableIdByTier, postUpdate])
+
   return (
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -159,17 +195,15 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-200">Добавление подарка</p>
           <div className="grid gap-2 md:grid-cols-4">
             <label className="text-[11px] text-slate-400">
-              ID
+              Витрина
               <select
-                value={addDraft.id}
-                onChange={(e) => setAddDraft((p) => ({ ...p, id: e.target.value }))}
+                value={addTier}
+                onChange={(e) => setAddTier(e.target.value as ShowcaseTier)}
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
               >
-                {(availableIdsForAdd.length > 0 ? availableIdsForAdd : DEFAULT_GIFT_CATALOG_ROWS.map((r) => r.id)).map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
+                <option value="free">Бесплатные</option>
+                <option value="paid">Платные</option>
+                <option value="vip">VIP</option>
               </select>
             </label>
             <label className="text-[11px] text-slate-400">
@@ -202,9 +236,10 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
               />
             </label>
           </div>
+          <p className="mt-2 text-xs text-slate-400">Слот ID подбирается автоматически по выбранной витрине.</p>
           <button
             type="button"
-            onClick={() => void postUpdate(addDraft.id, addDraft)}
+            onClick={() => void createFromAddDraft()}
             className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
           >
             Создать / добавить

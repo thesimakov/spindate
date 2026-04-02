@@ -20,6 +20,8 @@ type RowDraft = {
   deleted: boolean
 }
 
+type ShowcaseTier = "free" | "paid" | "vip"
+
 function parseRows(rows: unknown): RowDraft[] {
   if (!Array.isArray(rows)) return []
   const parsed: RowDraft[] = []
@@ -67,6 +69,7 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
   const [error, setError] = useState("")
   const [busyId, setBusyId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [addTier, setAddTier] = useState<ShowcaseTier>("free")
   const [addDraft, setAddDraft] = useState<RowDraft>({
     id: "none",
     section: "free",
@@ -175,6 +178,72 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
     () => FRAME_ID_CANDIDATES.filter((id) => !rows.some((row) => row.id === id)),
     [rows],
   )
+  const addBusyKey = "__new_frame__"
+
+  const pickAvailableIdByTier = useCallback(
+    (tier: ShowcaseTier): string | null => {
+      const byTier = (id: string): boolean => {
+        const defaults = rows.find((row) => row.id === id)
+        const fallbackIsPremium = id !== "none" && id !== "silver" && id !== "gold"
+        const isPremium = defaults ? defaults.section === "premium" : fallbackIsPremium
+        if (tier === "free") return !isPremium
+        if (tier === "vip") return isPremium
+        return isPremium
+      }
+      const scoped = availableIdsForAdd.filter(byTier)
+      return scoped[0] ?? availableIdsForAdd[0] ?? null
+    },
+    [availableIdsForAdd, rows],
+  )
+
+  const createFromAddDraft = useCallback(async () => {
+    const id = pickAvailableIdByTier(addTier)
+    if (!id) {
+      setError("Свободных слотов больше нет. Можно редактировать уже существующие рамки.")
+      return
+    }
+    const nextSection: "free" | "premium" = addTier === "free" ? "free" : "premium"
+    const nextCost = addTier === "free" ? 0 : addDraft.cost
+    await postUpdate(id, {
+      ...addDraft,
+      id,
+      section: nextSection,
+      cost: Math.max(0, Math.floor(Number(nextCost) || 0)),
+      published: true,
+      deleted: false,
+    })
+  }, [addDraft, addTier, pickAvailableIdByTier, postUpdate])
+
+  const uploadNewFrameAsset = useCallback(
+    async (file: File) => {
+      setBusyId(addBusyKey)
+      setError("")
+      try {
+        const form = new FormData()
+        form.set("file", file)
+        form.set("bucket", "frame")
+        const res = await apiFetch("/api/admin/content/upload-image", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+          cache: "no-store",
+          credentials: "include",
+          body: form,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || typeof data.path !== "string") {
+          setError(`Не удалось загрузить файл: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+          return
+        }
+        const nextPath = data.path.startsWith("/") ? data.path.slice(1) : data.path
+        setAddDraft((prev) => ({ ...prev, svgPath: nextPath }))
+      } catch {
+        setError("Ошибка сети при загрузке ассета рамки")
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [token],
+  )
 
   return (
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
@@ -206,19 +275,17 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
       {showAdd && (
         <div className="mb-4 rounded-xl border border-violet-500/35 bg-violet-950/20 p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-200">Добавление рамки</p>
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-2 md:grid-cols-4">
             <label className="text-[11px] text-slate-400">
-              ID
+              Витрина
               <select
-                value={addDraft.id}
-                onChange={(e) => setAddDraft((p) => ({ ...p, id: e.target.value }))}
+                value={addTier}
+                onChange={(e) => setAddTier(e.target.value as ShowcaseTier)}
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
               >
-                {(availableIdsForAdd.length > 0 ? availableIdsForAdd : FRAME_ID_CANDIDATES).map((id) => (
-                  <option key={id} value={id}>
-                    {id}
-                  </option>
-                ))}
+                <option value="free">Бесплатные</option>
+                <option value="paid">Платные</option>
+                <option value="vip">VIP</option>
               </select>
             </label>
             <label className="text-[11px] text-slate-400">
@@ -231,20 +298,47 @@ export function AdminFrameContent({ token }: AdminFrameContentProps) {
               />
             </label>
             <label className="text-[11px] text-slate-400">
-              Секция
-              <select
-                value={addDraft.section}
-                onChange={(e) => setAddDraft((p) => ({ ...p, section: e.target.value as "free" | "premium" }))}
+              Стоимость
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={addDraft.cost}
+                onChange={(e) => setAddDraft((p) => ({ ...p, cost: Math.max(0, Math.floor(Number(e.target.value) || 0)) }))}
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
-              >
-                <option value="free">Бесплатные</option>
-                <option value="premium">Премиум</option>
-              </select>
+              />
+            </label>
+            <label className="text-[11px] text-slate-400">
+              SVG/картинка (файл)
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={addDraft.svgPath}
+                  readOnly
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                />
+                <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-500 bg-slate-700/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600">
+                  Файл
+                  <input
+                    type="file"
+                    accept="image/svg+xml,image/png,image/webp"
+                    className="hidden"
+                    disabled={busyId === addBusyKey}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.currentTarget.value = ""
+                      if (!file) return
+                      void uploadNewFrameAsset(file)
+                    }}
+                  />
+                </label>
+              </div>
             </label>
           </div>
+          <p className="mt-2 text-xs text-slate-400">Слот ID для новой рамки подбирается автоматически по витрине.</p>
           <button
             type="button"
-            onClick={() => void postUpdate(addDraft.id, addDraft)}
+            onClick={() => void createFromAddDraft()}
             className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25"
           >
             Создать / добавить
