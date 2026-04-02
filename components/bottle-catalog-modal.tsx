@@ -28,6 +28,8 @@ export type BottleCatalogModalProps = {
   players: Player[]
   ownedBottleSkins: BottleSkin[] | undefined
   bottleSkin: BottleSkin | undefined
+  /** Скин, который реально отображается на столе (с учётом «главной» бутылочки) */
+  effectiveBottleSkin?: string
   voiceBalance: number
   bottleCooldownUntil: number | null | undefined
   currentUser: Player | null
@@ -41,6 +43,7 @@ export function BottleCatalogModal({
   players,
   ownedBottleSkins,
   bottleSkin,
+  effectiveBottleSkin,
   voiceBalance,
   bottleCooldownUntil,
   currentUser,
@@ -48,7 +51,7 @@ export function BottleCatalogModal({
   showToast,
 }: BottleCatalogModalProps) {
   const [tick, setTick] = useState(0)
-  const { rows: catalogRows } = useBottleCatalog()
+  const { rows: catalogRows, mainBottleId } = useBottleCatalog()
 
   useEffect(() => {
     const t = window.setInterval(() => setTick((n) => n + 1), 1000)
@@ -85,8 +88,9 @@ export function BottleCatalogModal({
     return sourceRows.map((skin) => {
       const freeSkin = isFreeSkin(skin.cost, skin.section)
       const vipSkin = isVipSkin(skin.section)
-      const owned = ownedSet.has(skin.id)
-      const selected = bottleSkin === skin.id
+      const isMainBottle = mainBottleId != null && skin.id === mainBottleId
+      const owned = ownedSet.has(skin.id) || isMainBottle
+      const selected = (effectiveBottleSkin ?? bottleSkin) === skin.id
       const cooldownActive = cooldownLeftMs > 0
       const purchaseLocked = cooldownActive && !owned && !freeSkin
       const notEnough = !owned && !freeSkin && voiceBalance < skin.cost
@@ -147,6 +151,8 @@ export function BottleCatalogModal({
     catalogRows,
     ownedSet,
     bottleSkin,
+    effectiveBottleSkin,
+    mainBottleId,
     cooldownLeftMs,
     voiceBalance,
     dispatch,
