@@ -11,6 +11,7 @@ export function useBankPassive(
   userId: number | undefined,
   dispatch: Dispatch<GameAction>,
   onGrantBurst: () => void,
+  enabled = true,
 ) {
   const lastMsRef = useRef(0)
   const [tick, setTick] = useState(0)
@@ -43,6 +44,19 @@ export function useBankPassive(
     if (userId == null) return
 
     const key = `${STORAGE_KEY_PREFIX}${userId}`
+    // На паузе/away начисление выключено: не копим "долг", а переносим точку отсчёта на сейчас.
+    if (!enabled) {
+      const now = Date.now()
+      lastMsRef.current = now
+      try {
+        localStorage.setItem(key, JSON.stringify({ lastTickMs: now }))
+      } catch {
+        // ignore
+      }
+      setTick((t) => t + 1)
+      return
+    }
+
     const id = window.setInterval(() => {
       const now = Date.now()
       let last = lastMsRef.current
@@ -67,12 +81,12 @@ export function useBankPassive(
     }, 1000)
 
     return () => window.clearInterval(id)
-  }, [userId, dispatch])
+  }, [userId, dispatch, enabled])
 
   const msUntilNext = useMemo(() => {
-    if (userId == null) return 0
+    if (userId == null || !enabled) return 0
     return Math.max(0, lastMsRef.current + INTERVAL_MS - Date.now())
-  }, [userId, tick])
+  }, [userId, tick, enabled])
 
   return { msUntilNext }
 }

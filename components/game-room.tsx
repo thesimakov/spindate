@@ -2409,7 +2409,13 @@ export function GameRoom() {
     }
     setBankPassiveBurstKey((k) => k + 1)
   }, [])
-  const { msUntilNext: msUntilNextBank } = useBankPassive(currentUser?.id, dispatch, triggerBankPassiveBurst)
+  const bankPassiveEnabled = Boolean(currentUser) && !tablePaused && !isClientTabAway
+  const { msUntilNext: msUntilNextBank } = useBankPassive(
+    currentUser?.id,
+    dispatch,
+    triggerBankPassiveBurst,
+    bankPassiveEnabled,
+  )
   const handlePauseGame = useCallback(() => {
     if (!currentUser) return
     // Явно освобождаем место за live-столом и отключаем синхронизацию, пока пользователь не возобновит.
