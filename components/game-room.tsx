@@ -65,6 +65,7 @@ import { RoomChannelChat } from "@/components/room-channel-chat"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
+import { SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON } from "@/lib/side-menu-flags"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -3344,21 +3345,22 @@ export function GameRoom() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Сообщения — мини-чат (только мобильная/планшет; на ПК скрыто); на планшете — по ширине как остальные кнопки меню */}
-          <div className="lg:hidden w-full">
-            <button
-              onClick={() => setShowChatListModal(true)}
-              className={`${sideBtnClass} w-full justify-start`}
-              style={{
-                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(56,189,248,0.28)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-              }}
-            >
-              <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
-            </button>
-          </div>
+          {SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON && (
+            <div className="lg:hidden w-full">
+              <button
+                onClick={() => setShowChatListModal(true)}
+                className={`${sideBtnClass} w-full justify-start`}
+                style={{
+                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                  border: "1px solid rgba(56,189,248,0.28)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                }}
+              >
+                <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
+                <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
+              </button>
+            </div>
+          )}
 
           {/* Текущий стол + счётчик */}
           <div

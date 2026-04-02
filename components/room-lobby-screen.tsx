@@ -9,6 +9,14 @@ import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -43,14 +51,38 @@ const BUY_HEARTS_VOTES = 9
 const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"
 const VISITED_TTL_MS = 24 * 60 * 60 * 1000
 
-const CREATE_BOTTLE_OPTIONS: Array<{ id: BottleSkin; name: string; img: string }> = [
+/** Варианты бутылочки при создании стола: без алкогольных скинов, с колесом фортуны. */
+const CREATE_BOTTLE_OPTIONS: Array<{ id: BottleSkin; name: string; img?: string }> = [
   { id: "classic", name: "Классика", img: assetUrl(BOTTLE_IMAGES.classic) },
   { id: "ruby", name: "Лимонад", img: assetUrl(BOTTLE_IMAGES.ruby) },
-  { id: "neon", name: "Виски", img: assetUrl(BOTTLE_IMAGES.neon) },
-  { id: "frost", name: "Шампанское", img: assetUrl(BOTTLE_IMAGES.frost) },
-  { id: "milk", name: "Молочная", img: assetUrl(BOTTLE_IMAGES.milk) },
+  { id: "milk", name: "Молоко", img: assetUrl(BOTTLE_IMAGES.milk) },
   { id: "baby", name: "Детская", img: assetUrl(BOTTLE_IMAGES.baby) },
+  { id: "vip", name: "Праздничная", img: assetUrl(BOTTLE_IMAGES.vip) },
+  { id: "frame_72", name: "Ягодный сок", img: assetUrl(BOTTLE_IMAGES.frame_72) },
+  { id: "frame_75", name: "Тропический микс", img: assetUrl(BOTTLE_IMAGES.frame_75) },
+  { id: "fortune_wheel", name: "Колесо фортуны" },
 ]
+
+const CREATE_BOTTLE_IDS = new Set(CREATE_BOTTLE_OPTIONS.map((o) => o.id))
+
+function CreateBottleOptionPreview({ opt, className }: { opt: (typeof CREATE_BOTTLE_OPTIONS)[0]; className?: string }) {
+  if (opt.id === "fortune_wheel") {
+    return (
+      <FortuneWheelBottleVisual
+        segmentCount={8}
+        className={cn("h-8 w-8 shrink-0 object-contain pointer-events-none select-none", className)}
+      />
+    )
+  }
+  return (
+    <img
+      src={opt.img}
+      alt=""
+      className={cn("h-8 w-8 shrink-0 object-contain", className)}
+      loading="lazy"
+    />
+  )
+}
 
 const TABLE_STYLE_PREVIEW: Record<RoomTableStyle, string> = {
   classic_night: "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.92))",
@@ -137,6 +169,12 @@ export function RoomLobbyScreen() {
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState("")
   const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    if (!CREATE_BOTTLE_IDS.has(createBottleSkin)) {
+      setCreateBottleSkin(DEFAULT_ROOM_BOTTLE_SKIN)
+    }
+  }, [createBottleSkin])
 
   const fetchLobby = useCallback(async () => {
     try {
@@ -620,28 +658,37 @@ export function RoomLobbyScreen() {
               className="border-slate-600 bg-slate-900"
             />
             <div className="mt-2 space-y-2">
-              <p className="text-sm text-slate-300">Бутылочка стола</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {CREATE_BOTTLE_OPTIONS.map((opt) => {
-                  const selected = createBottleSkin === opt.id
-                  return (
-                    <button
+              <label htmlFor="create-room-bottle" className="text-sm text-slate-300">
+                Бутылочка стола
+              </label>
+              <Select
+                value={createBottleSkin}
+                onValueChange={(v) => setCreateBottleSkin(v as BottleSkin)}
+              >
+                <SelectTrigger
+                  id="create-room-bottle"
+                  className="h-auto min-h-10 w-full border-slate-600 bg-slate-900 py-2 text-slate-100 shadow-none hover:bg-slate-800/80"
+                >
+                  <SelectValue placeholder="Выберите вариант" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  className="z-[200] max-h-[min(320px,var(--radix-select-content-available-height))] border-slate-600 bg-slate-950 text-slate-100"
+                >
+                  {CREATE_BOTTLE_OPTIONS.map((opt) => (
+                    <SelectItem
                       key={opt.id}
-                      type="button"
-                      onClick={() => setCreateBottleSkin(opt.id)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-xl border px-2 py-2 text-left text-xs transition",
-                        selected
-                          ? "border-emerald-400 bg-emerald-500/15 text-emerald-100"
-                          : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500",
-                      )}
+                      value={opt.id}
+                      className="cursor-pointer py-2 focus:bg-slate-800 focus:text-slate-50"
                     >
-                      <img src={opt.img} alt={opt.name} className="h-8 w-8 object-contain" loading="lazy" />
-                      <span className="truncate">{opt.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
+                      <span className="flex items-center gap-2">
+                        <CreateBottleOptionPreview opt={opt} />
+                        <span>{opt.name}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="mt-2 space-y-2">
               <p className="text-sm text-slate-300">Стилистика стола</p>

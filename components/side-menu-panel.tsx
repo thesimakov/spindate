@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { GameAction } from "@/lib/game-types"
+import { SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON } from "@/lib/side-menu-flags"
 
 interface SideMenuPanelProps {
   isPcLayout: boolean
@@ -228,12 +229,14 @@ function SideMenuPanelInner({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="lg:hidden w-full">
-          <button onClick={onOpenChatList} className={`${sideBtnClass} w-full justify-start`} style={darkBtnStyle}>
-            <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
-          </button>
-        </div>
+        {SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON && (
+          <div className="lg:hidden w-full">
+            <button onClick={onOpenChatList} className={`${sideBtnClass} w-full justify-start`} style={darkBtnStyle}>
+              <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
+              <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
+            </button>
+          </div>
+        )}
 
         <div
           className={"flex items-center gap-1.5 rounded-[999px] px-3 py-2 min-h-[40px]" + (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2" : "")}
