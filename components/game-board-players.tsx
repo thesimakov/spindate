@@ -54,6 +54,7 @@ interface GameBoardPlayersProps {
   getKissCountForPlayer: (id: number) => number
   getGiftsForPlayer: (id: number) => Array<"kiss" | "flowers" | "song" | "rose" | "diamond">
   getBigGiftSequenceForPlayer: (id: number) => string[]
+  giftDisplayById?: Map<string, { emoji: string; img: string }>
 }
 
 function GameBoardPlayersInner({
@@ -89,6 +90,7 @@ function GameBoardPlayersInner({
   getKissCountForPlayer,
   getGiftsForPlayer,
   getBigGiftSequenceForPlayer,
+  giftDisplayById,
 }: GameBoardPlayersProps) {
   return (
     <>
@@ -141,6 +143,7 @@ function GameBoardPlayersInner({
                 kissCount={getKissCountForPlayer(player.id)}
                 giftIcons={giftIcons}
                 bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
+                giftDisplayById={giftDisplayById}
                 frameId={avatarFrames?.[player.id]}
                 inGame={playerInUgadaika != null && player.id === playerInUgadaika}
                 showAsleep={

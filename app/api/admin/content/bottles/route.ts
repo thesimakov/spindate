@@ -41,6 +41,7 @@ export async function POST(req: Request) {
       section: body?.section === "free" || body?.section === "paid" || body?.section === "vip" ? body.section : undefined,
       cost: typeof body?.cost === "number" ? body.cost : undefined,
       published: typeof body?.published === "boolean" ? body.published : undefined,
+      isMain: typeof body?.isMain === "boolean" ? body.isMain : undefined,
     })
     const rows = listBottleCatalogRows({ includeDeleted: true, resolveImage: false })
     return NextResponse.json({ ok: true, rows }, { headers: NO_CACHE })

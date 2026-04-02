@@ -164,6 +164,9 @@ function migrate(database: Database.Database) {
     database.exec(`UPDATE bottle_catalog SET section = 'free' WHERE cost = 0 OR id = 'classic'`)
     database.exec(`UPDATE bottle_catalog SET section = 'vip' WHERE id IN ('vip', 'fortune_wheel')`)
   }
+  if (!bottleCols.some((c) => c.name === "is_main")) {
+    database.exec(`ALTER TABLE bottle_catalog ADD COLUMN is_main INTEGER NOT NULL DEFAULT 0`)
+  }
   database.exec(`UPDATE gift_catalog SET section = 'paid' WHERE section = 'premium'`)
   database.exec(`UPDATE gift_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
   const giftCols = database.prepare(`PRAGMA table_info(gift_catalog)`).all() as { name: string }[]

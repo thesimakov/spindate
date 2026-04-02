@@ -76,7 +76,7 @@ import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
-import { DEFAULT_BOTTLE_CATALOG_ROWS } from "@/lib/bottle-catalog"
+import { DEFAULT_BOTTLE_CATALOG_ROWS, toBottleImageUrl } from "@/lib/bottle-catalog"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
@@ -420,7 +420,7 @@ const TABLE_STYLE_BACKGROUNDS: Record<
 
 export function GameRoom() {
   const { state } = useGame()
-  const { rows: bottleCatalogRows } = useBottleCatalog()
+  const { rows: bottleCatalogRows, mainBottleId } = useBottleCatalog()
   const { rows: frameCatalogRows } = useFrameCatalog()
   const { rows: giftCatalogRows } = useGiftCatalog()
   useTheme()
@@ -482,15 +482,14 @@ export function GameRoom() {
   )
   const frameMetaById = useMemo(() => {
     const m = new Map<string, { border: string; shadow: string; svgPath?: string }>()
-    frameCatalogSource.forEach((row) => {
-      m.set(row.id, {
-        border: row.border,
-        shadow: row.shadow,
-        svgPath: row.svgPath || undefined,
-      })
-    })
+    for (const row of DEFAULT_FRAME_CATALOG_ROWS) {
+      m.set(row.id, { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined })
+    }
+    for (const row of frameCatalogRows) {
+      m.set(row.id, { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined })
+    }
     return m
-  }, [frameCatalogSource])
+  }, [frameCatalogRows])
   const giftableFramesFree = useMemo(
     () =>
       frameCatalogSource
@@ -540,23 +539,39 @@ export function GameRoom() {
   )
   const giftDisplayById = useMemo(() => {
     const m = new Map<string, { emoji: string; img: string }>()
-    for (const row of giftCatalogSource) {
+    for (const row of DEFAULT_GIFT_CATALOG_ROWS) {
+      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim() })
+    }
+    for (const row of giftCatalogRows) {
       m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim() })
     }
     return m
-  }, [giftCatalogSource])
+  }, [giftCatalogRows])
   const giftCatalogLogTypeIds = useMemo(
-    () => new Set<string>(giftCatalogSource.map((r) => String(r.id))),
-    [giftCatalogSource],
+    () => {
+      const s = new Set<string>(DEFAULT_GIFT_CATALOG_ROWS.map((r) => String(r.id)))
+      for (const r of giftCatalogRows) s.add(String(r.id))
+      return s
+    },
+    [giftCatalogRows],
   )
   const bottleCatalogSource = useMemo(
     () => (bottleCatalogRows.length > 0 ? bottleCatalogRows : DEFAULT_BOTTLE_CATALOG_ROWS),
     [bottleCatalogRows],
   )
-  const bottleImageOnTable = useMemo(
-    () => bottleCatalogSource.find((row) => row.id === (bottleSkin ?? "classic"))?.img ?? "",
-    [bottleCatalogSource, bottleSkin],
-  )
+  const effectiveBottleSkin = useMemo(() => {
+    const skinId = bottleSkin ?? "classic"
+    if (skinId === "classic" && mainBottleId) return mainBottleId
+    return skinId
+  }, [bottleSkin, mainBottleId])
+
+  const bottleImageOnTable = useMemo(() => {
+    const fromCatalog = bottleCatalogSource.find((row) => row.id === effectiveBottleSkin)?.img
+    if (fromCatalog) return fromCatalog
+    const fromApi = bottleCatalogRows.find((row) => row.id === effectiveBottleSkin)?.img
+    if (fromApi) return fromApi
+    return ""
+  }, [bottleCatalogSource, bottleCatalogRows, effectiveBottleSkin])
 
   const gameRoomDustParticles = useMemo(
     () => buildGameRoomDustParticles(8 + (GAME_ROOM_DUST_SEED % 19), GAME_ROOM_DUST_SEED),
@@ -4070,7 +4085,7 @@ export function GameRoom() {
               <Bottle
                 angle={bottleAngle}
                 isSpinning={isSpinning}
-                skin={bottleSkin ?? "classic"}
+                skin={effectiveBottleSkin as any}
                 skinImageUrl={bottleImageOnTable}
                 isDrunk={isCurrentTurnDrunk}
                 fortuneSegmentCount={players.length > 0 ? players.length : 8}

@@ -73,7 +73,7 @@ export function Bottle({
 
   const isFortuneWheel = skin === "fortune_wheel"
   const knownSkinSrc = isFortuneWheel ? "" : skinToImg[skin as BottleSkinWithImage]
-  const imgSrc = isFortuneWheel ? "" : (skinImageUrl || knownSkinSrc || skinToImg.classic)
+  const imgSrc = isFortuneWheel ? "" : (skinImageUrl && skinImageUrl.trim() ? skinImageUrl : knownSkinSrc || skinToImg.classic)
   useEffect(() => {
     setImgError(false)
   }, [skin, imgSrc])

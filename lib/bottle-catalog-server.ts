@@ -11,6 +11,7 @@ type BottleCatalogDbRow = {
   published: number
   deleted: number
   sort_order: number
+  is_main: number
 }
 
 export function listBottleCatalogRows(options?: {
@@ -26,7 +27,7 @@ export function listBottleCatalogRows(options?: {
   const rows = db
     .prepare(
       `SELECT id, name, img, cost, published, deleted, sort_order
-      , section
+      , section, is_main
        FROM bottle_catalog
        ${whereSql}
        ORDER BY sort_order ASC, updated_at ASC`,
@@ -46,6 +47,7 @@ export function listBottleCatalogRows(options?: {
     cost: Math.max(0, row.cost | 0),
     published: row.published === 1,
     deleted: row.deleted === 1,
+    isMain: row.is_main === 1,
   }))
 }
 
@@ -65,21 +67,24 @@ export function updateBottleCatalogEntry(input: {
   cost?: number
   published?: boolean
   deleted?: boolean
+  isMain?: boolean
 }) {
   if (typeof input.id !== "string" || !input.id.trim()) throw new Error("bad_bottle_id")
   const safeId = input.id.trim()
   const db = getDb()
   const now = Date.now()
   const existing = db
-    .prepare(`SELECT id, name, img, section, cost, published, deleted FROM bottle_catalog WHERE id = ? LIMIT 1`)
+    .prepare(`SELECT id, name, img, section, cost, published, deleted, is_main FROM bottle_catalog WHERE id = ? LIMIT 1`)
     .get(safeId) as Omit<BottleCatalogDbRow, "sort_order"> | undefined
   if (!existing) {
+    const isMain = input.isMain === true ? 1 : 0
+    if (isMain) db.prepare(`UPDATE bottle_catalog SET is_main = 0 WHERE is_main = 1`).run()
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM bottle_catalog`).get() as {
       next: number
     }
     db.prepare(
-      `INSERT INTO bottle_catalog (id, name, img, section, cost, published, deleted, sort_order, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bottle_catalog (id, name, img, section, cost, published, deleted, is_main, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       safeId,
       input.name?.trim() || safeId,
@@ -88,6 +93,7 @@ export function updateBottleCatalogEntry(input: {
       Math.max(0, Math.floor(Number(input.cost) || 0)),
       input.published === false ? 0 : 1,
       input.deleted === true ? 1 : 0,
+      isMain,
       sortOrder.next,
       now,
     )
@@ -99,12 +105,25 @@ export function updateBottleCatalogEntry(input: {
   const nextCost = Number.isFinite(Number(input.cost)) ? Math.max(0, Math.floor(Number(input.cost))) : existing.cost
   const nextPublished = typeof input.published === "boolean" ? (input.published ? 1 : 0) : existing.published
   const nextDeleted = typeof input.deleted === "boolean" ? (input.deleted ? 1 : 0) : existing.deleted
+  const nextIsMain = typeof input.isMain === "boolean" ? (input.isMain ? 1 : 0) : existing.is_main
+
+  if (nextIsMain === 1 && existing.is_main !== 1) {
+    db.prepare(`UPDATE bottle_catalog SET is_main = 0 WHERE is_main = 1`).run()
+  }
 
   db.prepare(
     `UPDATE bottle_catalog
-     SET name = ?, img = ?, section = ?, cost = ?, published = ?, deleted = ?, updated_at = ?
+     SET name = ?, img = ?, section = ?, cost = ?, published = ?, deleted = ?, is_main = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(nextName, nextImg, nextSection, nextCost, nextPublished, nextDeleted, now, safeId)
+  ).run(nextName, nextImg, nextSection, nextCost, nextPublished, nextDeleted, nextIsMain, now, safeId)
+}
+
+export function getMainBottleId(): string | null {
+  const db = getDb()
+  const row = db
+    .prepare(`SELECT id FROM bottle_catalog WHERE is_main = 1 AND published = 1 AND deleted = 0 LIMIT 1`)
+    .get() as { id: string } | undefined
+  return row?.id ?? null
 }
 
 export function deleteBottleCatalogEntry(id: string): { removedImagePath: string | null } {

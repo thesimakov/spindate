@@ -11,6 +11,7 @@ import {
 export function useBottleCatalog() {
   const [rows, setRows] = useState<BottleCatalogSkinRow[]>(DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published))
   const [loading, setLoading] = useState(true)
+  const [mainBottleId, setMainBottleId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -21,12 +22,15 @@ export function useBottleCatalog() {
         const parsed = normalizeBottleCatalogRows(data.rows, { onlyPublished: true })
         if (parsed.length > 0) {
           setRows(parsed)
+          setMainBottleId(typeof data.mainBottleId === "string" ? data.mainBottleId : null)
           return
         }
       }
       setRows(DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published))
+      setMainBottleId(null)
     } catch {
       setRows(DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published))
+      setMainBottleId(null)
     } finally {
       setLoading(false)
     }
@@ -36,5 +40,5 @@ export function useBottleCatalog() {
     void refresh()
   }, [refresh])
 
-  return { rows, loading, refresh }
+  return { rows, loading, refresh, mainBottleId }
 }

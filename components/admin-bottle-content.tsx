@@ -16,6 +16,7 @@ type RowDraft = {
   cost: number
   published: boolean
   deleted: boolean
+  isMain: boolean
 }
 
 type ShowcaseTier = "free" | "paid" | "vip"
@@ -33,6 +34,7 @@ function parseAdminRows(rows: unknown): RowDraft[] {
       cost?: number
       published?: boolean
       deleted?: boolean
+      isMain?: boolean
     }
     if (typeof rec.id !== "string" || !rec.id.trim()) continue
     parsed.push({
@@ -48,6 +50,7 @@ function parseAdminRows(rows: unknown): RowDraft[] {
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
       published: rec.published !== false,
       deleted: rec.deleted === true,
+      isMain: rec.isMain === true,
     })
   }
   return parsed
@@ -85,6 +88,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
     cost: 0,
     published: true,
     deleted: false,
+    isMain: false,
   })
 
   const fetchRows = useCallback(async () => {
@@ -203,6 +207,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
       img: "",
       section: nextSection,
       cost: addTier === "free" ? 0 : prev.cost,
+      isMain: false,
     }))
   }, [addDraft, addTier, postUpdate, rows])
 
@@ -336,6 +341,16 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
               </div>
             </label>
           </div>
+          <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+            <input
+              type="checkbox"
+              checked={addDraft.isMain}
+              onChange={(e) => setAddDraft((p) => ({ ...p, isMain: e.target.checked }))}
+              className="h-4 w-4 rounded border-slate-600 bg-slate-950 text-amber-500 focus:ring-amber-500/30"
+            />
+            <span className="text-amber-200 font-medium">Главная</span>
+            <span className="text-slate-500">(заменяет дефолтную бутылочку на всех столах, для праздников)</span>
+          </label>
           <p className="mt-2 text-xs text-slate-400">
             ID можно задать вручную, если оставить пустым - сформируется автоматически.
           </p>
@@ -422,6 +437,24 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
                     className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
                   />
                 </label>
+                <label className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={row.isMain}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      if (checked) {
+                        setRows((prev) => prev.map((r) => ({ ...r, isMain: r.id === row.id })))
+                      } else {
+                        updateRow(row.id, { isMain: false })
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-950 text-amber-500 focus:ring-amber-500/30"
+                  />
+                  <span className={row.isMain ? "font-semibold text-amber-300" : "text-slate-400"}>
+                    Главная {row.isMain && "★"}
+                  </span>
+                </label>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -434,6 +467,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
                       img: row.img,
                       section: row.section,
                       cost: row.cost,
+                      isMain: row.isMain,
                     })
                   }
                   className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-medium text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50"

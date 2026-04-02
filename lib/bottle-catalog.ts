@@ -9,6 +9,7 @@ export type BottleCatalogSkinRow = {
   cost: number
   published: boolean
   deleted?: boolean
+  isMain?: boolean
 }
 
 export type BottleCatalogDefaultRow = Omit<BottleCatalogSkinRow, "img"> & { imgPath: string }
@@ -91,6 +92,7 @@ export function normalizeBottleCatalogRows(
       cost: Math.max(0, Number.isFinite(Number(rec.cost)) ? Math.floor(Number(rec.cost)) : 0),
       published: rec.published !== false,
       deleted: rec.deleted === true,
+      isMain: rec.isMain === true,
     }
     if (!options?.includeDeleted && normalized.deleted) continue
     if (options?.onlyPublished && !normalized.published) continue
