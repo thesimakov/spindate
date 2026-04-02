@@ -198,13 +198,13 @@ export function DevScreen() {
 
   return (
     <div
-      className="min-h-app overflow-auto p-4 pb-12"
+      className="h-app max-h-app overflow-hidden p-4 pb-12"
       style={{
         background: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
         color: "#e2e8f0",
       }}
     >
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto flex h-full min-h-0 max-w-5xl flex-col">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-600 pb-4">
           <div>
             <h1 className="text-xl font-bold text-amber-400">Панель разработчика</h1>
@@ -269,9 +269,10 @@ export function DevScreen() {
           </button>
         </div>
 
-        {activeTab === "users" ? (
-          <>
-            <div className="max-h-[78dvh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-600 bg-slate-800/40">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          {activeTab === "users" ? (
+            <>
+              <div className="max-h-[78dvh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-600 bg-slate-800/40">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-slate-600 bg-slate-800/90 backdrop-blur">
@@ -400,19 +401,20 @@ export function DevScreen() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
 
-            <p className="mt-4 text-xs text-slate-500">
-              Заблокировать — игрок удаляется из игры, при попытке входа видит сообщение. Забанить на сутки — доступ
-              закрыт на 24 часа. Логин отображается только для входа через логин/пароль; пароль на клиенте не хранится.
-            </p>
-          </>
-        ) : (
-          <div className="space-y-4">
-            <AdminBottleContent token={getAdminToken()} />
-            <AdminGiftContent token={getAdminToken()} />
-          </div>
-        )}
+              <p className="mt-4 text-xs text-slate-500">
+                Заблокировать — игрок удаляется из игры, при попытке входа видит сообщение. Забанить на сутки — доступ
+                закрыт на 24 часа. Логин отображается только для входа через логин/пароль; пароль на клиенте не хранится.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-4 pb-8">
+              <AdminBottleContent token={getAdminToken()} />
+              <AdminGiftContent token={getAdminToken()} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

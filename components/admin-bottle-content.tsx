@@ -109,6 +109,37 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
     [token],
   )
 
+  const uploadBottleImage = useCallback(
+    async (id: string, file: File) => {
+      setBusyId(id)
+      setError("")
+      try {
+        const form = new FormData()
+        form.set("file", file)
+        form.set("bucket", "bottle")
+        const res = await apiFetch("/api/admin/content/upload-image", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+          cache: "no-store",
+          credentials: "include",
+          body: form,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || typeof data.path !== "string") {
+          setError(`Не удалось загрузить файл: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+          return
+        }
+        updateRow(id, { img: data.path })
+        await postUpdate(id, { img: data.path })
+      } catch {
+        setError("Ошибка сети при загрузке картинки")
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [token, postUpdate],
+  )
+
   const total = rows.length
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
 
@@ -167,13 +198,30 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
                   />
                 </label>
                 <label className="block text-[11px] text-slate-400">
-                  Картинка (URL или /assets/...)
-                  <input
-                    type="text"
-                    value={row.img}
-                    onChange={(e) => updateRow(row.id, { img: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
-                  />
+                  Картинка (загрузка файла)
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={row.img}
+                      readOnly
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                    />
+                    <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-500 bg-slate-700/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-600">
+                      Прикрепить файл
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                        disabled={busyId === row.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.currentTarget.value = ""
+                          if (!file) return
+                          void uploadBottleImage(row.id, file)
+                        }}
+                      />
+                    </label>
+                  </div>
                 </label>
                 <label className="block text-[11px] text-slate-400">
                   Стоимость, ❤
