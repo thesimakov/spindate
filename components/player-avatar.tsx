@@ -68,6 +68,12 @@ interface PlayerAvatarProps {
   bigGiftSequence?: AvatarBigGiftType[]
   /** Рамка на аватарке (подаренная) — отображается на столе */
   frameId?: string
+  /** Переопределение бордера рамки из каталога (для кастомных загруженных рамок). */
+  frameBorder?: string
+  /** Переопределение тени рамки из каталога (для кастомных загруженных рамок). */
+  frameShadow?: string
+  /** Путь к SVG/картинке рамки из каталога (для кастомных загруженных рамок). */
+  frameSvgPath?: string
   /** Скрыть бейдж с именем под аватаркой (например, в предпросмотре) */
   hideNameLabel?: boolean
   /** Игрок сейчас в мини-игре «Угадай-ка» — показывать статус «в игре» */
@@ -95,6 +101,9 @@ export function PlayerAvatar({
   giftIcons,
   bigGiftSequence,
   frameId,
+  frameBorder,
+  frameShadow,
+  frameSvgPath,
   hideNameLabel = false,
   inGame = false,
   showAsleep = false,
@@ -102,10 +111,19 @@ export function PlayerAvatar({
   tableRingLayout = false,
   showStatusBadge = false,
 }: PlayerAvatarProps) {
-  const frameStyle = frameId && frameId !== "none" ? FRAME_STYLES[frameId] ?? FRAME_STYLES.none : null
+  const frameStyle =
+    frameId && frameId !== "none"
+      ? frameBorder
+        ? { border: frameBorder, boxShadow: frameShadow ?? "none" }
+        : FRAME_STYLES[frameId] ?? FRAME_STYLES.none
+      : null
   const useFrameOnRim = frameStyle && !isTarget && !isCurrentTurn
   const isSvgFrame = frameId && FRAME_SVG_IDS.includes(frameId as keyof typeof FRAME_SVG)
-  const svgFrameSrc = isSvgFrame && frameId in FRAME_SVG ? assetUrl((FRAME_SVG as Record<string, string>)[frameId]) : null
+  const svgFrameSrc = frameSvgPath
+    ? assetUrl(frameSvgPath.startsWith("/") ? frameSvgPath : `/assets/${frameSvgPath}`)
+    : isSvgFrame && frameId in FRAME_SVG
+      ? assetUrl((FRAME_SVG as Record<string, string>)[frameId])
+      : null
   const size = sizeProp ?? (compact ? 52 : 70)
   const borderSize = size <= 52 ? 3 : 4
   const outerSize = size + borderSize * 2 + 4

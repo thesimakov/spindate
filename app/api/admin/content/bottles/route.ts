@@ -31,6 +31,7 @@ export async function POST(req: Request) {
       id,
       name: typeof body?.name === "string" ? body.name : undefined,
       img: typeof body?.img === "string" ? body.img : undefined,
+      section: body?.section === "free" || body?.section === "paid" || body?.section === "vip" ? body.section : undefined,
       cost: typeof body?.cost === "number" ? body.cost : undefined,
       published: typeof body?.published === "boolean" ? body.published : undefined,
       deleted: typeof body?.deleted === "boolean" ? body.deleted : undefined,

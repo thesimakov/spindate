@@ -31,6 +31,8 @@ interface BottleProps {
   isDrunk?: boolean
   /** Для скина «Колесо фортуны»: число секторов = числу игроков за столом */
   fortuneSegmentCount?: number
+  /** URL изображения из админ-каталога для кастомных ID */
+  skinImageUrl?: string
 }
 
 type BottleSkinWithImage = Exclude<NonNullable<BottleProps["skin"]>, "fortune_wheel">
@@ -41,6 +43,7 @@ export function Bottle({
   skin = "classic",
   isDrunk = false,
   fortuneSegmentCount,
+  skinImageUrl,
 }: BottleProps) {
   const [imgError, setImgError] = useState(false)
   const [renderAngle, setRenderAngle] = useState(angle)
@@ -69,7 +72,8 @@ export function Bottle({
   }
 
   const isFortuneWheel = skin === "fortune_wheel"
-  const imgSrc = isFortuneWheel ? "" : skinToImg[skin]
+  const knownSkinSrc = isFortuneWheel ? "" : skinToImg[skin as BottleSkinWithImage]
+  const imgSrc = isFortuneWheel ? "" : (skinImageUrl || knownSkinSrc || skinToImg.classic)
   useEffect(() => {
     setImgError(false)
   }, [skin, imgSrc])

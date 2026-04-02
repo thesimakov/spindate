@@ -98,6 +98,7 @@ function migrate(database: Database.Database) {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       img TEXT NOT NULL DEFAULT '',
+      section TEXT NOT NULL DEFAULT 'paid',
       cost INTEGER NOT NULL DEFAULT 0,
       published INTEGER NOT NULL DEFAULT 1,
       deleted INTEGER NOT NULL DEFAULT 0,
@@ -108,7 +109,7 @@ function migrate(database: Database.Database) {
 
     CREATE TABLE IF NOT EXISTS gift_catalog (
       id TEXT PRIMARY KEY,
-      section TEXT NOT NULL DEFAULT 'premium',
+      section TEXT NOT NULL DEFAULT 'paid',
       name TEXT NOT NULL,
       emoji TEXT NOT NULL DEFAULT '🎁',
       cost INTEGER NOT NULL DEFAULT 0,
@@ -156,6 +157,16 @@ function migrate(database: Database.Database) {
   if (!profileCols.some((c) => c.name === "status")) {
     database.exec(`ALTER TABLE player_profiles ADD COLUMN status TEXT NOT NULL DEFAULT ''`)
   }
+  const bottleCols = database.prepare(`PRAGMA table_info(bottle_catalog)`).all() as { name: string }[]
+  if (!bottleCols.some((c) => c.name === "section")) {
+    database.exec(`ALTER TABLE bottle_catalog ADD COLUMN section TEXT NOT NULL DEFAULT 'paid'`)
+    database.exec(`UPDATE bottle_catalog SET section = 'free' WHERE cost = 0 OR id = 'classic'`)
+    database.exec(`UPDATE bottle_catalog SET section = 'vip' WHERE id IN ('vip', 'fortune_wheel')`)
+  }
+  database.exec(`UPDATE gift_catalog SET section = 'paid' WHERE section = 'premium'`)
+  database.exec(`UPDATE gift_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
+  database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)
+  database.exec(`UPDATE frame_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
 
   // Старые инсталляции: vk_payment_orders могла быть создана без vk_user_id — IF NOT EXISTS таблицу не пересоздаёт.
   const paymentCols = database.prepare(`PRAGMA table_info(vk_payment_orders)`).all() as { name: string }[]
@@ -169,12 +180,12 @@ function migrate(database: Database.Database) {
 
   const now = Date.now()
   const insertBottle = database.prepare(
-    `INSERT INTO bottle_catalog (id, name, img, cost, published, deleted, sort_order, updated_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+    `INSERT INTO bottle_catalog (id, name, img, section, cost, published, deleted, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(id) DO NOTHING`,
   )
   DEFAULT_BOTTLE_CATALOG_SKINS.forEach((row, index) => {
-    insertBottle.run(row.id, row.name, row.imgPath, row.cost, row.published ? 1 : 0, index, now)
+    insertBottle.run(row.id, row.name, row.imgPath, row.section, row.cost, row.published ? 1 : 0, index, now)
   })
 
   const insertGift = database.prepare(

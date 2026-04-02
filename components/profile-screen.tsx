@@ -102,7 +102,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       }))
   }, [frameCatalogRows])
   const FREE_FRAMES = PROFILE_FRAMES.filter((row) => row.section === "free")
-  const PREMIUM_FRAMES = PROFILE_FRAMES.filter((row) => row.section === "premium")
+  const PREMIUM_FRAMES = PROFILE_FRAMES.filter((row) => row.section !== "free")
 
   const rosesBalance = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,

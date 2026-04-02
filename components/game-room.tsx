@@ -76,8 +76,10 @@ import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
+import { DEFAULT_BOTTLE_CATALOG_ROWS } from "@/lib/bottle-catalog"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
+import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
 import { useGiftCatalog } from "@/lib/use-gift-catalog"
 
@@ -418,6 +420,7 @@ const TABLE_STYLE_BACKGROUNDS: Record<
 
 export function GameRoom() {
   const { state } = useGame()
+  const { rows: bottleCatalogRows } = useBottleCatalog()
   const { rows: frameCatalogRows } = useFrameCatalog()
   const { rows: giftCatalogRows } = useGiftCatalog()
   useTheme()
@@ -477,6 +480,17 @@ export function GameRoom() {
     () => (frameCatalogRows.length > 0 ? frameCatalogRows : DEFAULT_FRAME_CATALOG_ROWS),
     [frameCatalogRows],
   )
+  const frameMetaById = useMemo(() => {
+    const m = new Map<string, { border: string; shadow: string; svgPath?: string }>()
+    frameCatalogSource.forEach((row) => {
+      m.set(row.id, {
+        border: row.border,
+        shadow: row.shadow,
+        svgPath: row.svgPath || undefined,
+      })
+    })
+    return m
+  }, [frameCatalogSource])
   const giftableFramesFree = useMemo(
     () =>
       frameCatalogSource
@@ -494,7 +508,7 @@ export function GameRoom() {
   const giftableFramesPremium = useMemo(
     () =>
       frameCatalogSource
-        .filter((row) => row.section === "premium" && row.published && !row.deleted)
+        .filter((row) => row.section !== "free" && row.published && !row.deleted)
         .map((row) => ({
           id: row.id,
           label: row.name,
@@ -521,8 +535,16 @@ export function GameRoom() {
     [giftCatalogSource],
   )
   const giftCatalogPremium = useMemo(
-    () => giftCatalogSource.filter((row) => row.section === "premium" && row.published && !row.deleted),
+    () => giftCatalogSource.filter((row) => row.section !== "free" && row.published && !row.deleted),
     [giftCatalogSource],
+  )
+  const bottleCatalogSource = useMemo(
+    () => (bottleCatalogRows.length > 0 ? bottleCatalogRows : DEFAULT_BOTTLE_CATALOG_ROWS),
+    [bottleCatalogRows],
+  )
+  const bottleImageOnTable = useMemo(
+    () => bottleCatalogSource.find((row) => row.id === (bottleSkin ?? "classic"))?.img ?? "",
+    [bottleCatalogSource, bottleSkin],
   )
 
   const gameRoomDustParticles = useMemo(
@@ -3773,6 +3795,8 @@ export function GameRoom() {
           {/* ---- PLAYERS around the circle ---- */}
           {players.map((player, i) => {
             const pos = positions[i]
+            const playerFrameId = avatarFrames?.[player.id]
+            const playerFrameMeta = playerFrameId ? frameMetaById.get(playerFrameId) : undefined
             const isAvatarMenuOpen = sidebarTargetPlayer?.id === player.id
             const isClickableForPrediction =
               predictionPhase && !predictionMade && !isSpinning && !showResult &&
@@ -3829,7 +3853,10 @@ export function GameRoom() {
                     kissCount={getKissCountForPlayer(player.id)}
                     giftIcons={giftIcons}
                     bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
-                    frameId={avatarFrames?.[player.id]}
+                    frameId={playerFrameId}
+                    frameBorder={playerFrameMeta?.border}
+                    frameShadow={playerFrameMeta?.shadow}
+                    frameSvgPath={playerFrameMeta?.svgPath}
                     inGame={playerInUgadaika != null && player.id === playerInUgadaika}
                     showAsleep={
                       (spinSkips?.[player.id] ?? 0) >= 3 || clientTabAway?.[player.id] === true
@@ -4037,6 +4064,7 @@ export function GameRoom() {
                 angle={bottleAngle}
                 isSpinning={isSpinning}
                 skin={bottleSkin ?? "classic"}
+                skinImageUrl={bottleImageOnTable}
                 isDrunk={isCurrentTurnDrunk}
                 fortuneSegmentCount={players.length > 0 ? players.length : 8}
               />
@@ -4826,11 +4854,20 @@ export function GameRoom() {
                     }}
                     aria-hidden
                   />
+                  {(() => {
+                    const menuFrameId = avatarFrames?.[playerMenuTarget.id] || "none"
+                    const menuFrameMeta = frameMetaById.get(menuFrameId)
+                    return (
                   <PlayerAvatar
                     player={playerMenuTarget}
-                    frameId={avatarFrames?.[playerMenuTarget.id] || "none"}
+                    frameId={menuFrameId}
+                    frameBorder={menuFrameMeta?.border}
+                    frameShadow={menuFrameMeta?.shadow}
+                    frameSvgPath={menuFrameMeta?.svgPath}
                     size={isMobile ? 100 : 128}
                   />
+                    )
+                  })()}
                   <h2 className="relative z-[1] mt-3 max-w-full px-1 text-center text-xl font-black leading-tight tracking-tight text-slate-900 sm:text-2xl">
                     {playerMenuTarget.name}
                   </h2>
@@ -5222,7 +5259,7 @@ export function GameRoom() {
                     ))}
                   </div>
 
-                  <p className="text-[13px] font-semibold text-amber-200">Премиум — цены из каталога</p>
+                  <p className="text-[13px] font-semibold text-amber-200">Доступно / VIP — цены из каталога</p>
                   <div className="grid grid-cols-4 gap-3">
                     {giftableFramesPremium.map((f) => {
                       const canAfford = voiceBalance >= f.cost
@@ -5369,7 +5406,7 @@ export function GameRoom() {
                         },
                         {
                           key: "premium",
-                          title: "Премиум",
+                          title: "Доступно / VIP",
                           gifts: giftCatalogPremium,
                           accent: "amber" as const,
                         },

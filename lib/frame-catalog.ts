@@ -15,7 +15,7 @@ export type FrameCatalogId =
   | "mir"
   | "vesna"
 
-export type FrameCatalogSection = "free" | "premium"
+export type FrameCatalogSection = "free" | "paid" | "vip"
 
 export type FrameCatalogRow = {
   id: FrameCatalogId
@@ -121,7 +121,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "fox",
-    section: "premium",
+    section: "paid",
     name: "Лиса",
     border: "2px solid transparent",
     shadow: "none",
@@ -132,7 +132,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "rabbit",
-    section: "premium",
+    section: "paid",
     name: "Кролик",
     border: "2px solid transparent",
     shadow: "none",
@@ -143,7 +143,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "fairy",
-    section: "premium",
+    section: "paid",
     name: "Фея",
     border: "2px solid transparent",
     shadow: "none",
@@ -154,7 +154,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "mag",
-    section: "premium",
+    section: "paid",
     name: "Маг сердца",
     border: "2px solid transparent",
     shadow: "none",
@@ -165,7 +165,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "malif",
-    section: "premium",
+    section: "paid",
     name: "Милифисента",
     border: "2px solid transparent",
     shadow: "none",
@@ -176,7 +176,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "mir",
-    section: "premium",
+    section: "paid",
     name: "Миру мир",
     border: "2px solid transparent",
     shadow: "none",
@@ -187,7 +187,7 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
   },
   {
     id: "vesna",
-    section: "premium",
+    section: "paid",
     name: "Весна",
     border: "2px solid transparent",
     shadow: "none",
@@ -218,7 +218,12 @@ export function normalizeFrameCatalogRows(
     if (typeof rec.id !== "string" || !isFrameCatalogId(rec.id)) continue
     const normalized: FrameCatalogRow = {
       id: rec.id,
-      section: rec.section === "free" ? "free" : "premium",
+      section:
+        rec.section === "free" || rec.section === "vip"
+          ? rec.section
+          : Number(rec.cost) >= 10
+            ? "vip"
+            : "paid",
       name: typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : rec.id,
       border: typeof rec.border === "string" && rec.border.trim() ? rec.border.trim() : "2px solid #475569",
       shadow: typeof rec.shadow === "string" && rec.shadow.trim() ? rec.shadow.trim() : "none",

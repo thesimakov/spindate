@@ -35,9 +35,15 @@ function parseRows(rows: unknown): RowDraft[] {
       deleted?: boolean
     }
     if (typeof rec.id !== "string" || !rec.id.trim()) continue
+    const section: GiftCatalogSection =
+      rec.section === "free" || rec.section === "vip"
+        ? rec.section
+        : Number(rec.cost) >= 10
+          ? "vip"
+          : "paid"
     parsed.push({
       id: rec.id,
-      section: rec.section === "free" ? "free" : "premium",
+      section,
       name: typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : rec.id,
       emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "🎁",
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
@@ -74,7 +80,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
   const [addTier, setAddTier] = useState<ShowcaseTier>("paid")
   const [addDraft, setAddDraft] = useState<RowDraft>({
     id: "new_gift",
-    section: "premium",
+    section: "paid",
     name: "Новый подарок",
     emoji: "🎁",
     cost: 1,
@@ -146,7 +152,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     const existingIds = new Set(rows.map((row) => row.id))
     const baseId = normalizeCatalogId(addDraft.id || addDraft.name, "gift")
     const id = makeUniqueId(baseId, existingIds)
-    const nextSection: GiftCatalogSection = addTier === "free" ? "free" : "premium"
+    const nextSection: GiftCatalogSection = addTier === "free" ? "free" : addTier === "vip" ? "vip" : "paid"
     const nextCost = addTier === "free" ? 0 : addDraft.cost
     await postUpdate(id, {
       ...addDraft,
@@ -324,10 +330,13 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                 <button
                   type="button"
                   disabled={busyId === row.id}
-                  onClick={() => void postUpdate(row.id, { section: row.section === "free" ? "premium" : "free" })}
+                  onClick={() => {
+                    const nextSection = row.section === "free" ? "paid" : row.section === "paid" ? "vip" : "free"
+                    void postUpdate(row.id, { section: nextSection })
+                  }}
                   className="rounded-lg border border-violet-500/40 bg-violet-500/15 px-2.5 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
                 >
-                  {row.section === "free" ? "Сделать премиум" : "Сделать бесплатным"}
+                  {row.section === "free" ? "В витрину: Доступно" : row.section === "paid" ? "В витрину: VIP" : "В витрину: Бесплатно"}
                 </button>
                 <button
                   type="button"

@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     }
     updateGiftCatalogEntry({
       id,
-      section: body?.section === "free" || body?.section === "premium" ? body.section : undefined,
+      section: body?.section === "free" || body?.section === "paid" || body?.section === "vip" ? body.section : undefined,
       name: typeof body?.name === "string" ? body.name : undefined,
       emoji: typeof body?.emoji === "string" ? body.emoji : undefined,
       cost: typeof body?.cost === "number" ? body.cost : undefined,

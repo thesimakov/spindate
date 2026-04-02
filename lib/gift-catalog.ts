@@ -1,6 +1,6 @@
 import type { InventoryItem } from "@/lib/game-types"
 
-export type GiftCatalogSection = "free" | "premium"
+export type GiftCatalogSection = "free" | "paid" | "vip"
 
 export type GiftCatalogRow = {
   id: InventoryItem["type"]
@@ -13,13 +13,13 @@ export type GiftCatalogRow = {
 }
 
 export const DEFAULT_GIFT_CATALOG_ROWS: GiftCatalogRow[] = [
-  { id: "toy_bear", section: "premium", name: "Плюшевый мишка", emoji: "🧸", cost: 10, published: true },
-  { id: "plush_heart", section: "premium", name: "Подушка-сердце", emoji: "❤️", cost: 8, published: true },
-  { id: "toy_car", section: "premium", name: "Игрушечная машинка", emoji: "🚗", cost: 7, published: true },
-  { id: "toy_ball", section: "premium", name: "Футбольный мяч", emoji: "⚽️", cost: 6, published: true },
-  { id: "souvenir_magnet", section: "premium", name: "Магнитик на холодильник", emoji: "🧲", cost: 3, published: true },
-  { id: "souvenir_keychain", section: "premium", name: "Брелок-сувенир", emoji: "🔑", cost: 5, published: true },
-  { id: "chocolate_box", section: "premium", name: "Коробка конфет", emoji: "🍫", cost: 4, published: true },
+  { id: "toy_bear", section: "vip", name: "Плюшевый мишка", emoji: "🧸", cost: 10, published: true },
+  { id: "plush_heart", section: "paid", name: "Подушка-сердце", emoji: "❤️", cost: 8, published: true },
+  { id: "toy_car", section: "paid", name: "Игрушечная машинка", emoji: "🚗", cost: 7, published: true },
+  { id: "toy_ball", section: "paid", name: "Футбольный мяч", emoji: "⚽️", cost: 6, published: true },
+  { id: "souvenir_magnet", section: "paid", name: "Магнитик на холодильник", emoji: "🧲", cost: 3, published: true },
+  { id: "souvenir_keychain", section: "paid", name: "Брелок-сувенир", emoji: "🔑", cost: 5, published: true },
+  { id: "chocolate_box", section: "paid", name: "Коробка конфет", emoji: "🍫", cost: 4, published: true },
 ]
 
 export function isGiftCatalogId(value: string): value is InventoryItem["type"] {
@@ -40,7 +40,12 @@ export function normalizeGiftCatalogRows(
     if (!item || typeof item !== "object") continue
     const rec = item as Partial<GiftCatalogRow> & { id?: string; section?: string }
     if (typeof rec.id !== "string" || !isGiftCatalogId(rec.id)) continue
-    const section: GiftCatalogSection = rec.section === "free" ? "free" : "premium"
+    const section: GiftCatalogSection =
+      rec.section === "free" || rec.section === "vip"
+        ? rec.section
+        : Number(rec.cost) >= 10
+          ? "vip"
+          : "paid"
     const normalized: GiftCatalogRow = {
       id: rec.id,
       section,

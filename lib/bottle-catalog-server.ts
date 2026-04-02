@@ -6,6 +6,7 @@ type BottleCatalogDbRow = {
   id: string
   name: string
   img: string
+  section: string
   cost: number
   published: number
   deleted: number
@@ -25,6 +26,7 @@ export function listBottleCatalogRows(options?: {
   const rows = db
     .prepare(
       `SELECT id, name, img, cost, published, deleted, sort_order
+      , section
        FROM bottle_catalog
        ${whereSql}
        ORDER BY sort_order ASC, updated_at ASC`,
@@ -35,6 +37,12 @@ export function listBottleCatalogRows(options?: {
     id: row.id as BottleSkin,
     name: row.name,
     img: options?.resolveImage === false ? row.img : toBottleImageUrl(row.img),
+    section:
+      row.section === "free" || row.section === "vip"
+        ? row.section
+        : (row.cost | 0) <= 0
+          ? "free"
+          : "paid",
     cost: Math.max(0, row.cost | 0),
     published: row.published === 1,
     deleted: row.deleted === 1,
@@ -53,6 +61,7 @@ export function updateBottleCatalogEntry(input: {
   id: string
   name?: string
   img?: string
+  section?: "free" | "paid" | "vip"
   cost?: number
   published?: boolean
   deleted?: boolean
@@ -62,19 +71,20 @@ export function updateBottleCatalogEntry(input: {
   const db = getDb()
   const now = Date.now()
   const existing = db
-    .prepare(`SELECT id, name, img, cost, published, deleted FROM bottle_catalog WHERE id = ? LIMIT 1`)
+    .prepare(`SELECT id, name, img, section, cost, published, deleted FROM bottle_catalog WHERE id = ? LIMIT 1`)
     .get(safeId) as Omit<BottleCatalogDbRow, "sort_order"> | undefined
   if (!existing) {
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM bottle_catalog`).get() as {
       next: number
     }
     db.prepare(
-      `INSERT INTO bottle_catalog (id, name, img, cost, published, deleted, sort_order, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bottle_catalog (id, name, img, section, cost, published, deleted, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       safeId,
       input.name?.trim() || safeId,
       input.img?.trim() || "",
+      input.section === "free" || input.section === "vip" ? input.section : "paid",
       Math.max(0, Math.floor(Number(input.cost) || 0)),
       input.published === false ? 0 : 1,
       input.deleted === true ? 1 : 0,
@@ -85,14 +95,15 @@ export function updateBottleCatalogEntry(input: {
   }
   const nextName = typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing.name
   const nextImg = typeof input.img === "string" ? input.img.trim() : existing.img
+  const nextSection = input.section === "free" || input.section === "vip" || input.section === "paid" ? input.section : existing.section
   const nextCost = Number.isFinite(Number(input.cost)) ? Math.max(0, Math.floor(Number(input.cost))) : existing.cost
   const nextPublished = typeof input.published === "boolean" ? (input.published ? 1 : 0) : existing.published
   const nextDeleted = typeof input.deleted === "boolean" ? (input.deleted ? 1 : 0) : existing.deleted
 
   db.prepare(
     `UPDATE bottle_catalog
-     SET name = ?, img = ?, cost = ?, published = ?, deleted = ?, updated_at = ?
+     SET name = ?, img = ?, section = ?, cost = ?, published = ?, deleted = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(nextName, nextImg, nextCost, nextPublished, nextDeleted, now, safeId)
+  ).run(nextName, nextImg, nextSection, nextCost, nextPublished, nextDeleted, now, safeId)
 }
 

@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     }
     updateFrameCatalogEntry({
       id,
-      section: body?.section === "free" || body?.section === "premium" ? body.section : undefined,
+      section: body?.section === "free" || body?.section === "paid" || body?.section === "vip" ? body.section : undefined,
       name: typeof body?.name === "string" ? body.name : undefined,
       border: typeof body?.border === "string" ? body.border : undefined,
       shadow: typeof body?.shadow === "string" ? body.shadow : undefined,

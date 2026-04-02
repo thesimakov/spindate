@@ -12,6 +12,7 @@ type RowDraft = {
   id: string
   name: string
   img: string
+  section: "free" | "paid" | "vip"
   cost: number
   published: boolean
   deleted: boolean
@@ -28,6 +29,7 @@ function parseAdminRows(rows: unknown): RowDraft[] {
       id?: string
       name?: string
       img?: string
+      section?: string
       cost?: number
       published?: boolean
       deleted?: boolean
@@ -37,6 +39,12 @@ function parseAdminRows(rows: unknown): RowDraft[] {
       id: rec.id,
       name: typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : rec.id,
       img: typeof rec.img === "string" ? rec.img : "",
+      section:
+        rec.section === "free" || rec.section === "vip"
+          ? rec.section
+          : Number(rec.cost) <= 0
+            ? "free"
+            : "paid",
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
       published: rec.published !== false,
       deleted: rec.deleted === true,
@@ -73,6 +81,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
     id: "new_bottle",
     name: "Новая бутылочка",
     img: "",
+    section: "free",
     cost: 0,
     published: true,
     deleted: false,
@@ -178,14 +187,23 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
     const baseId = normalizeCatalogId(addDraft.id || addDraft.name, "bottle")
     const id = makeUniqueId(baseId, existingIds)
     const nextCost = addTier === "free" ? 0 : addDraft.cost
+    const nextSection: "free" | "paid" | "vip" = addTier === "free" ? "free" : addTier === "vip" ? "vip" : "paid"
     await postUpdate(id, {
       ...addDraft,
       id,
+      section: nextSection,
       cost: Math.max(0, Math.floor(Number(nextCost) || 0)),
       published: true,
       deleted: false,
     })
-    setAddDraft((prev) => ({ ...prev, id: "", name: "Новая бутылочка", img: "", cost: addTier === "free" ? 0 : prev.cost }))
+    setAddDraft((prev) => ({
+      ...prev,
+      id: "",
+      name: "Новая бутылочка",
+      img: "",
+      section: nextSection,
+      cost: addTier === "free" ? 0 : prev.cost,
+    }))
   }, [addDraft, addTier, postUpdate, rows])
 
   const uploadNewBottleImage = useCallback(
@@ -414,6 +432,7 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
                     void postUpdate(row.id, {
                       name: row.name,
                       img: row.img,
+                      section: row.section,
                       cost: row.cost,
                     })
                   }
@@ -428,6 +447,17 @@ export function AdminBottleContent({ token }: AdminBottleContentProps) {
                   className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1.5 text-xs font-medium text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-50"
                 >
                   {row.published ? "Снять с публикации" : "Публиковать"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId === row.id}
+                  onClick={() => {
+                    const nextSection = row.section === "free" ? "paid" : row.section === "paid" ? "vip" : "free"
+                    void postUpdate(row.id, { section: nextSection })
+                  }}
+                  className="rounded-lg border border-violet-500/40 bg-violet-500/15 px-2.5 py-1.5 text-xs font-medium text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
+                >
+                  {row.section === "free" ? "В витрину: Доступно" : row.section === "paid" ? "В витрину: VIP" : "В витрину: Бесплатно"}
                 </button>
                 <button
                   type="button"

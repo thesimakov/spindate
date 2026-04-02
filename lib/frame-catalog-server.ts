@@ -31,7 +31,12 @@ export function listFrameCatalogRows(options?: { includeDeleted?: boolean; onlyP
 
   return rows.map((row) => ({
     id: row.id as FrameCatalogRow["id"],
-    section: row.section === "free" ? "free" : "premium",
+    section:
+      row.section === "free" || row.section === "vip"
+        ? row.section
+        : (row.cost | 0) >= 10
+          ? "vip"
+          : "paid",
     name: row.name,
     border: row.border,
     shadow: row.shadow,
@@ -45,7 +50,7 @@ export function listFrameCatalogRows(options?: { includeDeleted?: boolean; onlyP
 
 export function updateFrameCatalogEntry(input: {
   id: string
-  section?: "free" | "premium"
+  section?: "free" | "paid" | "vip"
   name?: string
   border?: string
   shadow?: string
@@ -92,7 +97,8 @@ export function updateFrameCatalogEntry(input: {
     return
   }
 
-  const nextSection = input.section === "free" || input.section === "premium" ? input.section : existing.section
+  const nextSection =
+    input.section === "free" || input.section === "paid" || input.section === "vip" ? input.section : existing.section
   const nextName = typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing.name
   const nextBorder = typeof input.border === "string" && input.border.trim() ? input.border.trim() : existing.border
   const nextShadow = typeof input.shadow === "string" && input.shadow.trim() ? input.shadow.trim() : existing.shadow

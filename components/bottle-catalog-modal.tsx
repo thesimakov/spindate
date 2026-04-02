@@ -77,26 +77,27 @@ export function BottleCatalogModal({
 
   const ownedSet = useMemo(() => new Set(ownedBottleSkins ?? ["classic"]), [ownedBottleSkins])
 
-  const isClassicId = (id: BottleSkin) => id === "classic"
-  const isVipId = (id: BottleSkin) => id === "vip"
-  const isPremiumFortuneId = (id: BottleSkin) => id === "fortune_wheel"
+  const isFreeSkin = (cost: number, section?: "free" | "paid" | "vip") => section === "free" || cost <= 0
+  const isVipSkin = (section?: "free" | "paid" | "vip") => section === "vip"
 
   const entries = useMemo(() => {
     const sourceRows = catalogRows.length > 0 ? catalogRows : DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published)
     return sourceRows.map((skin) => {
+      const freeSkin = isFreeSkin(skin.cost, skin.section)
+      const vipSkin = isVipSkin(skin.section)
       const owned = ownedSet.has(skin.id)
       const selected = bottleSkin === skin.id
       const cooldownActive = cooldownLeftMs > 0
-      const purchaseLocked = cooldownActive && !owned && !isClassicId(skin.id)
-      const notEnough = !owned && !isClassicId(skin.id) && voiceBalance < skin.cost
-      const vipLocked = isVipId(skin.id) && !owned && !currentUser?.isVip
+      const purchaseLocked = cooldownActive && !owned && !freeSkin
+      const notEnough = !owned && !freeSkin && voiceBalance < skin.cost
+      const vipLocked = vipSkin && !owned && !currentUser?.isVip
       const disabled = purchaseLocked || notEnough || vipLocked
 
       const status = owned
         ? selected
           ? "Выбрано"
           : "Куплено"
-        : isClassicId(skin.id)
+        : freeSkin
           ? "Бесплатно"
           : vipLocked
             ? "Только VIP"
@@ -105,7 +106,7 @@ export function BottleCatalogModal({
               : `${skin.cost} ❤`
 
       const handleClick = () => {
-        if (owned || isClassicId(skin.id)) {
+        if (owned || freeSkin) {
           dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
           return
         }
@@ -153,9 +154,9 @@ export function BottleCatalogModal({
     currentUser,
   ])
 
-  const free = entries.filter((e) => isClassicId(e.skin.id))
-  const vip = entries.filter((e) => isVipId(e.skin.id) || isPremiumFortuneId(e.skin.id))
-  const rest = entries.filter((e) => !isClassicId(e.skin.id) && !isVipId(e.skin.id) && !isPremiumFortuneId(e.skin.id))
+  const free = entries.filter((e) => isFreeSkin(e.skin.cost, e.skin.section))
+  const vip = entries.filter((e) => isVipSkin(e.skin.section))
+  const rest = entries.filter((e) => !isFreeSkin(e.skin.cost, e.skin.section) && !isVipSkin(e.skin.section))
 
   const Section = ({ title, items }: { title: string; items: typeof entries }) => (
     <div className="px-5 pb-5 pt-4">
@@ -171,7 +172,7 @@ export function BottleCatalogModal({
       >
         {items.map((e) => {
           const ring = e.selected ? "ring-2 ring-amber-400" : "ring-1 ring-slate-700/40"
-          const dim = e.disabled && !e.owned && e.skin.id !== "classic" ? "opacity-55" : ""
+          const dim = e.disabled && !e.owned && !isFreeSkin(e.skin.cost, e.skin.section) ? "opacity-55" : ""
           const badgeTone = e.selected
             ? { background: "rgba(34,197,94,0.16)", border: "1px solid rgba(34,197,94,0.28)", color: "#86efac" }
             : e.owned

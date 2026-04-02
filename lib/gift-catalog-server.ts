@@ -28,7 +28,12 @@ export function listGiftCatalogRows(options?: { includeDeleted?: boolean; onlyPu
 
   return rows.map((row) => ({
     id: row.id as GiftCatalogRow["id"],
-    section: row.section === "free" ? "free" : "premium",
+    section:
+      row.section === "free" || row.section === "vip"
+        ? row.section
+        : (row.cost | 0) >= 10
+          ? "vip"
+          : "paid",
     name: row.name,
     emoji: row.emoji || "🎁",
     cost: Math.max(0, row.cost | 0),
@@ -39,7 +44,7 @@ export function listGiftCatalogRows(options?: { includeDeleted?: boolean; onlyPu
 
 export function updateGiftCatalogEntry(input: {
   id: string
-  section?: "free" | "premium"
+  section?: "free" | "paid" | "vip"
   name?: string
   emoji?: string
   cost?: number
@@ -62,7 +67,7 @@ export function updateGiftCatalogEntry(input: {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       safeId,
-      input.section ?? "premium",
+      input.section ?? "paid",
       input.name?.trim() || safeId,
       input.emoji?.trim() || "🎁",
       Math.max(0, Math.floor(Number(input.cost) || 0)),
@@ -74,7 +79,8 @@ export function updateGiftCatalogEntry(input: {
     return
   }
 
-  const nextSection = input.section === "free" || input.section === "premium" ? input.section : existing.section
+  const nextSection =
+    input.section === "free" || input.section === "paid" || input.section === "vip" ? input.section : existing.section
   const nextName = typeof input.name === "string" && input.name.trim() ? input.name.trim() : existing.name
   const nextEmoji = typeof input.emoji === "string" && input.emoji.trim() ? input.emoji.trim() : existing.emoji
   const nextCost = Number.isFinite(Number(input.cost)) ? Math.max(0, Math.floor(Number(input.cost))) : existing.cost
