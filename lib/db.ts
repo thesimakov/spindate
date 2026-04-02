@@ -134,6 +134,14 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_frame_catalog_published ON frame_catalog(published, deleted, sort_order);
+
+    CREATE TABLE IF NOT EXISTS status_line (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      text TEXT NOT NULL DEFAULT '',
+      published INTEGER NOT NULL DEFAULT 0,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
@@ -199,6 +207,14 @@ function migrate(database: Database.Database) {
       now,
     )
   })
+
+  database
+    .prepare(
+      `INSERT INTO status_line (id, text, published, deleted, updated_at)
+       VALUES (1, '', 0, 0, ?)
+       ON CONFLICT(id) DO NOTHING`,
+    )
+    .run(now)
 }
 
 export function getDb() {
