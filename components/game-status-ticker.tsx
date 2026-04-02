@@ -2,30 +2,26 @@
 
 import { useMemo } from "react"
 import { useStatusLine } from "@/lib/use-status-line"
-import { useGameLayoutMode } from "@/lib/use-media-query"
+import { cn } from "@/lib/utils"
 
-export function GameStatusTicker() {
+type GameStatusTickerProps = {
+  className?: string
+}
+
+export function GameStatusTicker({ className }: GameStatusTickerProps) {
   const { row } = useStatusLine()
-  const { layoutMobile } = useGameLayoutMode()
 
   const text = useMemo(() => (row?.text ?? "").trim(), [row?.text])
   if (!text) return null
 
   const repeated = `${text}   •   ${text}   •   ${text}   •   `
-  const tableWidthStyle = layoutMobile
-    ? {
-        width: "min(90vw, 420px)",
-        maxWidth: "min(90vw, 420px)",
-      }
-    : {
-        width: "min(90%, min(100%, calc(min(72vh, 78dvh) * 60 / 50)))",
-        maxWidth: "100vw",
-      }
 
   return (
     <div
-      className="status-board pointer-events-none fixed bottom-0 left-1/2 z-40 -translate-x-1/2 border border-cyan-300/30 bg-slate-950/90 shadow-[0_-8px_24px_rgba(0,0,0,0.45)] backdrop-blur"
-      style={tableWidthStyle}
+      className={cn(
+        "status-board pointer-events-none z-40 border border-cyan-300/30 bg-slate-950/90 shadow-[0_-8px_24px_rgba(0,0,0,0.45)] backdrop-blur",
+        className,
+      )}
     >
       <div className="status-board-glow" />
       <div className="flex items-center gap-3 px-2 py-1.5 sm:px-3">

@@ -1,6 +1,5 @@
 import { GameProvider } from "@/lib/game-context"
 import { GameApp } from "@/components/game-app"
-import { GameStatusTicker } from "@/components/game-status-ticker"
 
 /**
  * Не задаём `dynamic = "force-dynamic"`: при `output: "export"` (GitHub Pages) сборка падает,
@@ -12,7 +11,6 @@ export default function Page() {
     <GameProvider>
       <main className="flex h-app min-h-0 w-full min-w-0 max-w-none flex-col overflow-x-hidden overflow-y-auto bg-background">
         <GameApp />
-        <GameStatusTicker />
       </main>
     </GameProvider>
   )

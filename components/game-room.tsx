@@ -62,6 +62,7 @@ import { useGameTimers } from "@/hooks/use-game-timers"
 import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
+import { GameStatusTicker } from "@/components/game-status-ticker"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
 import {
@@ -4196,6 +4197,23 @@ export function GameRoom() {
               </button>
             )}
           </div>
+        </div>
+
+        <div
+          className="mx-auto mt-2 mb-1 w-full shrink-0 px-1"
+          style={
+            isMobile
+              ? {
+                  width: "min(90vw, 420px)",
+                  maxWidth: "min(90vw, 420px)",
+                }
+              : {
+                  width: "min(90%, min(100%, calc(min(72vh, 78dvh) * 60 / 50)))",
+                  maxWidth: "100%",
+                }
+          }
+        >
+          <GameStatusTicker />
         </div>
 
         {!isPcLayout && (
