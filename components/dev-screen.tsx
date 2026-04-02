@@ -5,6 +5,7 @@ import Link from "next/link"
 import { apiFetch } from "@/lib/api-fetch"
 import { AdminBottleContent } from "@/components/admin-bottle-content"
 import { AdminGiftContent } from "@/components/admin-gift-content"
+import { AdminContentPagePlaceholder } from "@/components/admin-content-page-placeholder"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
@@ -36,6 +37,9 @@ export function DevScreen() {
   }>>([])
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"users" | "content">("users")
+  const [contentPage, setContentPage] = useState<
+    "bottles" | "gifts" | "frames" | "emotions" | "vip" | "hearts"
+  >("bottles")
 
   useEffect(() => {
     setAuthenticated(getAdminAuthenticated())
@@ -258,7 +262,10 @@ export function DevScreen() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("content")}
+            onClick={() => {
+              setActiveTab("content")
+              setContentPage((prev) => prev ?? "bottles")
+            }}
             className={`rounded-lg border px-3 py-2 text-sm font-medium ${
               activeTab === "content"
                 ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
@@ -410,8 +417,58 @@ export function DevScreen() {
             </>
           ) : (
             <div className="space-y-4 pb-8">
-              <AdminBottleContent token={getAdminToken()} />
-              <AdminGiftContent token={getAdminToken()} />
+              <div className="flex flex-wrap gap-2 rounded-xl border border-slate-700/80 bg-slate-900/50 p-2">
+                {(
+                  [
+                    { id: "bottles", label: "Бутылочки" },
+                    { id: "gifts", label: "Подарки" },
+                    { id: "frames", label: "Рамки" },
+                    { id: "emotions", label: "Эмоции" },
+                    { id: "vip", label: "VIP" },
+                    { id: "hearts", label: "Сердечки" },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setContentPage(item.id)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold sm:text-sm ${
+                      contentPage === item.id
+                        ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
+                        : "border-slate-600 bg-slate-800/70 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {contentPage === "bottles" && <AdminBottleContent token={getAdminToken()} />}
+              {contentPage === "gifts" && <AdminGiftContent token={getAdminToken()} />}
+              {contentPage === "frames" && (
+                <AdminContentPagePlaceholder
+                  title="Контент: рамки"
+                  description="Отдельная страница под каталог рамок для аватаров."
+                />
+              )}
+              {contentPage === "emotions" && (
+                <AdminContentPagePlaceholder
+                  title="Контент: эмоции"
+                  description="Отдельная страница под управление каталогом эмоций и их стоимостью."
+                />
+              )}
+              {contentPage === "vip" && (
+                <AdminContentPagePlaceholder
+                  title="Контент: VIP"
+                  description="Отдельная страница под тарифы VIP и условия активации."
+                />
+              )}
+              {contentPage === "hearts" && (
+                <AdminContentPagePlaceholder
+                  title="Контент: сердечки"
+                  description="Отдельная страница под пакеты пополнения сердец и цены в голосах."
+                />
+              )}
             </div>
           )}
         </div>
