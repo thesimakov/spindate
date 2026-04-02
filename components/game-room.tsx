@@ -4258,9 +4258,11 @@ export function GameRoom() {
             )}
           </div>
         </div>
+        </div>
 
+        {/* Тикер и чат вне flex-1 justify-center — стол центрируется в оставшейся высоте */}
         <div
-          className="sticky bottom-0 z-40 mx-auto mt-auto w-full shrink-0 px-1 pb-1"
+          className="sticky bottom-0 z-40 mx-auto w-full shrink-0 px-1 pb-1"
           style={
             isMobile
               ? {
@@ -4288,8 +4290,6 @@ export function GameRoom() {
             className="w-full max-w-[min(95vw,720px)] mx-auto mt-2 mb-1 shrink-0 max-h-[min(38vh,320px)] min-h-[140px]"
           />
         )}
-
-        </div>
 
       </div>
 
