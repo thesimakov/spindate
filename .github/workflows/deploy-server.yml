@@ -6,6 +6,10 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-spindate-vps
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
@@ -50,8 +54,10 @@ jobs:
           SERVER_SSH_KEY_B64: ${{ secrets.SERVER_SSH_KEY_B64 }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_DEPLOY_PATH: ${{ secrets.SERVER_DEPLOY_PATH }}
         run: |
           set -euo pipefail
+          DEPLOY_PATH="${SERVER_DEPLOY_PATH:-/var/www/spindate}"
           if { [ -z "${SERVER_SSH_KEY:-}" ] && [ -z "${SERVER_SSH_KEY_B64:-}" ]; } || [ -z "${SERVER_HOST:-}" ] || [ -z "${SERVER_USER:-}" ]; then
             echo "::error::SERVER_SSH_KEY(_B64), SERVER_HOST или SERVER_USER не заданы — deploy прерван."
             echo "Add secrets in repo Settings → Secrets and variables → Actions."
@@ -79,10 +85,10 @@ jobs:
           # Временные файлы rsync на приёмнике — в /tmp (иначе mkstemp в /var/www/... даёт Permission denied, если каталог не принадлежит SERVER_USER)
           # ВАЖНО: сначала останавливаем процесс и очищаем .next, чтобы не было смеси старых/новых чанков.
           ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
-            "mkdir -p /var/www/spindate /tmp/rsync-spindate && \
+            "mkdir -p \"$DEPLOY_PATH\" /tmp/rsync-spindate && \
              chmod 1777 /tmp/rsync-spindate && \
              pm2 stop spindate 2>/dev/null || true && \
-             rm -rf /var/www/spindate/.next"
+             rm -rf \"$DEPLOY_PATH\"/.next"
           echo "Syncing files..."
           # Без -a и без -t: не трогаем mtime (иначе Operation not permitted на приёмнике).
           # Без -o/-g: не пытаемся сохранить uid/gid с раннера GitHub на вашем сервере.
@@ -102,11 +108,11 @@ jobs:
             package-lock.json \
             next.config.mjs \
             ecosystem.config.cjs \
-            "$SERVER_USER@$SERVER_HOST:/var/www/spindate/"
+            "$SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/"
           echo "Running npm ci and pm2 on server..."
           # Иначе npm ci падает с ENOTEMPTY на node_modules/next/... — процесс держит файлы
           ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
-            "cd /var/www/spindate && \
+            "cd \"$DEPLOY_PATH\" && \
              sleep 2 && \
              rm -rf node_modules && \
              npm ci && \
