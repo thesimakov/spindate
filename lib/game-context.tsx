@@ -489,13 +489,28 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
 
       const current = state.players[state.currentTurnIndex]
       let nextIndex = 0
+      let turnPlayerLeft = false
       if (current) {
         const idx = nextPlayers.findIndex((p) => p.id === current.id)
-        nextIndex = idx !== -1 ? idx : 0
+        if (idx !== -1) {
+          nextIndex = idx
+        } else {
+          turnPlayerLeft = !current.isBot
+          nextIndex = 0
+        }
       }
 
       const nextTarget = state.targetPlayer ? nextPlayers.find((p) => p.id === state.targetPlayer!.id) ?? null : null
       const nextTarget2 = state.targetPlayer2 ? nextPlayers.find((p) => p.id === state.targetPlayer2!.id) ?? null : null
+
+      const resetActive = turnPlayerLeft ? {
+        isSpinning: false,
+        countdown: null as number | null,
+        showResult: false,
+        resultAction: null as string | null,
+        targetPlayer: null as Player | null,
+        targetPlayer2: null as Player | null,
+      } : {}
 
       return {
         ...state,
@@ -503,6 +518,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         currentTurnIndex: nextPlayers.length === 0 ? 0 : Math.min(nextIndex, nextPlayers.length - 1),
         targetPlayer: nextTarget,
         targetPlayer2: nextTarget2,
+        ...resetActive,
       }
     }
     case "SET_TABLE_ID":
