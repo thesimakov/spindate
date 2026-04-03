@@ -3514,14 +3514,10 @@ export function GameRoom() {
             </div>
           </div>
         )}
-        {/* Инфо-статусы сверху: донор бутылки + таймер (таймер ниже статуса, без наложений) */}
+        {/* Инфо-статусы: донор бутылки + таймер — в потоке, shrink-0, перед столом */}
         {(bottleDonorName || (!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
           <div
-            className={`left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2 ${
-              isMobile
-                ? "fixed max-md:top-[calc(env(safe-area-inset-top)+4.25rem)] md:top-[max(0.5rem,env(safe-area-inset-top))]"
-                : "absolute top-1 lg:top-5"
-            }`}
+            className="z-30 flex w-full shrink-0 flex-col items-center gap-2 py-1"
           >
             {/* Статус подаренной бутылки */}
             {bottleDonorName && (

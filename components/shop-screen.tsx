@@ -27,7 +27,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const rosesCount = inventory.filter((i) => i.type === "rose").length
   const { rows: giftCatalogRows } = useGiftCatalog()
   const [exchangeTab, setExchangeTab] = useState<
-    "voices-to-roses" | "roses-to-voices" | "gift-to-voices"
+    "voices-to-roses" | "roses-to-voices"
   >("voices-to-roses")
 
   const giftCounts = useMemo(() => {
@@ -757,15 +757,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           <div className="flex flex-wrap items-center gap-2">
             <ArrowRightLeft className="h-5 w-5 text-cyan-700" strokeWidth={2} aria-hidden />
             <span className="text-sm font-extrabold text-slate-700">Курс</span>
-            {exchangeTab === "gift-to-voices" ? (
-              <span className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-2 text-[11px] font-bold leading-snug text-amber-950 sm:text-xs">
-                <Gift className="h-3.5 w-3.5 shrink-0 text-amber-700" strokeWidth={2} aria-hidden />
-                <span>стоимость подарка</span>
-                <span className="tabular-nums">−</span>
-                <span className="tabular-nums">1</span>
-                <Heart className="h-3.5 w-3.5 shrink-0 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
-              </span>
-            ) : (
+            {(
               <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-2 text-xs font-bold text-slate-700">
                 <span className="tabular-nums">5</span>
                 <Heart className="h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
@@ -777,7 +769,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           <div
             role="tablist"
-            className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200 sm:gap-1.5"
+            className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200 sm:gap-1.5"
             aria-label="Направление обмена"
           >
             <button
@@ -818,29 +810,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 <span className="font-black">Сердце</span>
               </span>
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={exchangeTab === "gift-to-voices"}
-              onClick={() => setExchangeTab("gift-to-voices")}
-              title="Подарок из инвентаря в сердца"
-              className={`flex min-h-[2.65rem] items-center justify-center gap-0.5 rounded-xl px-1.5 text-[10px] font-extrabold leading-tight transition sm:min-h-[2.75rem] sm:gap-1 sm:px-2 sm:text-[12px] md:text-sm ${
-                exchangeTab === "gift-to-voices"
-                  ? "bg-gradient-to-r from-amber-400 to-orange-500 text-slate-900 shadow"
-                  : "text-slate-600 hover:bg-white/70"
-              }`}
-            >
-              <span className="inline-flex flex-col items-center gap-0 sm:flex-row sm:gap-1">
-                <span className="inline-flex items-center gap-0.5 font-black">
-                  <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} aria-hidden />
-                  <span className="hidden sm:inline">Подарок</span>
-                </span>
-                <span className="text-slate-900/60 sm:inline" aria-hidden>
-                  →
-                </span>
-                <span className="font-black">❤</span>
-              </span>
-            </button>
+            {/* Кнопка «Подарок → ❤» временно скрыта */}
           </div>
         </div>
         <div className="space-y-3 px-4 py-4">
@@ -932,58 +902,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="text-xs font-bold text-slate-500">Баланс</span>
-                <span className="inline-flex items-center gap-1 text-lg font-black text-slate-800">
-                  <span className="tabular-nums">{voiceBalance}</span>
-                  <Heart className="h-5 w-5 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
-                </span>
-              </div>
-              <p className="text-center text-[11px] leading-snug text-slate-500 sm:text-xs">
-                Списывается один подарок из инвентаря; сердца = цена подарка в магазине минус один.
-              </p>
-              {exchangeableGiftRows.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-sm text-slate-500">
-                  Нет подарков для обмена в каталоге.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2">
-                  {exchangeableGiftRows.map((row) => {
-                    const count = giftCounts.get(row.id) ?? 0
-                    const gain = heartsFromGiftSellback(row.cost)
-                    return (
-                      <Button
-                        key={row.id}
-                        type="button"
-                        variant="outline"
-                        disabled={count < 1 || gain < 1}
-                        className="flex h-auto min-h-[4.75rem] min-w-0 flex-col gap-1 rounded-2xl border border-amber-200/90 bg-white px-2 py-2.5 text-[11px] font-extrabold text-slate-800 shadow-[0_4px_10px_rgba(180,83,9,0.1)] hover:bg-amber-50/80 disabled:opacity-50 sm:min-h-[5rem] sm:gap-1.5 sm:px-3 sm:py-3 sm:text-sm"
-                        onClick={() => {
-                          if (count < 1 || gain < 1) return
-                          dispatch({ type: "EXCHANGE_INVENTORY_GIFT_FOR_VOICES", giftType: row.id })
-                          showToast(`+${gain} сердец`, "success")
-                        }}
-                      >
-                        <span className="inline-flex items-center justify-center gap-1 text-rose-600 sm:gap-1.5">
-                          <span className="tabular-nums text-base font-black sm:text-lg">+{gain}</span>
-                          <Heart className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={2} fill="currentColor" aria-hidden />
-                        </span>
-                        <span className="flex min-h-[2.25rem] flex-col items-center justify-center gap-0.5 text-center leading-tight">
-                          <span className="text-base leading-none" aria-hidden>
-                            {row.emoji}
-                          </span>
-                          <span className="line-clamp-2 w-full text-[10px] font-bold text-slate-600 sm:text-[11px]">{row.name}</span>
-                        </span>
-                        <span className="mt-0.5 text-[10px] font-semibold text-slate-400 sm:text-[11px]">в наличии: {count}</span>
-                      </Button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 
