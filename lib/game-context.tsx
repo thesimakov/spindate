@@ -1119,7 +1119,17 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         }
       }
 
-      const keepLocalAngle = state.isSpinning && !p.isSpinning
+      // Active phase: initiator keeps local gameplay state to avoid authority overwrites
+      const isInitiator = state.currentUser != null &&
+        state.players[state.currentTurnIndex]?.id === state.currentUser.id
+      const inActivePhase = state.countdown !== null || state.isSpinning || state.showResult
+      const keepLocal = isInitiator && inActivePhase
+
+      const keepLocalAngle = state.isSpinning
+      const keepLocalCountdown = keepLocal && state.countdown !== null && (p.countdown === null || p.countdown >= state.countdown)
+      const keepLocalSpinState = keepLocal && state.isSpinning
+      const keepLocalResult = keepLocal && state.showResult && !p.showResult
+
       const localById = new Map(state.players.map((pl) => [pl.id, pl]))
       const mergedPlayers = p.players.map((pl) => {
         const prev = localById.get(pl.id)
@@ -1134,17 +1144,17 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         players: mergedPlayers,
         currentTurnIndex: p.currentTurnIndex,
-        isSpinning: p.isSpinning,
-        countdown: p.countdown,
+        isSpinning: keepLocalSpinState ? state.isSpinning : p.isSpinning,
+        countdown: keepLocalCountdown ? state.countdown : p.countdown,
         bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,
         bottleSkin: p.bottleSkin ?? state.bottleSkin ?? "classic",
         tableStyle: p.tableStyle ?? state.tableStyle ?? "classic_night",
         bottleDonorId: p.bottleDonorId,
         bottleDonorName: p.bottleDonorName,
-        targetPlayer: p.targetPlayer,
-        targetPlayer2: p.targetPlayer2,
-        showResult: p.showResult,
-        resultAction: p.resultAction,
+        targetPlayer: keepLocalSpinState ? state.targetPlayer : p.targetPlayer,
+        targetPlayer2: keepLocalSpinState ? state.targetPlayer2 : p.targetPlayer2,
+        showResult: keepLocalResult ? state.showResult : p.showResult,
+        resultAction: keepLocalResult ? state.resultAction : p.resultAction,
         roundNumber: p.roundNumber,
         predictionPhase: p.predictionPhase,
         currentTurnDidSpin: p.currentTurnDidSpin,

@@ -1060,23 +1060,24 @@ export function GameRoom() {
   // Turn timer, AFK skip, result timer, prediction timer, steam fog — all managed by useGameTimers hook
 
   /* ---- countdown tick ---- */
+  const isRoundDriverRef = useRef(isRoundDriver)
+  isRoundDriverRef.current = isRoundDriver
+  const isMyTurnRef = useRef(isMyTurn)
+  isMyTurnRef.current = isMyTurn
+  const currentTurnPlayerBotRef = useRef(currentTurnPlayer?.isBot)
+  currentTurnPlayerBotRef.current = currentTurnPlayer?.isBot
+
   useEffect(() => {
     if (tableLoading) return
-    // Живой игрок тикает свой отсчёт; для ботов — водитель.
-    const shouldTick = currentTurnPlayer?.isBot ? isRoundDriver : isMyTurn
-    if (!shouldTick) return
     if (countdown === null || countdown <= 0) return
     const timer = setTimeout(() => {
-      if (countdown > 1) {
-        dispatch({ type: "TICK_COUNTDOWN" })
-      } else {
-        dispatch({ type: "TICK_COUNTDOWN" })
-        startSpinRef.current()
-      }
+      const shouldTick = currentTurnPlayerBotRef.current ? isRoundDriverRef.current : isMyTurnRef.current
+      if (!shouldTick) return
+      dispatch({ type: "TICK_COUNTDOWN" })
+      if (countdown <= 1) startSpinRef.current()
     }, 800)
     return () => clearTimeout(timer)
-     
-  }, [countdown, dispatch, tableLoading, isRoundDriver, isMyTurn, currentTurnPlayer?.isBot])
+  }, [countdown, dispatch, tableLoading])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
   const playEmotionSound = useCallback((actionId: string) => {
@@ -1315,6 +1316,7 @@ export function GameRoom() {
 
   /* ---- start the actual spin ---- */
   const startSpin = useCallback(() => {
+    if (isSpinning) return
     const spinner = currentTurnPlayer
     if (!spinner) return
 
@@ -1507,7 +1509,7 @@ export function GameRoom() {
       }
     }, 6000)
      
-  }, [players, currentTurnPlayer, dispatch, launchEmoji, launchEmotionGiftImage, playEmotionSound, predictions, bets, pot, currentUser, bottleAngle, tableId, roundNumber, currentTurnIndex])
+  }, [players, currentTurnPlayer, dispatch, launchEmoji, launchEmotionGiftImage, playEmotionSound, predictions, bets, pot, currentUser, bottleAngle, tableId, roundNumber, currentTurnIndex, isSpinning])
 
   useEffect(() => {
     if (isSpinning) return
@@ -3514,59 +3516,56 @@ export function GameRoom() {
             </div>
           </div>
         )}
-        {/* Инфо-статусы: донор бутылки + таймер — в потоке, shrink-0, перед столом */}
-        {(bottleDonorName || (!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null)) && (
-          <div
-            className="z-30 flex w-full shrink-0 flex-col items-center gap-2 py-1"
-          >
-            {/* Статус подаренной бутылки */}
-            {bottleDonorName && (
-              <div
-                className="flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold"
+        {/* Инфо-статусы: донор бутылки + таймер — фиксированная высота, стол не прыгает */}
+        <div
+          className="z-30 flex w-full shrink-0 flex-col items-center justify-center gap-1"
+          style={{ minHeight: bottleDonorName ? 52 : 28 }}
+        >
+          {bottleDonorName && (
+            <div
+              className="flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold"
+              style={{
+                background: "rgba(15,23,42,0.9)",
+                border: "1px solid #475569",
+                boxShadow: "0 3px 10px rgba(0,0,0,0.6)",
+                color: "#f0e0c8",
+              }}
+            >
+              <span>
+                {"Бутылку нашему столу подарил(а): "}
+                <span style={{ color: "#e8c06a" }}>{bottleDonorName}</span>
+              </span>
+              <button
+                onClick={handleThankDonor}
+                className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:brightness-110 active:scale-95"
                 style={{
-                  background: "rgba(15,23,42,0.9)",
-                  border: "1px solid #475569",
-                  boxShadow: "0 3px 10px rgba(0,0,0,0.6)",
-                  color: "#f0e0c8",
+                  background: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)",
+                  border: "1px solid #166534",
+                  color: "#ecfdf5",
                 }}
               >
-                <span>
-                  {"Бутылку нашему столу подарил(а): "}
-                  <span style={{ color: "#e8c06a" }}>{bottleDonorName}</span>
-                </span>
-                <button
-                  onClick={handleThankDonor}
-                  className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:brightness-110 active:scale-95"
-                  style={{
-                    background: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)",
-                    border: "1px solid #166534",
-                    color: "#ecfdf5",
-                  }}
-                >
-                  {"Спасибо"}
-                </button>
-              </div>
-            )}
+                {"Спасибо"}
+              </button>
+            </div>
+          )}
 
-            {/* Таймер хода для текущего пользователя */}
-            {!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
-              <div
-                className="flex items-center gap-1.5 rounded-full px-3 py-1"
-                style={{
-                  background: "rgba(15,23,42,0.9)",
-                  border: "1px solid rgba(248, 250, 252, 0.3)",
-                  boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
-                }}
-              >
-                <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
-                <span className="text-sm font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
-                  {turnTimer}
-                </span>
-                <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
-              </div>
-            )}
-          </div>
-        )}
+          {!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
+            <div
+              className="flex items-center gap-1.5 rounded-full px-3 py-1"
+              style={{
+                background: "rgba(15,23,42,0.9)",
+                border: "1px solid rgba(248, 250, 252, 0.3)",
+                boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
+              }}
+            >
+              <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
+              <span className="text-sm font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
+                {turnTimer}
+              </span>
+              <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
+            </div>
+          )}
+        </div>
         {/* Блок стола: по центру колонки по вертикали и горизонтали; при переполнении — прокрутка */}
         <div
           className={cn(
