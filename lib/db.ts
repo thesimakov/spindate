@@ -158,6 +158,12 @@ function migrate(database: Database.Database) {
   if (!profileCols.some((c) => c.name === "status")) {
     database.exec(`ALTER TABLE player_profiles ADD COLUMN status TEXT NOT NULL DEFAULT ''`)
   }
+  if (!profileCols.some((c) => c.name === "city")) {
+    database.exec(`ALTER TABLE player_profiles ADD COLUMN city TEXT NOT NULL DEFAULT ''`)
+  }
+  if (!profileCols.some((c) => c.name === "zodiac")) {
+    database.exec(`ALTER TABLE player_profiles ADD COLUMN zodiac TEXT NOT NULL DEFAULT ''`)
+  }
   const bottleCols = database.prepare(`PRAGMA table_info(bottle_catalog)`).all() as { name: string }[]
   if (!bottleCols.some((c) => c.name === "section")) {
     database.exec(`ALTER TABLE bottle_catalog ADD COLUMN section TEXT NOT NULL DEFAULT 'paid'`)

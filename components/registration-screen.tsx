@@ -125,6 +125,8 @@ export function RegistrationScreen() {
           age?: number
           purpose?: string
           vkUserId?: number
+          city?: string
+          zodiac?: string
         }
       } | null
       const u = meData?.user
@@ -145,6 +147,8 @@ export function RegistrationScreen() {
         authProvider: (typeof u.vkUserId === "number" ? "vk" : "login") as "vk" | "login",
         authUserId: typeof u.vkUserId === "number" ? undefined : u.id,
         vkUserId: typeof u.vkUserId === "number" ? u.vkUserId : undefined,
+        city: u.city,
+        zodiac: u.zodiac,
       }
       const stRes = await apiFetch("/api/user/state", { credentials: "include" })
       const stData = await stRes.json().catch(() => null)
@@ -204,7 +208,8 @@ export function RegistrationScreen() {
               lastName: vkUser.last_name,
               photoUrl: vkUser.photo_200,
               sex: vkUser.sex,
-              age: 25,
+              bdate: vkUser.bdate,
+              city: vkUser.city?.title,
             },
           }),
         })
@@ -222,6 +227,8 @@ export function RegistrationScreen() {
             age?: number
             purpose?: string
             vkUserId?: number
+            city?: string
+            zodiac?: string
           }
           voiceBalance?: number
           inventory?: unknown[]
@@ -248,6 +255,8 @@ export function RegistrationScreen() {
               : defaultPurpose) as Purpose,
             status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
             authProvider: "vk" as const,
+            city: u.city,
+            zodiac: u.zodiac,
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
           const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
@@ -321,7 +330,8 @@ export function RegistrationScreen() {
               lastName: vkUser.last_name,
               photoUrl: vkUser.photo_200,
               sex: vkUser.sex,
-              age: ageNum,
+              bdate: vkUser.bdate,
+              city: vkUser.city?.title,
             },
           }),
         })
@@ -337,6 +347,8 @@ export function RegistrationScreen() {
             age?: number
             purpose?: string
             vkUserId?: number
+            city?: string
+            zodiac?: string
           }
           voiceBalance?: number
           inventory?: unknown[]
@@ -356,6 +368,8 @@ export function RegistrationScreen() {
             purpose: defaultPurpose,
             status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
             authProvider: "vk" as const,
+            city: u.city,
+            zodiac: u.zodiac,
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
           const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]

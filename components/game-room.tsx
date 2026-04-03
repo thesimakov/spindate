@@ -4831,7 +4831,7 @@ export function GameRoom() {
                     }}
                   >
                     <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569", background: "#1e293b" }}>
-                      <img src={p.avatar} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" crossOrigin="anonymous" onError={(e) => { const img = e.currentTarget; const fb = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.name)}&size=48`; if (img.src !== fb) img.src = fb }} />
+                      <img src={p.avatar} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" crossOrigin="anonymous" onError={(e) => { const img = e.currentTarget; if (img.dataset.fell) return; img.dataset.fell = "1"; const n = (p.name || "?").slice(0,1).toUpperCase(); const h = ((p.id * 137) % 360); img.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="24" fill="hsl(${h},55%,45%)"/><text x="24" y="24" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="22" font-weight="700" fill="#fff">${n}</text></svg>`)}` }} />
                     </div>
                     <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
                     <span className="text-[9px] ml-auto" style={{ color: "#94a3b8" }}>

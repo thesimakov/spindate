@@ -32,9 +32,10 @@ export function generateBots(count: number, _userGender: Gender): Player[] {
     const isFemale = i % 2 === 0
     const nameList = isFemale ? FEMALE_NAMES : MALE_NAMES
     const name = nameList[i % nameList.length]
-    const seed = encodeURIComponent(`${name}-${1000 + i}`)
-    const style = isFemale ? "adventurer" : "adventurer"
-    const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${seed}&size=80`
+    const avatarIndex = (100 + i) % 100
+    const avatarUrl = isFemale
+      ? `/assets/avatars/women/${avatarIndex}.jpg`
+      : `/assets/avatars/men/${avatarIndex}.jpg`
 
     bots.push({
       id: 1000 + i,

@@ -402,9 +402,12 @@ export function PlayerAvatar({
                 style={{ background: "#1e293b" }}
                 onError={(e) => {
                   const img = e.currentTarget
-                  const seed = encodeURIComponent(player.name || `p${player.id}`)
-                  const fallback = `https://api.dicebear.com/9.x/initials/svg?seed=${seed}&size=80`
-                  if (img.src !== fallback) img.src = fallback
+                  const n = (player.name || "?").slice(0, 1).toUpperCase()
+                  const h = ((player.id * 137) % 360)
+                  const fb = `data:image/svg+xml,${encodeURIComponent(
+                    `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="40" fill="hsl(${h},55%,45%)"/><text x="40" y="40" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="36" font-weight="700" fill="#fff">${n}</text></svg>`
+                  )}`
+                  if (!img.dataset.fell) { img.dataset.fell = "1"; img.src = fb }
                 }}
               />
             </div>

@@ -14,6 +14,8 @@ export type VkUserInfo = {
   last_name: string
   photo_200: string
   sex?: 1 | 2 // 1 — женский, 2 — мужской
+  bdate?: string // "D.M.YYYY" или "D.M"
+  city?: { id: number; title: string }
 }
 
 type Bridge = { send: (method: string, params?: object) => Promise<unknown>; isEmbedded?: () => boolean }
@@ -260,13 +262,18 @@ export async function getUserInfo(): Promise<VkUserInfo> {
   if (b && isVkMiniApp()) {
     try {
       const data = await b.send("VKWebAppGetUserInfo", {})
-      const d = data as { id: number; first_name: string; last_name: string; photo_200: string; sex?: 1 | 2 }
+      const d = data as {
+        id: number; first_name: string; last_name: string; photo_200: string
+        sex?: 1 | 2; bdate?: string; city?: { id: number; title: string }
+      }
       return {
         id: d.id,
         first_name: d.first_name ?? "",
         last_name: d.last_name ?? "",
         photo_200: d.photo_200 ?? "",
         sex: d.sex,
+        bdate: d.bdate,
+        city: d.city,
       }
     } catch (e) {
       console.warn("VKWebAppGetUserInfo failed", e)
