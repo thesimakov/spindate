@@ -394,8 +394,18 @@ export function PlayerAvatar({
               <img
                 src={player.avatar}
                 alt={player.name}
+                width={size}
+                height={size}
+                loading="lazy"
+                decoding="async"
                 className="h-full w-full object-cover"
                 style={{ background: "#1e293b" }}
+                onError={(e) => {
+                  const img = e.currentTarget
+                  const seed = encodeURIComponent(player.name || `p${player.id}`)
+                  const fallback = `https://api.dicebear.com/9.x/initials/svg?seed=${seed}&size=80`
+                  if (img.src !== fallback) img.src = fallback
+                }}
               />
             </div>
           </div>

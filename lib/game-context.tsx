@@ -144,19 +144,17 @@ function parseAdmirersFromStorage(raw: string): Player[] {
 }
 
 function persistAdmirersList(userId: number, list: Player[]) {
-  try {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ADMIRERS_LS_KEY(userId), JSON.stringify(list))
-    }
-  } catch {}
+  if (typeof window === "undefined") return
+  const data = JSON.stringify(list)
+  try { window.localStorage.setItem(ADMIRERS_LS_KEY(userId), data) } catch {}
+  try { window.sessionStorage.setItem(ADMIRERS_LS_KEY(userId), data) } catch {}
 }
 
 function persistFavoritesList(userId: number, list: Player[]) {
-  try {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(FAVORITES_LS_KEY(userId), JSON.stringify(list))
-    }
-  } catch {}
+  if (typeof window === "undefined") return
+  const data = JSON.stringify(list)
+  try { window.localStorage.setItem(FAVORITES_LS_KEY(userId), data) } catch {}
+  try { window.sessionStorage.setItem(FAVORITES_LS_KEY(userId), data) } catch {}
 }
 
 function dateKeyFromTimestamp(ts: number): string {
@@ -362,8 +360,10 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       try {
         if (typeof window !== "undefined") {
           const raw = window.localStorage.getItem(ADMIRERS_LS_KEY(action.user.id))
+            ?? window.sessionStorage.getItem(ADMIRERS_LS_KEY(action.user.id))
           if (raw) admirers = parseAdmirersFromStorage(raw)
           const rawFav = window.localStorage.getItem(FAVORITES_LS_KEY(action.user.id))
+            ?? window.sessionStorage.getItem(FAVORITES_LS_KEY(action.user.id))
           if (rawFav) favorites = parseAdmirersFromStorage(rawFav)
           const savedFrame = window.localStorage.getItem(AVATAR_FRAME_LS_KEY(action.user.id))
           if (savedFrame && savedFrame !== "none") restoredFrameId = savedFrame

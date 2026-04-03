@@ -17,9 +17,10 @@ export type LiveTablesState = {
 
 export const TABLE_ID_MIN = 7000
 export const TABLE_ID_MAX = 7999
-// Фоновая вкладка может троттлить таймеры/поллинг. TTL держим > 5 минут,
-// чтобы игрок не "выпадал" из live-стола и у клиентов не расходились статусы.
-export const PRESENCE_TTL_MS = 7 * 60 * 1000
+// Поллинг каждые 3с обновляет presence. При закрытии вкладки sendBeacon отправляет
+// leave мгновенно. TTL — fallback для случаев когда leave не дошёл (крэш, убийство процесса).
+// Фоновые вкладки Chrome троттлят таймеры до ~60с, поэтому TTL > 60с.
+export const PRESENCE_TTL_MS = 90 * 1000
 
 export function createEmptyLiveTablesState(): LiveTablesState {
   return {

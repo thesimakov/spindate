@@ -854,6 +854,23 @@ export function GameRoom() {
     return () => clearInterval(t)
   }, [showBottleCatalog, bottleCooldownUntil])
 
+  useEffect(() => {
+    if (!bottleCooldownUntil) return
+    const remaining = bottleCooldownUntil - Date.now()
+    if (remaining <= 0) {
+      dispatch({ type: "SET_BOTTLE_SKIN", skin: "classic" })
+      dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: undefined })
+      dispatch({ type: "SET_BOTTLE_DONOR", playerId: undefined, playerName: undefined })
+      return
+    }
+    const timer = setTimeout(() => {
+      dispatch({ type: "SET_BOTTLE_SKIN", skin: "classic" })
+      dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: undefined })
+      dispatch({ type: "SET_BOTTLE_DONOR", playerId: undefined, playerName: undefined })
+    }, remaining)
+    return () => clearTimeout(timer)
+  }, [bottleCooldownUntil, dispatch])
+
   const formatCooldown = (ms: number) => {
     const totalSec = Math.ceil(ms / 1000)
     const m = Math.floor(totalSec / 60)
@@ -1521,6 +1538,17 @@ export function GameRoom() {
       spinResolveTimeoutRef.current = null
     }
   }, [isSpinning, roundNumber, currentTurnIndex])
+
+  // Watchdog: if spin is stuck > 12s, force stop and advance turn
+  useEffect(() => {
+    if (!isSpinning) return
+    const watchdog = setTimeout(() => {
+      if (!isRoundDriverRef.current) return
+      dispatch({ type: "STOP_SPIN", action: "skip" })
+      dispatch({ type: "NEXT_TURN" })
+    }, 12_000)
+    return () => clearTimeout(watchdog)
+  }, [isSpinning, dispatch])
 
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
@@ -4802,8 +4830,8 @@ export function GameRoom() {
                       border: "1px solid #334155",
                     }}
                   >
-                    <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569" }}>
-                      <img src={p.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+                    <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569", background: "#1e293b" }}>
+                      <img src={p.avatar} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" crossOrigin="anonymous" onError={(e) => { const img = e.currentTarget; const fb = `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(p.name)}&size=48`; if (img.src !== fb) img.src = fb }} />
                     </div>
                     <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
                     <span className="text-[9px] ml-auto" style={{ color: "#94a3b8" }}>

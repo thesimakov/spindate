@@ -31,14 +31,14 @@ export function generateBots(count: number, _userGender: Gender): Player[] {
   for (let i = 0; i < count; i++) {
     const isFemale = i % 2 === 0
     const nameList = isFemale ? FEMALE_NAMES : MALE_NAMES
-    const avatarIndex = (100 + i) % 100
-    const avatarUrl = isFemale
-      ? `https://randomuser.me/api/portraits/women/${avatarIndex}.jpg`
-      : `https://randomuser.me/api/portraits/men/${avatarIndex}.jpg`
+    const name = nameList[i % nameList.length]
+    const seed = encodeURIComponent(`${name}-${1000 + i}`)
+    const style = isFemale ? "adventurer" : "adventurer"
+    const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${seed}&size=80`
 
     bots.push({
       id: 1000 + i,
-      name: nameList[i % nameList.length],
+      name,
       avatar: avatarUrl,
       gender: isFemale ? "female" : "male",
       age: 25 + Math.floor(Math.random() * 20),

@@ -371,7 +371,7 @@ export type GameAction =
   | { type: "ADD_LOG"; entry: GameLogEntry }
   | { type: "REQUEST_EXTRA_TURN"; playerId: number }
   | { type: "SET_BOTTLE_COOLDOWN_UNTIL"; ts?: number }
-  | { type: "SET_BOTTLE_DONOR"; playerId: number; playerName: string }
+  | { type: "SET_BOTTLE_DONOR"; playerId: number | undefined; playerName: string | undefined }
   // Daily quests
   | { type: "CLAIM_DAILY_QUEST"; questIndex: number; dateKey: string }
   // Predictions

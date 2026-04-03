@@ -407,14 +407,18 @@ export function useSyncEngine(): SyncEngineResult {
     }
   }, [currentUser, tableId, fetchTableAuthority, tablePaused, seatConfirmed])
 
-  // Always send leave on tab close / navigation away.
-  // On refresh the page will re-mount and immediately re-join via syncLiveTable("join"),
-  // so the brief absence (<1s) is invisible to other players.
+  // Send leave on tab close / navigation away / VK WebView close.
+  // beforeunload + pagehide cover desktop browsers, mobile Safari, and VK WebView.
+  // On refresh the page re-mounts and immediately re-joins via syncLiveTable("join").
   const currentUserId = currentUser?.id ?? null
+  const leaveSentRef = useRef(false)
   useEffect(() => {
     if (!currentUserId) return
+    leaveSentRef.current = false
     const payload = JSON.stringify({ mode: "leave", userId: currentUserId })
-    const leave = () => {
+    const sendLeave = () => {
+      if (leaveSentRef.current) return
+      leaveSentRef.current = true
       if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
         navigator.sendBeacon(appPath("/api/table/live"), new Blob([payload], { type: "application/json" }))
       } else {
@@ -427,11 +431,13 @@ export function useSyncEngine(): SyncEngineResult {
       }
     }
 
-    window.addEventListener("beforeunload", leave)
+    window.addEventListener("beforeunload", sendLeave)
+    window.addEventListener("pagehide", sendLeave)
 
     return () => {
-      window.removeEventListener("beforeunload", leave)
-      leave()
+      window.removeEventListener("beforeunload", sendLeave)
+      window.removeEventListener("pagehide", sendLeave)
+      sendLeave()
     }
   }, [currentUserId])
 
