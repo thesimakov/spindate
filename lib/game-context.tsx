@@ -1185,6 +1185,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,
         bottleSkin: p.bottleSkin ?? state.bottleSkin ?? "classic",
         tableStyle: p.tableStyle ?? state.tableStyle ?? "classic_night",
+        bottleCooldownUntil: p.bottleCooldownUntil ?? state.bottleCooldownUntil,
         bottleDonorId: p.bottleDonorId,
         bottleDonorName: p.bottleDonorName,
         targetPlayer: keepLocalSpinState ? state.targetPlayer : p.targetPlayer,

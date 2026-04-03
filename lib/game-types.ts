@@ -100,6 +100,8 @@ export interface TableAuthorityPayload {
   bottleSkin?: BottleSkin
   /** Визуальная стилистика стола (общая для всей комнаты). */
   tableStyle?: TableStyle
+  /** До какого момента (ms epoch) активен купленный скин бутылки */
+  bottleCooldownUntil?: number
   /** Кто последним купил бутылочку для стола (баннер «Спасибо») */
   bottleDonorId?: number
   bottleDonorName?: string

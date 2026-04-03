@@ -148,7 +148,7 @@ export function applyTableAuthorityAction(
         spinStartedAtMs: null,
       }
     case "SET_BOTTLE_COOLDOWN_UNTIL":
-      return snapshot
+      return { ...snapshot, bottleCooldownUntil: action.ts }
     case "SET_CLIENT_TAB_AWAY": {
       const next = { ...(snapshot.clientTabAway ?? {}) }
       if (action.away) {
