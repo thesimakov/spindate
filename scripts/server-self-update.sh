@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Автообновление на VPS без GitHub Actions: git pull → npm ci → build → pm2 restart.
-# Пример crontab (каждые 5 минут, только если есть новые коммиты — см. git fetch):
-#   */5 * * * * cd /var/www/spindate && /usr/bin/env bash scripts/server-self-update.sh >> /var/log/spindate-update.log 2>&1
+# Автообновление на VPS: git pull → npm ci → build → pm2 reload (graceful, zero-downtime).
+# Пример crontab (каждые 5 минут, только если есть новые коммиты):
+#   */5 * * * * /usr/bin/env bash /var/www/spindate/scripts/server-self-update.sh >> /var/log/spindate-update.log 2>&1
 #
 # Переменные окружения (опционально):
 #   SPINDATE_DIR — каталог репозитория (по умолчанию каталог выше scripts/)
-#   PM2_APP    — имя процесса PM2 (по умолчанию spindate)
+#   PM2_APP      — имя процесса PM2 (по умолчанию spindate)
 
 set -euo pipefail
 
@@ -30,21 +30,24 @@ fi
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse "origin/$UPSTREAM")
 if [ "$LOCAL" = "$REMOTE" ]; then
-  echo "$(date -Iseconds) already at $REMOTE"
   exit 0
 fi
 
 echo "$(date -Iseconds) updating $LOCAL → $REMOTE"
-# Снять типичную блокировку pull (сгенерённый next-env.d.ts)
 git checkout -- next-env.d.ts 2>/dev/null || true
 git merge --ff-only "origin/$UPSTREAM"
 
 export NODE_ENV=production
-rm -rf node_modules
-npm ci
+npm ci --production
 npm run build
 
-pm2 restart "$PM2_NAME" --update-env || pm2 start ecosystem.config.cjs --update-env
+# Graceful restart: старый процесс обслуживает запросы пока новый не стартует.
+# Данные в Redis и SQLite не теряются.
+if pm2 describe "$PM2_NAME" >/dev/null 2>&1; then
+  pm2 reload "$PM2_NAME" --update-env
+else
+  pm2 start ecosystem.config.cjs --update-env
+fi
 pm2 save
 
-echo "$(date -Iseconds) done"
+echo "$(date -Iseconds) done — now at $(git rev-parse --short HEAD)"

@@ -1,4 +1,6 @@
-# Сборка и деплой на свой сервер по SSH (после push в main)
+# Сборка и деплой на свой сервер по SSH (после push в main).
+# Zero-downtime: новый билд заливается в staging-папку, затем атомарный swap
+# через симлинк и pm2 reload (graceful restart). Данные в Redis не теряются.
 name: Build and deploy to own server
 
 on:
@@ -35,20 +37,15 @@ jobs:
 
       - name: Build (for Node server, no static export)
         env:
-          # Видно в HTML (`data-build` на body) — сверка с коммитом на GitHub
           NEXT_PUBLIC_BUILD_ID: ${{ github.sha }}
-          # Должен совпадать с доменом в проде — иначе OG/metadata и часть клиентских URL будут неверными.
-          # Форк: поменяй здесь или задай репозиторную переменную NEXT_PUBLIC_APP_URL (и подставь через vars).
           NEXT_PUBLIC_APP_URL: https://spindate.lemnity.ru
-          # Публичный ID мини-приложения VK — вшивается в клиентскую сборку (как в .env.example).
           NEXT_PUBLIC_VK_APP_ID: "54511363"
         run: npm run build
 
-      # Кэш webpack/swc не нужен для `next start`, только раздувает rsync и провоцирует Broken pipe
       - name: Remove .next/cache before deploy
         run: rm -rf .next/cache
 
-      - name: Deploy to server via SSH
+      - name: Deploy to server via SSH (zero-downtime)
         env:
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_SSH_KEY_B64: ${{ secrets.SERVER_SSH_KEY_B64 }}
@@ -57,49 +54,39 @@ jobs:
           SERVER_DEPLOY_PATH: ${{ secrets.SERVER_DEPLOY_PATH }}
         run: |
           set -euo pipefail
-          DEPLOY_PATH="${SERVER_DEPLOY_PATH:-/var/www/spindate}"
+
+          # --- Paths ---
+          BASE="${SERVER_DEPLOY_PATH:-/var/www/spindate}"
+          # "current" symlink points at the active release; PM2 cwd = $BASE/current
+          RELEASES="$BASE/releases"
+          RELEASE_NAME="$(date +%Y%m%d_%H%M%S)_${GITHUB_SHA:0:7}"
+          RELEASE_DIR="$RELEASES/$RELEASE_NAME"
+
+          # --- SSH key ---
           if { [ -z "${SERVER_SSH_KEY:-}" ] && [ -z "${SERVER_SSH_KEY_B64:-}" ]; } || [ -z "${SERVER_HOST:-}" ] || [ -z "${SERVER_USER:-}" ]; then
-            echo "::error::SERVER_SSH_KEY(_B64), SERVER_HOST или SERVER_USER не заданы — deploy прерван."
-            echo "Add secrets in repo Settings → Secrets and variables → Actions."
+            echo "::error::SERVER_SSH_KEY(_B64), SERVER_HOST или SERVER_USER не заданы."
             exit 1
           fi
           mkdir -p ~/.ssh
-          # Ключ лучше хранить как base64 (одна строка), чтобы GitHub не ломал переносы.
-          # SERVER_SSH_KEY_B64: base64 от приватного ключа (например ~/.ssh/deploy).
           if [ -n "${SERVER_SSH_KEY_B64:-}" ]; then
             echo "$SERVER_SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           else
-            # Сырой ключ: убираем \r (Windows) — иначе "Load key: error in libcrypto"
             echo "$SERVER_SSH_KEY" | sed 's/\r$//' > ~/.ssh/deploy_key
           fi
           chmod 600 ~/.ssh/deploy_key
-          if ! grep -q -- "BEGIN" ~/.ssh/deploy_key || ! grep -q -- "PRIVATE KEY" ~/.ssh/deploy_key; then
-            echo "::error::SERVER_SSH_KEY не похож на приватный ключ. Вставь в Secrets полное содержимое deploy_key (cat deploy_key)."
-            exit 1
-          fi
           ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=40 -o TCPKeepAlive=yes"
+          SSH="ssh $SSH_OPTS $SERVER_USER@$SERVER_HOST"
+
           echo "Checking SSH connectivity..."
-          ssh -o BatchMode=yes $SSH_OPTS "$SERVER_USER@$SERVER_HOST" "echo ok"
-          echo "Preparing directories on server..."
-          # Временные файлы rsync на приёмнике — в /tmp (иначе mkstemp в /var/www/... даёт Permission denied, если каталог не принадлежит SERVER_USER)
-          # ВАЖНО: сначала останавливаем процесс и очищаем .next, чтобы не было смеси старых/новых чанков.
-          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
-            "mkdir -p \"$DEPLOY_PATH\" /tmp/rsync-spindate && \
-             chmod 1777 /tmp/rsync-spindate && \
-             pm2 stop spindate 2>/dev/null || true && \
-             rm -rf \"$DEPLOY_PATH\"/.next"
-          echo "Syncing files..."
-          # Без -a и без -t: не трогаем mtime (иначе Operation not permitted на приёмнике).
-          # Без -o/-g: не пытаемся сохранить uid/gid с раннера GitHub на вашем сервере.
-          # -M: на удалённый rsync — временные файлы в /tmp (обход Permission denied на mkstemp в /var/www)
-          rsync -rlpvz --delete \
+          $SSH "echo ok"
+
+          echo "Creating release directory $RELEASE_DIR ..."
+          $SSH "mkdir -p '$RELEASE_DIR' /tmp/rsync-spindate && chmod 1777 /tmp/rsync-spindate"
+
+          echo "Syncing build artifacts..."
+          rsync -rlpvz \
             -M '--temp-dir=/tmp/rsync-spindate' \
-            --exclude 'node_modules' \
-            --exclude 'data' \
-            --exclude '.env*' \
-            --exclude '.git' \
-            --exclude 'cache' \
             --exclude '.DS_Store' \
             -e "ssh $SSH_OPTS" \
             .next \
@@ -108,15 +95,48 @@ jobs:
             package-lock.json \
             next.config.mjs \
             ecosystem.config.cjs \
-            "$SERVER_USER@$SERVER_HOST:$DEPLOY_PATH/"
-          echo "Running npm ci and pm2 on server..."
-          # Иначе npm ci падает с ENOTEMPTY на node_modules/next/... — процесс держит файлы
-          ssh $SSH_OPTS "$SERVER_USER@$SERVER_HOST" \
-            "cd \"$DEPLOY_PATH\" && \
-             sleep 2 && \
-             rm -rf node_modules && \
-             npm ci && \
-             pm2 delete spindate 2>/dev/null || true && \
-             PORT=3002 pm2 start ecosystem.config.cjs --update-env && \
-             pm2 save"
-          echo "Deploy finished."
+            "$SERVER_USER@$SERVER_HOST:$RELEASE_DIR/"
+
+          echo "Installing deps, swapping symlink, reloading PM2..."
+          $SSH bash -s -- "$BASE" "$RELEASE_DIR" "$RELEASES" <<'REMOTE_SCRIPT'
+            set -euo pipefail
+            BASE="$1"; RELEASE="$2"; RELEASES_DIR="$3"
+
+            cd "$RELEASE"
+
+            # Shared .env — symlink into release
+            if [ -f "$BASE/shared/.env.local" ]; then
+              ln -sf "$BASE/shared/.env.local" .env.local
+            elif [ -f "$BASE/.env.local" ]; then
+              ln -sf "$BASE/.env.local" .env.local
+            fi
+
+            # Shared data dir (SQLite, uploads)
+            if [ -d "$BASE/shared/data" ]; then
+              ln -sf "$BASE/shared/data" data
+            elif [ -d "$BASE/data" ]; then
+              ln -sf "$BASE/data" data
+            fi
+
+            npm ci --production
+
+            # Atomic symlink swap: current → this release
+            ln -sfn "$RELEASE" "$BASE/current.tmp"
+            mv -fT "$BASE/current.tmp" "$BASE/current"
+
+            # Graceful reload: PM2 keeps old process alive until new one is ready.
+            # If PM2 process doesn't exist yet — start it.
+            if pm2 describe spindate >/dev/null 2>&1; then
+              pm2 reload spindate --update-env
+            else
+              cd "$BASE/current"
+              PORT=3002 pm2 start ecosystem.config.cjs --update-env
+            fi
+            pm2 save
+
+            # Cleanup: keep last 3 releases
+            cd "$RELEASES_DIR"
+            ls -1dt */ 2>/dev/null | tail -n +4 | xargs rm -rf -- 2>/dev/null || true
+
+            echo "Deploy complete. Active release: $(readlink -f "$BASE/current")"
+          REMOTE_SCRIPT
