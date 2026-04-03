@@ -972,14 +972,14 @@ export function GameRoom() {
   }, [roundNumber])
 
   const handleSpin = useCallback(() => {
-    // Живой игрок управляет своим ходом; для ботов — только водитель (min id).
+    if (isSpinning || countdown !== null) return
     const canSpin = currentTurnPlayer?.isBot ? isRoundDriver : isMyTurn
     if (!canSpin) return
     if (!CASUAL_MODE) {
       dispatch({ type: "END_PREDICTION_PHASE" })
     }
     dispatch({ type: "START_COUNTDOWN" })
-  }, [dispatch, isRoundDriver, isMyTurn, currentTurnPlayer?.isBot])
+  }, [dispatch, isRoundDriver, isMyTurn, currentTurnPlayer?.isBot, isSpinning, countdown])
 
   const {
     turnTimer,
@@ -1023,14 +1023,16 @@ export function GameRoom() {
   }, [currentTurnIndex, isSpinning, showResult, countdown, tableLoading])
 
   /* ---- bot auto-spin (delayed to let prediction phase happen) ---- */
+  const handleSpinRef = useRef(handleSpin)
+  handleSpinRef.current = handleSpin
+
   useEffect(() => {
     if (tableLoading) return
     if (!isRoundDriver) return
     if (!currentTurnPlayer?.isBot || isSpinning || countdown !== null || showResult) return
-    const timer = setTimeout(() => handleSpin(), 2500)
+    const timer = setTimeout(() => handleSpinRef.current(), 2500)
     return () => clearTimeout(timer)
-     
-  }, [currentTurnIndex, currentTurnPlayer, isSpinning, countdown, showResult, handleSpin, tableLoading, isRoundDriver])
+  }, [currentTurnIndex, currentTurnPlayer?.isBot, isSpinning, countdown, showResult, tableLoading, isRoundDriver])
 
   /* ---- при возврате из мини-игры: анимация «вернулся к нам», пропуск хода если ход был у вернувшегося ---- */
   /* Важно: ждём tableLoading=false и перезапускаемся при его смене — иначе при возврате во время

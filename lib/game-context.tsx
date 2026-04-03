@@ -105,6 +105,7 @@ const initialState: GameState = {
 }
 
 const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
+const FAVORITES_LS_KEY = (userId: number) => `spindate_favorites_v1_${userId}`
 const AVATAR_FRAME_LS_KEY = (userId: number) => `spindate_avatar_frame_v1_${userId}`
 const BOTTLE_SKIN_LS_KEY = (userId: number) => `spindate_bottle_skin_v1_${userId}`
 
@@ -147,9 +148,15 @@ function persistAdmirersList(userId: number, list: Player[]) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ADMIRERS_LS_KEY(userId), JSON.stringify(list))
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
+}
+
+function persistFavoritesList(userId: number, list: Player[]) {
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(FAVORITES_LS_KEY(userId), JSON.stringify(list))
+    }
+  } catch {}
 }
 
 function dateKeyFromTimestamp(ts: number): string {
@@ -349,12 +356,15 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     }
     case "SET_USER": {
       let admirers: Player[] = []
+      let favorites: Player[] = []
       let restoredFrameId: string | null = null
       let restoredBottleSkin: GameState["bottleSkin"] | null = null
       try {
         if (typeof window !== "undefined") {
           const raw = window.localStorage.getItem(ADMIRERS_LS_KEY(action.user.id))
           if (raw) admirers = parseAdmirersFromStorage(raw)
+          const rawFav = window.localStorage.getItem(FAVORITES_LS_KEY(action.user.id))
+          if (rawFav) favorites = parseAdmirersFromStorage(rawFav)
           const savedFrame = window.localStorage.getItem(AVATAR_FRAME_LS_KEY(action.user.id))
           if (savedFrame && savedFrame !== "none") restoredFrameId = savedFrame
           const savedBottle = window.localStorage.getItem(BOTTLE_SKIN_LS_KEY(action.user.id)) as GameState["bottleSkin"] | null
@@ -362,6 +372,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         }
       } catch {
         admirers = []
+        favorites = []
       }
       const nextFrames = { ...(state.avatarFrames ?? {}) }
       if (restoredFrameId) nextFrames[action.user.id] = restoredFrameId
@@ -372,6 +383,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         currentUser: action.user,
         admirers,
+        favorites,
         avatarFrames: nextFrames,
         bottleSkin: restoredBottleSkin ?? state.bottleSkin,
         ownedBottleSkins: nextOwnedBottleSkins,
@@ -382,7 +394,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         currentUser: null,
         players: [],
-        admirers: [],
         tableId: (() => {
           if (typeof window !== "undefined") {
             try { window.sessionStorage.removeItem("spindate_tableId") } catch {}
@@ -627,6 +638,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "SET_TABLES_COUNT":
       return { ...state, tablesCount: action.tablesCount }
     case "START_COUNTDOWN":
+      if (state.countdown !== null || state.isSpinning) return state
       return { ...state, countdown: 3 }
     case "TICK_COUNTDOWN":
       return {
@@ -710,9 +722,12 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         extraTurnPlayerId: undefined,
       }
     }
-    case "ADD_FAVORITE":
+    case "ADD_FAVORITE": {
       if (state.favorites.find((f) => f.id === action.player.id)) return state
-      return { ...state, favorites: [...state.favorites, action.player] }
+      const nextFav = [...state.favorites, action.player]
+      if (state.currentUser) persistFavoritesList(state.currentUser.id, nextFav)
+      return { ...state, favorites: nextFav }
+    }
     case "ADD_ADMIRER": {
       if (!state.currentUser || state.currentUser.id === action.player.id) return state
       if (state.admirers.find((a) => a.id === action.player.id)) return state
@@ -1119,9 +1134,14 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Active phase: initiator keeps local gameplay state to avoid authority overwrites
-      const isInitiator = state.currentUser != null &&
-        state.players[state.currentTurnIndex]?.id === state.currentUser.id
+      // Active phase: initiator (or roundDriver for bots) keeps local gameplay state
+      const turnPlayer = state.players[state.currentTurnIndex]
+      const isMyTurnDirect = state.currentUser != null && turnPlayer?.id === state.currentUser.id
+      const isBotTurnAndDriver = !!(turnPlayer?.isBot && state.currentUser && (() => {
+        const liveIds = state.players.filter((pl) => !pl.isBot).map((pl) => pl.id).sort((a, b) => a - b)
+        return liveIds.length > 0 && liveIds[0] === state.currentUser!.id
+      })())
+      const isInitiator = isMyTurnDirect || isBotTurnAndDriver
       const inActivePhase = state.countdown !== null || state.isSpinning || state.showResult
       const keepLocal = isInitiator && inActivePhase
 
