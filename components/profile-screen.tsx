@@ -8,6 +8,8 @@ import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
+import type { GameLogEntry } from "@/lib/game-types"
+import { generateLogId } from "@/lib/ids"
 import { assetUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
@@ -420,9 +422,47 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const isPanel = variant === "panel"
 
   const handleInviteFriends = async () => {
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "error")
+      return
+    }
     const ok = await vkBridge.inviteFriends()
-    if (ok) showToast("Приглашение отправлено", "info")
-    else showToast("Не удалось отправить приглашение", "error")
+    if (ok) {
+      showToast("Приглашение отправлено", "info")
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "invite" as GameLogEntry["type"],
+          fromPlayer: currentUser ?? undefined,
+          text: `${currentUser?.name ?? "Игрок"} пригласил друзей`,
+          timestamp: Date.now(),
+        },
+      })
+    } else {
+      showToast("Не удалось отправить приглашение", "error")
+    }
+  }
+
+  const handleSelectFriends = async () => {
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "error")
+      return
+    }
+    const friends = await vkBridge.getFriends()
+    if (friends.length > 0) {
+      showToast(`Выбрано ${friends.length} друзей`, "info")
+    }
+  }
+
+  const handleRecommend = async () => {
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "error")
+      return
+    }
+    const ok = await vkBridge.recommendApp()
+    if (ok) showToast("Спасибо за рекомендацию!", "info")
+    else showToast("Не удалось рекомендовать", "error")
   }
 
   const renderProfileFields = () => (
@@ -731,13 +771,31 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 <p className="text-[15px] font-medium leading-relaxed text-slate-700">Пригласите в игру — веселее вместе</p>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className={`w-full px-3 ${secondaryBtnClass}`}
+                onClick={handleInviteFriends}
+              >
+                Пригласить
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className={`w-full px-3 ${secondaryBtnClass}`}
+                onClick={handleSelectFriends}
+              >
+                Найти друзей
+              </Button>
+            </div>
             <Button
               type="button"
               variant="outline"
-              className={`w-full px-5 ${secondaryBtnClass}`}
-              onClick={handleInviteFriends}
+              className={`w-full px-5 text-xs ${secondaryBtnClass}`}
+              onClick={handleRecommend}
             >
-              Пригласить
+              Рекомендовать приложение
             </Button>
           </div>
         </div>

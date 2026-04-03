@@ -459,7 +459,52 @@ export async function inviteFriends(): Promise<boolean> {
       return false
     }
   }
-  return new Promise((resolve) => setTimeout(() => resolve(true), 300))
+  return false
+}
+
+export type VkFriend = {
+  id: number
+  first_name: string
+  last_name: string
+  photo_200?: string
+}
+
+/**
+ * Получить список друзей VK, которые установили приложение.
+ * @see https://dev.vk.com/bridge/VKWebAppGetFriends
+ */
+export async function getFriends(): Promise<VkFriend[]> {
+  const b = await getBridgeAsync()
+  if (b && isVkMiniApp()) {
+    try {
+      const res = await b.send("VKWebAppGetFriends", { multi: true })
+      const r = res as { users?: VkFriend[] }
+      return r?.users ?? []
+    } catch (e) {
+      console.warn("VKWebAppGetFriends failed", e)
+      return []
+    }
+  }
+  return []
+}
+
+/**
+ * Пригласить конкретного друга по user_id.
+ * @see https://dev.vk.com/bridge/VKWebAppShowInviteBox
+ */
+export async function recommendApp(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (b && isVkMiniApp()) {
+    try {
+      const res = await b.send("VKWebAppRecommend", {})
+      const r = res as { result?: boolean }
+      return r?.result === true
+    } catch (e) {
+      console.warn("VKWebAppRecommend failed", e)
+      return false
+    }
+  }
+  return false
 }
 
 export const vkBridge = {
@@ -470,6 +515,8 @@ export const vkBridge = {
   buyHearts1000,
   buyVip,
   inviteFriends,
+  getFriends,
+  recommendApp,
   initVk,
   initVkResilient,
   isVkMiniApp,

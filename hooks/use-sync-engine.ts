@@ -407,7 +407,9 @@ export function useSyncEngine(): SyncEngineResult {
     }
   }, [currentUser, tableId, fetchTableAuthority, tablePaused, seatConfirmed])
 
-  // Leave table only on real unmount / user switch (not on profile field updates).
+  // Leave table on real tab close (not on refresh).
+  // We set a sessionStorage flag on beforeunload; if it's still there
+  // on the next page load the browser refreshed (not closed), so we skip leave.
   const currentUserId = currentUser?.id ?? null
   useEffect(() => {
     if (!currentUserId) return
@@ -425,11 +427,22 @@ export function useSyncEngine(): SyncEngineResult {
       }
     }
 
-    const onBeforeUnload = () => leave()
+    // On page load, clear the refresh marker (it was set by previous beforeunload)
+    try { window.sessionStorage.removeItem("spindate_refreshing") } catch {}
+
+    const onBeforeUnload = () => {
+      // Mark that we're navigating away — if the page loads again quickly,
+      // it's a refresh (marker will be present), not a real close.
+      try { window.sessionStorage.setItem("spindate_refreshing", "1") } catch {}
+      // Don't send leave on beforeunload — rely on PRESENCE_TTL for real closes.
+      // The marker will be cleaned up on next load (above), and the server
+      // will clean stale entries after 7min if the tab was actually closed.
+    }
     window.addEventListener("beforeunload", onBeforeUnload)
 
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload)
+      // React cleanup (unmount due to user switch, etc.) — real leave
       leave()
     }
   }, [currentUserId])

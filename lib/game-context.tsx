@@ -48,7 +48,13 @@ const initialState: GameState = {
   chatMessages: {},
   voiceBalance: 0,
   bonusBalance: 0,
-  tableId: Math.floor(Math.random() * 9999) + 1,
+  tableId: (() => {
+    if (typeof window !== "undefined") {
+      const saved = window.sessionStorage.getItem("spindate_tableId")
+      if (saved) { const n = Number(saved); if (Number.isFinite(n) && n > 0) return n }
+    }
+    return Math.floor(Math.random() * 9999) + 1
+  })(),
   roomCreatorPlayerId: null,
   gameLog: [],
   // Prediction & Betting
@@ -377,7 +383,12 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         currentUser: null,
         players: [],
         admirers: [],
-        tableId: Math.floor(Math.random() * 9999) + 1,
+        tableId: (() => {
+          if (typeof window !== "undefined") {
+            try { window.sessionStorage.removeItem("spindate_tableId") } catch {}
+          }
+          return Math.floor(Math.random() * 9999) + 1
+        })(),
         roomCreatorPlayerId: null,
         gameSidePanel: null,
       }
@@ -583,6 +594,9 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           nextRoomCreator = null
         }
 
+        if (typeof window !== "undefined") {
+          try { window.sessionStorage.setItem("spindate_tableId", String(action.tableId)) } catch {}
+        }
         return {
         ...state,
         players: nextPlayers,
