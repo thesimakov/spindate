@@ -91,9 +91,42 @@ function parseVkUserId(params: URLSearchParams): number | null {
 
 function heartsByItem(itemKey: string): number {
   const m = /^hearts_(\d+)$/i.exec(itemKey)
-  if (!m) return 0
-  const n = Number.parseInt(m[1], 10)
-  return Number.isFinite(n) && n > 0 ? n : 0
+  if (m) {
+    const n = Number.parseInt(m[1], 10)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
+  return 0
+}
+
+function vipDaysByItem(itemKey: string): number {
+  if (itemKey === "vip_7d") return 7
+  if (itemKey === "vip_30d") return 30
+  return 0
+}
+
+function grantVipByVkUser(vkUserId: number, days: number): void {
+  if (days <= 0) return
+  const db = getDb()
+  const now = Date.now()
+  const ms = days * 24 * 60 * 60 * 1000
+
+  const linkedUser = db
+    .prepare(`SELECT id FROM users WHERE vk_user_id = ?`)
+    .get(vkUserId) as { id: string } | undefined
+
+  const userId = linkedUser?.id
+  if (!userId) return
+
+  const existing = db
+    .prepare(`SELECT vip_until FROM user_game_state WHERE user_id = ?`)
+    .get(userId) as { vip_until: number | null } | undefined
+
+  const base = Math.max(existing?.vip_until ?? 0, now)
+  const newUntil = base + ms
+
+  db.prepare(
+    `UPDATE user_game_state SET vip_until = ?, updated_at = ? WHERE user_id = ?`,
+  ).run(newUntil, now, userId)
 }
 
 function isGrantableOrderStatus(statusRaw: string): boolean {
@@ -181,6 +214,10 @@ function handleOrderStatusChange(params: URLSearchParams, orderIdRaw: string, it
       if (hearts > 0) {
         grantHeartsByVkUser(vkUserId, hearts)
       }
+      const vipDays = vipDaysByItem(itemKey)
+      if (vipDays > 0) {
+        grantVipByVkUser(vkUserId, vipDays)
+      }
       db.prepare(
         `UPDATE vk_payment_orders
          SET processed = 1, updated_at = ?
@@ -199,10 +236,12 @@ export async function POST(req: NextRequest) {
     const params = await bodyToUrlParams(req)
     const sig = params.get("sig") ?? undefined
 
-    if (VK_PAYMENTS_SECRET) {
-      if (!verifyVkPaymentsSig(params, sig, VK_PAYMENTS_SECRET)) {
-        return vkError(10, "The calculated and sent signatures do not match", true)
-      }
+    if (!VK_PAYMENTS_SECRET) {
+      console.error("[vk/payments] VK_PAYMENTS_SECRET is not configured — rejecting request")
+      return vkError(10, "Payment secret not configured", true)
+    }
+    if (!verifyVkPaymentsSig(params, sig, VK_PAYMENTS_SECRET)) {
+      return vkError(10, "The calculated and sent signatures do not match", true)
     }
 
     const notificationType = String(params.get("notification_type") ?? "")

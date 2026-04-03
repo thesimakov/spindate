@@ -13,10 +13,11 @@ export type StatusLine = {
 export function useStatusLine() {
   const [row, setRow] = useState<StatusLine | null>(null)
   const [loading, setLoading] = useState(true)
+  const initialRef = { current: true }
 
   const refresh = useCallback(async () => {
     try {
-      setLoading(true)
+      if (initialRef.current) { setLoading(true); initialRef.current = false }
       const res = await apiFetch("/api/catalog/status-line", { cache: "no-store", credentials: "include" })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok || !data?.row || typeof data.row.text !== "string") {

@@ -757,7 +757,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         isSpinning: false,
       }
     case "ADD_LOG": {
-      const nextLog = [...state.gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES), action.entry]
+      const nextLog = [...state.gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES), action.entry].slice(-GAME_TABLE_LOG_MAX_ENTRIES)
       let nextAdmirers = state.admirers
       // «Ухаживать»: если кто-то ухаживает за текущим пользователем — добавить в поклонники
       if (
@@ -1141,7 +1141,14 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         emotionUseTodayByPlayer,
         generalChatMessages: [...(p.generalChatMessages ?? [])],
         avatarFrames: mergedFrames,
-        drunkUntil: { ...(state.drunkUntil ?? {}), ...(p.drunkUntil ?? {}) },
+        drunkUntil: (() => {
+          const merged: Record<number, number> = { ...(state.drunkUntil ?? {}) }
+          for (const [k, v] of Object.entries(p.drunkUntil ?? {})) {
+            const pid = Number(k)
+            merged[pid] = Math.max(merged[pid] ?? 0, v as number)
+          }
+          return merged
+        })(),
         admirers: syncAdmirers,
         clientTabAway: { ...(p.clientTabAway ?? {}) },
         predictions: [],

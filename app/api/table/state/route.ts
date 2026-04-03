@@ -8,7 +8,8 @@ const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const tableId = Math.floor(Number(body?.tableId))
-  const sinceRevision = Math.floor(Number(body?.sinceRevision ?? 0))
+  const sinceRevisionRaw = Number(body?.sinceRevision ?? 0)
+  const sinceRevision = Number.isFinite(sinceRevisionRaw) ? Math.floor(sinceRevisionRaw) : 0
 
   if (!Number.isInteger(tableId) || tableId <= 0) {
     return NextResponse.json({ ok: false, error: "Некорректный tableId" }, { status: 400, headers: NO_CACHE })

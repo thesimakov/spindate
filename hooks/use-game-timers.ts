@@ -183,7 +183,10 @@ export function useGameTimers({
       dispatch({ type: "NEXT_TURN" })
     }, TURN_MS + TURN_TICK_MS)
 
-    return () => {}
+    return () => {
+      if (turnTimerRef.current) { clearInterval(turnTimerRef.current); turnTimerRef.current = null }
+      if (turnGuardRef.current.skipTimeout) { clearTimeout(turnGuardRef.current.skipTimeout); turnGuardRef.current.skipTimeout = null }
+    }
   }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading])
 
   // --- Auto-skip for OTHER live players who went AFK ---
@@ -336,6 +339,8 @@ export function useGameTimers({
             },
           })
           dispatch({ type: "NEXT_TURN" })
+          g.key = null
+          g.deadlineTs = 0
         }
       }
 
@@ -369,6 +374,7 @@ export function useGameTimers({
               },
             })
             dispatch({ type: "NEXT_TURN" })
+            ag.key = null
           }
         }
       }
@@ -384,6 +390,7 @@ export function useGameTimers({
         }
         if (!isRoundDriver()) return
         dispatch({ type: "NEXT_TURN" })
+        resultGuardRef.current.key = null
       }
 
       const pg = predGuardRef.current

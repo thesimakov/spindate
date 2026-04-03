@@ -167,14 +167,25 @@ function migrate(database: Database.Database) {
   if (!bottleCols.some((c) => c.name === "is_main")) {
     database.exec(`ALTER TABLE bottle_catalog ADD COLUMN is_main INTEGER NOT NULL DEFAULT 0`)
   }
-  database.exec(`UPDATE gift_catalog SET section = 'paid' WHERE section = 'premium'`)
-  database.exec(`UPDATE gift_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
+  const hasPremiumGifts = (database.prepare(`SELECT COUNT(*) as c FROM gift_catalog WHERE section = 'premium'`).get() as { c: number })?.c > 0
+  if (hasPremiumGifts) {
+    database.exec(`UPDATE gift_catalog SET section = 'paid' WHERE section = 'premium'`)
+    database.exec(`UPDATE gift_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
+  }
   const giftCols = database.prepare(`PRAGMA table_info(gift_catalog)`).all() as { name: string }[]
   if (!giftCols.some((c) => c.name === "img")) {
     database.exec(`ALTER TABLE gift_catalog ADD COLUMN img TEXT NOT NULL DEFAULT ''`)
   }
-  database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)
-  database.exec(`UPDATE frame_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
+  const hasPremiumFrames = (database.prepare(`SELECT COUNT(*) as c FROM frame_catalog WHERE section = 'premium'`).get() as { c: number })?.c > 0
+  if (hasPremiumFrames) {
+    database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)
+    database.exec(`UPDATE frame_catalog SET section = 'vip' WHERE section = 'paid' AND cost >= 10`)
+  }
+
+  const gameStateCols = database.prepare(`PRAGMA table_info(user_game_state)`).all() as { name: string }[]
+  if (!gameStateCols.some((c) => c.name === "vip_until")) {
+    database.exec(`ALTER TABLE user_game_state ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0`)
+  }
 
   // Старые инсталляции: vk_payment_orders могла быть создана без vk_user_id — IF NOT EXISTS таблицу не пересоздаёт.
   const paymentCols = database.prepare(`PRAGMA table_info(vk_payment_orders)`).all() as { name: string }[]
@@ -241,6 +252,8 @@ export function getDb() {
   const dir = ensureDataDir()
   const file = path.join(dir, "auth.sqlite")
   db = new Database(file)
+  db.pragma("journal_mode = WAL")
+  db.pragma("busy_timeout = 5000")
   migrate(db)
   return db
 }

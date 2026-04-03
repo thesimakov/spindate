@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { createHash, timingSafeEqual } from "node:crypto"
 
 /**
  * Подпись уведомлений VK Payments (как в github.com/SevereCloud/vksdk payments).
@@ -25,5 +25,7 @@ export function vkPaymentsComputeSig(concat: string, secret: string): string {
 
 export function verifyVkPaymentsSig(params: URLSearchParams, sig: string | undefined, secret: string): boolean {
   if (!secret || !sig) return false
-  return vkPaymentsComputeSig(vkPaymentsConcatForSign(params), secret) === sig
+  const expected = vkPaymentsComputeSig(vkPaymentsConcatForSign(params), secret)
+  if (expected.length !== sig.length) return false
+  return timingSafeEqual(Buffer.from(expected, "utf8"), Buffer.from(sig, "utf8"))
 }
