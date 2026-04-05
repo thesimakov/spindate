@@ -1201,9 +1201,10 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       const inActivePhase = state.countdown !== null || state.isSpinning || state.showResult
       const keepLocal = isInitiator && inActivePhase
 
-      const keepLocalAngle = state.isSpinning
       const keepLocalCountdown = keepLocal && state.countdown !== null && (p.countdown === null || p.countdown >= state.countdown)
       const keepLocalSpinState = keepLocal && state.isSpinning
+      /** Только инициатор крутит локально; иначе все должны брать bottleAngle с сервера — иначе рассинхрон. */
+      const keepLocalAngle = keepLocalSpinState
       const keepLocalResult = keepLocal && state.showResult && !p.showResult
 
       const localById = new Map(state.players.map((pl) => [pl.id, pl]))
