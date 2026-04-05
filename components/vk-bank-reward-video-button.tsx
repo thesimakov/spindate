@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react"
 import { Video } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useGame } from "@/lib/game-context"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
 import { apiFetch } from "@/lib/api-fetch"
@@ -32,7 +33,7 @@ export function VkBankRewardVideoButton({
   onNotify?: (message: string, type?: InlineToastType) => void
 }) {
   const { dispatch, state } = useGame()
-  const { currentUser } = state
+  const { currentUser, voiceBalance } = state
   const [busy, setBusy] = useState(false)
   const [vkEnv, setVkEnv] = useState(false)
 
@@ -102,23 +103,47 @@ export function VkBankRewardVideoButton({
   if (!vkEnv || !currentUser || currentUser.authProvider !== "vk") return null
 
   return (
-    <button
-      type="button"
-      onClick={() => void handleClick()}
-      disabled={busy}
-      className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-0 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40",
-        className,
-      )}
-      style={btnShellStyle}
-      title={
-        busy
-          ? "Загрузка…"
-          : `Видеореклама — +${VK_REWARD_HEARTS} сердец (нажмите, чтобы посмотреть)`
-      }
-      aria-label={`Видеореклама, до ${VK_REWARD_HEARTS} сердец`}
-    >
-      <Video className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2.25} aria-hidden />
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => void handleClick()}
+          disabled={busy}
+          className={cn(
+            "flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full p-0 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40",
+            className,
+          )}
+          style={btnShellStyle}
+          aria-label={`Видеореклама, до ${VK_REWARD_HEARTS} сердец`}
+        >
+          <Video className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2.25} aria-hidden />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={6}
+        className="max-w-[18rem] border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 shadow-xl"
+      >
+        <p className="text-[11px] font-semibold tabular-nums text-white">
+          Точный баланс: {voiceBalance.toLocaleString("ru-RU")} ❤
+        </p>
+        <p className="mt-1.5 text-xs font-medium leading-snug">
+          Видеореклама: до{" "}
+          <span className="font-black tabular-nums text-cyan-300">+{VK_REWARD_HEARTS}</span> ❤ на баланс
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void handleClick()
+          }}
+          className="mt-2 w-full rounded-lg border border-cyan-500/50 bg-cyan-500/15 px-2 py-1.5 text-center text-[11px] font-bold text-cyan-200 transition hover:bg-cyan-500/25 disabled:opacity-50"
+        >
+          {busy ? "…" : "Посмотреть"}
+        </button>
+      </TooltipContent>
+    </Tooltip>
   )
 }
