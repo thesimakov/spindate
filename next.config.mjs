@@ -35,6 +35,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  /** Браузеры запрашивают `/favicon.ico` по умолчанию; отдаём SVG без дублирования бинарного .ico. */
+  async rewrites() {
+    return [{ source: "/favicon.ico", destination: "/favicon.svg" }]
+  },
   async headers() {
     const csp = {
       key: "Content-Security-Policy",

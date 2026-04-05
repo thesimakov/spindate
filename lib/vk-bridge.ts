@@ -554,29 +554,41 @@ export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promi
   }
 }
 
+export type VkBannerShowOptions = {
+  /** `top` — полоса у верхнего края WebView (ближе к блоку над чатом); `bottom` — внизу окна мини-приложения. */
+  banner_location?: "top" | "bottom"
+  layout_type?: "resize" | "overlay"
+  height_type?: "compact" | "regular"
+}
+
 /**
- * Баннерная реклама VK внизу окна мини-приложения.
- * По умолчанию у платформы layout_type = resize (область WebView уменьшается на высоту баннера).
- * banner_align не передаём: в документации он учитывается только при layout_type = overlay
- * (и десктоп / горизонтальная ориентация); при overlay + align ещё и height_type игнорируется.
+ * Баннерная реклама VK (клиент рисует её у края окна, не внутри вашего div).
  * @see https://dev.vk.com/ru/bridge/VKWebAppShowBannerAd
  */
-export async function showVkBannerAdBottomCompact(): Promise<boolean> {
+export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Promise<boolean> {
   const b = await getBridgeAsync()
   if (!b || !(await isVkRuntimeEnvironment())) return false
+  const banner_location = options?.banner_location ?? "top"
+  const layout_type = options?.layout_type ?? "resize"
+  const height_type = options?.height_type ?? "compact"
   try {
     const check = await b.send("VKWebAppCheckBannerAd", {})
     if ((check as { result?: boolean })?.result !== true) return false
     const res = await b.send("VKWebAppShowBannerAd", {
-      banner_location: "bottom",
-      layout_type: "resize",
-      height_type: "compact",
+      banner_location,
+      layout_type,
+      height_type,
     })
     return (res as { result?: boolean })?.result === true
   } catch (e) {
     console.warn("[VK] VKWebAppShowBannerAd", e)
     return false
   }
+}
+
+/** То же, что {@link showVkBannerAdCompact} с `banner_location: "bottom"`. */
+export async function showVkBannerAdBottomCompact(): Promise<boolean> {
+  return showVkBannerAdCompact({ banner_location: "bottom" })
 }
 
 export const vkBridge = {
@@ -591,6 +603,7 @@ export const vkBridge = {
   recommendApp,
   checkVkNativeAd,
   showVkNativeAd,
+  showVkBannerAdCompact,
   showVkBannerAdBottomCompact,
   initVk,
   initVkResilient,

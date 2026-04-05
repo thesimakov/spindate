@@ -1,27 +1,65 @@
 "use client"
 
 import { useEffect } from "react"
-import { isVkMiniApp, showVkBannerAdBottomCompact } from "@/lib/vk-bridge"
+import { initVkResilient, isVkMiniApp, showVkBannerAdCompact } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
+const BANNER_ONCE_KEY = "spindate_vk_room_banner_once"
+
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
 /**
- * Слот под баннерную рекламу VK над чатом (до 20% высоты стека).
+ * Над чатом — визуальная метка; сам баннер ВК рисуется нативно по краю WebView (VKWebAppShowBannerAd).
  * Reward-видео за сердца — кнопка «Видео» в строке «Ваш банк» рядом с «+».
  */
 export function VkChatAdBlock({ className }: { className?: string }) {
   useEffect(() => {
     if (!isVkMiniApp()) return
     if (typeof sessionStorage === "undefined") return
-    const k = "spindate_vk_room_banner_once"
-    if (sessionStorage.getItem(k) === "1") return
-    sessionStorage.setItem(k, "1")
-    void showVkBannerAdBottomCompact()
+    if (sessionStorage.getItem(BANNER_ONCE_KEY) === "1") return
+
+    let cancelled = false
+
+    ;(async () => {
+      await initVkResilient()
+      if (cancelled) return
+
+      const tryLocation = async (loc: "top" | "bottom"): Promise<boolean> => {
+        return showVkBannerAdCompact({ banner_location: loc })
+      }
+
+      let ok = false
+      for (let i = 0; i < 4 && !cancelled; i++) {
+        ok = await tryLocation("top")
+        if (ok) break
+        await delay(500 + i * 350)
+      }
+      if (!ok && !cancelled) {
+        for (let i = 0; i < 3 && !cancelled; i++) {
+          ok = await tryLocation("bottom")
+          if (ok) break
+          await delay(450 + i * 300)
+        }
+      }
+
+      if (ok && !cancelled) sessionStorage.setItem(BANNER_ONCE_KEY, "1")
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   if (!isVkMiniApp()) return null
 
   return (
-    <div className={cn("max-h-full w-full min-w-0", className)} aria-label="Реклама ВКонтакте">
+    <div
+      className={cn("max-h-full w-full min-w-0", className)}
+      aria-label="Реклама ВКонтакте"
+      title="Баннер показывается клиентом ВК у края окна (сверху или снизу), не внутри этой полосы."
+    >
       <div
         className="flex max-h-full min-h-0 w-full flex-col justify-center overflow-hidden rounded-xl border border-cyan-500/25 px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         style={{
