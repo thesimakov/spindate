@@ -63,6 +63,7 @@ import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
+import { VkChatAdBlock } from "@/components/vk-chat-ad-block"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
 import {
@@ -4305,16 +4306,19 @@ export function GameRoom() {
         </div>
 
         {!isPcLayout && (
-          <TableChatPanel
-            gameLog={gameLog}
-            chatInput={chatInput}
-            setChatInput={setChatInput}
-            onSend={handleSendChat}
-            logEndRef={logEndRef}
-            currentUserId={currentUser?.id}
-            chatDisabled={tablePaused}
-            className="w-full max-w-[min(95vw,720px)] mx-auto mt-2 mb-1 shrink-0 max-h-[min(38vh,320px)] min-h-[140px]"
-          />
+          <div className="mx-auto mt-2 flex w-full max-w-[min(95vw,720px)] shrink-0 flex-col gap-2 mb-1">
+            <VkChatAdBlock className="w-full" />
+            <TableChatPanel
+              gameLog={gameLog}
+              chatInput={chatInput}
+              setChatInput={setChatInput}
+              onSend={handleSendChat}
+              logEndRef={logEndRef}
+              currentUserId={currentUser?.id}
+              chatDisabled={tablePaused}
+              className="w-full shrink-0 max-h-[min(38vh,320px)] min-h-[140px]"
+            />
+          </div>
         )}
 
       </div>
@@ -4359,16 +4363,19 @@ export function GameRoom() {
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
-            <TableChatPanel
-              gameLog={gameLog}
-              chatInput={chatInput}
-              setChatInput={setChatInput}
-              onSend={handleSendChat}
-              logEndRef={logEndRef}
-              currentUserId={currentUser?.id}
-              chatDisabled={tablePaused}
-              className="flex min-h-0 flex-1 flex-col"
-            />
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <VkChatAdBlock className="w-full shrink-0" />
+              <TableChatPanel
+                gameLog={gameLog}
+                chatInput={chatInput}
+                setChatInput={setChatInput}
+                onSend={handleSendChat}
+                logEndRef={logEndRef}
+                currentUserId={currentUser?.id}
+                chatDisabled={tablePaused}
+                className="flex min-h-0 flex-1 flex-col"
+              />
+            </div>
           </div>
         )}
 

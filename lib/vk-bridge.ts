@@ -514,6 +514,54 @@ export async function recommendApp(): Promise<boolean> {
   return false
 }
 
+/** Доступна ли нативная реклама VK (reward / interstitial). */
+export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    const res = await b.send("VKWebAppCheckNativeAds", { ad_format: adFormat })
+    return (res as { result?: boolean })?.result === true
+  } catch {
+    return false
+  }
+}
+
+/** Показ полноэкранной нативной рекламы VK. */
+export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    const res = await b.send("VKWebAppShowNativeAds", { ad_format: adFormat })
+    return (res as { result?: boolean })?.result === true
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowNativeAds", e)
+    return false
+  }
+}
+
+/**
+ * Баннерная реклама VK внизу окна мини-приложения (layout resize — область контента сужается).
+ * @see https://dev.vk.com/bridge/VKWebAppShowBannerAd
+ */
+export async function showVkBannerAdBottomCompact(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    const check = await b.send("VKWebAppCheckBannerAd", {})
+    if ((check as { result?: boolean })?.result !== true) return false
+    const res = await b.send("VKWebAppShowBannerAd", {
+      banner_location: "bottom",
+      layout_type: "resize",
+      height_type: "compact",
+      banner_align: "center",
+    })
+    return (res as { result?: boolean })?.result === true
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowBannerAd", e)
+    return false
+  }
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -524,6 +572,9 @@ export const vkBridge = {
   inviteFriends,
   getFriends,
   recommendApp,
+  checkVkNativeAd,
+  showVkNativeAd,
+  showVkBannerAdBottomCompact,
   initVk,
   initVkResilient,
   isVkMiniApp,
