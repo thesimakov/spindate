@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react"
+import { useCallback, useState, type CSSProperties } from "react"
 import { Heart, Video } from "lucide-react"
 import { useGame } from "@/lib/game-context"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
@@ -28,22 +28,13 @@ export function VkBankRewardVideoButton({
   onNotify?: (message: string, type?: InlineToastType) => void
 }) {
   const { dispatch } = useGame()
-  const [rewardOk, setRewardOk] = useState(false)
   const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    if (!isVkMiniApp()) return
-    void (async () => {
-      setRewardOk(await checkVkNativeAd("reward"))
-    })()
-  }, [])
 
   const handleClick = useCallback(async () => {
     if (!isVkMiniApp() || busy) return
     setBusy(true)
     try {
       if (!(await checkVkNativeAd("reward"))) {
-        setRewardOk(false)
         onNotify?.("Сейчас нет рекламы с наградой", "info")
         return
       }
@@ -59,7 +50,7 @@ export function VkBankRewardVideoButton({
     }
   }, [busy, dispatch, onNotify])
 
-  if (!isVkMiniApp() || !rewardOk) return null
+  if (!isVkMiniApp()) return null
 
   return (
     <button
