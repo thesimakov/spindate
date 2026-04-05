@@ -514,6 +514,31 @@ export async function recommendApp(): Promise<boolean> {
   return false
 }
 
+/** Доступна ли нативная реклама VK (reward / interstitial). */
+export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    const res = await b.send("VKWebAppCheckNativeAds", { ad_format: adFormat })
+    return (res as { result?: boolean })?.result === true
+  } catch {
+    return false
+  }
+}
+
+/** Показ нативной рекламы VK (например, reward за просмотр). */
+export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return false
+  try {
+    const res = await b.send("VKWebAppShowNativeAds", { ad_format: adFormat })
+    return (res as { result?: boolean })?.result === true
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowNativeAds", e)
+    return false
+  }
+}
+
 /**
  * Баннерная реклама VK внизу окна мини-приложения.
  * По умолчанию у платформы layout_type = resize (область WebView уменьшается на высоту баннера).
@@ -549,6 +574,8 @@ export const vkBridge = {
   inviteFriends,
   getFriends,
   recommendApp,
+  checkVkNativeAd,
+  showVkNativeAd,
   showVkBannerAdBottomCompact,
   initVk,
   initVkResilient,

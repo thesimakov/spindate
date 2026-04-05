@@ -4315,7 +4315,7 @@ export function GameRoom() {
             }}
           >
             <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
-              <VkChatAdBlock className="max-h-full" />
+              <VkChatAdBlock className="max-h-full" onNotify={showToast} />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
               <TableChatPanel
@@ -4376,7 +4376,7 @@ export function GameRoom() {
             </button>
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col gap-2 overflow-hidden">
               <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
-                <VkChatAdBlock className="max-h-full" />
+                <VkChatAdBlock className="max-h-full" onNotify={showToast} />
               </div>
               <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
                 <TableChatPanel
