@@ -1,9 +1,31 @@
+import { execSync } from "node:child_process"
+
 /** @type {import('next').NextConfig} */
 /** В CI только workflow GitHub Pages задаёт BUILD_FOR_PAGES — тогда статический экспорт. Для деплоя на свой сервер сборка без export. */
 const isGitHubPages = process.env.BUILD_FOR_PAGES === "true"
 const basePath = isGitHubPages ? (process.env.NEXT_PUBLIC_BASE_PATH ?? "") : ""
+
+function resolvePublicBuildId() {
+  const fromEnv = process.env.NEXT_PUBLIC_BUILD_ID?.trim()
+  if (fromEnv) return fromEnv
+  const vercel = process.env.VERCEL_GIT_COMMIT_SHA?.trim()
+  if (vercel) return vercel.slice(0, 12)
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      encoding: "utf8",
+      cwd: process.cwd(),
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  } catch {
+    return "dev"
+  }
+}
+
 const nextConfig = {
   basePath: basePath || undefined,
+  env: {
+    NEXT_PUBLIC_BUILD_ID: resolvePublicBuildId(),
+  },
   ...(isGitHubPages && { output: "export" }),
   turbopack: {
     root: process.cwd(),
