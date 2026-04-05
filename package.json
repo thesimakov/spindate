@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:ws": "tsx server/custom-server.ts",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "start:ws": "NODE_ENV=production tsx server/custom-server.ts",
     "lint": "eslint ."
