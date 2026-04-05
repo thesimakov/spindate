@@ -22,6 +22,8 @@ function resolvePublicBuildId() {
 }
 
 const nextConfig = {
+  /** Не бандлить ioredis/node-cron — иначе Turbopack тянет Node `stream`/`net` и падает (instrumentation → purge → Redis). */
+  serverExternalPackages: ["ioredis", "node-cron"],
   basePath: basePath || undefined,
   env: {
     NEXT_PUBLIC_BUILD_ID: resolvePublicBuildId(),

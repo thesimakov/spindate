@@ -1,9 +1,14 @@
 import type { GeneralChatMessage } from "@/lib/game-types"
 import { getRedis } from "@/lib/redis"
-import { randomUUID } from "crypto"
 import { roomChatKey, ROOMS_PREFIX } from "@/lib/rooms/keys"
 
 const MAX_MESSAGES = 500
+
+function newChatMessageId(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === "function") return c.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+}
 
 declare global {
   var __spindateRoomChatMemory: Map<number, GeneralChatMessage[]> | undefined
@@ -19,7 +24,7 @@ function mem(): Map<number, GeneralChatMessage[]> {
 export class ChatService {
   async appendMessage(roomId: number, msg: Omit<GeneralChatMessage, "id"> & { id?: string }): Promise<GeneralChatMessage> {
     const full: GeneralChatMessage = {
-      id: msg.id ?? randomUUID(),
+      id: msg.id ?? newChatMessageId(),
       senderId: msg.senderId,
       senderName: msg.senderName,
       text: msg.text,

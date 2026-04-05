@@ -1,3 +1,5 @@
+import "server-only"
+
 import Redis from "ioredis"
 
 let client: Redis | null | undefined
