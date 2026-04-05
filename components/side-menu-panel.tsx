@@ -21,8 +21,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { cn } from "@/lib/utils"
 import type { GameAction } from "@/lib/game-types"
+import type { InlineToastType } from "@/hooks/use-inline-toast"
 import { SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON } from "@/lib/side-menu-flags"
 
 interface SideMenuPanelProps {
@@ -45,6 +47,7 @@ interface SideMenuPanelProps {
   onPause: () => void
   onOpenChatList: () => void
   emotionContent: React.ReactNode
+  onNotify?: (message: string, type?: InlineToastType) => void
 }
 
 function SideMenuPanelInner({
@@ -67,6 +70,7 @@ function SideMenuPanelInner({
   onPause,
   onOpenChatList,
   emotionContent,
+  onNotify,
 }: SideMenuPanelProps) {
   const sideBtnClass =
     "flex items-center gap-1.5 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
@@ -148,21 +152,24 @@ function SideMenuPanelInner({
             <span className="text-[15px] font-black tabular-nums leading-none shrink-0 sm:text-base" style={{ color: "#fff" }}>{voiceBalance}</span>
             <span className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")} style={{ color: "#cbd5e1" }}>{"Ваш банк"}</span>
           </div>
-          <button
-            type="button"
-            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
-            className={"flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95" + (!leftSideMenuExpanded ? " max-lg:flex" : "")}
-            style={{
-              border: "1px solid rgba(56,189,248,0.5)",
-              color: "#7dd3fc",
-              background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-            }}
-            title="Пополнить банк"
-            aria-label="Открыть магазин сердец"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
-          </button>
+          <div className={"flex shrink-0 items-center gap-1" + (!leftSideMenuExpanded ? " max-lg:flex" : "")}>
+            <VkBankRewardVideoButton onNotify={onNotify} />
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
+              style={{
+                border: "1px solid rgba(56,189,248,0.5)",
+                color: "#7dd3fc",
+                background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+              }}
+              title="Пополнить банк"
+              aria-label="Открыть магазин сердец"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+            </button>
+          </div>
         </div>
 
         <button onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })} className={sideBtnClass} style={{ background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)", border: "1px solid rgba(245, 158, 11, 0.8)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 20px rgba(251,146,60,0.35)" }}>

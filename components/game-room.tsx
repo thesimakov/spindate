@@ -63,6 +63,7 @@ import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
+import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { VkChatAdBlock } from "@/components/vk-chat-ad-block"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
@@ -3327,25 +3328,25 @@ export function GameRoom() {
                 {"Ваш банк"}
               </span>
             </div>
-            <button
-              type="button"
-              ref={bankPlusButtonRef}
-              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
-              className={
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95" +
-                (!leftSideMenuExpanded ? " max-lg:flex" : "")
-              }
-              style={{
-                border: "1px solid rgba(56,189,248,0.5)",
-                color: "#7dd3fc",
-                background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-              }}
-              title="Пополнить банк"
-              aria-label="Открыть магазин сердец"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
-            </button>
+            <div className={"flex shrink-0 items-center gap-1" + (!leftSideMenuExpanded ? " max-lg:flex" : "")}>
+              <VkBankRewardVideoButton onNotify={showToast} />
+              <button
+                type="button"
+                ref={bankPlusButtonRef}
+                onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
+                style={{
+                  border: "1px solid rgba(56,189,248,0.5)",
+                  color: "#7dd3fc",
+                  background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                }}
+                title="Пополнить банк"
+                aria-label="Открыть магазин сердец"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+              </button>
+            </div>
           </div>
 
           {/* Магазин */}
@@ -4315,7 +4316,7 @@ export function GameRoom() {
             }}
           >
             <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
-              <VkChatAdBlock className="max-h-full" onNotify={showToast} />
+              <VkChatAdBlock className="max-h-full" />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
               <TableChatPanel
@@ -4376,7 +4377,7 @@ export function GameRoom() {
             </button>
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col gap-2 overflow-hidden">
               <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
-                <VkChatAdBlock className="max-h-full" onNotify={showToast} />
+                <VkChatAdBlock className="max-h-full" />
               </div>
               <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
                 <TableChatPanel
@@ -4555,24 +4556,27 @@ export function GameRoom() {
                       Ваш банк
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
-                      setShowMobileMoreMenu(false)
-                    }}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
-                    style={{
-                      border: "1px solid rgba(56,189,248,0.5)",
-                      color: "#7dd3fc",
-                      background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-                    }}
-                    title="Пополнить банк"
-                    aria-label="Открыть магазин сердец"
-                  >
-                    <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <VkBankRewardVideoButton onNotify={showToast} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
+                        setShowMobileMoreMenu(false)
+                      }}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
+                      style={{
+                        border: "1px solid rgba(56,189,248,0.5)",
+                        color: "#7dd3fc",
+                        background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                      }}
+                      title="Пополнить банк"
+                      aria-label="Открыть магазин сердец"
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+                    </button>
+                  </div>
                 </div>
                 <button
                   type="button"
