@@ -9,6 +9,7 @@ import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import { loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
+import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 
 declare global {
   var __spindateTableAuthorityMemory: Map<number, TableAuthorityPayload> | undefined
@@ -73,6 +74,12 @@ function stabilizeAuthoritySnapshot(
     }
   } else if (next.spinStartedAtMs != null) {
     next = { ...next, spinStartedAtMs: null }
+    changed = true
+  }
+
+  const bottleLease = authoritySnapshotExpiredBottleLease(next, nowMs)
+  if (bottleLease.changed) {
+    next = bottleLease.snapshot
     changed = true
   }
 

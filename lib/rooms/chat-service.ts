@@ -1,9 +1,8 @@
 import type { GeneralChatMessage } from "@/lib/game-types"
 import { getRedis } from "@/lib/redis"
 import { randomUUID } from "crypto"
-import { roomChatKey } from "@/lib/rooms/keys"
+import { roomChatKey, ROOMS_PREFIX } from "@/lib/rooms/keys"
 
-const CHAT_TTL_SEC = 24 * 60 * 60
 const MAX_MESSAGES = 500
 
 declare global {
@@ -33,7 +32,6 @@ export class ChatService {
       const pipeline = r.pipeline()
       pipeline.lpush(key, raw)
       pipeline.ltrim(key, 0, MAX_MESSAGES - 1)
-      pipeline.expire(key, CHAT_TTL_SEC)
       await pipeline.exec()
       return full
     }
@@ -60,5 +58,25 @@ export class ChatService {
       return out
     }
     return [...(mem().get(roomId) ?? [])].reverse()
+  }
+}
+
+/** Вся история чатов комнат: Redis (все ключи `…:chat:*`) + in-memory fallback. */
+export async function purgeAllRoomChatHistory(): Promise<void> {
+  mem().clear()
+  const r = getRedis()
+  if (!r) return
+  const pattern = `${ROOMS_PREFIX}:chat:*`
+  let cursor = "0"
+  try {
+    do {
+      const [next, keys] = await r.scan(cursor, "MATCH", pattern, "COUNT", 200)
+      cursor = next
+      if (keys.length > 0) {
+        await r.del(...keys)
+      }
+    } while (cursor !== "0")
+  } catch (e) {
+    console.warn("[room-chat] purge redis failed", e)
   }
 }

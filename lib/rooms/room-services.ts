@@ -1,6 +1,7 @@
+import { ChatService } from "@/lib/rooms/chat-service"
+import { startRoomChatMidnightPurgeScheduler } from "@/lib/rooms/chat-purge-scheduler"
 import { QueueManager } from "@/lib/rooms/queue-manager"
 import { RoomManager } from "@/lib/rooms/room-manager"
-import { ChatService } from "@/lib/rooms/chat-service"
 import { ReconnectService } from "@/lib/rooms/reconnect-service"
 
 export type RoomServices = {
@@ -24,6 +25,7 @@ export function getRoomServices(): RoomServices {
       chat: new ChatService(),
       reconnect: new ReconnectService(),
     }
+    startRoomChatMidnightPurgeScheduler()
   }
   return globalThis.__spindateRoomServices
 }

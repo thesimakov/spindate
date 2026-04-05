@@ -19,6 +19,7 @@ import { generateBots as generateBotsImpl, AVATAR_FRAME_IDS, randomAvatarFrame a
 import { generateLogId as generateLogIdImpl, generateMessageId as generateMessageIdImpl } from "@/lib/ids"
 import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
 export { AVATAR_FRAME_IDS }
@@ -108,6 +109,7 @@ const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
 const FAVORITES_LS_KEY = (userId: number) => `spindate_favorites_v1_${userId}`
 const AVATAR_FRAME_LS_KEY = (userId: number) => `spindate_avatar_frame_v1_${userId}`
 const BOTTLE_SKIN_LS_KEY = (userId: number) => `spindate_bottle_skin_v1_${userId}`
+const BOTTLE_COOLDOWN_LS_KEY = (userId: number) => `spindate_bottle_cooldown_v1_${userId}`
 
 function parseAdmirersFromStorage(raw: string): Player[] {
   try {
@@ -368,7 +370,21 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           const savedFrame = window.localStorage.getItem(AVATAR_FRAME_LS_KEY(action.user.id))
           if (savedFrame && savedFrame !== "none") restoredFrameId = savedFrame
           const savedBottle = window.localStorage.getItem(BOTTLE_SKIN_LS_KEY(action.user.id)) as GameState["bottleSkin"] | null
-          if (savedBottle) restoredBottleSkin = savedBottle
+          const savedCdRaw = window.localStorage.getItem(BOTTLE_COOLDOWN_LS_KEY(action.user.id))
+          const savedCd = savedCdRaw != null ? Number(savedCdRaw) : NaN
+          const cdValid = Number.isFinite(savedCd)
+          const cdExpired = cdValid && Date.now() > savedCd
+          if (savedBottle && cdExpired) {
+            restoredBottleSkin = "classic"
+            try {
+              window.localStorage.setItem(BOTTLE_SKIN_LS_KEY(action.user.id), "classic")
+              window.localStorage.removeItem(BOTTLE_COOLDOWN_LS_KEY(action.user.id))
+            } catch {
+              /* ignore */
+            }
+          } else if (savedBottle) {
+            restoredBottleSkin = savedBottle
+          }
         }
       } catch {
         admirers = []
@@ -827,6 +843,18 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "REQUEST_EXTRA_TURN":
       return { ...state, extraTurnPlayerId: action.playerId }
     case "SET_BOTTLE_COOLDOWN_UNTIL":
+      try {
+        if (typeof window !== "undefined" && state.currentUser?.id != null) {
+          const uid = state.currentUser.id
+          if (action.ts != null) {
+            window.localStorage.setItem(BOTTLE_COOLDOWN_LS_KEY(uid), String(action.ts))
+          } else {
+            window.localStorage.removeItem(BOTTLE_COOLDOWN_LS_KEY(uid))
+          }
+        }
+      } catch {
+        // ignore
+      }
       return { ...state, bottleCooldownUntil: action.ts }
     case "SET_BOTTLE_DONOR":
       return { ...state, bottleDonorId: action.playerId, bottleDonorName: action.playerName }
@@ -1122,7 +1150,19 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       }
 
     case "SYNC_TABLE_AUTHORITY": {
-      const p = action.payload
+      const lease = authoritySnapshotExpiredBottleLease(action.payload, Date.now())
+      const p = lease.snapshot
+      if (lease.changed) {
+        try {
+          if (typeof window !== "undefined" && state.currentUser?.id != null) {
+            const uid = state.currentUser.id
+            window.localStorage.setItem(BOTTLE_SKIN_LS_KEY(uid), "classic")
+            window.localStorage.removeItem(BOTTLE_COOLDOWN_LS_KEY(uid))
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       const mergedFrames = { ...(state.avatarFrames ?? {}), ...(p.avatarFrames ?? {}) }
       const todayKey = dateKeyFromTimestamp(Date.now())
       const fromLog = rebuildTodayLimitedEmotionsFromLog(p.gameLog, todayKey)
