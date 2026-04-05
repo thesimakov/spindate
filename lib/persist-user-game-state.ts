@@ -18,6 +18,14 @@ export function userStatePutUrl(user: Player): string | null {
   return null
 }
 
+/** POST начисления за VK reward-рекламу (сессия или vk_user_id, как у /api/user/state). */
+export function vkAdRewardPostUrl(user: Player): string | null {
+  if (user.authProvider !== "vk") return null
+  const vk = vkUserIdForApi(user)
+  if (vk == null) return null
+  return `/api/vk/ad-reward?vk_user_id=${encodeURIComponent(String(vk))}`
+}
+
 /** Сразу записать баланс и инвентарь на сервер (обходит debounce GameProvider). */
 export async function persistUserGameState(
   user: Player,

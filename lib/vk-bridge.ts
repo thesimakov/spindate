@@ -164,6 +164,21 @@ export function isVkMiniApp(): boolean {
 }
 
 /**
+ * Мини-приложение ВК: query/referrer или встроенный WebView (у части клиентов в iframe нет vk_* в URL дочернего окна).
+ */
+export async function isVkRuntimeEnvironment(): Promise<boolean> {
+  if (isVkMiniApp()) return true
+  const b = await getBridgeAsync()
+  if (!b) return false
+  try {
+    if (typeof b.isEmbedded === "function" && b.isEmbedded()) return true
+  } catch {
+    /* ignore */
+  }
+  return false
+}
+
+/**
  * Просим ВК развернуть мини-приложение до максимально доступной области.
  * В части клиентов помогает убрать боковые поля/ограничения контейнера.
  * @see https://dev.vk.com/bridge/VKWebAppExpand
@@ -517,7 +532,7 @@ export async function recommendApp(): Promise<boolean> {
 /** Доступна ли нативная реклама VK (reward / interstitial). */
 export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
   const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return false
+  if (!b || !(await isVkRuntimeEnvironment())) return false
   try {
     const res = await b.send("VKWebAppCheckNativeAds", { ad_format: adFormat })
     return (res as { result?: boolean })?.result === true
@@ -529,7 +544,7 @@ export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Prom
 /** Показ нативной рекламы VK (например, reward за просмотр). */
 export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
   const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return false
+  if (!b || !(await isVkRuntimeEnvironment())) return false
   try {
     const res = await b.send("VKWebAppShowNativeAds", { ad_format: adFormat })
     return (res as { result?: boolean })?.result === true
@@ -548,7 +563,7 @@ export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promi
  */
 export async function showVkBannerAdBottomCompact(): Promise<boolean> {
   const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return false
+  if (!b || !(await isVkRuntimeEnvironment())) return false
   try {
     const check = await b.send("VKWebAppCheckBannerAd", {})
     if ((check as { result?: boolean })?.result !== true) return false
@@ -580,6 +595,7 @@ export const vkBridge = {
   initVk,
   initVkResilient,
   isVkMiniApp,
+  isVkRuntimeEnvironment,
   ensureVkLaunchSearch,
   ensureVkLaunchSearchResilient,
   getVkLaunchSearchFromLocation,

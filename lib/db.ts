@@ -200,8 +200,17 @@ function migrate(database: Database.Database) {
   }
   // После гарантии колонки (в т.ч. для старых БД) — индекс вне первого exec, иначе при отсутствии колонки весь блок миграции падал.
   database.exec(
-    `CREATE INDEX IF NOT EXISTS idx_vk_payment_orders_vk_user_id ON vk_payment_orders(vk_user_id)`,
+    `    CREATE INDEX IF NOT EXISTS idx_vk_payment_orders_vk_user_id ON vk_payment_orders(vk_user_id)`,
   )
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS vk_ad_reward_claims (
+      subject_key TEXT PRIMARY KEY,
+      last_claim_at INTEGER NOT NULL,
+      utc_day INTEGER NOT NULL DEFAULT 0,
+      claims_today INTEGER NOT NULL DEFAULT 0
+    );
+  `)
 
   const now = Date.now()
   const insertBottle = database.prepare(

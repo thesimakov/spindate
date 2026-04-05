@@ -1,10 +1,13 @@
 "use client"
 
-import { useCallback, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useState, type CSSProperties } from "react"
 import { Heart, Video } from "lucide-react"
 import { useGame } from "@/lib/game-context"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
-import { checkVkNativeAd, isVkMiniApp, showVkNativeAd } from "@/lib/vk-bridge"
+import { apiFetch } from "@/lib/api-fetch"
+import type { InventoryItem } from "@/lib/game-types"
+import { vkAdRewardPostUrl } from "@/lib/persist-user-game-state"
+import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
 const VK_REWARD_HEARTS = 5
@@ -19,6 +22,7 @@ const btnShellStyle: CSSProperties = {
 /**
  * Компактная кнопка reward-рекламы VK: +5 ❤, иконка видео, подпись «Видео».
  * Рядом с кнопкой «+» в строке «Ваш банк».
+ * При нажатии всегда запрашиваем показ; если ролик недоступен / тест / ошибка — всё равно начисляем обещанные сердца.
  */
 export function VkBankRewardVideoButton({
   className,
@@ -27,30 +31,75 @@ export function VkBankRewardVideoButton({
   className?: string
   onNotify?: (message: string, type?: InlineToastType) => void
 }) {
-  const { dispatch } = useGame()
+  const { dispatch, state } = useGame()
+  const { currentUser } = state
   const [busy, setBusy] = useState(false)
+  const [vkEnv, setVkEnv] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void isVkRuntimeEnvironment().then((ok) => {
+      if (!cancelled && ok) setVkEnv(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleClick = useCallback(async () => {
-    if (!isVkMiniApp() || busy) return
+    if (busy) return
+    if (!(await isVkRuntimeEnvironment())) return
+    if (!currentUser || currentUser.authProvider !== "vk") {
+      onNotify?.("Войдите через ВКонтакте", "info")
+      return
+    }
+    const postUrl = vkAdRewardPostUrl(currentUser)
+    if (!postUrl) {
+      onNotify?.("Не удалось определить профиль ВК", "info")
+      return
+    }
     setBusy(true)
     try {
-      if (!(await checkVkNativeAd("reward"))) {
-        onNotify?.("Сейчас нет рекламы с наградой", "info")
-        return
+      let shownOk = false
+      try {
+        shownOk = await showVkNativeAd("reward")
+      } catch {
+        shownOk = false
       }
-      const ok = await showVkNativeAd("reward")
-      if (ok) {
-        dispatch({ type: "ADD_VOICES", amount: VK_REWARD_HEARTS })
-        onNotify?.(`+${VK_REWARD_HEARTS} сердец за просмотр`, "success")
+      const res = await apiFetch(postUrl, { method: "POST", credentials: "include" })
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean
+        voiceBalance?: number
+        inventory?: unknown[]
+        error?: string
+        granted?: number
+      } | null
+      if (res.ok && data?.ok === true && typeof data.voiceBalance === "number") {
+        dispatch({
+          type: "RESTORE_GAME_STATE",
+          voiceBalance: data.voiceBalance,
+          inventory: Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
+        })
+        const g = typeof data.granted === "number" ? data.granted : VK_REWARD_HEARTS
+        if (shownOk) {
+          onNotify?.(`+${g} сердец за просмотр`, "success")
+        } else {
+          onNotify?.(
+            `+${g} сердец — награда с сервера (реклама недоступна или тестовый режим)`,
+            "success",
+          )
+        }
+      } else if (res.status === 429 && data?.error) {
+        onNotify?.(data.error, "info")
       } else {
-        onNotify?.("Награда не начислена — досмотрите рекламу до конца", "info")
+        onNotify?.(data?.error ?? "Не удалось начислить награду", "info")
       }
     } finally {
       setBusy(false)
     }
-  }, [busy, dispatch, onNotify])
+  }, [busy, currentUser, dispatch, onNotify])
 
-  if (!isVkMiniApp()) return null
+  if (!vkEnv || !currentUser || currentUser.authProvider !== "vk") return null
 
   return (
     <button
