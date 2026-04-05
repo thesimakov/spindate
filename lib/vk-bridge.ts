@@ -514,34 +514,12 @@ export async function recommendApp(): Promise<boolean> {
   return false
 }
 
-/** Доступна ли нативная реклама VK (reward / interstitial). */
-export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
-  const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return false
-  try {
-    const res = await b.send("VKWebAppCheckNativeAds", { ad_format: adFormat })
-    return (res as { result?: boolean })?.result === true
-  } catch {
-    return false
-  }
-}
-
-/** Показ полноэкранной нативной рекламы VK. */
-export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
-  const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return false
-  try {
-    const res = await b.send("VKWebAppShowNativeAds", { ad_format: adFormat })
-    return (res as { result?: boolean })?.result === true
-  } catch (e) {
-    console.warn("[VK] VKWebAppShowNativeAds", e)
-    return false
-  }
-}
-
 /**
- * Баннерная реклама VK внизу окна мини-приложения (layout resize — область контента сужается).
- * @see https://dev.vk.com/bridge/VKWebAppShowBannerAd
+ * Баннерная реклама VK внизу окна мини-приложения.
+ * По умолчанию у платформы layout_type = resize (область WebView уменьшается на высоту баннера).
+ * banner_align не передаём: в документации он учитывается только при layout_type = overlay
+ * (и десктоп / горизонтальная ориентация); при overlay + align ещё и height_type игнорируется.
+ * @see https://dev.vk.com/ru/bridge/VKWebAppShowBannerAd
  */
 export async function showVkBannerAdBottomCompact(): Promise<boolean> {
   const b = await getBridgeAsync()
@@ -553,7 +531,6 @@ export async function showVkBannerAdBottomCompact(): Promise<boolean> {
       banner_location: "bottom",
       layout_type: "resize",
       height_type: "compact",
-      banner_align: "center",
     })
     return (res as { result?: boolean })?.result === true
   } catch (e) {
@@ -572,8 +549,6 @@ export const vkBridge = {
   inviteFriends,
   getFriends,
   recommendApp,
-  checkVkNativeAd,
-  showVkNativeAd,
   showVkBannerAdBottomCompact,
   initVk,
   initVkResilient,

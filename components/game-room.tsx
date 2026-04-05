@@ -4306,18 +4306,29 @@ export function GameRoom() {
         </div>
 
         {!isPcLayout && (
-          <div className="mx-auto mt-2 flex w-full max-w-[min(95vw,720px)] shrink-0 flex-col gap-2 mb-1">
-            <VkChatAdBlock className="w-full" />
-            <TableChatPanel
-              gameLog={gameLog}
-              chatInput={chatInput}
-              setChatInput={setChatInput}
-              onSend={handleSendChat}
-              logEndRef={logEndRef}
-              currentUserId={currentUser?.id}
-              chatDisabled={tablePaused}
-              className="w-full shrink-0 max-h-[min(38vh,320px)] min-h-[140px]"
-            />
+          <div
+            className="mx-auto mt-2 mb-1 flex min-h-0 w-full max-w-[min(95vw,720px)] shrink-0 flex-col gap-2 overflow-hidden rounded-xl"
+            style={{
+              height: "min(46vh, 420px)",
+              maxHeight: "min(46vh, 420px)",
+              minHeight: "156px",
+            }}
+          >
+            <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
+              <VkChatAdBlock className="max-h-full" />
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
+              <TableChatPanel
+                gameLog={gameLog}
+                chatInput={chatInput}
+                setChatInput={setChatInput}
+                onSend={handleSendChat}
+                logEndRef={logEndRef}
+                currentUserId={currentUser?.id}
+                chatDisabled={tablePaused}
+                className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
+              />
+            </div>
           </div>
         )}
 
@@ -4363,18 +4374,22 @@ export function GameRoom() {
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <VkChatAdBlock className="w-full shrink-0" />
-              <TableChatPanel
-                gameLog={gameLog}
-                chatInput={chatInput}
-                setChatInput={setChatInput}
-                onSend={handleSendChat}
-                logEndRef={logEndRef}
-                currentUserId={currentUser?.id}
-                chatDisabled={tablePaused}
-                className="flex min-h-0 flex-1 flex-col"
-              />
+            <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col gap-2 overflow-hidden">
+              <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
+                <VkChatAdBlock className="max-h-full" />
+              </div>
+              <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
+                <TableChatPanel
+                  gameLog={gameLog}
+                  chatInput={chatInput}
+                  setChatInput={setChatInput}
+                  onSend={handleSendChat}
+                  logEndRef={logEndRef}
+                  currentUserId={currentUser?.id}
+                  chatDisabled={tablePaused}
+                  className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+                />
+              </div>
             </div>
           </div>
         )}
