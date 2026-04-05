@@ -2,6 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { formatBankPassiveCountdown } from "@/hooks/use-bank-passive"
+import { formatVoiceBalanceCompact } from "@/lib/format-voice-balance"
 import { cn } from "@/lib/utils"
 
 type BankHeartBalanceTooltipProps = {
@@ -21,14 +22,15 @@ export function BankHeartBalanceTooltip({
   tabularClassName,
 }: BankHeartBalanceTooltipProps) {
   const t = formatBankPassiveCountdown(msUntilNext)
+  const compact = formatVoiceBalanceCompact(voiceBalance)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           className={cn("cursor-help tabular-nums", className)}
-          title={`Следующие 3 сердечка через ${t}. Нажмите для подсказки.`}
+          title={`Баланс: ${voiceBalance.toLocaleString("ru-RU")} ❤ · следующие 3 сердечка через ${t}`}
         >
-          <span className={tabularClassName}>{voiceBalance}</span>
+          <span className={tabularClassName}>{compact}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent
@@ -36,7 +38,10 @@ export function BankHeartBalanceTooltip({
         sideOffset={6}
         className="max-w-[18rem] border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 shadow-xl"
       >
-        <p className="text-xs font-medium leading-snug">
+        <p className="text-[11px] font-semibold tabular-nums text-white">
+          Точный баланс: {voiceBalance.toLocaleString("ru-RU")} ❤
+        </p>
+        <p className="mt-1.5 text-xs font-medium leading-snug">
           Следующие 3 сердечка через{" "}
           <span className="font-black tabular-nums text-cyan-300">{t}</span>
         </p>

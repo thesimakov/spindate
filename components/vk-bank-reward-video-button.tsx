@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react"
-import { Heart, Video } from "lucide-react"
+import { Video } from "lucide-react"
 import { useGame } from "@/lib/game-context"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
 import { apiFetch } from "@/lib/api-fetch"
@@ -20,7 +20,7 @@ const btnShellStyle: CSSProperties = {
 }
 
 /**
- * Компактная кнопка reward-рекламы VK: +5 ❤, иконка видео, подпись «Видео».
+ * Кнопка reward-рекламы VK: только иконка видео, подсказка при наведении.
  * Рядом с кнопкой «+» в строке «Ваш банк».
  * При нажатии всегда запрашиваем показ; если ролик недоступен / тест / ошибка — всё равно начисляем обещанные сердца.
  */
@@ -107,23 +107,18 @@ export function VkBankRewardVideoButton({
       onClick={() => void handleClick()}
       disabled={busy}
       className={cn(
-        "flex h-8 min-w-[2.75rem] shrink-0 items-center gap-1 rounded-full px-1.5 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full p-0 transition-all hover:brightness-110 active:scale-95 disabled:opacity-40",
         className,
       )}
       style={btnShellStyle}
-      title={`Видеореклама — +${VK_REWARD_HEARTS} сердец`}
-      aria-label={`Смотреть видео за ${VK_REWARD_HEARTS} сердец`}
+      title={
+        busy
+          ? "Загрузка…"
+          : `Видеореклама — +${VK_REWARD_HEARTS} сердец (нажмите, чтобы посмотреть)`
+      }
+      aria-label={`Видеореклама, до ${VK_REWARD_HEARTS} сердец`}
     >
-      <Video className="h-3.5 w-3.5 shrink-0 opacity-95" strokeWidth={2.25} aria-hidden />
-      <span className="flex min-w-0 flex-col items-start justify-center leading-none">
-        <span className="flex items-center gap-px">
-          <span className="text-[9px] font-black tabular-nums text-white">+{VK_REWARD_HEARTS}</span>
-          <Heart className="h-2.5 w-2.5 shrink-0 fill-rose-400 text-rose-400" aria-hidden />
-        </span>
-        <span className="text-[6px] font-bold uppercase tracking-tight text-rose-100/90">
-          {busy ? "…" : "Видео"}
-        </span>
-      </span>
+      <Video className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2.25} aria-hidden />
     </button>
   )
 }

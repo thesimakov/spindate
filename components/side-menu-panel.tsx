@@ -25,6 +25,7 @@ import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-butto
 import { cn } from "@/lib/utils"
 import type { GameAction } from "@/lib/game-types"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
+import { formatVoiceBalanceCompact } from "@/lib/format-voice-balance"
 import { SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON } from "@/lib/side-menu-flags"
 
 interface SideMenuPanelProps {
@@ -149,7 +150,13 @@ function SideMenuPanelInner({
         >
           <div className={"flex min-w-0 flex-1 items-center gap-1.5" + (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")}>
             <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
-            <span className="text-[15px] font-black tabular-nums leading-none shrink-0 sm:text-base" style={{ color: "#fff" }}>{voiceBalance}</span>
+            <span
+              className="text-[15px] font-black tabular-nums leading-none shrink-0 sm:text-base"
+              style={{ color: "#fff" }}
+              title={`Баланс: ${voiceBalance.toLocaleString("ru-RU")} ❤`}
+            >
+              {formatVoiceBalanceCompact(voiceBalance)}
+            </span>
             <span className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")} style={{ color: "#cbd5e1" }}>{"Ваш банк"}</span>
           </div>
           <div className={"flex shrink-0 items-center gap-1" + (!leftSideMenuExpanded ? " max-lg:flex" : "")}>
