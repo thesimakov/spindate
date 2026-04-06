@@ -150,7 +150,7 @@ export async function POST(req: Request) {
       )
     }
     return NextResponse.json(
-      { ok: false, error: "На сегодня лимит наград за рекламу исчерпан", code: out.code },
+      { ok: false, error: "На сегодня лимит наград от спонсоров исчерпан", code: out.code },
       { status: 429 },
     )
   }

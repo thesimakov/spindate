@@ -18,7 +18,7 @@ export function userStatePutUrl(user: Player): string | null {
   return null
 }
 
-/** POST начисления за VK reward-рекламу (сессия или vk_user_id, как у /api/user/state). */
+/** POST начисления за VK reward от спонсоров (сессия или vk_user_id, как у /api/user/state). */
 export function vkAdRewardPostUrl(user: Player): string | null {
   if (user.authProvider !== "vk") return null
   const vk = vkUserIdForApi(user)

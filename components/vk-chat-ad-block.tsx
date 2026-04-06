@@ -57,8 +57,8 @@ export function VkChatAdBlock({ className }: { className?: string }) {
   return (
     <div
       className={cn("max-h-full w-full min-w-0", className)}
-      aria-label="Реклама ВКонтакте"
-      title="Баннер показывается клиентом ВК у края окна (сверху или снизу), не внутри этой полосы."
+      aria-label="Спонсоры ВКонтакте"
+      title="Блок спонсоров: полоса показывается клиентом ВК у края окна (сверху или снизу), не внутри этой метки."
     >
       <div
         className="flex max-h-full min-h-0 w-full flex-col justify-center overflow-hidden rounded-xl border border-cyan-500/25 px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
@@ -76,7 +76,7 @@ export function VkChatAdBlock({ className }: { className?: string }) {
           aria-hidden
         />
         <p className="shrink-0 pt-0.5 text-center text-[8px] font-semibold uppercase tracking-widest text-slate-500">
-          Реклама
+          Спонсоры
         </p>
       </div>
     </div>

@@ -529,7 +529,7 @@ export async function recommendApp(): Promise<boolean> {
   return false
 }
 
-/** Доступна ли нативная реклама VK (reward / interstitial). */
+/** Доступен ли нативный блок спонсоров VK (reward / interstitial). */
 export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
   const b = await getBridgeAsync()
   if (!b || !(await isVkRuntimeEnvironment())) return false
@@ -541,7 +541,7 @@ export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Prom
   }
 }
 
-/** Показ нативной рекламы VK (например, reward за просмотр). */
+/** Показ нативного ролика спонсора VK (например, reward за просмотр). */
 export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
   const b = await getBridgeAsync()
   if (!b || !(await isVkRuntimeEnvironment())) return false
@@ -562,7 +562,7 @@ export type VkBannerShowOptions = {
 }
 
 /**
- * Баннерная реклама VK (клиент рисует её у края окна, не внутри вашего div).
+ * Баннер спонсоров VK (клиент рисует его у края окна, не внутри вашего div).
  * @see https://dev.vk.com/ru/bridge/VKWebAppShowBannerAd
  */
 export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Promise<boolean> {

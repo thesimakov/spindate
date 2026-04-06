@@ -19,7 +19,7 @@ import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
 const VK_REWARD_HEARTS = 5
-/** Временно `false`: сразу открывается реклама ВК без белого диалога с таймером. Вернуть `true`, чтобы снова показать предэкран. */
+/** Временно `false`: сразу открывается ролик спонсора ВК без белого диалога с таймером. Вернуть `true`, чтобы снова показать предэкран. */
 const REWARD_GATE_ENABLED = false
 /** Длительность предэкрана при REWARD_GATE_ENABLED. */
 const REWARD_GATE_SECONDS = 5
@@ -32,7 +32,7 @@ const btnShellStyle: CSSProperties = {
 }
 
 /**
- * Кнопка reward-рекламы VK: только иконка видео, подсказка при наведении.
+ * Кнопка reward от спонсоров VK: только иконка видео, подсказка при наведении.
  * Рядом с кнопкой «+» в строке «Ваш банк».
  * При REWARD_GATE_ENABLED: перед VK — диалог с таймером.
  */
@@ -113,7 +113,7 @@ export function VkBankRewardVideoButton({
           onNotify?.(`+${g} сердец за просмотр`, "success")
         } else {
           onNotify?.(
-            `+${g} сердец — награда с сервера (реклама недоступна или тестовый режим)`,
+            `+${g} сердец — награда с сервера (спонсоры недоступны или тестовый режим)`,
             "success",
           )
         }
@@ -168,7 +168,7 @@ export function VkBankRewardVideoButton({
             }}
           >
             <DialogHeader className="gap-2 text-center">
-              <DialogTitle className="sr-only">Просмотр рекламы</DialogTitle>
+              <DialogTitle className="sr-only">Просмотр спонсорского ролика</DialogTitle>
               <DialogDescription className="text-sm font-medium text-slate-600">
                 Посмотрите ролик — награда начислится на баланс. Через пару секунд откроется окно ВКонтакте.
               </DialogDescription>
@@ -219,7 +219,7 @@ export function VkBankRewardVideoButton({
               className,
             )}
             style={btnShellStyle}
-            aria-label={`Видеореклама, до ${VK_REWARD_HEARTS} сердец`}
+            aria-label={`Спонсорское видео, до ${VK_REWARD_HEARTS} сердец`}
           >
             <Video className="h-4 w-4 shrink-0 opacity-95" strokeWidth={2.25} aria-hidden />
           </button>
@@ -233,7 +233,7 @@ export function VkBankRewardVideoButton({
             Точный баланс: {voiceBalance.toLocaleString("ru-RU")} ❤
           </p>
           <p className="mt-1.5 text-xs font-medium leading-snug">
-            Видеореклама: до{" "}
+            Спонсорское видео: до{" "}
             <span className="font-black tabular-nums text-cyan-300">+{VK_REWARD_HEARTS}</span> ❤ на баланс
           </p>
           <button
