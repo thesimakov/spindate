@@ -23,8 +23,8 @@ function resolvePublicBuildId() {
 }
 
 const nextConfig = {
-  /** Не бандлить ioredis/node-cron — иначе Turbopack тянет Node `stream`/`net` и падает (instrumentation → purge → Redis). */
-  serverExternalPackages: ["ioredis", "node-cron"],
+  /** Не бандлить ioredis/node-cron — иначе сборщик тянет Node `stream`/`net`. */
+  serverExternalPackages: ["ioredis", "@ioredis/commands", "node-cron"],
   basePath: basePath || undefined,
   env: {
     NEXT_PUBLIC_BUILD_ID: resolvePublicBuildId(),
@@ -32,6 +32,18 @@ const nextConfig = {
   ...(isGitHubPages && { output: "export" }),
   turbopack: {
     root: process.cwd(),
+  },
+  /** Дублируем external для `next dev --webpack` / части чанков, где serverExternalPackages не срабатывает. */
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals ?? []
+      if (Array.isArray(config.externals)) {
+        if (!config.externals.some((e) => e === "ioredis" || e === "@ioredis/commands")) {
+          config.externals.push("ioredis", "@ioredis/commands")
+        }
+      }
+    }
+    return config
   },
   images: {
     unoptimized: true,
