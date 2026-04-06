@@ -17,7 +17,8 @@ function resolvePublicBuildId() {
       stdio: ["ignore", "pipe", "ignore"],
     }).trim()
   } catch {
-    return "dev"
+    /** Без .git каждая сборка должна иметь уникальный id, иначе клиент думает что v=«dev» и отключает авто-перезагрузку. */
+    return `nobuild-${Date.now().toString(36)}`
   }
 }
 

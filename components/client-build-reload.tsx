@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { appPath } from "@/lib/app-path"
+import { apiFetch } from "@/lib/api-fetch"
 
 /** Вшивается в бандл при `next build` (см. `next.config.mjs`). */
 const CLIENT_BUILD = (process.env.NEXT_PUBLIC_BUILD_ID ?? "").trim()
@@ -15,7 +15,8 @@ const DEFAULT_POLL_MS = 45_000
 export function ClientBuildReload() {
   useEffect(() => {
     if (typeof window === "undefined") return
-    if (!CLIENT_BUILD || CLIENT_BUILD === "unknown" || CLIENT_BUILD === "dev") return
+    if (process.env.NODE_ENV === "development") return
+    if (!CLIENT_BUILD || CLIENT_BUILD === "unknown") return
 
     let cancelled = false
     const pollMs = DEFAULT_POLL_MS
@@ -23,9 +24,8 @@ export function ClientBuildReload() {
     const check = async () => {
       if (cancelled) return
       try {
-        const res = await fetch(appPath("/api/client-build"), {
+        const res = await apiFetch("/api/client-build", {
           cache: "no-store",
-          credentials: "same-origin",
         })
         if (!res.ok) return
         const data = (await res.json().catch(() => null)) as { buildId?: string } | null
@@ -44,6 +44,7 @@ export function ClientBuildReload() {
       if (document.visibilityState === "visible") void check()
     }
     document.addEventListener("visibilitychange", onVisible)
+    queueMicrotask(() => void check())
     const t0 = window.setTimeout(() => void check(), 12_000)
 
     return () => {
