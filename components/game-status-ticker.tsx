@@ -50,7 +50,7 @@ export function GameStatusTicker({ className }: GameStatusTickerProps) {
       <div className="status-board-glow" />
       <div className="flex items-center gap-3 px-2 py-1.5 sm:px-3">
         <span className="status-pill shrink-0 rounded border border-cyan-300/50 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-100">
-          Новости
+          Табло
         </span>
         <div className="relative w-full overflow-hidden">
           <div
