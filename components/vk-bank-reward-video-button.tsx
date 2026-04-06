@@ -19,7 +19,9 @@ import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
 const VK_REWARD_HEARTS = 5
-/** Нативное окно ВК не настраивается мини-приложением; перед показом рекламы держим наш диалог как в эталоне (~5 с без выхода). */
+/** Временно `false`: сразу открывается реклама ВК без белого диалога с таймером. Вернуть `true`, чтобы снова показать предэкран. */
+const REWARD_GATE_ENABLED = false
+/** Длительность предэкрана при REWARD_GATE_ENABLED. */
 const REWARD_GATE_SECONDS = 5
 
 const btnShellStyle: CSSProperties = {
@@ -32,7 +34,7 @@ const btnShellStyle: CSSProperties = {
 /**
  * Кнопка reward-рекламы VK: только иконка видео, подсказка при наведении.
  * Рядом с кнопкой «+» в строке «Ваш банк».
- * Перед VK: диалог 5 с без «Продолжить» / «Отказаться» (как у типичного reward-блока ВК).
+ * При REWARD_GATE_ENABLED: перед VK — диалог с таймером.
  */
 export function VkBankRewardVideoButton({
   className,
@@ -59,7 +61,7 @@ export function VkBankRewardVideoButton({
   }, [])
 
   useEffect(() => {
-    if (!gateOpen) return
+    if (!REWARD_GATE_ENABLED || !gateOpen) return
     setGateSecondsLeft(REWARD_GATE_SECONDS)
     let left = REWARD_GATE_SECONDS
     const id = window.setInterval(() => {
@@ -132,73 +134,79 @@ export function VkBankRewardVideoButton({
       onNotify?.("Войдите через ВКонтакте", "info")
       return
     }
+    if (!REWARD_GATE_ENABLED) {
+      void runAdAndClaim()
+      return
+    }
     setGateOpen(true)
-  }, [busy, currentUser, onNotify])
+  }, [busy, currentUser, onNotify, runAdAndClaim])
 
   if (!vkEnv || !currentUser || currentUser.authProvider !== "vk") return null
 
   return (
     <>
-      <Dialog
-        open={gateOpen}
-        onOpenChange={(o) => {
-          if (!o && !gateReady) return
-          setGateOpen(o)
-        }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          className={cn(
-            "max-w-[min(calc(100vw-1.5rem),20rem)] gap-5 rounded-2xl border-0 bg-white p-6 text-center shadow-xl",
-            "text-slate-900 sm:max-w-sm",
-          )}
-          overlayClassName="bg-black/60"
-          onPointerDownOutside={(e) => {
-            if (!gateReady) e.preventDefault()
-          }}
-          onEscapeKeyDown={(e) => {
-            if (!gateReady) e.preventDefault()
+      {REWARD_GATE_ENABLED && (
+        <Dialog
+          open={gateOpen}
+          onOpenChange={(o) => {
+            if (!o && !gateReady) return
+            setGateOpen(o)
           }}
         >
-          <DialogHeader className="gap-2 text-center">
-            <DialogTitle className="sr-only">Просмотр рекламы</DialogTitle>
-            <DialogDescription className="text-sm font-medium text-slate-600">
-              Посмотрите ролик — награда начислится на баланс. Через пару секунд откроется окно ВКонтакте.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              disabled={!gateReady || busy}
-              className={cn(
-                "w-full rounded-xl px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-45",
-                "bg-[#0077ff] hover:enabled:bg-[#0066dd]",
-              )}
-              onClick={() => {
-                if (!gateReady || busy) return
-                setGateOpen(false)
-                void runAdAndClaim()
-              }}
-            >
-              {gateReady ? "Продолжить просмотр" : `Продолжить просмотр (${gateSecondsLeft} с)`}
-            </button>
-            <button
-              type="button"
-              disabled={!gateReady || busy}
-              className={cn(
-                "text-center text-sm text-slate-500 transition disabled:cursor-not-allowed disabled:opacity-40",
-                gateReady && "hover:text-slate-700",
-              )}
-              onClick={() => {
-                if (!gateReady || busy) return
-                setGateOpen(false)
-              }}
-            >
-              Отказаться от награды
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          <DialogContent
+            showCloseButton={false}
+            className={cn(
+              "max-w-[min(calc(100vw-1.5rem),20rem)] gap-5 rounded-2xl border-0 bg-white p-6 text-center shadow-xl",
+              "text-slate-900 sm:max-w-sm",
+            )}
+            overlayClassName="bg-black/60"
+            onPointerDownOutside={(e) => {
+              if (!gateReady) e.preventDefault()
+            }}
+            onEscapeKeyDown={(e) => {
+              if (!gateReady) e.preventDefault()
+            }}
+          >
+            <DialogHeader className="gap-2 text-center">
+              <DialogTitle className="sr-only">Просмотр рекламы</DialogTitle>
+              <DialogDescription className="text-sm font-medium text-slate-600">
+                Посмотрите ролик — награда начислится на баланс. Через пару секунд откроется окно ВКонтакте.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                disabled={!gateReady || busy}
+                className={cn(
+                  "w-full rounded-xl px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-45",
+                  "bg-[#0077ff] hover:enabled:bg-[#0066dd]",
+                )}
+                onClick={() => {
+                  if (!gateReady || busy) return
+                  setGateOpen(false)
+                  void runAdAndClaim()
+                }}
+              >
+                {gateReady ? "Продолжить просмотр" : `Продолжить просмотр (${gateSecondsLeft} с)`}
+              </button>
+              <button
+                type="button"
+                disabled={!gateReady || busy}
+                className={cn(
+                  "text-center text-sm text-slate-500 transition disabled:cursor-not-allowed disabled:opacity-40",
+                  gateReady && "hover:text-slate-700",
+                )}
+                onClick={() => {
+                  if (!gateReady || busy) return
+                  setGateOpen(false)
+                }}
+              >
+                Отказаться от награды
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Tooltip>
         <TooltipTrigger asChild>
