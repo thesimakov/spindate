@@ -601,13 +601,16 @@ export async function showVkBannerAdBottomCompact(): Promise<boolean> {
 }
 
 /**
- * Горизонтальный баннер поверх контента (`overlay`). Позиция по умолчанию VK (`banner_location` не задаём).
+ * Как пресет с `banner_align: "left"` + `overlay` + `horizontal`, но **сверху и справа**:
+ * `banner_location: "top"`, `banner_align: "right"`, `layout_type: "overlay"`, `orientation: "horizontal"`.
  * `can_close: false` — по контракту VK баннер не закрывают пользователем вручную.
  * @see https://dev.vk.com/ru/games/monetization/ad/banners
  */
 export async function showVkBannerAdHorizontalPersistent(): Promise<boolean> {
   return showVkBannerAdCompact({
+    banner_location: "top",
     layout_type: "overlay",
+    banner_align: "right",
     orientation: "horizontal",
     height_type: "compact",
     can_close: false,

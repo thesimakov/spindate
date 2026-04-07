@@ -17,8 +17,8 @@ async function tryShowVkHorizontalBanner(): Promise<void> {
 }
 
 /**
- * Горизонтальный баннер VK (`layout_type: overlay`, `can_close: false`).
- * Без лимита «раз за сессию»; повторный запрос при возврате на вкладку, если WebView свернули.
+ * Горизонтальный баннер VK: верх, справа, `overlay`, `can_close: false` ({@link showVkBannerAdHorizontalPersistent}).
+ * Без лимита «раз за сессию»; повтор при возврате на вкладку.
  */
 export function useVkOverlayBannerInGameRoom() {
   useEffect(() => {
