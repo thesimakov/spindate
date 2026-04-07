@@ -28,9 +28,13 @@ alwaysApply: false
 
 ## Очередь
 
-При **publish** из `pending_moderation`:  
-`queue_start = max(now, max(queue_end_ms) среди всех `scheduled` с непустым `queue_end_ms`))`,  
-`queue_end = queue_start + duration_ms`, статус `scheduled`.
+При **publish** из `pending_moderation` новое объявление **сразу в эфир**:  
+`queue_start_ms = now`, `queue_end_ms = now + duration_ms`, статус `scheduled`.
+
+В той же транзакции все прочие строки `scheduled` с `queue_end_ms > now` пересчитываются (сортировка `queue_start_ms`, `id`):
+
+- Если есть активный слот (`queue_start_ms <= now < queue_end_ms`), у него сохраняется **остаток** `queue_end_ms - now`, окно переносится сразу после нового; далее по списку каждому назначается длина **`duration_ms` из строки**.
+- Если активного нет, ожидающие слоты сдвигаются подряд после нового, каждый на свою `duration_ms`.
 
 Публичный активный слот: `scheduled` и `queue_start_ms <= now < queue_end_ms`, порядок `queue_start_ms`, затем `id`.
 
