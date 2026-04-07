@@ -617,6 +617,63 @@ export async function showVkBannerAdHorizontalPersistent(): Promise<boolean> {
   })
 }
 
+function vkPersistentBannerRetryDelay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+async function showVkPersistentBannerWithRetries(): Promise<void> {
+  await initVkResilient()
+  for (let i = 0; i < 3; i++) {
+    const ok = await showVkBannerAdHorizontalPersistent()
+    if (ok) break
+    await vkPersistentBannerRetryDelay(400 + i * 250)
+  }
+}
+
+/** Нативный overlay-баннер ВК — снять, чтобы модалки мини-приложения оказались визуально поверх. */
+export async function hideVkBannerAd(): Promise<void> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return
+  try {
+    await b.send("VKWebAppHideBannerAd", {})
+  } catch (e) {
+    console.warn("[VK] VKWebAppHideBannerAd", e)
+  }
+}
+
+const vkPersistentBannerOverlaySuppressKeys = new Set<string>()
+
+export function isVkPersistentBannerOverlaySuppressed(): boolean {
+  return vkPersistentBannerOverlaySuppressKeys.size > 0
+}
+
+async function syncVkPersistentBannerWithSuppressState(): Promise<void> {
+  if (!isVkMiniApp()) return
+  if (vkPersistentBannerOverlaySuppressKeys.size > 0) {
+    await hideVkBannerAd()
+  } else {
+    await showVkPersistentBannerWithRetries()
+  }
+}
+
+/**
+ * Пока хотя бы один ключ в «подавлении», горизонтальный persistent-баннер скрыт; иначе снова показывается.
+ * Несколько источников (GameRoom, диалог нулевого баланса) не перетирают друг друга.
+ */
+export function setVkPersistentBannerSuppressedForOverlay(key: string, suppressed: boolean): void {
+  if (!isVkMiniApp()) return
+  if (suppressed) vkPersistentBannerOverlaySuppressKeys.add(key)
+  else vkPersistentBannerOverlaySuppressKeys.delete(key)
+  void syncVkPersistentBannerWithSuppressState()
+}
+
+/** После visibilitychange: повторный показ, если никто не держит overlay подавленным. */
+export async function refreshVkPersistentBannerIfNotSuppressed(): Promise<void> {
+  if (!isVkMiniApp()) return
+  if (isVkPersistentBannerOverlaySuppressed()) return
+  await showVkPersistentBannerWithRetries()
+}
+
 /**
  * Горизонтальная ориентация, блок справа, overlay (десктоп / часть клиентов ВК).
  * @see https://dev.vk.com/ru/games/monetization/ad/banners
@@ -679,6 +736,10 @@ export const vkBridge = {
   showVkBannerAdCompact,
   showVkBannerAdBottomCompact,
   showVkBannerAdHorizontalPersistent,
+  hideVkBannerAd,
+  setVkPersistentBannerSuppressedForOverlay,
+  isVkPersistentBannerOverlaySuppressed,
+  refreshVkPersistentBannerIfNotSuppressed,
   showVkBannerAdOverlayRightVertical,
   initVk,
   initVkResilient,

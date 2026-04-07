@@ -1,46 +1,34 @@
 "use client"
 
 import { useEffect } from "react"
-import { initVkResilient, isVkMiniApp, showVkBannerAdHorizontalPersistent } from "@/lib/vk-bridge"
-
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}
-
-async function tryShowVkHorizontalBanner(): Promise<void> {
-  await initVkResilient()
-  for (let i = 0; i < 3; i++) {
-    const ok = await showVkBannerAdHorizontalPersistent()
-    if (ok) break
-    await delay(400 + i * 250)
-  }
-}
+import {
+  isVkMiniApp,
+  refreshVkPersistentBannerIfNotSuppressed,
+  setVkPersistentBannerSuppressedForOverlay,
+} from "@/lib/vk-bridge"
 
 /**
- * Горизонтальный баннер VK: верх, справа, `overlay`, `can_close: false` ({@link showVkBannerAdHorizontalPersistent}).
- * Без лимита «раз за сессию»; повтор при возврате на вкладку.
+ * Горизонтальный баннер VK: при `suppressForModals` скрывается через `VKWebAppHideBannerAd`,
+ * чтобы нативный overlay не перекрывал модалки WebView. Иначе — снова показывается.
+ * Повторный показ при возврате на вкладку, если никто не держит подавление.
  */
-export function useVkOverlayBannerInGameRoom() {
+export function useVkOverlayBannerInGameRoom(suppressForModals: boolean) {
+  useEffect(() => {
+    setVkPersistentBannerSuppressedForOverlay("game-room-modals", suppressForModals)
+    return () => setVkPersistentBannerSuppressedForOverlay("game-room-modals", false)
+  }, [suppressForModals])
+
   useEffect(() => {
     if (!isVkMiniApp()) return
 
-    let cancelled = false
-
-    const run = () => {
-      if (cancelled) return
-      void tryShowVkHorizontalBanner()
-    }
-
-    run()
-
     const onVisibility = () => {
-      if (cancelled || typeof document === "undefined") return
-      if (document.visibilityState === "visible") run()
+      if (typeof document === "undefined") return
+      if (document.visibilityState !== "visible") return
+      void refreshVkPersistentBannerIfNotSuppressed()
     }
     document.addEventListener("visibilitychange", onVisibility)
 
     return () => {
-      cancelled = true
       document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [])

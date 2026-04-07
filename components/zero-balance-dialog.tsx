@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Coins, Heart, Wallet } from "lucide-react"
 import { useGame } from "@/lib/game-context"
+import { setVkPersistentBannerSuppressedForOverlay } from "@/lib/vk-bridge"
 
 /**
  * Окно «не хватает средств» при нулевом балансе сердец за столом.
@@ -22,6 +23,12 @@ export function ZeroBalanceDialog() {
     state.voiceBalance === 0 &&
     !dismissed &&
     state.gameSidePanel == null
+
+  useEffect(() => {
+    if (!open) return
+    setVkPersistentBannerSuppressedForOverlay("zero-balance-dialog", true)
+    return () => setVkPersistentBannerSuppressedForOverlay("zero-balance-dialog", false)
+  }, [open])
 
   if (!open) return null
 

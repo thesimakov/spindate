@@ -439,7 +439,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Только два режима: телефон (`isMobile`) и ПК (`isPcLayout`), без отдельного «планшетного» слоя по max-md/md/lg. */
   const isPcLayout = !isMobile
-  useVkOverlayBannerInGameRoom()
   const {
     players,
     currentTurnIndex,
@@ -832,6 +831,39 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [betPlaced, setBetPlaced] = useState(false)
   const [betWinnings, setBetWinnings] = useState<number | null>(null)
   const botActionRoundRef = useRef<number | null>(null)
+
+  const suppressVkPersistentBannerOverlays = useMemo(
+    () =>
+      tableLoading ||
+      tickerAnnouncementOpen ||
+      Boolean(tablePaused && currentUser) ||
+      Boolean(currentUser && isClientTabAway && !tablePaused) ||
+      Boolean(emotionPurchaseOpen && currentUser) ||
+      Boolean(!CASUAL_MODE && showBetPicker) ||
+      Boolean(playerMenuTarget) ||
+      showBottleCatalog ||
+      showFramePicker ||
+      Boolean(giftCatalogDrawerPlayer) ||
+      gameSidePanel != null ||
+      showMobileMoreMenu,
+    [
+      tableLoading,
+      tickerAnnouncementOpen,
+      tablePaused,
+      currentUser,
+      isClientTabAway,
+      emotionPurchaseOpen,
+      showBetPicker,
+      playerMenuTarget,
+      showBottleCatalog,
+      showFramePicker,
+      giftCatalogDrawerPlayer,
+      gameSidePanel,
+      showMobileMoreMenu,
+    ],
+  )
+
+  useVkOverlayBannerInGameRoom(suppressVkPersistentBannerOverlays)
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id
