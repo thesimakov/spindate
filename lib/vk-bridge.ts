@@ -565,6 +565,7 @@ export type VkBannerShowOptions = {
 
 /**
  * Баннер спонсоров VK: нативный клиент рисует полосу у края WebView, не внутри произвольного div.
+ * Не вызывать VKWebAppCheckBannerAd до показа — проверка относится к уже открытому баннеру.
  * @see https://dev.vk.com/ru/bridge/VKWebAppShowBannerAd
  */
 export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Promise<boolean> {
@@ -574,8 +575,6 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
   const layout_type = options?.layout_type ?? "resize"
   const height_type = options?.height_type ?? "compact"
   try {
-    const check = await b.send("VKWebAppCheckBannerAd", {})
-    if ((check as { result?: boolean })?.result !== true) return false
     const res = await b.send("VKWebAppShowBannerAd", {
       banner_location,
       layout_type,

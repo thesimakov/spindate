@@ -72,9 +72,11 @@ export function VkChatAdBlock({ className }: { className?: string }) {
         className="flex w-full min-h-[3rem] max-h-[min(7rem,22vh)] flex-col justify-center rounded-lg border border-slate-600/40 bg-slate-950/35 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:min-h-[3.25rem]"
       >
         <p className="text-center text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">Спонсоры</p>
-        <p className="sr-only">
-          Рекламная полоса ВКонтакте отображается клиентом у края окна мини-приложения, не внутри этого блока.
+        <p className="mt-1 max-w-full text-center text-[10px] leading-snug text-slate-500/90">
+          Рекламная полоса открывается клиентом ВК у верхнего или нижнего края окна приложения, не внутри этой
+          рамки.
         </p>
+        <p className="sr-only">Спонсоры: нативный баннер у края WebView после VKWebAppShowBannerAd.</p>
       </div>
     </div>
   )
