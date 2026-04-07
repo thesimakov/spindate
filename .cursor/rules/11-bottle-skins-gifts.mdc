@@ -1,6 +1,6 @@
 ---
 description: Скины бутылки, подарки стола, донор бутылочки, cooldown
-globs: components/game-room.tsx,components/bottle-catalog-modal.tsx,lib/game-types.ts,lib/game-context.tsx
+globs: components/game-room.tsx,components/bottle-catalog-modal.tsx,lib/game-types.ts,lib/game-context.tsx,hooks/use-sync-engine.ts,lib/live-table-events-server.ts,lib/table-authority-apply.ts
 alwaysApply: false
 ---
 
@@ -26,9 +26,15 @@ alwaysApply: false
 
 1. Игрок выбирает скин в `BottleCatalogModal`
 2. Оплата: `PAY_VOICES`
-3. `SET_BOTTLE_SKIN { skin }`
-4. `SET_BOTTLE_DONOR { playerId, playerName }` — баннер "Спасибо" на столе
-5. `SET_BOTTLE_COOLDOWN_UNTIL { ts }` — cooldown перед следующей покупкой
+3. **`SET_BOTTLE_TABLE_PURCHASE { skin, cooldownUntil, donorId, donorName }`** — один push на сервер (скин + донор + таймер сразу в authority). Не тремя отдельными `SET_BOTTLE_*`.
+4. Резерв: по одному `SET_BOTTLE_SKIN` / `SET_BOTTLE_DONOR` / `SET_BOTTLE_COOLDOWN_UNTIL` (например сброс в `game-room`) — по-прежнему в `isTableSyncedAction`.
+
+### Синхронизация для всех за столом (обязательное требование)
+
+- **`bottleSkin`, `bottleCooldownUntil`, `bottleDonorId`, `bottleDonorName`** должны быть общими для всей комнаты: после любой покупки (включая сценарий, где платит/оформляет покупку бот с точки зрения логики стола) **каждый** клиент с подтверждённым местом (`seatConfirmed`) видит тот же скин, таймер cooldown и баннер «сказать спасибо» через `SYNC_TABLE_AUTHORITY` и поля `TableAuthorityPayload`.
+- Действия **`SET_BOTTLE_SKIN`**, **`SET_BOTTLE_DONOR`**, **`SET_BOTTLE_COOLDOWN_UNTIL`** входят в `isTableSyncedAction` и уходят на сервер через `pushTableAction` только когда есть валидный `tableId`, `userId` и **`seatConfirmedRef === true`** (см. `hooks/use-sync-engine.ts`). Локально обновить только у инициатора без пуша — ошибка.
+- **`PAY_VOICES`** по-прежнему локален/не в синхронизации; общее состояние бутылки задаётся только тремя `SET_BOTTLE_*` (и при необходимости `ADD_LOG`).
+- Без **`REDIS_URL`** authority хранится в памяти процесса: параллельные `applyAuthorityEvent` обязаны идти **последовательно** на стол (`runMemoryAuthorityOp` в `lib/table-authority-server.ts`), иначе при покупке несколько `SET_BOTTLE_*` подряд перезапишут снимок и у части клиентов пропадут donor/cooldown.
 
 ## Донор бутылочки
 

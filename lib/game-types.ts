@@ -374,6 +374,14 @@ export type GameAction =
   | { type: "REQUEST_EXTRA_TURN"; playerId: number }
   | { type: "SET_BOTTLE_COOLDOWN_UNTIL"; ts?: number }
   | { type: "SET_BOTTLE_DONOR"; playerId: number | undefined; playerName: string | undefined }
+  /** Одна синхронизация со столом: скин + донор + cooldown (вместо трёх отдельных SET_BOTTLE_*). */
+  | {
+      type: "SET_BOTTLE_TABLE_PURCHASE"
+      skin: BottleSkin
+      cooldownUntil: number
+      donorId: number
+      donorName: string
+    }
   // Daily quests
   | { type: "CLAIM_DAILY_QUEST"; questIndex: number; dateKey: string }
   // Predictions

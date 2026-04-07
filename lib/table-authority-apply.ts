@@ -131,6 +131,14 @@ export function applyTableAuthorityAction(
     }
     case "SET_BOTTLE_SKIN":
       return { ...snapshot, bottleSkin: action.skin }
+    case "SET_BOTTLE_TABLE_PURCHASE":
+      return {
+        ...snapshot,
+        bottleSkin: action.skin,
+        bottleCooldownUntil: action.cooldownUntil,
+        bottleDonorId: action.donorId,
+        bottleDonorName: action.donorName,
+      }
     case "SET_BOTTLE_DONOR":
       return {
         ...snapshot,

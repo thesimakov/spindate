@@ -23,6 +23,22 @@ function getMemoryStore(): Map<number, TableAuthorityPayload> {
   return globalThis.__spindateTableAuthorityMemory
 }
 
+/** Без Redis параллельные apply/ensure читают один и тот же snap — последний writer теряет поля (напр. donor/cooldown). */
+const memoryAuthorityOpTail = new Map<number, Promise<unknown>>()
+
+function runMemoryAuthorityOp<T>(tid: number, op: () => Promise<T>): Promise<T> {
+  const prev = memoryAuthorityOpTail.get(tid) ?? Promise.resolve()
+  const result = prev.then(() => op())
+  memoryAuthorityOpTail.set(
+    tid,
+    result.then(
+      () => undefined,
+      () => undefined,
+    ),
+  )
+  return result
+}
+
 function authorityRedisKey(tableId: number): string {
   return `spindate:v1:authority:${tableId}`
 }
@@ -160,14 +176,16 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
     return out
   }
 
-  const store = getMemoryStore()
-  const prev = store.get(tid) ?? null
-  const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
-  if (!next) return null
-  const stabilized = stabilizeAuthoritySnapshot(next)
-  const out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot
-  store.set(tid, out)
-  return out
+  return runMemoryAuthorityOp(tid, async () => {
+    const store = getMemoryStore()
+    const prev = store.get(tid) ?? null
+    const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
+    if (!next) return null
+    const stabilized = stabilizeAuthoritySnapshot(next)
+    const out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot
+    store.set(tid, out)
+    return out
+  })
 }
 
 export async function getTableAuthoritySnapshot(tableId: number): Promise<TableAuthorityPayload | null> {
@@ -192,12 +210,14 @@ export async function getTableAuthoritySnapshot(tableId: number): Promise<TableA
     })
     return out
   }
-  const snap = getMemoryStore().get(tid) ?? null
-  if (!snap) return null
-  const stabilized = stabilizeAuthoritySnapshot(snap)
-  const out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
-  if (stabilized.changed) getMemoryStore().set(tid, out)
-  return out
+  return runMemoryAuthorityOp(tid, async () => {
+    const snap = getMemoryStore().get(tid) ?? null
+    if (!snap) return null
+    const stabilized = stabilizeAuthoritySnapshot(snap)
+    const out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
+    if (stabilized.changed) getMemoryStore().set(tid, out)
+    return out
+  })
 }
 
 /**
@@ -228,16 +248,18 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
     return out
   }
 
-  const store = getMemoryStore()
-  const snap = store.get(tid)
-  if (!snap) return null
-  const applied = applyTableAuthorityAction(snap, action)
-  if (!applied) return null
-  let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
-  const stabilized = stabilizeAuthoritySnapshot(next)
-  if (stabilized.changed) {
-    next = { ...stabilized.snapshot, revision: next.revision + 1 }
-  }
-  store.set(tid, next)
-  return next
+  return runMemoryAuthorityOp(tid, async () => {
+    const store = getMemoryStore()
+    const snap = store.get(tid)
+    if (!snap) return null
+    const applied = applyTableAuthorityAction(snap, action)
+    if (!applied) return null
+    let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
+    const stabilized = stabilizeAuthoritySnapshot(next)
+    if (stabilized.changed) {
+      next = { ...stabilized.snapshot, revision: next.revision + 1 }
+    }
+    store.set(tid, next)
+    return next
+  })
 }

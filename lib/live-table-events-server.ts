@@ -1,4 +1,4 @@
-import type { GameAction } from "@/lib/game-types"
+import type { GameAction, TableAuthorityPayload } from "@/lib/game-types"
 import { applyAuthorityEvent, ensureTableAuthority } from "@/lib/table-authority-server"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
@@ -65,6 +65,7 @@ function isActionAllowed(action: GameAction): boolean {
     case "ADD_DRUNK_TIME":
     case "SET_BOTTLE_SKIN":
     case "SET_BOTTLE_DONOR":
+    case "SET_BOTTLE_TABLE_PURCHASE":
     case "RESET_ROUND":
     case "SET_BOTTLE_COOLDOWN_UNTIL":
     case "SET_CLIENT_TAB_AWAY":
@@ -79,6 +80,39 @@ function senderMatchesAction(senderId: number, action: GameAction): boolean {
     return senderId === action.playerId
   }
   return true
+}
+
+function agentLogBottleAuthorityAfter(action: GameAction, snap: TableAuthorityPayload | null) {
+  const t = action.type
+  if (
+    t !== "SET_BOTTLE_SKIN" &&
+    t !== "SET_BOTTLE_DONOR" &&
+    t !== "SET_BOTTLE_COOLDOWN_UNTIL" &&
+    t !== "SET_BOTTLE_TABLE_PURCHASE"
+  )
+    return
+  // #region agent log
+  void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c301a2" },
+    body: JSON.stringify({
+      sessionId: "c301a2",
+      runId: "pre-fix",
+      hypothesisId: "H2-H5",
+      location: "live-table-events-server.ts:pushTableEvent",
+      message: "authority after bottle action",
+      data: {
+        actionType: t,
+        snapNull: snap == null,
+        revision: snap?.revision ?? null,
+        bottleSkin: snap?.bottleSkin ?? null,
+        bottleCooldownUntil: snap?.bottleCooldownUntil ?? null,
+        bottleDonorId: snap?.bottleDonorId ?? null,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
 }
 
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
@@ -112,7 +146,8 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
       return JSON.stringify(bucket)
     })
     await ensureTableAuthority(tableId)
-    await applyAuthorityEvent(tableId, args.action)
+    const snapAfter = await applyAuthorityEvent(tableId, args.action)
+    agentLogBottleAuthorityAfter(args.action, snapAfter)
     return { ok: true as const, seq }
   }
 
@@ -132,7 +167,8 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   }
   store.set(tableId, bucket)
   await ensureTableAuthority(tableId)
-  await applyAuthorityEvent(tableId, args.action)
+  const snapAfterMem = await applyAuthorityEvent(tableId, args.action)
+  agentLogBottleAuthorityAfter(args.action, snapAfterMem)
   return { ok: true as const, seq: bucket.seq }
 }
 

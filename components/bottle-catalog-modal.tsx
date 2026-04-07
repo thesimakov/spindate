@@ -127,10 +127,15 @@ export function BottleCatalogModal({
           return
         }
         dispatch({ type: "PAY_VOICES", amount: skin.cost })
-        dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
-        dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: Date.now() + 30 * 60 * 1000 })
+        const cdUntil = Date.now() + 30 * 60 * 1000
         if (currentUser) {
-          dispatch({ type: "SET_BOTTLE_DONOR", playerId: currentUser.id, playerName: currentUser.name })
+          dispatch({
+            type: "SET_BOTTLE_TABLE_PURCHASE",
+            skin: skin.id,
+            cooldownUntil: cdUntil,
+            donorId: currentUser.id,
+            donorName: currentUser.name,
+          })
           dispatch({
             type: "ADD_LOG",
             entry: {
@@ -141,6 +146,9 @@ export function BottleCatalogModal({
               timestamp: Date.now(),
             },
           })
+        } else {
+          dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
+          dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: cdUntil })
         }
         showToast("Бутылочка куплена", "success")
       }

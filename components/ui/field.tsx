@@ -73,14 +73,14 @@ const fieldVariants = cva(
       },
     },
     defaultVariants: {
-      orientation: 'vertical',
+      orientation: 'horizontal',
     },
   },
 )
 
 function Field({
   className,
-  orientation = 'vertical',
+  orientation = 'horizontal',
   ...props
 }: React.ComponentProps<'div'> & VariantProps<typeof fieldVariants>) {
   return (

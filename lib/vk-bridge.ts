@@ -601,7 +601,7 @@ export async function showVkBannerAdBottomCompact(): Promise<boolean> {
 }
 
 /**
- * Вертикальная полоса справа, overlay (десктоп / часть клиентов ВК).
+ * Горизонтальная ориентация, блок справа, overlay (десктоп / часть клиентов ВК).
  * @see https://dev.vk.com/ru/games/monetization/ad/banners
  */
 export async function showVkBannerAdOverlayRightVertical(): Promise<boolean> {
@@ -609,7 +609,7 @@ export async function showVkBannerAdOverlayRightVertical(): Promise<boolean> {
     banner_location: "top",
     layout_type: "overlay",
     banner_align: "right",
-    orientation: "vertical",
+    orientation: "horizontal",
     height_type: "regular",
   })
 }
