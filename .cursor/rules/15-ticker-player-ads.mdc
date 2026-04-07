@@ -29,18 +29,20 @@ alwaysApply: false
 ## Очередь
 
 При **publish** из `pending_moderation`:  
-`queue_start = max(now, max(queue_end_ms) среди `scheduled` с `queue_end_ms > now`))`,  
+`queue_start = max(now, max(queue_end_ms) среди всех `scheduled` с непустым `queue_end_ms`))`,  
 `queue_end = queue_start + duration_ms`, статус `scheduled`.
 
 Публичный активный слот: `scheduled` и `queue_start_ms <= now < queue_end_ms`, порядок `queue_start_ms`, затем `id`.
 
+Снимок очереди для клиента: `getTickerPlayerAdQueueSnapshot(now)` — слоты с `queue_end_ms > now`, без истёкших по концу.
+
 ## API
 
 - Игрок: `POST /api/ticker/announcement` — только списание на сервере (транзакция), ответ `newBalance`.
-- Витрина: `GET /api/catalog/ticker-feed` — `{ editorial, player }`.
+- Витрина: `GET /api/catalog/ticker-feed` — `{ editorial, player, playerQueue }`; `playerQueue` — элементы `{ id, text, linkUrl, queueStartMs, queueEndMs }` для тика по времени на клиенте.
 - Админ: `GET/POST /api/admin/content/ticker-announcements` с `requireAdmin`; действия `publish` | `reject` | `delete`.
 
 ## Клиент
 
-- `useTickerFeed` поллинг ~12 с; тикер показывает игровой сегмент с ссылкой или fallback на редакционный `status_line`.
+- `useTickerFeed`: refetch витрины ~12 с; каждую ~1 с из `playerQueue` выбирается активный сегмент по `Date.now()`; тикер — игровой сегмент с ссылкой или fallback на редакционный `status_line`.
 - Не дублировать списание сердец на клиенте кроме синхронизации баланса после успешного ответа API.

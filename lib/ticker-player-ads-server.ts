@@ -194,9 +194,9 @@ export function schedulePublishedTickerAd(id: number): { ok: true } | { ok: fals
   const tailRow = db
     .prepare(
       `SELECT MAX(queue_end_ms) as m FROM ticker_player_ads
-       WHERE status = 'scheduled' AND queue_end_ms IS NOT NULL AND queue_end_ms > ?`,
+       WHERE status = 'scheduled' AND queue_end_ms IS NOT NULL`,
     )
-    .get(now) as { m: number | null } | undefined
+    .get() as { m: number | null } | undefined
   const tail = tailRow?.m != null && Number.isFinite(tailRow.m) ? Number(tailRow.m) : 0
   const queueStart = Math.max(now, tail)
   const queueEnd = queueStart + row.duration_ms
@@ -210,22 +210,63 @@ export function schedulePublishedTickerAd(id: number): { ok: true } | { ok: fals
   return { ok: true }
 }
 
-export function getCurrentTickerPlayerAd(now: number): { id: number; text: string; linkUrl: string } | null {
+export type TickerPlayerQueueItem = {
+  id: number
+  text: string
+  linkUrl: string
+  queueStartMs: number
+  queueEndMs: number
+}
+
+/** Оставшиеся слоты в очереди (конец ещё не наступил); для клиентского тика по времени. */
+export function getTickerPlayerAdQueueSnapshot(now: number): TickerPlayerQueueItem[] {
   const db = getDb()
-  const row = db
+  const rows = db
     .prepare(
-      `SELECT id, body, link_url FROM ticker_player_ads
+      `SELECT id, body, link_url, queue_start_ms, queue_end_ms FROM ticker_player_ads
        WHERE status = 'scheduled'
          AND queue_start_ms IS NOT NULL AND queue_end_ms IS NOT NULL
-         AND queue_start_ms <= ? AND ? < queue_end_ms
-       ORDER BY queue_start_ms ASC, id ASC
-       LIMIT 1`,
+         AND queue_end_ms > ?
+       ORDER BY queue_start_ms ASC, id ASC`,
     )
-    .get(now, now) as { id: number; body: string; link_url: string } | undefined
-  if (!row) return null
-  const text = String(row.body ?? "").trim()
-  if (!text) return null
-  return { id: row.id, text, linkUrl: String(row.link_url ?? "") }
+    .all(now) as Array<{
+    id: number
+    body: string
+    link_url: string
+    queue_start_ms: number
+    queue_end_ms: number
+  }>
+
+  const out: TickerPlayerQueueItem[] = []
+  for (const r of rows) {
+    const text = String(r.body ?? "").trim()
+    if (!text) continue
+    out.push({
+      id: Number(r.id),
+      text,
+      linkUrl: String(r.link_url ?? ""),
+      queueStartMs: Number(r.queue_start_ms),
+      queueEndMs: Number(r.queue_end_ms),
+    })
+  }
+  return out
+}
+
+export function pickActiveTickerPlayerFromQueue(
+  queue: TickerPlayerQueueItem[],
+  t: number,
+): TickerPlayerQueueItem | null {
+  for (const item of queue) {
+    if (item.queueStartMs <= t && t < item.queueEndMs) return item
+  }
+  return null
+}
+
+export function getCurrentTickerPlayerAd(now: number): { id: number; text: string; linkUrl: string } | null {
+  const queue = getTickerPlayerAdQueueSnapshot(now)
+  const active = pickActiveTickerPlayerFromQueue(queue, now)
+  if (!active) return null
+  return { id: active.id, text: active.text, linkUrl: active.linkUrl }
 }
 
 export function listTickerPlayerAdsForAdmin(): TickerPlayerAdRow[] {
