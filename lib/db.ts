@@ -153,6 +153,13 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_table_style_catalog_published ON table_style_catalog(published, sort_order);
+
+    CREATE TABLE IF NOT EXISTS table_style_global (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      enabled INTEGER NOT NULL DEFAULT 0,
+      style_id TEXT NOT NULL DEFAULT 'classic_night',
+      updated_at INTEGER NOT NULL
+    );
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
@@ -285,6 +292,14 @@ function migrate(database: Database.Database) {
   tableStyles.forEach((row, index) => {
     insertTableStyle.run(row.id, row.name, row.published, index, now)
   })
+
+  database
+    .prepare(
+      `INSERT INTO table_style_global (id, enabled, style_id, updated_at)
+       VALUES (1, 0, 'classic_night', ?)
+       ON CONFLICT(id) DO NOTHING`,
+    )
+    .run(now)
 }
 
 export function getDb() {

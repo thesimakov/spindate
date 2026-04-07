@@ -8,7 +8,8 @@ import { applyTableAuthorityAction } from "@/lib/table-authority-apply"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import { loadRoomRegistry } from "@/lib/rooms/room-registry"
-import { normalizeRoomBottleSkin, normalizeRoomTableStyle } from "@/lib/rooms/room-appearance"
+import { normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
+import { resolveEffectiveTableStyle } from "@/lib/table-style-global-server"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 
 declare global {
@@ -137,7 +138,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
   const meta = reg.rooms.find((r) => r.roomId === tid)
   const roomDefaults = {
     bottleSkin: normalizeRoomBottleSkin(meta?.bottleSkin),
-    tableStyle: normalizeRoomTableStyle(meta?.tableStyle),
+    tableStyle: resolveEffectiveTableStyle(meta),
   } satisfies { bottleSkin: TableAuthorityPayload["bottleSkin"]; tableStyle: TableAuthorityPayload["tableStyle"] }
 
   const redis = getRedis()

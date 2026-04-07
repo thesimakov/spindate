@@ -179,6 +179,8 @@ export async function addUserRoom(name: string, createdByUserId: number): Promis
   const meta: RoomMeta = {
     roomId,
     name: trimmed,
+    bottleSkin: DEFAULT_ROOM_BOTTLE_SKIN,
+    tableStyle: DEFAULT_ROOM_TABLE_STYLE,
     isUserRoom: true,
     createdByUserId,
     createdAtMs: Date.now(),

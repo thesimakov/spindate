@@ -17,12 +17,9 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Слот «Спонсоры» над чатом: резерв места под визуальную связку с баннером VK.
- * Креатив не вставляется в этот div — клиент VK рисует полосу через VKWebAppShowBannerAd
- * у верхнего/нижнего края окна мини-приложения (в документации нет привязки к произвольному контейнеру).
- * Reward-видео за сердца — кнопка «Видео» в строке «Ваш банк».
+ * Один вызов цепочки VKWebAppShowBannerAd на монтирование GameRoom (не дублировать в двух колонках).
  */
-export function VkChatAdBlock({ className }: { className?: string }) {
+export function useVkRoomBannerAd() {
   useEffect(() => {
     if (!isVkMiniApp()) return
     if (typeof sessionStorage === "undefined") return
@@ -59,7 +56,13 @@ export function VkChatAdBlock({ className }: { className?: string }) {
       cancelled = true
     }
   }, [])
+}
 
+/**
+ * Визуальный слот «Спонсоры» над чатом (без побочных эффектов моста).
+ * Нативный креатив VK не встраивается в div.
+ */
+export function VkChatAdSlot({ className }: { className?: string }) {
   if (!isVkMiniApp()) return null
 
   return (
@@ -69,7 +72,11 @@ export function VkChatAdBlock({ className }: { className?: string }) {
       aria-label="Спонсоры ВКонтакте"
     >
       <div
-        className="flex w-full min-h-[3rem] max-h-[min(7rem,22vh)] flex-col justify-center rounded-lg border border-slate-600/40 bg-slate-950/35 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:min-h-[3.25rem]"
+        className={cn(
+          "relative z-[1] flex w-full min-h-[3rem] max-h-[min(7rem,22vh)] flex-col justify-center rounded-lg border border-slate-600/45",
+          "bg-slate-950/55 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[2px]",
+          "sm:min-h-[3.25rem]",
+        )}
       >
         <p className="text-center text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">Спонсоры</p>
         <p className="mt-1 max-w-full text-center text-[10px] leading-snug text-slate-500/90">
@@ -80,4 +87,10 @@ export function VkChatAdBlock({ className }: { className?: string }) {
       </div>
     </div>
   )
+}
+
+/** Слот + эффект в одном компоненте (для редких мест вне GameRoom). */
+export function VkChatAdBlock({ className }: { className?: string }) {
+  useVkRoomBannerAd()
+  return <VkChatAdSlot className={className} />
 }
