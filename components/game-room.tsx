@@ -4313,7 +4313,7 @@ export function GameRoom() {
 
         {!isPcLayout && (
           <div
-            className="mx-auto mt-2 mb-1 flex min-h-0 w-full max-w-[min(95vw,720px)] shrink-0 flex-col overflow-hidden rounded-xl"
+            className="mx-auto mt-[56px] mb-1 flex min-h-0 w-full max-w-[min(95vw,720px)] shrink-0 flex-col overflow-hidden rounded-xl"
             style={{
               height: "min(46vh, 420px)",
               maxHeight: "min(46vh, 420px)",
@@ -4377,7 +4377,7 @@ export function GameRoom() {
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="mt-[56px] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <TableChatPanel
                 gameLog={gameLog}
                 chatInput={chatInput}
