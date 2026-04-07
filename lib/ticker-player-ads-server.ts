@@ -180,6 +180,7 @@ export function createTickerPlayerAdOrder(input: {
   }
 }
 
+/** После модерации объявление встаёт в конец очереди: без пересечения слотов, показ только после предыдущих. */
 export function schedulePublishedTickerAd(id: number): { ok: true } | { ok: false; error: string } {
   const db = getDb()
   const now = Date.now()
@@ -191,87 +192,28 @@ export function schedulePublishedTickerAd(id: number): { ok: true } | { ok: fals
     return { ok: false, error: "Можно опубликовать только объявление на модерации" }
   }
 
-  const newDuration = Number(pending.duration_ms) || 0
-  if (newDuration <= 0) return { ok: false, error: "Некорректная длительность" }
+  const duration = Number(pending.duration_ms) || 0
+  if (duration <= 0) return { ok: false, error: "Некорректная длительность" }
 
-  try {
-    const run = db.transaction(() => {
-      const newStart = now
-      const newEnd = now + newDuration
+  const tailRow = db
+    .prepare(
+      `SELECT MAX(queue_end_ms) as m FROM ticker_player_ads
+       WHERE status = 'scheduled' AND queue_end_ms IS NOT NULL AND queue_end_ms > ?`,
+    )
+    .get(now) as { m: number | null } | undefined
+  const tail = tailRow?.m != null && Number.isFinite(tailRow.m) ? Number(tailRow.m) : 0
+  const queueStart = Math.max(now, tail)
+  const queueEnd = queueStart + duration
 
-      const scheduledRows = db
-        .prepare(
-          `SELECT id, queue_start_ms, queue_end_ms, duration_ms FROM ticker_player_ads
-           WHERE status = 'scheduled'
-             AND queue_start_ms IS NOT NULL AND queue_end_ms IS NOT NULL
-             AND queue_end_ms > ?
-           ORDER BY queue_start_ms ASC, id ASC`,
-        )
-        .all(now) as Array<{
-        id: number
-        queue_start_ms: number
-        queue_end_ms: number
-        duration_ms: number
-      }>
-
-      let activeIdx = -1
-      for (let i = 0; i < scheduledRows.length; i++) {
-        const s = scheduledRows[i]
-        const qs = Number(s.queue_start_ms)
-        const qe = Number(s.queue_end_ms)
-        if (qs <= now && now < qe) {
-          activeIdx = i
-          break
-        }
-      }
-
-      let cursor = newEnd
-      const shiftRow = db.prepare(
-        `UPDATE ticker_player_ads
-         SET queue_start_ms = ?, queue_end_ms = ?, updated_at = ?
-         WHERE id = ? AND status = 'scheduled'`,
-      )
-
-      if (activeIdx >= 0) {
-        const A = scheduledRows[activeIdx]
-        const remaining = Number(A.queue_end_ms) - now
-        if (remaining > 0) {
-          shiftRow.run(cursor, cursor + remaining, now, A.id)
-          cursor += remaining
-        }
-        for (let j = activeIdx + 1; j < scheduledRows.length; j++) {
-          const B = scheduledRows[j]
-          const d = Number(B.duration_ms) || 0
-          if (d <= 0) continue
-          shiftRow.run(cursor, cursor + d, now, B.id)
-          cursor += d
-        }
-      } else {
-        for (const B of scheduledRows) {
-          const d = Number(B.duration_ms) || 0
-          if (d <= 0) continue
-          shiftRow.run(cursor, cursor + d, now, B.id)
-          cursor += d
-        }
-      }
-
-      const published = db
-        .prepare(
-          `UPDATE ticker_player_ads
-           SET status = 'scheduled', queue_start_ms = ?, queue_end_ms = ?, updated_at = ?
-           WHERE id = ? AND status = 'pending_moderation'`,
-        )
-        .run(newStart, newEnd, now, id)
-      if (published.changes === 0) throw new Error("PUBLISH_CONFLICT")
-    })
-    run()
-    return { ok: true }
-  } catch (e) {
-    if (e instanceof Error && e.message === "PUBLISH_CONFLICT") {
-      return { ok: false, error: "Не удалось опубликовать" }
-    }
-    throw e
-  }
+  const r = db
+    .prepare(
+      `UPDATE ticker_player_ads
+       SET status = 'scheduled', queue_start_ms = ?, queue_end_ms = ?, updated_at = ?
+       WHERE id = ? AND status = 'pending_moderation'`,
+    )
+    .run(queueStart, queueEnd, now, id)
+  if (r.changes === 0) return { ok: false, error: "Не удалось опубликовать" }
+  return { ok: true }
 }
 
 export type TickerPlayerQueueItem = {

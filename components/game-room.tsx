@@ -2595,6 +2595,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           onClose={() => setTickerAnnouncementOpen(false)}
           authorDisplayName={currentUser.name?.trim() || "Игрок"}
           authQuery={tickerAuthQuery}
+          voiceBalance={voiceBalance}
           onSuccess={(newBalance) => {
             const paid = voiceBalance - newBalance
             if (paid > 0) dispatch({ type: "PAY_VOICES", amount: paid })

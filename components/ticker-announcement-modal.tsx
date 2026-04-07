@@ -1,10 +1,14 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api-fetch"
-import { TICKER_AD_TIERS, type TickerAdTierId } from "@/lib/ticker-player-ads-constants"
+import {
+  TICKER_AD_TIERS,
+  TICKER_AD_TIER_ORDER,
+  type TickerAdTierId,
+} from "@/lib/ticker-player-ads-constants"
 import { cn } from "@/lib/utils"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
 
@@ -14,29 +18,44 @@ type TickerAnnouncementModalProps = {
   authorDisplayName: string
   /** Суффикс запроса: `?vk_user_id=...` для VK */
   authQuery: string
+  /** Текущий баланс сердец (игровой банк). */
+  voiceBalance: number
   onSuccess: (newBalance: number) => void
   showToast: (message: string, type?: InlineToastType) => void
 }
-
-const TIER_IDS = Object.keys(TICKER_AD_TIERS) as TickerAdTierId[]
 
 export function TickerAnnouncementModal({
   open,
   onClose,
   authorDisplayName,
   authQuery,
+  voiceBalance,
   onSuccess,
   showToast,
 }: TickerAnnouncementModalProps) {
   const [body, setBody] = useState("")
   const [linkUrl, setLinkUrl] = useState("")
-  const [tier, setTier] = useState<TickerAdTierId>("10m")
+  const [tier, setTier] = useState<TickerAdTierId>("5m")
   const [busy, setBusy] = useState(false)
+
+  const canAfford = useCallback(
+    (id: TickerAdTierId) => voiceBalance >= TICKER_AD_TIERS[id].cost_hearts,
+    [voiceBalance],
+  )
+
+  useEffect(() => {
+    if (!open) return
+    setTier((prev) => {
+      if (canAfford(prev)) return prev
+      const first = TICKER_AD_TIER_ORDER.find((id) => canAfford(id))
+      return first ?? TICKER_AD_TIER_ORDER[0]
+    })
+  }, [open, voiceBalance, canAfford])
 
   const reset = useCallback(() => {
     setBody("")
     setLinkUrl("")
-    setTier("10m")
+    setTier("5m")
   }, [])
 
   const handleClose = useCallback(() => {
@@ -44,6 +63,7 @@ export function TickerAnnouncementModal({
   }, [busy, onClose])
 
   const submit = useCallback(async () => {
+    if (!canAfford(tier)) return
     setBusy(true)
     try {
       const path = `/api/ticker/announcement${authQuery.startsWith("?") ? authQuery : authQuery ? `?${authQuery}` : ""}`
@@ -73,11 +93,12 @@ export function TickerAnnouncementModal({
     } finally {
       setBusy(false)
     }
-  }, [authQuery, authorDisplayName, body, linkUrl, onClose, onSuccess, reset, showToast, tier])
+  }, [authQuery, authorDisplayName, body, canAfford, linkUrl, onClose, onSuccess, reset, showToast, tier])
 
   if (!open) return null
 
   const tariff = TICKER_AD_TIERS[tier]
+  const canPaySelected = canAfford(tier)
 
   return (
     <div
@@ -146,42 +167,63 @@ export function TickerAnnouncementModal({
           <fieldset className="space-y-2">
             <legend className="text-xs font-medium text-slate-400">Срок показа</legend>
             <div className="flex flex-col gap-2">
-              {TIER_IDS.map((id) => (
-                <label
-                  key={id}
-                  className={cn(
-                    "flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm",
-                    tier === id
-                      ? "border-cyan-400/60 bg-cyan-950/40 text-cyan-50"
-                      : "border-slate-600 bg-slate-900/40 text-slate-200",
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="ticker-tier"
-                      checked={tier === id}
-                      onChange={() => setTier(id)}
-                      disabled={busy}
-                      className="accent-cyan-400"
-                    />
-                    {TICKER_AD_TIERS[id].label}
-                  </span>
-                  <span className="font-semibold text-rose-300">{TICKER_AD_TIERS[id].cost_hearts} ❤</span>
-                </label>
-              ))}
+              {TICKER_AD_TIER_ORDER.map((id) => {
+                const affordable = canAfford(id)
+                return (
+                  <label
+                    key={id}
+                    className={cn(
+                      "flex items-center justify-between rounded-lg border px-3 py-2 text-sm",
+                      !affordable && "pointer-events-none cursor-not-allowed opacity-45",
+                      affordable && tier === id
+                        ? "cursor-pointer border-cyan-400/60 bg-cyan-950/40 text-cyan-50"
+                        : affordable
+                          ? "cursor-pointer border-slate-600 bg-slate-900/40 text-slate-200"
+                          : "border-slate-700/80 bg-slate-950/40 text-slate-500",
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="ticker-tier"
+                        checked={tier === id}
+                        onChange={() => affordable && setTier(id)}
+                        disabled={busy || !affordable}
+                        className="accent-cyan-400 disabled:opacity-50"
+                      />
+                      {TICKER_AD_TIERS[id].label}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        affordable ? "text-rose-300" : "text-slate-500",
+                      )}
+                    >
+                      {TICKER_AD_TIERS[id].cost_hearts} ❤
+                    </span>
+                  </label>
+                )
+              })}
             </div>
           </fieldset>
 
           <p className="text-center text-sm font-semibold text-slate-200">
             К оплате: <span className="text-rose-300">{tariff.cost_hearts}</span> ❤
+            {voiceBalance < tariff.cost_hearts && (
+              <span className="mt-1 block text-xs font-normal text-amber-400/90">Недостаточно сердец</span>
+            )}
           </p>
 
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="outline" className="flex-1" onClick={handleClose} disabled={busy}>
               Отмена
             </Button>
-            <Button type="button" className="flex-1 bg-cyan-600 hover:bg-cyan-500" onClick={() => void submit()} disabled={busy}>
+            <Button
+              type="button"
+              className="flex-1 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40"
+              onClick={() => void submit()}
+              disabled={busy || !canPaySelected}
+            >
               {busy ? "Отправка…" : "Оплатить и отправить"}
             </Button>
           </div>
