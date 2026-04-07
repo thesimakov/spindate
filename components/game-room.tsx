@@ -76,6 +76,7 @@ import {
   type GameLogEntry,
   type PairGenderCombo,
 } from "@/lib/game-types"
+import { effectiveOpenToChatInvites, effectiveShowVkAfterCare } from "@/lib/player-profile-prefs"
 import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
@@ -468,7 +469,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     inventory,
     playerMenuTarget,
     courtshipProfileAllowed,
-    allowChatInvite: _allowChatInvite,
+    allowChatInvite,
+    favorites,
     bottleDonorName,
     drunkUntil,
     bottleDonorId,
@@ -1987,30 +1989,38 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }
 
   /* ---- invite / pay ---- */
-  const handleInvite = async () => {
+  const invitePlayerToChat = useCallback(
+    (tp: Player) => {
+      if (!currentUser) return
+      if (voiceBalance < 5) {
+        showToast("Недостаточно сердец для приглашения", "error")
+        return
+      }
+      if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
+      if (resultTimerRef.current) clearInterval(resultTimerRef.current)
+      dispatch({ type: "PAY_VOICES", amount: 5 })
+      dispatch({ type: "ADD_FAVORITE", player: tp })
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "invite",
+          fromPlayer: currentUser,
+          toPlayer: tp,
+          text: `${currentUser.name} приглашает ${tp.name} общаться`,
+          timestamp: Date.now(),
+        },
+      })
+      showToast("Приглашение отправлено", "success")
+    },
+    [currentUser, voiceBalance, dispatch, showToast],
+  )
+
+  const handleInvite = useCallback(() => {
     const tp = resolvedTargetPlayer
     if (!tp) return
-    if (voiceBalance < 5) {
-      showToast("Недостаточно сердец для приглашения", "error")
-      return
-    }
-    if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current)
-    if (resultTimerRef.current) clearInterval(resultTimerRef.current)
-    dispatch({ type: "PAY_VOICES", amount: 5 })
-    dispatch({ type: "ADD_FAVORITE", player: tp })
-    dispatch({
-      type: "ADD_LOG",
-      entry: {
-        id: generateLogId(),
-        type: "invite",
-        fromPlayer: currentUser!,
-        toPlayer: tp,
-        text: `${currentUser!.name} приглашает ${tp.name} общаться`,
-        timestamp: Date.now(),
-      },
-    })
-    showToast("Приглашение отправлено", "success")
-  }
+    invitePlayerToChat(tp)
+  }, [resolvedTargetPlayer, invitePlayerToChat])
 
   /* ---- send chat message ---- */
   const handleSendChat = useCallback(() => {
@@ -5152,7 +5162,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     const carersCount = uniqueCarerIds.size
                     const currentUserAlreadyCared = currentUser && uniqueCarerIds.has(currentUser.id)
                     const canCare = carersCount < 5 && !currentUserAlreadyCared && voiceBalance >= 50
-                    const canOpenVk = !!currentUser && (courtshipProfileAllowed?.[playerMenuTarget.id] !== false) && voiceBalance >= 200
+                    const showVkRow = effectiveShowVkAfterCare(playerMenuTarget, courtshipProfileAllowed)
+                    const targetAcceptsInvites = effectiveOpenToChatInvites(playerMenuTarget, allowChatInvite)
+                    const isTargetFavorite = !!currentUser && favorites.some((f) => f.id === playerMenuTarget.id)
+                    const canOpenVk = !!currentUser && showVkRow && voiceBalance >= 200
                     const myRosesToThem = (rosesGiven ?? []).filter(
                       (r) => r.fromPlayerId === currentUser?.id && r.toPlayerId === playerMenuTarget.id,
                     ).length
@@ -5286,7 +5299,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                             </div>
                           )}
                         </div>
-                        {courtshipProfileAllowed?.[playerMenuTarget.id] !== false ? (
+                        {showVkRow ? (
                           <div className="grid w-full min-w-0 grid-cols-2 gap-1.5 sm:gap-2">
                             <button
                               type="button"
@@ -5334,8 +5347,53 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                               className="rounded-xl px-3 py-2.5 text-center text-[13px] font-medium sm:text-[15px]"
                               style={{ color: "#94a3b8", background: "rgba(15,23,42,0.6)", border: "1px solid #334155" }}
                             >
-                              {"Если хотите пообщаться, но кнопка не работает — активируйте приват."}
+                              {
+                                "Игрок не показывает ВК после «Ухаживать» — общение в личных сообщениях игры. Если у него в профиле включено «Общение», можно пригласить в чат (5 сердец)."
+                              }
                             </p>
+                            {currentUser && (
+                              <div className="grid w-full min-w-0 grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-2">
+                                {isTargetFavorite && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      dispatch({ type: "OPEN_SIDE_CHAT", player: playerMenuTarget })
+                                      dispatch({ type: "CLOSE_PLAYER_MENU" })
+                                    }}
+                                    className="flex min-h-[3rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[12px] font-bold transition-all hover:brightness-110 active:scale-[0.99] sm:min-h-[3.25rem] sm:text-[13px]"
+                                    style={{
+                                      background: "linear-gradient(180deg, #0d9488 0%, #0f766e 100%)",
+                                      color: "#fff",
+                                      border: "2px solid #115e59",
+                                      boxShadow: "0 2px 0 #134e4a",
+                                    }}
+                                  >
+                                    <MessageCircle className="h-6 w-6 shrink-0" strokeWidth={2.25} />
+                                    <span className="text-center leading-snug">Написать</span>
+                                  </button>
+                                )}
+                                {targetAcceptsInvites && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      invitePlayerToChat(playerMenuTarget)
+                                      dispatch({ type: "CLOSE_PLAYER_MENU" })
+                                    }}
+                                    disabled={voiceBalance < 5}
+                                    className="flex min-h-[3rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[12px] font-bold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40 sm:min-h-[3.25rem] sm:text-[13px]"
+                                    style={{
+                                      background: "linear-gradient(180deg, #6366f1 0%, #4f46e5 100%)",
+                                      color: "#fff",
+                                      border: "2px solid #4338ca",
+                                      boxShadow: "0 2px 0 #3730a3",
+                                    }}
+                                  >
+                                    <Send className="h-6 w-6 shrink-0" strokeWidth={2.25} />
+                                    <span className="text-center leading-snug">Пригласить общаться — 5 ❤</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
                             <button
                               type="button"
                               onClick={() => {

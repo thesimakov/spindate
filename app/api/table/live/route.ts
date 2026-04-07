@@ -40,6 +40,9 @@ function parsePlayer(raw: unknown): Player | null {
   if (!Number.isInteger(id) || id <= 0) return null
   if (!gender) return null
 
+  const showVkAfterCare = typeof p.showVkAfterCare === "boolean" ? p.showVkAfterCare : undefined
+  const openToChatInvites = typeof p.openToChatInvites === "boolean" ? p.openToChatInvites : undefined
+
   return {
     id,
     name: name || `Игрок ${id}`,
@@ -57,6 +60,8 @@ function parsePlayer(raw: unknown): Player | null {
     authUserId,
     vkUserId,
     isBot: false,
+    ...(showVkAfterCare !== undefined ? { showVkAfterCare } : {}),
+    ...(openToChatInvites !== undefined ? { openToChatInvites } : {}),
   }
 }
 

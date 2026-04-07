@@ -28,6 +28,15 @@ export interface Player {
   zodiac?: string
   /** Короткий статус игрока (до 15 символов) */
   status?: string
+  /**
+   * Показывать ВК после «Ухаживать». Если false — только личные сообщения в игре.
+   * undefined — как true (по умолчанию разрешено).
+   */
+  showVkAfterCare?: boolean
+  /**
+   * Разрешить другим «Пригласить общаться». true только при явном включении в профиле.
+   */
+  openToChatInvites?: boolean
 }
 
 export interface ChatMessage {

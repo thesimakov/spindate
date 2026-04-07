@@ -631,6 +631,39 @@ export async function showVkBannerAdOverlayRightVertical(): Promise<boolean> {
   })
 }
 
+/**
+ * Диалог разрешения push-уведомлений от мини-приложения (системный экран ВК).
+ * Без согласия пользователя {@link https://dev.vk.com/method/notifications.sendMessage notifications.sendMessage} не доставляет оповещения.
+ * @see https://dev.vk.com/bridge/VKWebAppAllowNotifications
+ */
+export async function requestVkAllowNotifications(): Promise<{ ok: boolean }> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return { ok: false }
+  try {
+    const raw = await b.send("VKWebAppAllowNotifications", {})
+    const data = raw as { result?: boolean } | null
+    if (data && typeof data === "object" && data.result === false) return { ok: false }
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Отключение уведомлений от приложения (по желанию пользователя).
+ * @see https://dev.vk.com/bridge/VKWebAppDenyNotifications
+ */
+export async function requestVkDenyNotifications(): Promise<{ ok: boolean }> {
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return { ok: false }
+  try {
+    await b.send("VKWebAppDenyNotifications", {})
+    return { ok: true }
+  } catch {
+    return { ok: false }
+  }
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -656,5 +689,7 @@ export const vkBridge = {
   getVkLaunchSearchFromLocation,
   subscribeVkViewportResize,
   requestVkExpand,
+  requestVkAllowNotifications,
+  requestVkDenyNotifications,
   VK_ITEM_IDS,
 }

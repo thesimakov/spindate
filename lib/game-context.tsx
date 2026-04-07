@@ -110,6 +110,10 @@ const FAVORITES_LS_KEY = (userId: number) => `spindate_favorites_v1_${userId}`
 const AVATAR_FRAME_LS_KEY = (userId: number) => `spindate_avatar_frame_v1_${userId}`
 const BOTTLE_SKIN_LS_KEY = (userId: number) => `spindate_bottle_skin_v1_${userId}`
 const BOTTLE_COOLDOWN_LS_KEY = (userId: number) => `spindate_bottle_cooldown_v1_${userId}`
+/** "0" — пользователь выключил показ ВК после ухаживания; отсутствие ключа — по умолчанию разрешено */
+const PROFILE_SHOW_VK_LS_KEY = (userId: number) => `spindate_profile_show_vk_v1_${userId}`
+/** "1" — включены приглашения в личный чат */
+const PROFILE_CHAT_INVITE_LS_KEY = (userId: number) => `spindate_profile_chat_invite_v1_${userId}`
 
 function parseAdmirersFromStorage(raw: string): Player[] {
   try {
@@ -390,19 +394,41 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         admirers = []
         favorites = []
       }
+      let mergedUser = action.user
+      try {
+        if (typeof window !== "undefined") {
+          if (window.localStorage.getItem(PROFILE_SHOW_VK_LS_KEY(action.user.id)) === "0") {
+            mergedUser = { ...mergedUser, showVkAfterCare: false }
+          }
+          if (window.localStorage.getItem(PROFILE_CHAT_INVITE_LS_KEY(action.user.id)) === "1") {
+            mergedUser = { ...mergedUser, openToChatInvites: true }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
       const nextFrames = { ...(state.avatarFrames ?? {}) }
       if (restoredFrameId) nextFrames[action.user.id] = restoredFrameId
       const nextOwnedBottleSkins = Array.from(
         new Set([...(state.ownedBottleSkins ?? ["classic"]), restoredBottleSkin ?? "classic"]),
       )
+      const uid = mergedUser.id
       return {
         ...state,
-        currentUser: action.user,
+        currentUser: mergedUser,
         admirers,
         favorites,
         avatarFrames: nextFrames,
         bottleSkin: restoredBottleSkin ?? state.bottleSkin,
         ownedBottleSkins: nextOwnedBottleSkins,
+        courtshipProfileAllowed: {
+          ...(state.courtshipProfileAllowed ?? {}),
+          [uid]: mergedUser.showVkAfterCare !== false,
+        },
+        allowChatInvite: {
+          ...(state.allowChatInvite ?? {}),
+          [uid]: mergedUser.openToChatInvites === true,
+        },
       }
     }
     case "CLEAR_USER":
@@ -500,6 +526,8 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         return {
           ...p,
           status: p.status ?? currentStatus ?? prev?.status,
+          showVkAfterCare: "showVkAfterCare" in p ? p.showVkAfterCare : prev?.showVkAfterCare,
+          openToChatInvites: "openToChatInvites" in p ? p.openToChatInvites : prev?.openToChatInvites,
         }
       })
 
@@ -553,6 +581,8 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           return {
             ...p,
             status: p.status ?? currentStatus ?? prev?.status,
+            showVkAfterCare: "showVkAfterCare" in p ? p.showVkAfterCare : prev?.showVkAfterCare,
+            openToChatInvites: "openToChatInvites" in p ? p.openToChatInvites : prev?.openToChatInvites,
           }
         })
         const spinnerIdx = nextPlayers.length > 0 ? Math.floor(Math.random() * nextPlayers.length) : 0
@@ -1120,22 +1150,48 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       }
       return { ...state, avatarFrames: next }
     }
-    case "SET_COURTSHIP_PROFILE_ALLOWED":
+    case "SET_COURTSHIP_PROFILE_ALLOWED": {
+      try {
+        if (typeof window !== "undefined") {
+          if (action.allowed) window.localStorage.removeItem(PROFILE_SHOW_VK_LS_KEY(action.playerId))
+          else window.localStorage.setItem(PROFILE_SHOW_VK_LS_KEY(action.playerId), "0")
+        }
+      } catch {
+        /* ignore */
+      }
+      const showVkAfterCare = action.allowed
+      const patch = (p: Player) => (p.id === action.playerId ? { ...p, showVkAfterCare } : p)
       return {
         ...state,
+        players: state.players.map(patch),
+        currentUser: state.currentUser?.id === action.playerId ? patch(state.currentUser) : state.currentUser,
         courtshipProfileAllowed: {
           ...(state.courtshipProfileAllowed ?? {}),
           [action.playerId]: action.allowed,
         },
       }
-    case "SET_ALLOW_CHAT_INVITE":
+    }
+    case "SET_ALLOW_CHAT_INVITE": {
+      try {
+        if (typeof window !== "undefined") {
+          if (action.allowed) window.localStorage.setItem(PROFILE_CHAT_INVITE_LS_KEY(action.playerId), "1")
+          else window.localStorage.removeItem(PROFILE_CHAT_INVITE_LS_KEY(action.playerId))
+        }
+      } catch {
+        /* ignore */
+      }
+      const openToChatInvites = action.allowed
+      const patch = (p: Player) => (p.id === action.playerId ? { ...p, openToChatInvites } : p)
       return {
         ...state,
+        players: state.players.map(patch),
+        currentUser: state.currentUser?.id === action.playerId ? patch(state.currentUser) : state.currentUser,
         allowChatInvite: {
           ...(state.allowChatInvite ?? {}),
           [action.playerId]: action.allowed,
         },
       }
+    }
 
     // ---- VIP status ----
     case "SET_VIP_STATUS": {
@@ -1260,6 +1316,8 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         return {
           ...pl,
           status: pl.status ?? currentStatus ?? prev?.status,
+          showVkAfterCare: "showVkAfterCare" in pl ? pl.showVkAfterCare : prev?.showVkAfterCare,
+          openToChatInvites: "openToChatInvites" in pl ? pl.openToChatInvites : prev?.openToChatInvites,
         }
       })
 

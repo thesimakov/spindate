@@ -41,7 +41,7 @@ alwaysApply: false
 
 ## API
 
-- Игрок: `POST /api/ticker/announcement` — только списание на сервере (транзакция), ответ `newBalance`.
+- Игрок: `POST /api/ticker/announcement` — только списание на сервере (транзакция), ответ `newBalance`. При успехе опционально шлётся сообщение в Telegram ([`lib/admin-telegram-notify.ts`](lib/admin-telegram-notify.ts)), если заданы `TELEGRAM_ADMIN_BOT_TOKEN` и `TELEGRAM_ADMIN_CHAT_ID` в env.
 - Витрина: `GET /api/catalog/ticker-feed` — `{ editorial, player, playerQueue }`; `playerQueue` — элементы `{ id, text, linkUrl, queueStartMs, queueEndMs }` для тика по времени на клиенте.
 - Админ: `GET/POST /api/admin/content/ticker-announcements` с `requireAdmin`; действия `publish` | `reject` | `delete`.
 

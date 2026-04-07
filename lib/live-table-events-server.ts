@@ -2,6 +2,7 @@ import type { GameAction, TableAuthorityPayload } from "@/lib/game-types"
 import { applyAuthorityEvent, ensureTableAuthority } from "@/lib/table-authority-server"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
+import { scheduleVkNotificationForTableAction } from "@/lib/vk-app-notifications-server"
 
 type TableEvent = {
   seq: number
@@ -148,6 +149,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     await ensureTableAuthority(tableId)
     const snapAfter = await applyAuthorityEvent(tableId, args.action)
     agentLogBottleAuthorityAfter(args.action, snapAfter)
+    scheduleVkNotificationForTableAction(args.action)
     return { ok: true as const, seq }
   }
 
@@ -169,6 +171,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   await ensureTableAuthority(tableId)
   const snapAfterMem = await applyAuthorityEvent(tableId, args.action)
   agentLogBottleAuthorityAfter(args.action, snapAfterMem)
+  scheduleVkNotificationForTableAction(args.action)
   return { ok: true as const, seq: bucket.seq }
 }
 

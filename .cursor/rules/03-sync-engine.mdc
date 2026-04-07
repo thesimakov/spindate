@@ -31,6 +31,7 @@ alwaysApply: false
 - Первый вызов: `mode: "join"` → регистрация на столе
 - Далее: `mode: "sync"` → обновление списка живых игроков
 - Дополнительно опрос при `focus` и `visibilitychange`
+- Тело запроса: в том числе `user: currentUser` — полный объект [`Player`](lib/game-types.ts), включая настройки профиля `showVkAfterCare` и `openToChatInvites`. Они **не** отправляются через `pushTableAction`; сервер кладёт их в presence и отдаёт в `livePlayers[]`, откуда их подхватывают остальные клиенты.
 - Ответ: `livePlayers[]`, `tableId`, `tablesCount`
 - Из livePlayers + ботов формируется полный состав через `composeTablePlayers`
 
@@ -48,7 +49,7 @@ bottleSkin, targetPlayer, targetPlayer2, showResult, resultAction, roundNumber,
 predictionPhase, currentTurnDidSpin, extraTurnPlayerId, spinSkips, gameLog,
 generalChatMessages, avatarFrames, drunkUntil.
 
-Мержит: emotionUseTodayByPlayer (max локального и серверного), admirers (из лога care).
+Мержит: emotionUseTodayByPlayer (max локального и серверного), admirers (из лога care), а также для каждого игрока — `showVkAfterCare` / `openToChatInvites`, если в снимке authority эти поля отсутствуют (актуальные значения приходят с live poll).
 
 ## Уход со стола
 

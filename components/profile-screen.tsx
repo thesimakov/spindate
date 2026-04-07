@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Flower2, Heart, Sparkles, Trash2, Trophy, Users, Volume2, VolumeX, X } from "lucide-react"
+import { Bell, Flower2, Heart, Sparkles, Trash2, Trophy, Users, Volume2, VolumeX, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
@@ -9,6 +9,7 @@ import { PlayerAvatar } from "@/components/player-avatar"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
 import type { GameLogEntry } from "@/lib/game-types"
+import { effectiveOpenToChatInvites, effectiveShowVkAfterCare } from "@/lib/player-profile-prefs"
 import { generateLogId } from "@/lib/ids"
 import { assetUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
@@ -310,6 +311,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [frameHoverPreviewId, setFrameHoverPreviewId] = useState<string | null>(null)
   /** Анимация «как за столом» после успешной отправки розы */
   const [roseGiftFx, setRoseGiftFx] = useState(false)
+  const [vkNotifyBusy, setVkNotifyBusy] = useState(false)
   const roseGiftFxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { toast, showToast } = useInlineToast(1700)
   const nameTrimmed = name.trim()
@@ -833,6 +835,35 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 </>
               )}
             </button>
+            {currentUser.authProvider === "vk" && vkBridge.isVkMiniApp() && (
+              <>
+                <button
+                  type="button"
+                  disabled={vkNotifyBusy}
+                  onClick={async () => {
+                    setVkNotifyBusy(true)
+                    try {
+                      const { ok } = await vkBridge.requestVkAllowNotifications()
+                      showToast(
+                        ok
+                          ? "Если вы согласились в окне ВК, уведомления от игры включены"
+                          : "Не удалось открыть запрос разрешения (попробуйте позже)",
+                        ok ? "success" : "info",
+                      )
+                    } finally {
+                      setVkNotifyBusy(false)
+                    }
+                  }}
+                  className={`flex w-full items-center justify-center gap-2 px-4 py-3 ${secondaryBtnClass}`}
+                >
+                  <Bell className="h-4 w-4 text-amber-500" aria-hidden />
+                  Уведомления ВКонтакте
+                </button>
+                <p className="px-0.5 text-center text-[13px] font-medium leading-snug text-slate-600">
+                  Push от ВК (приглашения в чат и др.). Нужен сервисный ключ на сервере и согласие в диалоге.
+                </p>
+              </>
+            )}
           </div>
         </div>
       </>
@@ -1144,7 +1175,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         <label className={`flex cursor-pointer items-center gap-3 ${sectionCardClass}`}>
           <input
             type="checkbox"
-            checked={courtshipProfileAllowed?.[currentUser.id] !== false}
+            checked={effectiveShowVkAfterCare(currentUser, courtshipProfileAllowed)}
             onChange={(e) =>
               dispatch({
                 type: "SET_COURTSHIP_PROFILE_ALLOWED",
@@ -1159,7 +1190,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           </span>
         </label>
         <p className="-mt-2 text-[15px] font-medium text-slate-700">
-          {courtshipProfileAllowed?.[currentUser.id] !== false
+          {effectiveShowVkAfterCare(currentUser, courtshipProfileAllowed)
             ? "Кто нажал «Ухаживание» — увидит ссылку на ваш профиль ВК."
             : "Кто нажал «Ухаживание» — сможет написать вам личное сообщение в игре."}
         </p>
@@ -1167,7 +1198,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         <label className={`flex cursor-pointer items-center gap-3 ${sectionCardClass}`}>
           <input
             type="checkbox"
-            checked={allowChatInvite?.[currentUser.id] === true}
+            checked={effectiveOpenToChatInvites(currentUser, allowChatInvite)}
             onChange={(e) =>
               dispatch({
                 type: "SET_ALLOW_CHAT_INVITE",
@@ -1182,9 +1213,9 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           </span>
         </label>
         <p className="-mt-2 text-[15px] font-medium text-slate-700">
-          {allowChatInvite?.[currentUser.id] === true
+          {effectiveOpenToChatInvites(currentUser, allowChatInvite)
             ? "У вас включена кнопка «Пригласить общаться» — другие могут пригласить вас в личный чат."
-            : "Если хотите пообщаться, но кнопка не работает — активируйте приват."}
+            : "Включите, если хотите, чтобы другие могли пригласить вас в личный чат за столом (5 сердец)."}
         </p>
 
       <button

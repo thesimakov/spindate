@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
+import { notifyTelegramTickerModerationQueued } from "@/lib/admin-telegram-notify"
 import {
   createTickerPlayerAdOrder,
   normalizeTickerAdLink,
@@ -47,6 +48,14 @@ export async function POST(req: Request) {
     const status = result.code === "unauthorized" ? 401 : 400
     return NextResponse.json({ ok: false, error: result.error }, { status })
   }
+
+  void notifyTelegramTickerModerationQueued({
+    adId: result.id,
+    authorDisplayName: authorDisplayName.trim() || "—",
+    body: text,
+    linkUrl: linkNorm.url,
+    costHearts: tariff.cost_hearts,
+  })
 
   return NextResponse.json({ ok: true, id: result.id, newBalance: result.newBalance })
 }
