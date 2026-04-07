@@ -40,6 +40,7 @@ import {
   getBottleCatalogRowById,
 } from "@/lib/bottle-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
+import { useTableStyleCatalog } from "@/lib/use-table-style-catalog"
 import { buyHearts200 } from "@/lib/vk-bridge"
 
 type LobbyRow = {
@@ -86,6 +87,8 @@ const TABLE_STYLE_PREVIEW: Record<RoomTableStyle, string> = {
   sunset_lounge: "linear-gradient(135deg, rgba(146,64,14,0.92), rgba(219,39,119,0.88))",
   ocean_breeze: "linear-gradient(135deg, rgba(8,145,178,0.92), rgba(29,78,216,0.88))",
   violet_dream: "linear-gradient(135deg, rgba(91,33,182,0.92), rgba(147,51,234,0.88))",
+  cosmic_rockets:
+    "radial-gradient(circle at 30% 20%, rgba(56,189,248,0.35), transparent 55%), radial-gradient(circle at 80% 70%, rgba(147,51,234,0.25), transparent 55%), linear-gradient(135deg, rgba(2,6,23,0.95), rgba(15,23,42,0.92))",
 }
 
 /** VK: query нужен, если нет cookie-сессии (мини-приложение). */
@@ -151,6 +154,7 @@ export function RoomLobbyScreen() {
   const user = state.currentUser
   const voiceBalance = state.voiceBalance ?? 0
   const { rows: catalogRows } = useBottleCatalog()
+  const { rows: tableStyleRows } = useTableStyleCatalog()
 
   const [rows, setRows] = useState<LobbyRow[]>([])
   const [lobbyLoaded, setLobbyLoaded] = useState(false)
@@ -167,6 +171,16 @@ export function RoomLobbyScreen() {
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState("")
   const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
+
+  const lobbyTableStyleOptions = useMemo(() => {
+    const published = new Set(tableStyleRows.filter((r) => r.published).map((r) => r.id))
+    const nameById = new Map(tableStyleRows.map((r) => [r.id, r.name]))
+    const base = ROOM_TABLE_STYLE_OPTIONS.filter((opt) => published.has(opt.id)).map((opt) => ({
+      ...opt,
+      name: nameById.get(opt.id) ?? opt.name,
+    }))
+    return base.length > 0 ? base : ROOM_TABLE_STYLE_OPTIONS
+  }, [tableStyleRows])
 
   const fallbackCreateOption = useMemo<CreateBottleOption>(() => {
     const classic = getBottleCatalogRowById("classic")
@@ -206,6 +220,14 @@ export function RoomLobbyScreen() {
       setCreateBottleSkin(createBottleOptions[0]?.id ?? DEFAULT_ROOM_BOTTLE_SKIN)
     }
   }, [createBottleIds, createBottleOptions, createBottleSkin])
+
+  const lobbyStyleIds = useMemo(() => new Set(lobbyTableStyleOptions.map((o) => o.id)), [lobbyTableStyleOptions])
+
+  useEffect(() => {
+    if (!lobbyStyleIds.has(createTableStyle)) {
+      setCreateTableStyle(lobbyTableStyleOptions[0]?.id ?? DEFAULT_ROOM_TABLE_STYLE)
+    }
+  }, [lobbyStyleIds, lobbyTableStyleOptions, createTableStyle])
 
   const fetchLobby = useCallback(async () => {
     try {
@@ -526,7 +548,9 @@ export function RoomLobbyScreen() {
                   getBottleCatalogRowById(roomBottle) ??
                   fallbackCreateOption
                 const styleName =
-                  ROOM_TABLE_STYLE_OPTIONS.find((s) => s.id === roomStyle)?.name ?? ROOM_TABLE_STYLE_OPTIONS[0].name
+                  lobbyTableStyleOptions.find((s) => s.id === roomStyle)?.name ??
+                  ROOM_TABLE_STYLE_OPTIONS.find((s) => s.id === roomStyle)?.name ??
+                  ROOM_TABLE_STYLE_OPTIONS[0].name
                 return (
                   <li
                     key={r.roomId}
@@ -792,7 +816,7 @@ export function RoomLobbyScreen() {
                 <p className="text-sm font-semibold text-slate-200">Стилистика стола</p>
                 <p className="text-[11px] leading-snug text-slate-500">Фон и атмосфера комнаты для всех игроков</p>
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-                  {ROOM_TABLE_STYLE_OPTIONS.map((opt) => {
+                  {lobbyTableStyleOptions.map((opt) => {
                     const selected = createTableStyle === opt.id
                     return (
                       <button

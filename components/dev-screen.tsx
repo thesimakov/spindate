@@ -7,6 +7,7 @@ import { AdminBottleContent } from "@/components/admin-bottle-content"
 import { AdminFrameContent } from "@/components/admin-frame-content"
 import { AdminGiftContent } from "@/components/admin-gift-content"
 import { AdminStatusLineContent } from "@/components/admin-status-line-content"
+import { AdminTableStyleContent } from "@/components/admin-table-style-content"
 import { AdminContentPagePlaceholder } from "@/components/admin-content-page-placeholder"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
@@ -40,7 +41,7 @@ export function DevScreen() {
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"users" | "content">("users")
   const [contentPage, setContentPage] = useState<
-    "bottles" | "gifts" | "frames" | "status" | "emotions" | "vip" | "hearts"
+    "bottles" | "gifts" | "frames" | "status" | "tableStyles" | "emotions" | "vip" | "hearts"
   >("bottles")
 
   useEffect(() => {
@@ -426,6 +427,7 @@ export function DevScreen() {
                     { id: "gifts", label: "Подарки" },
                     { id: "frames", label: "Рамки" },
                     { id: "status", label: "Статус" },
+                    { id: "tableStyles", label: "Стили стола" },
                     { id: "emotions", label: "Эмоции" },
                     { id: "vip", label: "VIP" },
                     { id: "hearts", label: "Сердечки" },
@@ -450,6 +452,7 @@ export function DevScreen() {
               {contentPage === "gifts" && <AdminGiftContent token={getAdminToken()} />}
               {contentPage === "frames" && <AdminFrameContent token={getAdminToken()} />}
               {contentPage === "status" && <AdminStatusLineContent token={getAdminToken()} />}
+              {contentPage === "tableStyles" && <AdminTableStyleContent token={getAdminToken()} />}
               {contentPage === "emotions" && (
                 <AdminContentPagePlaceholder
                   title="Контент: эмоции"

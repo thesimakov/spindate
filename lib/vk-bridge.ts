@@ -555,14 +555,16 @@ export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promi
 }
 
 export type VkBannerShowOptions = {
-  /** `top` — полоса у верхнего края WebView (ближе к блоку над чатом); `bottom` — внизу окна мини-приложения. */
+  /** `top` — полоса у верхнего края WebView; `bottom` — внизу окна мини-приложения. Параметра привязки к DOM-контейнеру нет. */
   banner_location?: "top" | "bottom"
+  /** `resize` — сжимает область веб-контента под высоту баннера; `overlay` — наложение поверх контента. */
   layout_type?: "resize" | "overlay"
+  /** `compact` — ниже по высоте; `regular` — выше. */
   height_type?: "compact" | "regular"
 }
 
 /**
- * Баннер спонсоров VK (клиент рисует его у края окна, не внутри вашего div).
+ * Баннер спонсоров VK: нативный клиент рисует полосу у края WebView, не внутри произвольного div.
  * @see https://dev.vk.com/ru/bridge/VKWebAppShowBannerAd
  */
 export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Promise<boolean> {

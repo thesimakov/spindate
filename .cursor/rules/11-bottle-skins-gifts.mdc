@@ -10,6 +10,12 @@ alwaysApply: false
 
 Доступные: classic, ruby, neon, frost, baby, vip, milk, frame_69–80, fortune_wheel.
 
+## Стили стола (TableStyle)
+
+Доступные: classic_night, sunset_lounge, ocean_breeze, violet_dream, cosmic_rockets.
+
+Публикация стилей для лобби: SQLite `table_style_catalog` + `/api/catalog/table-styles` (админ: `/api/admin/content/table-styles`).
+
 ## SET_BOTTLE_SKIN
 
 1. `bottleSkin = action.skin`

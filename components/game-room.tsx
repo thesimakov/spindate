@@ -53,6 +53,7 @@ import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
 import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
 import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
+import { SpaceRocketsLayer } from "@/components/space-rockets-layer"
 import { BankHeartBalanceTooltip } from "@/components/bank-heart-balance-tooltip"
 import { useBankPassive } from "@/hooks/use-bank-passive"
 import { InlineToast } from "@/components/ui/inline-toast"
@@ -411,13 +412,15 @@ const MOBILE_EMOTION_STRIP_BTN =
 
 const GAME_ROOM_DUST_SEED = 0x51ab1e
 const TABLE_STYLE_BACKGROUNDS: Record<
-  "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream",
+  "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream" | "cosmic_rockets",
   string
 > = {
   classic_night: "linear-gradient(180deg, rgba(3,8,18,0.72) 0%, rgba(15,23,42,0.52) 40%, rgba(2,6,23,0.72) 100%)",
   sunset_lounge: "linear-gradient(180deg, rgba(120,53,15,0.52) 0%, rgba(190,24,93,0.40) 40%, rgba(30,41,59,0.70) 100%)",
   ocean_breeze: "linear-gradient(180deg, rgba(8,145,178,0.45) 0%, rgba(29,78,216,0.35) 45%, rgba(15,23,42,0.72) 100%)",
   violet_dream: "linear-gradient(180deg, rgba(91,33,182,0.50) 0%, rgba(147,51,234,0.36) 44%, rgba(15,23,42,0.72) 100%)",
+  cosmic_rockets:
+    "linear-gradient(180deg, rgba(2,6,23,0.78) 0%, rgba(15,23,42,0.42) 45%, rgba(2,6,23,0.78) 100%)",
 }
 
 export function GameRoom() {
@@ -2568,6 +2571,7 @@ export function GameRoom() {
   return (
     <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
       <div className="pointer-events-none absolute inset-0 z-0" style={{ background: tableStyleOverlay }} />
+      {tableStyle === "cosmic_rockets" && <SpaceRocketsLayer />}
       {toast && <InlineToast toast={toast} />}
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
 
@@ -4315,8 +4319,8 @@ export function GameRoom() {
               minHeight: "156px",
             }}
           >
-            <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
-              <VkChatAdBlock className="max-h-full" />
+            <div className="w-full shrink-0">
+              <VkChatAdBlock className="w-full" />
             </div>
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
               <TableChatPanel
@@ -4364,6 +4368,9 @@ export function GameRoom() {
           </button>
         ) : (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1.5">
+            <div className="mb-1.5 w-full shrink-0">
+              <VkChatAdBlock className="w-full" />
+            </div>
             <button
               type="button"
               onClick={() => setChatPanelCollapsed(true)}
@@ -4375,22 +4382,17 @@ export function GameRoom() {
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
-            <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col gap-2 overflow-hidden">
-              <div className="max-h-[20%] min-h-0 w-full shrink-0 overflow-hidden">
-                <VkChatAdBlock className="max-h-full" />
-              </div>
-              <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
-                <TableChatPanel
-                  gameLog={gameLog}
-                  chatInput={chatInput}
-                  setChatInput={setChatInput}
-                  onSend={handleSendChat}
-                  logEndRef={logEndRef}
-                  currentUserId={currentUser?.id}
-                  chatDisabled={tablePaused}
-                  className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
-                />
-              </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <TableChatPanel
+                gameLog={gameLog}
+                chatInput={chatInput}
+                setChatInput={setChatInput}
+                onSend={handleSendChat}
+                logEndRef={logEndRef}
+                currentUserId={currentUser?.id}
+                chatDisabled={tablePaused}
+                className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+              />
             </div>
           </div>
         )}

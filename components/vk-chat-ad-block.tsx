@@ -6,13 +6,21 @@ import { cn } from "@/lib/utils"
 
 const BANNER_ONCE_KEY = "spindate_vk_room_banner_once"
 
+/** Параметры показа: нативный баннер у края WebView, `resize` — область приложения сжимается под полосу. */
+const BANNER_OPTS = {
+  layout_type: "resize" as const,
+  height_type: "compact" as const,
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
 /**
- * Над чатом — визуальная метка; сам баннер ВК рисуется нативно по краю WebView (VKWebAppShowBannerAd).
- * Reward-видео за сердца — кнопка «Видео» в строке «Ваш банк» рядом с «+».
+ * Слот «Спонсоры» над чатом: резерв места под визуальную связку с баннером VK.
+ * Креатив не вставляется в этот div — клиент VK рисует полосу через VKWebAppShowBannerAd
+ * у верхнего/нижнего края окна мини-приложения (в документации нет привязки к произвольному контейнеру).
+ * Reward-видео за сердца — кнопка «Видео» в строке «Ваш банк».
  */
 export function VkChatAdBlock({ className }: { className?: string }) {
   useEffect(() => {
@@ -26,19 +34,19 @@ export function VkChatAdBlock({ className }: { className?: string }) {
       await initVkResilient()
       if (cancelled) return
 
-      const tryLocation = async (loc: "top" | "bottom"): Promise<boolean> => {
-        return showVkBannerAdCompact({ banner_location: loc })
+      const tryShow = async (loc: "top" | "bottom"): Promise<boolean> => {
+        return showVkBannerAdCompact({ banner_location: loc, ...BANNER_OPTS })
       }
 
       let ok = false
       for (let i = 0; i < 4 && !cancelled; i++) {
-        ok = await tryLocation("top")
+        ok = await tryShow("top")
         if (ok) break
         await delay(500 + i * 350)
       }
       if (!ok && !cancelled) {
         for (let i = 0; i < 3 && !cancelled; i++) {
-          ok = await tryLocation("bottom")
+          ok = await tryShow("bottom")
           if (ok) break
           await delay(450 + i * 300)
         }
@@ -56,27 +64,16 @@ export function VkChatAdBlock({ className }: { className?: string }) {
 
   return (
     <div
-      className={cn("max-h-full w-full min-w-0", className)}
+      className={cn("w-full min-w-0", className)}
+      role="region"
       aria-label="Спонсоры ВКонтакте"
-      title="Блок спонсоров: полоса показывается клиентом ВК у края окна (сверху или снизу), не внутри этой метки."
     >
       <div
-        className="flex max-h-full min-h-0 w-full flex-col justify-center overflow-hidden rounded-xl border border-cyan-500/25 px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(2,6,23,0.65) 0%, rgba(15,23,42,0.45) 50%, rgba(2,6,23,0.55) 100%)",
-        }}
+        className="flex w-full min-h-[3rem] max-h-[min(7rem,22vh)] flex-col justify-center rounded-lg border border-slate-600/40 bg-slate-950/35 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:min-h-[3.25rem]"
       >
-        <div
-          className="h-4 w-full max-h-full shrink-0 rounded-md opacity-[0.35]"
-          style={{
-            background:
-              "repeating-linear-gradient(-45deg, rgba(34,211,238,0.12), rgba(34,211,238,0.12) 6px, transparent 6px, transparent 12px)",
-          }}
-          aria-hidden
-        />
-        <p className="shrink-0 pt-0.5 text-center text-[8px] font-semibold uppercase tracking-widest text-slate-500">
-          Спонсоры
+        <p className="text-center text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">Спонсоры</p>
+        <p className="sr-only">
+          Рекламная полоса ВКонтакте отображается клиентом у края окна мини-приложения, не внутри этого блока.
         </p>
       </div>
     </div>

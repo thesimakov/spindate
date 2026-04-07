@@ -144,6 +144,15 @@ function migrate(database: Database.Database) {
       deleted INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS table_style_catalog (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      published INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_table_style_catalog_published ON table_style_catalog(published, sort_order);
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
@@ -260,6 +269,22 @@ function migrate(database: Database.Database) {
        ON CONFLICT(id) DO NOTHING`,
     )
     .run(now)
+
+  const tableStyles = [
+    { id: "classic_night", name: "Классическая ночь", published: 1 },
+    { id: "sunset_lounge", name: "Закатный лаунж", published: 1 },
+    { id: "ocean_breeze", name: "Океанский бриз", published: 1 },
+    { id: "violet_dream", name: "Фиолетовый сон", published: 1 },
+    { id: "cosmic_rockets", name: "Космос и ракеты", published: 0 },
+  ] as const
+  const insertTableStyle = database.prepare(
+    `INSERT INTO table_style_catalog (id, name, published, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
+  )
+  tableStyles.forEach((row, index) => {
+    insertTableStyle.run(row.id, row.name, row.published, index, now)
+  })
 }
 
 export function getDb() {
