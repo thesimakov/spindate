@@ -64,6 +64,7 @@ import { useClientTabAwayPresence } from "@/hooks/use-client-tab-away"
 import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
+import { TickerAnnouncementModal } from "@/components/ticker-announcement-modal"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { useVkOverlayBannerInGameRoom } from "@/hooks/use-vk-overlay-banner"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
@@ -604,9 +605,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const spinSessionRef = useRef<string>("")
 
   const [tableLoading, setTableLoading] = useState(true)
+  const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
   const [bankHeartPulseActive, setBankHeartPulseActive] = useState(false)
   const prevVoiceBalanceRef = useRef<number | null>(null)
   const bankHeartPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tickerAuthQuery = useMemo(() => {
+    if (!currentUser) return ""
+    if (currentUser.authProvider === "vk") {
+      return `?vk_user_id=${encodeURIComponent(String(currentUser.id))}`
+    }
+    return ""
+  }, [currentUser])
+
   const isRoundDriver = useMemo(() => {
     if (!currentUser) return false
     const liveIds = players
@@ -2579,6 +2589,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       <div className="pointer-events-none absolute inset-0 z-0" style={{ background: tableStyleOverlay }} />
       {tableStyle === "cosmic_rockets" && <SpaceRocketsLayer />}
       {toast && <InlineToast toast={toast} />}
+      {currentUser && (
+        <TickerAnnouncementModal
+          open={tickerAnnouncementOpen}
+          onClose={() => setTickerAnnouncementOpen(false)}
+          authorDisplayName={currentUser.name?.trim() || "Игрок"}
+          authQuery={tickerAuthQuery}
+          onSuccess={(newBalance) => {
+            const paid = voiceBalance - newBalance
+            if (paid > 0) dispatch({ type: "PAY_VOICES", amount: paid })
+            else if (paid < 0) dispatch({ type: "ADD_VOICES", amount: -paid })
+          }}
+          showToast={showToast}
+        />
+      )}
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
 
       <TableLoaderOverlay
@@ -4355,7 +4379,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 }
           }
         >
-          <GameStatusTicker />
+          <GameStatusTicker
+            showAnnouncementCta={!!currentUser}
+            onOpenAnnouncement={currentUser ? () => setTickerAnnouncementOpen(true) : undefined}
+          />
         </div>
 
         {!isPcLayout && (

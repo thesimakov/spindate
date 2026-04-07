@@ -8,6 +8,7 @@ import { AdminFrameContent } from "@/components/admin-frame-content"
 import { AdminGiftContent } from "@/components/admin-gift-content"
 import { AdminStatusLineContent } from "@/components/admin-status-line-content"
 import { AdminTableStyleContent } from "@/components/admin-table-style-content"
+import { AdminTickerAnnouncementsContent } from "@/components/admin-ticker-announcements-content"
 import { AdminContentPagePlaceholder } from "@/components/admin-content-page-placeholder"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
@@ -41,7 +42,15 @@ export function DevScreen() {
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"users" | "content">("users")
   const [contentPage, setContentPage] = useState<
-    "bottles" | "gifts" | "frames" | "status" | "tableStyles" | "emotions" | "vip" | "hearts"
+    | "bottles"
+    | "gifts"
+    | "frames"
+    | "status"
+    | "tickerAnnouncements"
+    | "tableStyles"
+    | "emotions"
+    | "vip"
+    | "hearts"
   >("bottles")
 
   useEffect(() => {
@@ -427,6 +436,7 @@ export function DevScreen() {
                     { id: "gifts", label: "Подарки" },
                     { id: "frames", label: "Рамки" },
                     { id: "status", label: "Статус" },
+                    { id: "tickerAnnouncements", label: "Объявления" },
                     { id: "tableStyles", label: "Стили стола" },
                     { id: "emotions", label: "Эмоции" },
                     { id: "vip", label: "VIP" },
@@ -452,6 +462,7 @@ export function DevScreen() {
               {contentPage === "gifts" && <AdminGiftContent token={getAdminToken()} />}
               {contentPage === "frames" && <AdminFrameContent token={getAdminToken()} />}
               {contentPage === "status" && <AdminStatusLineContent token={getAdminToken()} />}
+              {contentPage === "tickerAnnouncements" && <AdminTickerAnnouncementsContent token={getAdminToken()} />}
               {contentPage === "tableStyles" && <AdminTableStyleContent token={getAdminToken()} />}
               {contentPage === "emotions" && (
                 <AdminContentPagePlaceholder

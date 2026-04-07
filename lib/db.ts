@@ -228,6 +228,28 @@ function migrate(database: Database.Database) {
     );
   `)
 
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS ticker_player_ads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_user_id TEXT,
+      owner_vk_user_id INTEGER,
+      author_display_name TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL,
+      link_url TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      cost_hearts INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      paid_at INTEGER NOT NULL,
+      queue_start_ms INTEGER,
+      queue_end_ms INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      reject_reason TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticker_player_ads_status ON ticker_player_ads(status);
+    CREATE INDEX IF NOT EXISTS idx_ticker_player_ads_queue ON ticker_player_ads(status, queue_start_ms, queue_end_ms);
+  `)
+
   const now = Date.now()
   const insertBottle = database.prepare(
     `INSERT INTO bottle_catalog (id, name, img, section, cost, published, deleted, sort_order, updated_at)

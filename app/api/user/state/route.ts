@@ -1,32 +1,12 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
-import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
-
-function getUserIdFromSession(req: Request): string | null {
-  const token = getSessionTokenFromRequest(req)
-  if (!token) return null
-  const db = getDb()
-  const tokenHash = sha256Base64(token)
-  const now = Date.now()
-  const row = db
-    .prepare(`SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?`)
-    .get(tokenHash, now) as { user_id: string } | undefined
-  return row?.user_id ?? null
-}
-
-function getVkUserIdFromRequest(req: Request): number | null {
-  const url = new URL(req.url)
-  const raw = url.searchParams.get("vk_user_id")
-  if (!raw) return null
-  const n = Number(raw)
-  if (!Number.isInteger(n) || n <= 0) return null
-  return n
-}
+import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
 
 export async function GET(req: Request) {
-  const userId = getUserIdFromSession(req)
-  const vkUserId = userId ? null : getVkUserIdFromRequest(req)
-  if (!userId && !vkUserId) {
+  const auth = getGameUserIdFromRequest(req)
+  const userId = auth?.userId ?? null
+  const vkUserId = auth?.vkUserId ?? null
+  if (!userId && vkUserId == null) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
 
@@ -53,9 +33,10 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const userId = getUserIdFromSession(req)
-  const vkUserId = userId ? null : getVkUserIdFromRequest(req)
-  if (!userId && !vkUserId) {
+  const auth = getGameUserIdFromRequest(req)
+  const userId = auth?.userId ?? null
+  const vkUserId = auth?.vkUserId ?? null
+  if (!userId && vkUserId == null) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
 

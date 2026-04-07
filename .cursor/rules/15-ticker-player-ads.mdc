@@ -1,0 +1,46 @@
+---
+description: Платные объявления игроков в бегущей строке (тикер), модерация, очередь по времени
+alwaysApply: false
+---
+
+# Объявления игроков в тикере
+
+## Таблица `ticker_player_ads`
+
+- Автор: `owner_user_id` (login) или `owner_vk_user_id` (VK), взаимоисключающие по смыслу заказа.
+- Контент: `author_display_name`, `body`, `link_url` (нормализация на сервере; допустимы хосты vk.com / vk.ru, итог `https`).
+- Экономика: `duration_ms`, `cost_hearts`, `paid_at`.
+- Статусы: `pending_moderation` | `scheduled` | `rejected` | `deleted` | (`expired` зарезервировано под ленивое обновление).
+- Очередь показа после публикации админом: `queue_start_ms`, `queue_end_ms`.
+- `reject_reason` при отклонении.
+
+## Тарифы (единый источник констант)
+
+Дублируются в `lib/ticker-player-ads-constants.ts` (клиент + справка) и подключаются в `lib/ticker-player-ads-server.ts`:
+
+| tier id | длительность | сердца |
+|---------|----------------|--------|
+| `10m`   | 600_000 ms     | 200    |
+| `20m`   | 1_200_000 ms   | 500    |
+| `1h`    | 3_600_000 ms   | 2000   |
+
+Не менять числа в одном месте без другого.
+
+## Очередь
+
+При **publish** из `pending_moderation`:  
+`queue_start = max(now, max(queue_end_ms) среди `scheduled` с `queue_end_ms > now`))`,  
+`queue_end = queue_start + duration_ms`, статус `scheduled`.
+
+Публичный активный слот: `scheduled` и `queue_start_ms <= now < queue_end_ms`, порядок `queue_start_ms`, затем `id`.
+
+## API
+
+- Игрок: `POST /api/ticker/announcement` — только списание на сервере (транзакция), ответ `newBalance`.
+- Витрина: `GET /api/catalog/ticker-feed` — `{ editorial, player }`.
+- Админ: `GET/POST /api/admin/content/ticker-announcements` с `requireAdmin`; действия `publish` | `reject` | `delete`.
+
+## Клиент
+
+- `useTickerFeed` поллинг ~12 с; тикер показывает игровой сегмент с ссылкой или fallback на редакционный `status_line`.
+- Не дублировать списание сердец на клиенте кроме синхронизации баланса после успешного ответа API.
