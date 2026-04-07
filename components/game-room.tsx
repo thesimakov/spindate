@@ -65,7 +65,7 @@ import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
-import { useVkRoomBannerAd, VkChatAdSlot } from "@/components/vk-chat-ad-block"
+import { useVkOverlayBannerInGameRoom } from "@/hooks/use-vk-overlay-banner"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
 import {
@@ -432,7 +432,7 @@ export function GameRoom() {
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Только два режима: телефон (`isMobile`) и ПК (`isPcLayout`), без отдельного «планшетного» слоя по max-md/md/lg. */
   const isPcLayout = !isMobile
-  useVkRoomBannerAd()
+  useVkOverlayBannerInGameRoom()
   const {
     players,
     currentTurnIndex,
@@ -4313,16 +4313,13 @@ export function GameRoom() {
 
         {!isPcLayout && (
           <div
-            className="mx-auto mt-2 mb-1 flex min-h-0 w-full max-w-[min(95vw,720px)] shrink-0 flex-col gap-2 overflow-hidden rounded-xl"
+            className="mx-auto mt-2 mb-1 flex min-h-0 w-full max-w-[min(95vw,720px)] shrink-0 flex-col overflow-hidden rounded-xl"
             style={{
               height: "min(46vh, 420px)",
               maxHeight: "min(46vh, 420px)",
               minHeight: "156px",
             }}
           >
-            <div className="relative z-[36] w-full shrink-0">
-              <VkChatAdSlot className="w-full" />
-            </div>
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
               <TableChatPanel
                 gameLog={gameLog}
@@ -4369,9 +4366,6 @@ export function GameRoom() {
           </button>
         ) : (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1.5">
-            <div className="relative z-[36] mb-1.5 w-full shrink-0">
-              <VkChatAdSlot className="w-full" />
-            </div>
             <button
               type="button"
               onClick={() => setChatPanelCollapsed(true)}

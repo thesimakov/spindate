@@ -600,6 +600,20 @@ export async function showVkBannerAdBottomCompact(): Promise<boolean> {
   return showVkBannerAdCompact({ banner_location: "bottom" })
 }
 
+/**
+ * Вертикальная полоса справа, overlay (десктоп / часть клиентов ВК).
+ * @see https://dev.vk.com/ru/games/monetization/ad/banners
+ */
+export async function showVkBannerAdOverlayRightVertical(): Promise<boolean> {
+  return showVkBannerAdCompact({
+    banner_location: "top",
+    layout_type: "overlay",
+    banner_align: "right",
+    orientation: "vertical",
+    height_type: "regular",
+  })
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -614,6 +628,7 @@ export const vkBridge = {
   showVkNativeAd,
   showVkBannerAdCompact,
   showVkBannerAdBottomCompact,
+  showVkBannerAdOverlayRightVertical,
   initVk,
   initVkResilient,
   isVkMiniApp,
