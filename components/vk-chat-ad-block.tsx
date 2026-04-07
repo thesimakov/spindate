@@ -4,32 +4,55 @@ import { useEffect } from "react"
 import { initVkResilient, isVkMiniApp, showVkBannerAdCompact } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
-const BANNER_ONCE_KEY = "spindate_vk_room_banner_once"
+/** Успешный первичный показ в этой вкладке — не дублировать цепочку при повторном входе в комнату. */
+const BANNER_SESSION_OK_KEY = "spindate_vk_room_banner_initial_ok"
 
-/** Параметры показа: нативный баннер у края WebView, `resize` — область приложения сжимается под полосу. */
+/** Нативная полоса у края WebView; `regular` — выше по высоте. */
 const BANNER_OPTS = {
   layout_type: "resize" as const,
-  height_type: "compact" as const,
+  height_type: "regular" as const,
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+type VkBridgeEventDetail = { detail?: { type?: string } }
+
 /**
- * Один вызов цепочки VKWebAppShowBannerAd на монтирование GameRoom (не дублировать в двух колонках).
+ * Один экземпляр: первичный VKWebAppShowBannerAd (сначала bottom, затем top) + подписка на события баннера.
  */
 export function useVkRoomBannerAd() {
   useEffect(() => {
     if (!isVkMiniApp()) return
     if (typeof sessionStorage === "undefined") return
-    if (sessionStorage.getItem(BANNER_ONCE_KEY) === "1") return
 
     let cancelled = false
+    let unsubscribe: (() => void) | null = null
 
     ;(async () => {
       await initVkResilient()
       if (cancelled) return
+
+      try {
+        const m = await import("@vkontakte/vk-bridge")
+        const bridge = m.default
+        if (bridge?.subscribe && bridge?.unsubscribe) {
+          const handler = (event: VkBridgeEventDetail) => {
+            const t = event?.detail?.type
+            if (t === "VKWebAppBannerAdUpdated" || t === "VKWebAppBannerAdClosedByUser") {
+              /* клиент VK обновил или закрыл полосу — без повторного Show */
+            }
+          }
+          bridge.subscribe(handler)
+          unsubscribe = () => bridge.unsubscribe(handler)
+        }
+      } catch {
+        /* ignore */
+      }
+
+      if (cancelled) return
+      if (sessionStorage.getItem(BANNER_SESSION_OK_KEY) === "1") return
 
       const tryShow = async (loc: "top" | "bottom"): Promise<boolean> => {
         return showVkBannerAdCompact({ banner_location: loc, ...BANNER_OPTS })
@@ -37,30 +60,30 @@ export function useVkRoomBannerAd() {
 
       let ok = false
       for (let i = 0; i < 4 && !cancelled; i++) {
-        ok = await tryShow("top")
+        ok = await tryShow("bottom")
         if (ok) break
         await delay(500 + i * 350)
       }
       if (!ok && !cancelled) {
         for (let i = 0; i < 3 && !cancelled; i++) {
-          ok = await tryShow("bottom")
+          ok = await tryShow("top")
           if (ok) break
           await delay(450 + i * 300)
         }
       }
 
-      if (ok && !cancelled) sessionStorage.setItem(BANNER_ONCE_KEY, "1")
+      if (ok && !cancelled) sessionStorage.setItem(BANNER_SESSION_OK_KEY, "1")
     })()
 
     return () => {
       cancelled = true
+      unsubscribe?.()
     }
   }, [])
 }
 
 /**
- * Визуальный слот «Спонсоры» над чатом (без побочных эффектов моста).
- * Нативный креатив VK не встраивается в div.
+ * Горизонтальный слот «Спонсоры»: широкая зона min 200px под визуальное совпадение с полосой VK (креатив рисует клиент).
  */
 export function VkChatAdSlot({ className }: { className?: string }) {
   if (!isVkMiniApp()) return null
@@ -73,17 +96,28 @@ export function VkChatAdSlot({ className }: { className?: string }) {
     >
       <div
         className={cn(
-          "relative z-[1] flex w-full min-h-[3rem] max-h-[min(7rem,22vh)] flex-col justify-center rounded-lg border border-slate-600/45",
-          "bg-slate-950/55 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[2px]",
-          "sm:min-h-[3.25rem]",
+          "relative z-[1] flex w-full flex-col gap-2 rounded-lg border border-slate-600/45 p-2",
+          "bg-slate-950/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_24px_rgba(0,0,0,0.35)] backdrop-blur-[2px]",
         )}
       >
-        <p className="text-center text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">Спонсоры</p>
-        <p className="mt-1 max-w-full text-center text-[10px] leading-snug text-slate-500/90">
-          Рекламная полоса открывается клиентом ВК у верхнего или нижнего края окна приложения, не внутри этой
-          рамки.
+        <div className="flex w-full min-h-0 flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <p className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">Спонсоры</p>
+          <p className="min-w-0 flex-1 text-right text-[10px] leading-snug text-slate-500/90">
+            Реклама ВКонтакте — полоса у края окна; блок по ширине совпадает с зоной чата.
+          </p>
+        </div>
+
+        <div
+          className={cn(
+            "flex min-h-[200px] w-full flex-col rounded-md border border-dashed border-slate-600/45",
+            "bg-slate-900/40 px-2 py-2",
+          )}
+          aria-hidden
+        />
+
+        <p className="sr-only">
+          Баннерная реклама VKWebAppShowBannerAd отображается нативным клиентом, не внутри этой вёрстки.
         </p>
-        <p className="sr-only">Спонсоры: нативный баннер у края WebView после VKWebAppShowBannerAd.</p>
       </div>
     </div>
   )

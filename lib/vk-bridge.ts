@@ -561,6 +561,10 @@ export type VkBannerShowOptions = {
   layout_type?: "resize" | "overlay"
   /** `compact` — ниже по высоте; `regular` — выше. */
   height_type?: "compact" | "regular"
+  /** Часть платформ (напр. desktop overlay), см. ShowBannerAdRequest в @vkontakte/vk-bridge. */
+  banner_align?: "left" | "right" | "center"
+  orientation?: "horizontal" | "vertical"
+  can_close?: boolean
 }
 
 /**
@@ -575,11 +579,15 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
   const layout_type = options?.layout_type ?? "resize"
   const height_type = options?.height_type ?? "compact"
   try {
-    const res = await b.send("VKWebAppShowBannerAd", {
+    const payload: Record<string, unknown> = {
       banner_location,
       layout_type,
       height_type,
-    })
+    }
+    if (options?.banner_align != null) payload.banner_align = options.banner_align
+    if (options?.orientation != null) payload.orientation = options.orientation
+    if (options?.can_close != null) payload.can_close = options.can_close
+    const res = await b.send("VKWebAppShowBannerAd", payload)
     return (res as { result?: boolean })?.result === true
   } catch (e) {
     console.warn("[VK] VKWebAppShowBannerAd", e)
