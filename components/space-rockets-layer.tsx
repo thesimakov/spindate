@@ -3,19 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { assetUrl } from "@/lib/assets"
 
-type RocketSprite = {
-  src: string
-  /** Local "up" vector in image space: nose - tail (normalized). */
-  forward: { x: number; y: number }
-}
-
-const ROCKET_SPRITES: RocketSprite[] = [
-  { src: assetUrl("/assets/space-rocket-1.png"), forward: { x: 0, y: -1 } },
-  { src: assetUrl("/assets/space-rocket-2.png"), forward: { x: 0, y: -1 } },
-  { src: assetUrl("/assets/space-rocket-3.png"), forward: { x: 0, y: -1 } },
-  { src: assetUrl("/assets/space-rocket-4.png"), forward: { x: 0, y: -1 } },
-  { src: assetUrl("/assets/space-rocket-5.png"), forward: { x: 0, y: -1 } },
-]
+const ROCKET_SPRITES = [
+  assetUrl("/assets/space-rocket-1.png"),
+  assetUrl("/assets/space-rocket-2.png"),
+  assetUrl("/assets/space-rocket-3.png"),
+  assetUrl("/assets/space-rocket-4.png"),
+  assetUrl("/assets/space-rocket-5.png"),
+] as const
 
 type FlyingRocket = {
   id: number
@@ -37,15 +31,9 @@ function mulberry32(seed: number) {
   }
 }
 
-function angleBetween(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const cross = a.x * b.y - a.y * b.x
-  const dot = a.x * b.x + a.y * b.y
-  return (Math.atan2(cross, dot) * 180) / Math.PI
-}
-
-function normalize2(v: { x: number; y: number }) {
-  const len = Math.hypot(v.x, v.y) || 1
-  return { x: v.x / len, y: v.y / len }
+/** Угол CSS rotate (°): верх PNG (нос «вверх» экрана, −Y) совпадает с (vx, vy); Y растёт вниз. */
+function rotationDegForVelocity(vx: number, vy: number) {
+  return (Math.atan2(vx, -vy) * 180) / Math.PI
 }
 
 export function SpaceRocketsLayer() {
@@ -62,7 +50,7 @@ export function SpaceRocketsLayer() {
     const { w, h } = sizeRef.current
     if (w < 32 || h < 32) return
 
-    const sprite = ROCKET_SPRITES[Math.floor(rand() * ROCKET_SPRITES.length)] ?? ROCKET_SPRITES[0]
+    const src = ROCKET_SPRITES[Math.floor(rand() * ROCKET_SPRITES.length)] ?? ROCKET_SPRITES[0]
     const speed = 60 + rand() * 110
     const angleRad = rand() * Math.PI * 2
     const vx = Math.cos(angleRad) * speed
@@ -72,9 +60,7 @@ export function SpaceRocketsLayer() {
     const x = -margin + rand() * (w + margin * 2)
     const y = -margin + rand() * (h + margin * 2)
 
-    const travelDeg = (Math.atan2(vy, vx) * 180) / Math.PI
-    const forward = normalize2(sprite.forward)
-    const deg = travelDeg + angleBetween(forward, { x: 0, y: 1 })
+    const deg = rotationDegForVelocity(vx, vy)
 
     const size = 28 + rand() * 34
 
@@ -85,7 +71,7 @@ export function SpaceRocketsLayer() {
       vx,
       vy,
       deg,
-      src: sprite.src,
+      src,
       size,
     }
 
