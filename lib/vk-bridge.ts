@@ -621,7 +621,10 @@ function vkPersistentBannerRetryDelay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function showVkPersistentBannerWithRetries(): Promise<void> {
+/**
+ * Повторные попытки показать горизонтальный persistent-баннер (после {@link initVkResilient}).
+ */
+export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
   await initVkResilient()
   for (let i = 0; i < 3; i++) {
     const ok = await showVkBannerAdHorizontalPersistent()
@@ -630,7 +633,7 @@ async function showVkPersistentBannerWithRetries(): Promise<void> {
   }
 }
 
-/** Нативный overlay-баннер ВК — снять, чтобы модалки мини-приложения оказались визуально поверх. */
+/** Снять нативный баннер (если нужно вручную; при обычной игре не вызываем — баннер остаётся статичным). */
 export async function hideVkBannerAd(): Promise<void> {
   const b = await getBridgeAsync()
   if (!b || !(await isVkRuntimeEnvironment())) return
@@ -639,39 +642,6 @@ export async function hideVkBannerAd(): Promise<void> {
   } catch (e) {
     console.warn("[VK] VKWebAppHideBannerAd", e)
   }
-}
-
-const vkPersistentBannerOverlaySuppressKeys = new Set<string>()
-
-export function isVkPersistentBannerOverlaySuppressed(): boolean {
-  return vkPersistentBannerOverlaySuppressKeys.size > 0
-}
-
-async function syncVkPersistentBannerWithSuppressState(): Promise<void> {
-  if (!isVkMiniApp()) return
-  if (vkPersistentBannerOverlaySuppressKeys.size > 0) {
-    await hideVkBannerAd()
-  } else {
-    await showVkPersistentBannerWithRetries()
-  }
-}
-
-/**
- * Пока хотя бы один ключ в «подавлении», горизонтальный persistent-баннер скрыт; иначе снова показывается.
- * Несколько источников (GameRoom, диалог нулевого баланса) не перетирают друг друга.
- */
-export function setVkPersistentBannerSuppressedForOverlay(key: string, suppressed: boolean): void {
-  if (!isVkMiniApp()) return
-  if (suppressed) vkPersistentBannerOverlaySuppressKeys.add(key)
-  else vkPersistentBannerOverlaySuppressKeys.delete(key)
-  void syncVkPersistentBannerWithSuppressState()
-}
-
-/** После visibilitychange: повторный показ, если никто не держит overlay подавленным. */
-export async function refreshVkPersistentBannerIfNotSuppressed(): Promise<void> {
-  if (!isVkMiniApp()) return
-  if (isVkPersistentBannerOverlaySuppressed()) return
-  await showVkPersistentBannerWithRetries()
 }
 
 /**
@@ -737,9 +707,7 @@ export const vkBridge = {
   showVkBannerAdBottomCompact,
   showVkBannerAdHorizontalPersistent,
   hideVkBannerAd,
-  setVkPersistentBannerSuppressedForOverlay,
-  isVkPersistentBannerOverlaySuppressed,
-  refreshVkPersistentBannerIfNotSuppressed,
+  refreshVkPersistentHorizontalBanner,
   showVkBannerAdOverlayRightVertical,
   initVk,
   initVkResilient,

@@ -832,38 +832,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [betWinnings, setBetWinnings] = useState<number | null>(null)
   const botActionRoundRef = useRef<number | null>(null)
 
-  const suppressVkPersistentBannerOverlays = useMemo(
-    () =>
-      tableLoading ||
-      tickerAnnouncementOpen ||
-      Boolean(tablePaused && currentUser) ||
-      Boolean(currentUser && isClientTabAway && !tablePaused) ||
-      Boolean(emotionPurchaseOpen && currentUser) ||
-      Boolean(!CASUAL_MODE && showBetPicker) ||
-      Boolean(playerMenuTarget) ||
-      showBottleCatalog ||
-      showFramePicker ||
-      Boolean(giftCatalogDrawerPlayer) ||
-      gameSidePanel != null ||
-      showMobileMoreMenu,
-    [
-      tableLoading,
-      tickerAnnouncementOpen,
-      tablePaused,
-      currentUser,
-      isClientTabAway,
-      emotionPurchaseOpen,
-      showBetPicker,
-      playerMenuTarget,
-      showBottleCatalog,
-      showFramePicker,
-      giftCatalogDrawerPlayer,
-      gameSidePanel,
-      showMobileMoreMenu,
-    ],
-  )
-
-  useVkOverlayBannerInGameRoom(suppressVkPersistentBannerOverlays)
+  useVkOverlayBannerInGameRoom()
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id

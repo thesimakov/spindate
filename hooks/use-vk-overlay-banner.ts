@@ -1,34 +1,33 @@
 "use client"
 
 import { useEffect } from "react"
-import {
-  isVkMiniApp,
-  refreshVkPersistentBannerIfNotSuppressed,
-  setVkPersistentBannerSuppressedForOverlay,
-} from "@/lib/vk-bridge"
+import { isVkMiniApp, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridge"
 
 /**
- * Горизонтальный баннер VK: при `suppressForModals` скрывается через `VKWebAppHideBannerAd`,
- * чтобы нативный overlay не перекрывал модалки WebView. Иначе — снова показывается.
- * Повторный показ при возврате на вкладку, если никто не держит подавление.
+ * Горизонтальный баннер VK в игровой комнате: показ при монтировании и снова при возврате на вкладку.
+ * Не вызываем HideBannerAd при модалках — баннер остаётся статичным (не моргает при открытии/закрытии окон).
  */
-export function useVkOverlayBannerInGameRoom(suppressForModals: boolean) {
-  useEffect(() => {
-    setVkPersistentBannerSuppressedForOverlay("game-room-modals", suppressForModals)
-    return () => setVkPersistentBannerSuppressedForOverlay("game-room-modals", false)
-  }, [suppressForModals])
-
+export function useVkOverlayBannerInGameRoom() {
   useEffect(() => {
     if (!isVkMiniApp()) return
 
+    let cancelled = false
+
+    const run = () => {
+      if (cancelled) return
+      void refreshVkPersistentHorizontalBanner()
+    }
+
+    run()
+
     const onVisibility = () => {
-      if (typeof document === "undefined") return
-      if (document.visibilityState !== "visible") return
-      void refreshVkPersistentBannerIfNotSuppressed()
+      if (cancelled || typeof document === "undefined") return
+      if (document.visibilityState === "visible") run()
     }
     document.addEventListener("visibilitychange", onVisibility)
 
     return () => {
+      cancelled = true
       document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [])
