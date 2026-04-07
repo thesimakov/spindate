@@ -211,7 +211,15 @@ export const PAIR_ACTIONS: PairAction[] = [
   { id: "skip",    label: "Пропустить",         icon: "skip",     cost: 0,  combo: ["MM", "MF", "FF"] },
 ]
 
-export type GameSidePanelId = "profile" | "shop" | "favorites" | "rating" | "daily" | "fortune-wheel" | "player-chat"
+export type GameSidePanelId =
+  | "profile"
+  | "shop"
+  | "favorites"
+  | "rating"
+  | "daily"
+  | "fortune-wheel"
+  | "player-chat"
+  | "private-inbox"
 
 /** Сколько последних записей лога стола храним на клиенте (эмоции с дневным лимитом считаются отдельно). */
 export const GAME_TABLE_LOG_MAX_ENTRIES = 400

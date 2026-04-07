@@ -1,0 +1,31 @@
+---
+description: VK горизонтальный баннер в игровой комнате — параметры bridge и что не выкидывать при рефакторинге
+globs: lib/vk-bridge.ts,hooks/use-vk-overlay-banner.ts,components/game-room.tsx
+alwaysApply: false
+---
+
+# VK баннер в GameRoom
+
+## Не удалять и не «упрощать без запроса»
+
+- Хук **`useVkOverlayBannerInGameRoom`** в `components/game-room.tsx` и файл **`hooks/use-vk-overlay-banner.ts`**.
+- Функцию **`showVkBannerAdHorizontalPersistent`** и связанные типы в **`lib/vk-bridge.ts`** (`VkBannerShowOptions`, `showVkBannerAdCompact`).
+
+## Контракт показа (актуальный пресет)
+
+Вызов идёт через **`showVkBannerAdHorizontalPersistent()`** → `VKWebAppShowBannerAd` с полями:
+
+- `banner_location: "top"` — полоса у **верхнего** края WebView
+- `layout_type: "overlay"` — поверх контента (не `resize` с нижней привязкой без запроса)
+- `banner_align: "right"` — **справа** (зеркало типичного пресета с `left`)
+- `orientation: "horizontal"`
+- `height_type: "compact"`
+- `can_close: false`
+
+## Поведение хука
+
+- **Без** `sessionStorage` / «один раз за сессию» — баннер запрашивается при монтировании и снова при **`visibilitychange`** (вкладка снова видима), с повторными попытками (до 3).
+
+## Связанный код
+
+- **`showVkBannerAdOverlayRightVertical`** — отдельный пресет (`height_type: "regular"`, без `can_close`); не путать с persistent, не удалять, если используется где-то ещё.

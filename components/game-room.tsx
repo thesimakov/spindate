@@ -423,7 +423,12 @@ const TABLE_STYLE_BACKGROUNDS: Record<
     "linear-gradient(180deg, rgba(2,6,23,0.78) 0%, rgba(15,23,42,0.42) 45%, rgba(2,6,23,0.78) 100%)",
 }
 
-export function GameRoom() {
+type GameRoomProps = {
+  /** Число диалогов с непрочитанным (поклонники + избранные), для бейджа «Чат». */
+  pmUnreadCount?: number
+}
+
+export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const { state } = useGame()
   const { rows: bottleCatalogRows, mainBottleId } = useBottleCatalog()
   const { rows: frameCatalogRows } = useFrameCatalog()
@@ -3274,6 +3279,21 @@ export function GameRoom() {
                 : "")
             const sideBtnTextClass =
               "text-[13px] font-semibold leading-none" + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
+            const darkSideBtnStyle: CSSProperties = {
+              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+              border: "1px solid rgba(56,189,248,0.28)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+            }
+            const sideBtnPairWrap =
+              "flex w-full gap-1.5 " +
+              (leftSideMenuExpanded ? "flex-row" : "flex-row max-lg:flex-col max-lg:items-stretch")
+            const sideBtnCompactClass =
+              "relative flex items-center gap-1.5 rounded-[999px] px-2.5 py-1.5 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[36px] " +
+              (leftSideMenuExpanded
+                ? "flex-1 min-w-0 justify-center"
+                : " flex-1 min-w-0 justify-center max-lg:h-9 max-lg:w-full max-lg:min-h-9 max-lg:flex-none max-lg:justify-center max-lg:rounded-full max-lg:px-0 max-lg:gap-0")
+            const sideBtnCompactTextClass =
+              "text-[12px] font-semibold leading-none truncate " + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
             return (
               <>
           {/* Крутить вне очереди — только на мобильной (на ПК убрано из бокового меню) */}
@@ -3368,19 +3388,46 @@ export function GameRoom() {
             <span className={sideBtnTextClass} style={{ color: "#1f2937" }}>{"Магазин"}</span>
           </button>
 
-          {/* Профиль */}
-          <button
-            onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })}
-            className={sideBtnClass}
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-            }}
-          >
-            <User className="h-4 w-4" style={{ color: "#e8c06a" }} />
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
-          </button>
+          {/* Профиль + личный чат (избранные / поклонники) */}
+          <div className={sideBtnPairWrap}>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })}
+              className={sideBtnCompactClass}
+              style={darkSideBtnStyle}
+            >
+              <User className="h-3.5 w-3.5 shrink-0" style={{ color: "#e8c06a" }} />
+              <span className={sideBtnCompactTextClass} style={{ color: "#f0e0c8" }}>
+                {"Профиль"}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "private-inbox" })}
+              className={sideBtnCompactClass}
+              style={darkSideBtnStyle}
+              title="Личные сообщения"
+              aria-label="Открыть личные сообщения"
+            >
+              <MessageCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#e8c06a" }} />
+              <span className={sideBtnCompactTextClass} style={{ color: "#f0e0c8" }}>
+                {"Чат"}
+              </span>
+              {pmUnreadCount > 0 ? (
+                <span
+                  className={
+                    "absolute flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white shadow-sm " +
+                    (leftSideMenuExpanded
+                      ? "-right-0.5 -top-1"
+                      : " -right-0.5 -top-1 max-lg:right-0.5 max-lg:top-0.5")
+                  }
+                  aria-label={`Непрочитанных диалогов: ${pmUnreadCount}`}
+                >
+                  {pmUnreadCount > 9 ? "9+" : pmUnreadCount}
+                </span>
+              ) : null}
+            </button>
+          </div>
 
           {/* Бутылочка */}
           <button

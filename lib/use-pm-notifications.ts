@@ -29,7 +29,7 @@ export function markChatRead(userId: number, peerId: number) {
 
 export function usePmNotifications(
   userId: number | undefined,
-  admirers: Player[],
+  peers: Player[],
 ): {
   notifications: PmNotification[]
   totalUnread: number
@@ -47,12 +47,12 @@ export function usePmNotifications(
   )
 
   const poll = useCallback(async () => {
-    if (!userId || admirers.length === 0) {
+    if (!userId || peers.length === 0) {
       setNotifications([])
       return
     }
 
-    const peerIds = admirers.map((a) => a.id)
+    const peerIds = peers.map((a) => a.id)
     const sinceMap = Object.fromEntries(peerIds.map((pid) => [pid, getLastReadTs(userId, pid)]))
     const minSince = Math.min(...Object.values(sinceMap), Date.now())
 
@@ -77,7 +77,7 @@ export function usePmNotifications(
         const pid = Number(pidStr)
         const readTs = getLastReadTs(userId, pid)
         if (!info.lastMessage || info.lastMessage.timestamp <= readTs) continue
-        const peer = admirers.find((a) => a.id === pid)
+        const peer = peers.find((a) => a.id === pid)
         if (!peer) continue
         next.push({
           peerId: pid,
@@ -91,7 +91,7 @@ export function usePmNotifications(
 
       setNotifications(next)
     } catch { /* ignore */ }
-  }, [userId, admirers])
+  }, [userId, peers])
 
   useEffect(() => {
     poll()

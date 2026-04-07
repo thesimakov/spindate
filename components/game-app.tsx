@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { getLayoutConstraintDebug } from "@/lib/use-media-query"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
+import { mergePeersForUnreadPoll } from "@/lib/merge-peers-for-pm"
 import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
 import { RoomLobbyScreen } from "@/components/room-lobby-screen"
@@ -22,6 +23,7 @@ import { PlayerChatPanel } from "@/components/player-chat-panel"
 import { PmNotificationToasts } from "@/components/pm-notification-toast"
 import { RatingLeaderboardBody } from "@/components/rating-screen"
 import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
+import { PrivateInboxPanel } from "@/components/private-inbox-panel"
 
 export function GameApp() {
   const { state, dispatch } = useGame()
@@ -29,17 +31,23 @@ export function GameApp() {
   const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
   const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)
 
-  const { notifications, dismiss } = usePmNotifications(state.currentUser?.id, state.admirers ?? [])
+  const pmPeers = useMemo(
+    () => mergePeersForUnreadPoll(state.favorites ?? [], state.admirers ?? []),
+    [state.favorites, state.admirers],
+  )
+
+  const { notifications, totalUnread: pmUnreadCount, dismiss } = usePmNotifications(state.currentUser?.id, pmPeers)
 
   const handleOpenPmFromNotification = useCallback(
     (peerId: number) => {
-      const peer = (state.admirers ?? []).find((a) => a.id === peerId) ?? state.players.find((p) => p.id === peerId)
+      const peer =
+        pmPeers.find((p) => p.id === peerId) ?? state.players.find((p) => p.id === peerId)
       if (!peer) return
       if (state.currentUser) markChatRead(state.currentUser.id, peerId)
       dismiss(peerId)
       dispatch({ type: "OPEN_SIDE_CHAT", player: peer })
     },
-    [state.admirers, state.players, state.currentUser, dispatch, dismiss],
+    [pmPeers, state.players, state.currentUser, dispatch, dismiss],
   )
 
   const tableReady =
@@ -189,7 +197,7 @@ export function GameApp() {
     case "game":
       return (
         <>
-          <GameRoom />
+          <GameRoom pmUnreadCount={pmUnreadCount} />
           <ZeroBalanceDialog />
           {showLayoutDebugOverlay && layoutDebugSnapshot && (
             <div className="fixed bottom-2 left-2 z-[110] w-[min(92vw,26rem)] rounded-xl border border-cyan-300/50 bg-slate-950/90 p-2 font-mono text-[11px] leading-tight text-cyan-100 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
@@ -236,6 +244,9 @@ export function GameApp() {
               variant="panel"
               onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
             />
+          )}
+          {state.gameSidePanel === "private-inbox" && (
+            <PrivateInboxPanel onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })} />
           )}
           {state.gameSidePanel === "rating" && (
             <GameSidePanelShell
