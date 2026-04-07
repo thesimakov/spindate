@@ -593,6 +593,100 @@
   animation: bottleIdleFloat 3.2s ease-in-out infinite;
 }
 
+/* Космос (cosmic_rockets): мерцание звёзд и медленный дрейф звёздного поля */
+@keyframes cosmic-star-twinkle-a {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+  22% {
+    opacity: 0.78;
+  }
+  48% {
+    opacity: 0.95;
+  }
+  71% {
+    opacity: 0.52;
+  }
+}
+
+@keyframes cosmic-star-twinkle-b {
+  0%,
+  100% {
+    opacity: 0.48;
+  }
+  18% {
+    opacity: 0.88;
+  }
+  52% {
+    opacity: 0.42;
+  }
+  76% {
+    opacity: 0.92;
+  }
+}
+
+@keyframes cosmic-star-twinkle-c {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+  35% {
+    opacity: 0.72;
+  }
+  58% {
+    opacity: 0.55;
+  }
+  82% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes cosmic-starfield-drift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-1.4%, 0.9%, 0);
+  }
+}
+
+.cosmic-stars-parallax {
+  animation: cosmic-starfield-drift 96s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.cosmic-stars-layer--a {
+  animation: cosmic-star-twinkle-a 4.8s ease-in-out infinite;
+  will-change: opacity;
+}
+
+.cosmic-stars-layer--b {
+  animation: cosmic-star-twinkle-b 6.4s ease-in-out infinite;
+  animation-delay: -1.4s;
+  will-change: opacity;
+}
+
+.cosmic-stars-layer--c {
+  animation: cosmic-star-twinkle-c 5.5s ease-in-out infinite;
+  animation-delay: -2.9s;
+  will-change: opacity;
+}
+
+@keyframes cosmic-rocket-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 6px rgba(56, 189, 248, 0.22));
+  }
+  50% {
+    filter: drop-shadow(0 11px 20px rgba(0, 0, 0, 0.48)) drop-shadow(0 0 12px rgba(147, 197, 253, 0.45));
+  }
+}
+
+.cosmic-rocket-glow {
+  animation: cosmic-rocket-glow 2.8s ease-in-out infinite;
+}
+
 /* Arrow swap animation between two players */
 @keyframes pairArrowPulse {
   0% {
