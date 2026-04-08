@@ -17,6 +17,7 @@ import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
 import { AppLoader } from "@/components/app-loader"
 import { Spinner } from "@/components/ui/spinner"
 import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
+import { parseAgeFromVkBdate, parseZodiacFromVkBdate } from "@/lib/vk-profile-fields"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
@@ -58,6 +59,11 @@ export function RegistrationScreen() {
     purpose: Purpose
     status?: string
     authProvider?: "vk" | "login"
+    authUserId?: string
+    vkUserId?: number
+    city?: string
+    zodiac?: string
+    interests?: string
   }) => {
     dispatch({ type: "SET_USER", user })
     dispatch({ type: "SET_SCREEN", screen: "daily-streak" })
@@ -67,15 +73,23 @@ export function RegistrationScreen() {
   const enterVkWithoutSignedServerAuth = async (vkUser: VkUserInfo, ageNum: number) => {
     const genderValue: Gender =
       vkUser.sex === 2 ? "male" : vkUser.sex === 1 ? "female" : gender
+    const ageFromVk =
+      vkUser.bdate && vkUser.bdate.length > 0 ? parseAgeFromVkBdate(vkUser.bdate) : null
+    const effectiveAge = ageFromVk != null && ageFromVk >= 18 ? ageFromVk : ageNum
+    const zodiacFromVk =
+      vkUser.bdate && vkUser.bdate.length > 0 ? parseZodiacFromVkBdate(vkUser.bdate) : undefined
     const user = {
       id: vkUser.id,
       name: `${vkUser.first_name} ${vkUser.last_name}`,
       avatar: vkUser.photo_200,
       gender: genderValue,
-      age: ageNum,
+      age: effectiveAge,
       purpose: defaultPurpose,
       authProvider: "vk" as const,
       vkUserId: vkUser.id,
+      ...(vkUser.city?.title ? { city: vkUser.city.title } : {}),
+      ...(zodiacFromVk ? { zodiac: zodiacFromVk } : {}),
+      ...(vkUser.interests ? { interests: vkUser.interests } : {}),
     }
     try {
       const res = await apiFetch(`/api/user/state?vk_user_id=${encodeURIComponent(String(vkUser.id))}`, {
@@ -127,6 +141,7 @@ export function RegistrationScreen() {
           vkUserId?: number
           city?: string
           zodiac?: string
+          interests?: string
         }
       } | null
       const u = meData?.user
@@ -149,6 +164,7 @@ export function RegistrationScreen() {
         vkUserId: typeof u.vkUserId === "number" ? u.vkUserId : undefined,
         city: u.city,
         zodiac: u.zodiac,
+        ...(u.interests ? { interests: u.interests } : {}),
       }
       const stRes = await apiFetch("/api/user/state", { credentials: "include" })
       const stData = await stRes.json().catch(() => null)
@@ -210,6 +226,7 @@ export function RegistrationScreen() {
               sex: vkUser.sex,
               bdate: vkUser.bdate,
               city: vkUser.city?.title,
+              interests: vkUser.interests,
             },
           }),
         })
@@ -229,6 +246,7 @@ export function RegistrationScreen() {
             vkUserId?: number
             city?: string
             zodiac?: string
+            interests?: string
           }
           voiceBalance?: number
           inventory?: unknown[]
@@ -257,6 +275,7 @@ export function RegistrationScreen() {
             authProvider: "vk" as const,
             city: u.city,
             zodiac: u.zodiac,
+            ...(u.interests ? { interests: u.interests } : {}),
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
           const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
@@ -332,6 +351,7 @@ export function RegistrationScreen() {
               sex: vkUser.sex,
               bdate: vkUser.bdate,
               city: vkUser.city?.title,
+              interests: vkUser.interests,
             },
           }),
         })
@@ -349,6 +369,7 @@ export function RegistrationScreen() {
             vkUserId?: number
             city?: string
             zodiac?: string
+            interests?: string
           }
           voiceBalance?: number
           inventory?: unknown[]
@@ -370,6 +391,7 @@ export function RegistrationScreen() {
             authProvider: "vk" as const,
             city: u.city,
             zodiac: u.zodiac,
+            ...(u.interests ? { interests: u.interests } : {}),
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
           const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]

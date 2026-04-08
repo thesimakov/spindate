@@ -4,47 +4,11 @@ import { generateSalt, hashPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { parseVkAppIdFromLaunchSearch, parseVkUserIdFromLaunchSearch, verifyVkLaunchParams } from "@/lib/vk-launch-params"
 import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { parseAgeFromVkBdate, parseZodiacFromVkBdate, vkGenderFromSex } from "@/lib/vk-profile-fields"
 
 const VALID_GENDERS = ["male", "female"] as const
 const VALID_PURPOSES = ["relationships", "communication", "love"] as const
-
-const ZODIAC_RANGES: [number, number, string][] = [
-  [120, 219, "Водолей"], [220, 320, "Рыбы"], [321, 420, "Овен"],
-  [421, 520, "Телец"], [521, 621, "Близнецы"], [622, 722, "Рак"],
-  [723, 822, "Лев"], [823, 922, "Дева"], [923, 1022, "Весы"],
-  [1023, 1121, "Скорпион"], [1122, 1221, "Стрелец"], [1222, 1319, "Козерог"],
-]
-
-function zodiacFromDate(month: number, day: number): string {
-  const code = month * 100 + day
-  if (code >= 1222 || code <= 119) return "Козерог"
-  for (const [from, to, sign] of ZODIAC_RANGES) {
-    if (code >= from && code <= to) return sign
-  }
-  return ""
-}
-
-function parseAgeFromBdate(bdate: string): number | null {
-  const parts = bdate.split(".")
-  if (parts.length < 3) return null
-  const day = parseInt(parts[0], 10)
-  const month = parseInt(parts[1], 10)
-  const year = parseInt(parts[2], 10)
-  if (!day || !month || !year || year < 1900 || year > 2020) return null
-  const now = new Date()
-  let age = now.getFullYear() - year
-  if (now.getMonth() + 1 < month || (now.getMonth() + 1 === month && now.getDate() < day)) age--
-  return age >= 14 && age <= 120 ? age : null
-}
-
-function parseZodiacFromBdate(bdate: string): string {
-  const parts = bdate.split(".")
-  if (parts.length < 2) return ""
-  const day = parseInt(parts[0], 10)
-  const month = parseInt(parts[1], 10)
-  if (!day || !month) return ""
-  return zodiacFromDate(month, day)
-}
+const INTERESTS_MAX = 240
 
 function getMiniAppSecret(): string {
   return process.env.VK_MINI_APP_SECRET ?? process.env.VK_PAYMENTS_SECRET ?? ""
@@ -68,10 +32,20 @@ function buildUserPayload(
 ) {
   const profile = db
     .prepare(
-      `SELECT display_name, avatar_url, status, gender, age, purpose, city, zodiac FROM player_profiles WHERE user_id = ?`,
+      `SELECT display_name, avatar_url, status, gender, age, purpose, city, zodiac, interests FROM player_profiles WHERE user_id = ?`,
     )
     .get(userId) as
-    | { display_name: string; avatar_url: string; status: string; gender: string; age: number; purpose: string; city: string; zodiac: string }
+    | {
+        display_name: string
+        avatar_url: string
+        status: string
+        gender: string
+        age: number
+        purpose: string
+        city: string
+        zodiac: string
+        interests: string
+      }
     | undefined
 
   const displayName = profile?.display_name ?? username
@@ -95,6 +69,7 @@ function buildUserPayload(
     vkUserId: vkUserId ?? undefined,
     ...(profile?.city ? { city: profile.city } : {}),
     ...(profile?.zodiac ? { zodiac: profile.zodiac } : {}),
+    ...(profile?.interests ? { interests: profile.interests } : {}),
   }
 }
 
@@ -141,24 +116,19 @@ export async function POST(req: Request) {
         age?: number
         bdate?: string
         city?: string
+        interests?: string
       }
     | undefined
 
   const bdateStr = typeof profileIn?.bdate === "string" ? profileIn.bdate.trim() : ""
-  const ageFromBdate = bdateStr ? parseAgeFromBdate(bdateStr) : null
-  const zodiacFromBdateStr = bdateStr ? parseZodiacFromBdate(bdateStr) : ""
-  const ageNum = ageFromBdate != null && ageFromBdate >= 18
-    ? ageFromBdate
-    : typeof profileIn?.age === "number" && profileIn.age >= 18 && profileIn.age <= 120
-      ? profileIn.age
-      : 25
+  const ageFromBdate = bdateStr ? parseAgeFromVkBdate(bdateStr) : null
+  const zodiacFromBdateStr = bdateStr ? parseZodiacFromVkBdate(bdateStr) : ""
+  const ageFromClient =
+    typeof profileIn?.age === "number" && profileIn.age >= 18 && profileIn.age <= 120 ? profileIn.age : null
   const cityStr = typeof profileIn?.city === "string" ? profileIn.city.trim().slice(0, 100) : ""
-  const genderFromSex =
-    profileIn?.sex === 2 ? "male" : profileIn?.sex === 1 ? "female" : undefined
-  const gender =
-    genderFromSex && VALID_GENDERS.includes(genderFromSex as (typeof VALID_GENDERS)[number])
-      ? genderFromSex
-      : "male"
+  const interestsStr = typeof profileIn?.interests === "string" ? profileIn.interests.trim().slice(0, INTERESTS_MAX) : ""
+  const genderFromSex = vkGenderFromSex(profileIn?.sex)
+
   const purposeRaw = typeof body?.purpose === "string" ? body.purpose : "communication"
   const purpose = VALID_PURPOSES.includes(purposeRaw as (typeof VALID_PURPOSES)[number])
     ? purposeRaw
@@ -175,6 +145,13 @@ export async function POST(req: Request) {
     .get(vkUserId) as { id: string; username: string } | undefined
 
   if (!userRow) {
+    const gender =
+      genderFromSex && VALID_GENDERS.includes(genderFromSex as (typeof VALID_GENDERS)[number])
+        ? genderFromSex
+        : "male"
+    const ageNum =
+      ageFromBdate != null && ageFromBdate >= 18 ? ageFromBdate : (ageFromClient ?? 25)
+
     const userId = newId()
     const username = `vk_${vkUserId}`
     const salt = generateSalt()
@@ -194,9 +171,9 @@ export async function POST(req: Request) {
         : `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
 
     db.prepare(
-      `INSERT INTO player_profiles (user_id, display_name, avatar_url, status, gender, age, purpose, city, zodiac, created_at, updated_at)
-       VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(userId, displayName, avatarUrl, gender, ageNum, purpose, cityStr, zodiacFromBdateStr, now, now)
+      `INSERT INTO player_profiles (user_id, display_name, avatar_url, status, gender, age, purpose, city, zodiac, interests, created_at, updated_at)
+       VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(userId, displayName, avatarUrl, gender, ageNum, purpose, cityStr, zodiacFromBdateStr, interestsStr, now, now)
 
     const vkState = db
       .prepare(`SELECT voice_balance, inventory_json FROM vk_user_game_state WHERE vk_user_id = ?`)
@@ -215,18 +192,49 @@ export async function POST(req: Request) {
     }
 
     userRow = { id: userId, username }
-  } else if (displayFromVk.length > 0 || avatarFromVk.length > 0 || genderFromSex || bdateStr || cityStr) {
+  } else if (profileIn != null && typeof profileIn === "object") {
     const cur = db
-      .prepare(`SELECT display_name, avatar_url, city, zodiac FROM player_profiles WHERE user_id = ?`)
-      .get(userRow.id) as { display_name: string; avatar_url: string; city: string; zodiac: string } | undefined
+      .prepare(
+        `SELECT display_name, avatar_url, gender, age, city, zodiac, interests FROM player_profiles WHERE user_id = ?`,
+      )
+      .get(userRow.id) as
+      | {
+          display_name: string
+          avatar_url: string
+          gender: string
+          age: number
+          city: string
+          zodiac: string
+          interests: string
+        }
+      | undefined
+
+    const curGender: (typeof VALID_GENDERS)[number] =
+      cur?.gender === "female" ? "female" : cur?.gender === "male" ? "male" : "male"
+    const nextGender =
+      genderFromSex && VALID_GENDERS.includes(genderFromSex as (typeof VALID_GENDERS)[number])
+        ? genderFromSex
+        : curGender
+
+    const curAge =
+      typeof cur?.age === "number" && cur.age >= 18 && cur.age <= 120 ? cur.age : 25
+    const nextAge =
+      ageFromBdate != null && ageFromBdate >= 18
+        ? ageFromBdate
+        : ageFromClient != null
+          ? ageFromClient
+          : curAge
+
     const nextName = displayFromVk.length > 0 ? displayFromVk : (cur?.display_name ?? "")
     const nextAvatar = avatarFromVk.length > 0 ? avatarFromVk : (cur?.avatar_url ?? "")
-    const nextCity = cityStr || (cur?.city ?? "")
-    const nextZodiac = zodiacFromBdateStr || (cur?.zodiac ?? "")
+    const nextCity = cityStr.length > 0 ? cityStr : (cur?.city ?? "")
+    const nextZodiac = zodiacFromBdateStr.length > 0 ? zodiacFromBdateStr : (cur?.zodiac ?? "")
+    const nextInterests = interestsStr.length > 0 ? interestsStr : (cur?.interests ?? "")
+
     db.prepare(
-      `UPDATE player_profiles SET display_name = ?, avatar_url = ?, gender = ?, age = ?, city = ?, zodiac = ?, updated_at = ?
+      `UPDATE player_profiles SET display_name = ?, avatar_url = ?, gender = ?, age = ?, city = ?, zodiac = ?, interests = ?, updated_at = ?
        WHERE user_id = ?`,
-    ).run(nextName, nextAvatar || "", gender, ageNum, nextCity, nextZodiac, now, userRow.id)
+    ).run(nextName, nextAvatar || "", nextGender, nextAge, nextCity, nextZodiac, nextInterests, now, userRow.id)
   }
 
   // restrictions

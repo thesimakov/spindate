@@ -40,10 +40,20 @@ export async function GET(req: Request) {
 
   const profile = db
     .prepare(
-      `SELECT display_name, avatar_url, status, gender, age, purpose, city, zodiac FROM player_profiles WHERE user_id = ?`,
+      `SELECT display_name, avatar_url, status, gender, age, purpose, city, zodiac, interests FROM player_profiles WHERE user_id = ?`,
     )
     .get(session.user_id) as
-    | { display_name: string; avatar_url: string; status: string; gender: string; age: number; purpose: string; city: string; zodiac: string }
+    | {
+        display_name: string
+        avatar_url: string
+        status: string
+        gender: string
+        age: number
+        purpose: string
+        city: string
+        zodiac: string
+        interests: string
+      }
     | undefined
 
   const displayName = profile?.display_name ?? userRow.username
@@ -69,6 +79,7 @@ export async function GET(req: Request) {
       ...(userRow.vk_user_id != null ? { vkUserId: userRow.vk_user_id } : {}),
       ...(profile?.city ? { city: profile.city } : {}),
       ...(profile?.zodiac ? { zodiac: profile.zodiac } : {}),
+      ...(profile?.interests ? { interests: profile.interests } : {}),
     },
   })
 }

@@ -16,6 +16,62 @@ export type VkUserInfo = {
   sex?: 1 | 2 // 1 — женский, 2 — мужской
   bdate?: string // "D.M.YYYY" или "D.M"
   city?: { id: number; title: string }
+  /** Интересы / деятельность, если клиент VK отдал в ответе GetUserInfo */
+  interests?: string
+}
+
+function unwrapVkWebAppUserPayload(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== "object") return null
+  const o = data as Record<string, unknown>
+
+  const tryShape = (x: Record<string, unknown>): Record<string, unknown> | null => {
+    const idRaw = x.id
+    const id = typeof idRaw === "number" ? idRaw : typeof idRaw === "string" && /^\d+$/.test(idRaw) ? Number(idRaw) : NaN
+    if (!Number.isFinite(id) || typeof x.first_name !== "string") return null
+    return { ...x, id }
+  }
+
+  const top = tryShape(o)
+  if (top) return top
+
+  for (const key of ["detail", "data"]) {
+    const inner = o[key]
+    if (inner && typeof inner === "object") {
+      const nested = tryShape(inner as Record<string, unknown>)
+      if (nested) return nested
+    }
+  }
+  const user = o.user
+  if (user && typeof user === "object") {
+    const nested = tryShape(user as Record<string, unknown>)
+    if (nested) return nested
+  }
+  return null
+}
+
+function coerceSex(raw: unknown): 1 | 2 | undefined {
+  if (raw === 1 || raw === 2) return raw
+  if (raw === "1") return 1
+  if (raw === "2") return 2
+  return undefined
+}
+
+function coerceCity(raw: unknown): { id: number; title: string } | undefined {
+  if (raw && typeof raw === "object" && "title" in raw) {
+    const t = (raw as { title?: unknown; id?: unknown }).title
+    const idNum = Number((raw as { id?: unknown }).id)
+    if (typeof t === "string" && t.trim()) return { id: Number.isFinite(idNum) ? idNum : 0, title: t.trim() }
+  }
+  if (typeof raw === "string" && raw.trim()) return { id: 0, title: raw.trim() }
+  return undefined
+}
+
+function pickInterestsFromPayload(o: Record<string, unknown>): string | undefined {
+  for (const k of ["interests", "activities"]) {
+    const v = o[k]
+    if (typeof v === "string" && v.trim()) return v.trim().slice(0, 240)
+  }
+  return undefined
 }
 
 type Bridge = { send: (method: string, params?: object) => Promise<unknown>; isEmbedded?: () => boolean }
@@ -293,18 +349,19 @@ export async function getUserInfo(): Promise<VkUserInfo> {
   if (b && isVkMiniApp()) {
     try {
       const data = await b.send("VKWebAppGetUserInfo", {})
-      const d = data as {
-        id: number; first_name: string; last_name: string; photo_200: string
-        sex?: 1 | 2; bdate?: string; city?: { id: number; title: string }
-      }
-      return {
-        id: d.id,
-        first_name: d.first_name ?? "",
-        last_name: d.last_name ?? "",
-        photo_200: d.photo_200 ?? "",
-        sex: d.sex,
-        bdate: d.bdate,
-        city: d.city,
+      const d = unwrapVkWebAppUserPayload(data)
+      if (d) {
+        const interests = pickInterestsFromPayload(d)
+        return {
+          id: d.id as number,
+          first_name: (d.first_name as string) ?? "",
+          last_name: (d.last_name as string) ?? "",
+          photo_200: typeof d.photo_200 === "string" ? d.photo_200 : "",
+          sex: coerceSex(d.sex),
+          bdate: typeof d.bdate === "string" ? d.bdate : undefined,
+          city: coerceCity(d.city),
+          ...(interests ? { interests } : {}),
+        }
       }
     } catch (e) {
       console.warn("VKWebAppGetUserInfo failed", e)
