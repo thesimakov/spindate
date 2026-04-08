@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, subscribeVkViewportResize } from "@/lib/vk-bridge"
-import { getLayoutConstraintDebug } from "@/lib/use-media-query"
+import { getLayoutConstraintDebug, useGameLayoutMode } from "@/lib/use-media-query"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
 import { mergePeersForUnreadPoll } from "@/lib/merge-peers-for-pm"
@@ -24,9 +24,11 @@ import { PmNotificationToasts } from "@/components/pm-notification-toast"
 import { RatingLeaderboardBody } from "@/components/rating-screen"
 import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
 import { PrivateInboxPanel } from "@/components/private-inbox-panel"
+import { MobileAppBlockedScreen } from "@/components/mobile-app-blocked-screen"
 
 export function GameApp() {
   const { state, dispatch } = useGame()
+  const { isDesktopUser, deviceClassResolved } = useGameLayoutMode()
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
   const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
   const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)
@@ -144,6 +146,22 @@ export function GameApp() {
   // общий AppLoader показываем только до появления пользователя.
   const showEntryLoader = state.screen === "game" && !state.currentUser
   const showLayoutDebugOverlay = layoutDebugEnabled && !!layoutDebugSnapshot
+
+  const mobileAppBlocked = process.env.NEXT_PUBLIC_MOBILE_APP_BLOCKED !== "0"
+  if (mobileAppBlocked && !layoutDebugEnabled) {
+    if (!deviceClassResolved) {
+      return (
+        <AppLoader
+          title="Загрузка…"
+          subtitle="Подготовка приложения"
+          hint="Определяем тип устройства"
+        />
+      )
+    }
+    if (!isDesktopUser) {
+      return <MobileAppBlockedScreen />
+    }
+  }
 
   if (state.screen === "game" && state.currentUser && blockStatus) {
     const isBlocked = blockStatus === "blocked"

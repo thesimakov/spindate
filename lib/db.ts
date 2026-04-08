@@ -208,6 +208,14 @@ function migrate(database: Database.Database) {
   if (!gameStateCols.some((c) => c.name === "vip_until")) {
     database.exec(`ALTER TABLE user_game_state ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0`)
   }
+  if (!gameStateCols.some((c) => c.name === "vk_group_bonus_claimed")) {
+    database.exec(`ALTER TABLE user_game_state ADD COLUMN vk_group_bonus_claimed INTEGER NOT NULL DEFAULT 0`)
+  }
+
+  const vkGameStateCols = database.prepare(`PRAGMA table_info(vk_user_game_state)`).all() as { name: string }[]
+  if (!vkGameStateCols.some((c) => c.name === "vk_group_bonus_claimed")) {
+    database.exec(`ALTER TABLE vk_user_game_state ADD COLUMN vk_group_bonus_claimed INTEGER NOT NULL DEFAULT 0`)
+  }
 
   // Старые инсталляции: vk_payment_orders могла быть создана без vk_user_id — IF NOT EXISTS таблицу не пересоздаёт.
   const paymentCols = database.prepare(`PRAGMA table_info(vk_payment_orders)`).all() as { name: string }[]

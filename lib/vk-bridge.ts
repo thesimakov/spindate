@@ -61,6 +61,22 @@ export function getVkLaunchSearchFromLocation(): string {
   return search || fromHash
 }
 
+/** vk_user_id из адресной строки мини-приложения (без вызова bridge). */
+export function readVkUserIdFromClientLocation(): number | null {
+  const q = getVkLaunchSearchFromLocation()
+  if (!q) return null
+  const formatted = q.startsWith("?") ? q.slice(1) : q
+  const raw = new URLSearchParams(formatted).get("vk_user_id")
+  if (!raw) return null
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n
+}
+
+/** Сообщество Lemnity (бонус за подписку, экран «мобильная версия»). */
+export const VK_COMMUNITY_GROUP_ID = 236519647
+export const VK_COMMUNITY_PUBLIC_URL = "https://vk.com/lemnitygame"
+
 function serializeVkLaunchParamsFromBridge(data: Record<string, unknown>): string {
   const vkPairs: { key: string; value: string }[] = []
   let sign = ""
@@ -691,6 +707,47 @@ export async function requestVkDenyNotifications(): Promise<{ ok: boolean }> {
   }
 }
 
+/**
+ * Подписка на сообщество из мини-приложения.
+ * @see https://dev.vk.com/bridge/VKWebAppJoinGroup
+ */
+export async function joinVkCommunityGroup(): Promise<{ ok: boolean }> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
+  try {
+    const raw = await b.send("VKWebAppJoinGroup", { group_id: VK_COMMUNITY_GROUP_ID })
+    const data = raw as { result?: boolean } | null
+    if (data && typeof data === "object" && data.result === false) return { ok: false }
+    return { ok: true }
+  } catch (e) {
+    console.warn("[VK] VKWebAppJoinGroup", e)
+    return { ok: false }
+  }
+}
+
+/**
+ * Открыть ссылку (во встроенном браузере ВК или в новой вкладке).
+ * @see https://dev.vk.com/bridge/VKWebAppOpenURL
+ */
+export async function openVkUrl(url: string): Promise<boolean> {
+  const u = url.trim()
+  if (!u) return false
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) {
+    if (typeof window !== "undefined") window.open(u, "_blank", "noopener,noreferrer")
+    return true
+  }
+  try {
+    const raw = await b.send("VKWebAppOpenURL", { url: u })
+    const data = raw as { result?: boolean } | null
+    return data?.result !== false
+  } catch (e) {
+    console.warn("[VK] VKWebAppOpenURL", e)
+    if (typeof window !== "undefined") window.open(u, "_blank", "noopener,noreferrer")
+    return true
+  }
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -720,5 +777,10 @@ export const vkBridge = {
   requestVkExpand,
   requestVkAllowNotifications,
   requestVkDenyNotifications,
+  joinVkCommunityGroup,
+  openVkUrl,
+  readVkUserIdFromClientLocation,
+  VK_COMMUNITY_GROUP_ID,
+  VK_COMMUNITY_PUBLIC_URL,
   VK_ITEM_IDS,
 }

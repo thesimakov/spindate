@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useLayoutEffect } from "react"
 
 /**
  * vk_platform в мини-приложении ВК часто в hash (#/…?vk_platform=…), а не в location.search.
@@ -140,21 +140,50 @@ export function useIsMobile(): boolean {
   return useMediaQuery("(max-width: 767px)")
 }
 
+type DesktopUserDetect =
+  | { resolved: false }
+  | { resolved: true; desktop: boolean }
+
+/**
+ * Пока нет `window` / до commit layout — не показываем «мобильную блокировку» десктопу:
+ * считаем клиент условно ПК (как в узком iframe ВК). После `useLayoutEffect` — фактическое устройство.
+ */
+function useDesktopUserDetect(): {
+  /** ПК для игровой логики и вёрстки; до `resolved` — всегда true */
+  isDesktopUser: boolean
+  /** После первого layout на клиенте */
+  deviceClassResolved: boolean
+} {
+  const [detect, setDetect] = useState<DesktopUserDetect>({ resolved: false })
+
+  useLayoutEffect(() => {
+    setDetect({ resolved: true, desktop: computeIsDesktopUser() })
+  }, [])
+
+  if (!detect.resolved) {
+    return { isDesktopUser: true, deviceClassResolved: false }
+  }
+  return { isDesktopUser: detect.desktop, deviceClassResolved: true }
+}
+
 /**
  * Режим вёрстки игры: узкий «телефонный» вид только на реальном телефоне;
- * в узком iframe ВК на ПК — ПК-раскладка. Один вызов `useIsDesktopUser` на компонент.
+ * в узком iframe ВК на ПК — ПК-раскладка.
  */
 export function useGameLayoutMode(): {
   /** Компактный UI как на телефоне */
   layoutMobile: boolean
   /** ПК / десктопный клиент ВК (стол на 10, широкая логика) */
   isDesktopUser: boolean
+  /** Можно безопасно решать «мобильный клиент vs ПК» (экран блокировки только при resolved && !isDesktopUser) */
+  deviceClassResolved: boolean
 } {
   const narrowViewport = useMediaQuery("(max-width: 767px)")
-  const isDesktopUser = useIsDesktopUser()
+  const { isDesktopUser, deviceClassResolved } = useDesktopUserDetect()
   return {
     layoutMobile: narrowViewport && !isDesktopUser,
     isDesktopUser,
+    deviceClassResolved,
   }
 }
 
@@ -169,11 +198,5 @@ export function useIsTablet(): boolean {
  * Используется для ИГРОВОЙ логики (10 игроков вместо 6), не для визуальной верстки.
  */
 export function useIsDesktopUser(): boolean {
-  const [isDesktop, setIsDesktop] = useState(computeIsDesktopUser)
-
-  useEffect(() => {
-    setIsDesktop(computeIsDesktopUser())
-  }, [])
-
-  return isDesktop
+  return useGameLayoutMode().isDesktopUser
 }
