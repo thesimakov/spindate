@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Heart, Loader2, Sparkles } from "lucide-react"
 import { useGame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
@@ -13,8 +13,16 @@ import {
   readVkUserIdFromClientLocation,
   VK_COMMUNITY_PUBLIC_URL,
 } from "@/lib/vk-bridge"
+import { useVkMiniAppPersistentHorizontalBanner } from "@/hooks/use-vk-overlay-banner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+
+const OPEN_URL_RACE_MS = 1800
+const AFTER_OPEN_DELAY_MS = 450
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms))
+}
 
 function buildSubscribeRewardUrl(user: Player | null): string {
   let vk: number | null = null
@@ -33,13 +41,19 @@ function buildSubscribeRewardUrl(user: Player | null): string {
   return "/api/rewards/vk-group-subscribe"
 }
 
+type SubscribeSuccess = "none" | "granted" | "alreadyClaimed"
+
 export function MobileAppBlockedScreen() {
+  useVkMiniAppPersistentHorizontalBanner()
+
   const { state, dispatch } = useGame()
   const user = state.currentUser
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
+  const [subscribeSuccess, setSubscribeSuccess] = useState<SubscribeSuccess>("none")
+  const awaitingClaimRef = useRef(false)
 
-  const tryClaimBonus = useCallback(async () => {
+  const tryClaimBonus = useCallback(async (): Promise<SubscribeSuccess> => {
     setHint(null)
     const res = await apiFetch(buildSubscribeRewardUrl(user), {
       method: "POST",
@@ -48,20 +62,29 @@ export function MobileAppBlockedScreen() {
     const data = (await res.json().catch(() => null)) as Record<string, unknown> | null
 
     if (res.status === 401) {
-      setHint("Чтобы получить бонус, войдите в приложение. Если вы уже играли на ПК — откройте мини-приложение в том же аккаунте ВК.")
-      return
+      setHint(
+        "Чтобы получить бонус, войдите в приложение. Если вы уже играли на ПК — откройте мини-приложение в том же аккаунте ВК.",
+      )
+      awaitingClaimRef.current = false
+      return "none"
     }
     if (res.status === 503) {
-      setHint("Проверка подписки временно недоступна. Подпишитесь на сообщество по ссылке — как только сервер настроят, бонус можно будет получить повторным нажатием.")
-      return
+      setHint(
+        "Проверка подписки временно недоступна. Подпишитесь на сообщество по ссылке — как только сервер настроят, бонус можно будет получить повторным нажатием.",
+      )
+      awaitingClaimRef.current = false
+      return "none"
     }
     if (!data || data.ok !== true) {
       if (data?.isMember === false) {
-        setHint("Подписка пока не засчиталась. Оформите вступление в сообщество и нажмите кнопку ещё раз через несколько секунд.")
-        return
+        setHint(
+          "Подписка пока не засчиталась. Оформите вступление в сообщество и нажмите кнопку ещё раз через несколько секунд.",
+        )
+        return "none"
       }
       setHint(typeof data?.error === "string" ? data.error : "Не удалось начислить бонус. Попробуйте ещё раз.")
-      return
+      awaitingClaimRef.current = false
+      return "none"
     }
 
     if (typeof data.voiceBalance === "number") {
@@ -71,28 +94,56 @@ export function MobileAppBlockedScreen() {
         inventory: (state.inventory ?? []) as InventoryItem[],
       })
     }
-    if (data.alreadyClaimed === true) {
-      setHint("Бонус уже был получен ранее. Спасибо, что с нами!")
-    } else if (data.granted === true) {
-      setHint("Готово: на баланс начислено 30 ❤. Зайдите с компьютера, чтобы продолжить игру.")
-    }
+
+    awaitingClaimRef.current = false
+    if (data.alreadyClaimed === true) return "alreadyClaimed"
+    if (data.granted === true) return "granted"
+    return "alreadyClaimed"
   }, [dispatch, state.inventory, user])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (typeof document === "undefined" || document.visibilityState !== "visible") return
+      if (!awaitingClaimRef.current) return
+      void (async () => {
+        const outcome = await tryClaimBonus()
+        if (outcome === "granted" || outcome === "alreadyClaimed") {
+          setSubscribeSuccess(outcome)
+        }
+      })()
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => document.removeEventListener("visibilitychange", onVisibility)
+  }, [tryClaimBonus])
 
   const handleSubscribeAndBonus = async () => {
     setBusy(true)
     setHint(null)
+    setSubscribeSuccess("none")
+    awaitingClaimRef.current = true
     try {
       await initVkResilient()
       if (isVkMiniApp()) {
         await joinVkCommunityGroup()
       }
-      await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
-      await new Promise((r) => setTimeout(r, 900))
-      await tryClaimBonus()
+      await Promise.race([openVkUrl(VK_COMMUNITY_PUBLIC_URL), sleep(OPEN_URL_RACE_MS)])
+      await sleep(AFTER_OPEN_DELAY_MS)
+      const outcome = await tryClaimBonus()
+      if (outcome === "granted" || outcome === "alreadyClaimed") {
+        setSubscribeSuccess(outcome)
+      }
     } finally {
       setBusy(false)
     }
   }
+
+  const showSuccess = subscribeSuccess !== "none"
+  const successFooter =
+    subscribeSuccess === "granted"
+      ? "Вы получаете 30 сердец, зайдите с компьютера и начните игру."
+      : subscribeSuccess === "alreadyClaimed"
+        ? "Бонус вы уже получали ранее. Зайдите с компьютера, чтобы продолжить игру."
+        : null
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-y-auto bg-[#0a0f18] px-4 py-8 text-slate-100">
@@ -120,17 +171,20 @@ export function MobileAppBlockedScreen() {
 
         <Button
           type="button"
-          disabled={busy}
+          disabled={busy || showSuccess}
           onClick={() => void handleSubscribeAndBonus()}
           className={cn(
             "mt-6 h-12 w-full rounded-2xl border border-cyan-400/40",
             "bg-gradient-to-r from-cyan-600 via-cyan-500 to-sky-500",
             "text-sm font-semibold text-white shadow-[0_6px_26px_rgba(6,182,212,0.4)]",
             "hover:from-cyan-500 hover:via-cyan-400 hover:to-sky-400 disabled:opacity-50",
+            showSuccess && "cursor-default opacity-90",
           )}
         >
-          {busy ? (
+          {busy && !showSuccess ? (
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+          ) : showSuccess ? (
+            "Вы подписались"
           ) : (
             <>
               <Heart className="mr-2 h-4 w-4 shrink-0 fill-white/20" aria-hidden />
@@ -138,6 +192,10 @@ export function MobileAppBlockedScreen() {
             </>
           )}
         </Button>
+
+        {successFooter ? (
+          <p className="mt-4 text-center text-sm leading-relaxed text-slate-300">{successFooter}</p>
+        ) : null}
 
         {typeof state.voiceBalance === "number" && user ? (
           <p className="mt-4 text-center text-xs text-slate-500">

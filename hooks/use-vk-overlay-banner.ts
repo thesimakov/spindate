@@ -4,10 +4,10 @@ import { useEffect } from "react"
 import { isVkMiniApp, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridge"
 
 /**
- * Горизонтальный баннер VK в игровой комнате: показ при монтировании и снова при возврате на вкладку.
- * Не вызываем HideBannerAd при модалках — баннер остаётся статичным (не моргает при открытии/закрытии окон).
+ * Горизонтальный overlay-баннер VK (compact, top): при маунте и при возврате вкладки.
+ * Не вызываем HideBannerAd при модалках — баннер остаётся статичным.
  */
-export function useVkOverlayBannerInGameRoom() {
+export function useVkMiniAppPersistentHorizontalBanner() {
   useEffect(() => {
     if (!isVkMiniApp()) return
 
@@ -32,3 +32,6 @@ export function useVkOverlayBannerInGameRoom() {
     }
   }, [])
 }
+
+/** @deprecated Используйте {@link useVkMiniAppPersistentHorizontalBanner}; имя сохранено для GameRoom. */
+export const useVkOverlayBannerInGameRoom = useVkMiniAppPersistentHorizontalBanner

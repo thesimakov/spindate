@@ -1,6 +1,6 @@
 ---
 description: VK горизонтальный баннер в игровой комнате — параметры bridge и что не выкидывать при рефакторинге
-globs: lib/vk-bridge.ts,hooks/use-vk-overlay-banner.ts,components/game-room.tsx
+globs: lib/vk-bridge.ts,hooks/use-vk-overlay-banner.ts,components/game-room.tsx,components/mobile-app-blocked-screen.tsx
 alwaysApply: false
 ---
 
@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Не удалять и не «упрощать без запроса»
 
-- Хук **`useVkOverlayBannerInGameRoom`** в `components/game-room.tsx` и файл **`hooks/use-vk-overlay-banner.ts`**.
+- Хук **`useVkMiniAppPersistentHorizontalBanner`** в файле **`hooks/use-vk-overlay-banner.ts`** (алиас **`useVkOverlayBannerInGameRoom`** — вызывается из `components/game-room.tsx`; тот же показ — из `components/mobile-app-blocked-screen.tsx`).
 - Функцию **`showVkBannerAdHorizontalPersistent`** и связанные типы в **`lib/vk-bridge.ts`** (`VkBannerShowOptions`, `showVkBannerAdCompact`).
 
 ## Контракт показа (актуальный пресет)
