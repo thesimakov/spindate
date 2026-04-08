@@ -105,7 +105,7 @@ export function MobileAppBlockedScreen() {
       >
         <div className="mb-4 inline-flex items-center gap-2 text-cyan-200/95">
           <Sparkles className="h-5 w-5 shrink-0" aria-hidden />
-          <span className="text-xs font-semibold tracking-wide">Spindate</span>
+          <span className="text-xs font-semibold tracking-wide">Крути и знакомься</span>
         </div>
         <h1 className="text-xl font-bold leading-snug tracking-tight text-white sm:text-2xl">
           Мобильная версия временно недоступна
