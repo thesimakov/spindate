@@ -25,8 +25,12 @@ import { RatingLeaderboardBody } from "@/components/rating-screen"
 import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
 import { PrivateInboxPanel } from "@/components/private-inbox-panel"
 import { MobileAppBlockedScreen } from "@/components/mobile-app-blocked-screen"
+import { useVkMiniAppPersistentHorizontalBanner } from "@/hooks/use-vk-overlay-banner"
 
 export function GameApp() {
+  /** Один раз на всё приложение в VK: лобби/регистрация/магазин не монтируют GameRoom — баннер только так показывается «везде». */
+  useVkMiniAppPersistentHorizontalBanner()
+
   const { state, dispatch } = useGame()
   const { isDesktopUser, deviceClassResolved } = useGameLayoutMode()
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)

@@ -66,7 +66,6 @@ import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
 import { TickerAnnouncementModal } from "@/components/ticker-announcement-modal"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
-import { useVkOverlayBannerInGameRoom } from "@/hooks/use-vk-overlay-banner"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
 import {
@@ -831,8 +830,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [betPlaced, setBetPlaced] = useState(false)
   const [betWinnings, setBetWinnings] = useState<number | null>(null)
   const botActionRoundRef = useRef<number | null>(null)
-
-  useVkOverlayBannerInGameRoom()
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id

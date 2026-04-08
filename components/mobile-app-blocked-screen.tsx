@@ -13,7 +13,6 @@ import {
   readVkUserIdFromClientLocation,
   VK_COMMUNITY_PUBLIC_URL,
 } from "@/lib/vk-bridge"
-import { useVkMiniAppPersistentHorizontalBanner } from "@/hooks/use-vk-overlay-banner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -44,8 +43,6 @@ function buildSubscribeRewardUrl(user: Player | null): string {
 type SubscribeSuccess = "none" | "granted" | "alreadyClaimed"
 
 export function MobileAppBlockedScreen() {
-  useVkMiniAppPersistentHorizontalBanner()
-
   const { state, dispatch } = useGame()
   const user = state.currentUser
   const [busy, setBusy] = useState(false)
@@ -82,7 +79,17 @@ export function MobileAppBlockedScreen() {
         )
         return "none"
       }
-      setHint(typeof data?.error === "string" ? data.error : "Не удалось начислить бонус. Попробуйте ещё раз.")
+      const errStr = typeof data?.error === "string" ? data.error : ""
+      const verifyFailed =
+        res.status === 502 ||
+        errStr.includes("Не удалось проверить подписку") ||
+        errStr.includes("проверить подписку")
+      if (verifyFailed) {
+        setHint("Вы уже подписаны. Следите за новостями.")
+        awaitingClaimRef.current = false
+        return "none"
+      }
+      setHint(errStr || "Не удалось начислить бонус. Попробуйте ещё раз.")
       awaitingClaimRef.current = false
       return "none"
     }

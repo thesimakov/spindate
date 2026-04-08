@@ -1,14 +1,14 @@
 ---
 description: VK горизонтальный баннер в игровой комнате — параметры bridge и что не выкидывать при рефакторинге
-globs: lib/vk-bridge.ts,hooks/use-vk-overlay-banner.ts,components/game-room.tsx,components/mobile-app-blocked-screen.tsx
+globs: lib/vk-bridge.ts,hooks/use-vk-overlay-banner.ts,components/game-app.tsx
 alwaysApply: false
 ---
 
-# VK баннер в GameRoom
+# VK горизонтальный баннер (мини-приложение)
 
 ## Не удалять и не «упрощать без запроса»
 
-- Хук **`useVkMiniAppPersistentHorizontalBanner`** в файле **`hooks/use-vk-overlay-banner.ts`** (алиас **`useVkOverlayBannerInGameRoom`** — вызывается из `components/game-room.tsx`; тот же показ — из `components/mobile-app-blocked-screen.tsx`).
+- Хук **`useVkMiniAppPersistentHorizontalBanner`** в **`hooks/use-vk-overlay-banner.ts`** (алиас **`useVkOverlayBannerInGameRoom`**) вызывается **один раз** из **`components/game-app.tsx`**, чтобы баннер запрашивался на всех экранах (лобби, регистрация, стол), а не только при монтировании `GameRoom`.
 - Функцию **`showVkBannerAdHorizontalPersistent`** и связанные типы в **`lib/vk-bridge.ts`** (`VkBannerShowOptions`, `showVkBannerAdCompact`).
 
 ## Контракт показа (актуальный пресет)
@@ -25,7 +25,7 @@ alwaysApply: false
 ## Поведение хука
 
 - **Без** `sessionStorage` / «один раз за сессию» — баннер запрашивается при монтировании и снова при **`visibilitychange`** (вкладка снова видима), с повторными попытками (до 3).
-- **Не** вызывать `VKWebAppHideBannerAd` при открытии модалок — иначе баннер «отваливается» при каждом открытии/закрытии окна; баннер должен оставаться **статичным** на время сессии за столом.
+- **Не** вызывать `VKWebAppHideBannerAd` при открытии модалок — иначе баннер «отваливается» при каждом открытии/закрытии окна; баннер должен оставаться **статичным** на время сессии.
 
 ## Связанный код
 
