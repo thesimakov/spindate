@@ -33,11 +33,18 @@ export class RoomManager {
         name: roomNameForDisplay(m.name, m.roomId),
         bottleSkin: normalizeRoomBottleSkin(m.bottleSkin ?? DEFAULT_ROOM_BOTTLE_SKIN),
         tableStyle: resolveEffectiveTableStyle(m),
+        isUserRoom: m.isUserRoom === true,
+        createdByUserId: m.createdByUserId,
+        createdAtMs: m.createdAtMs,
         livePlayerCount: n,
         maxPlayers: ROOM_MAX_PLAYERS,
       })
     }
-    return rows
+    const defaults = rows.filter((r) => !r.isUserRoom)
+    const userCreated = rows
+      .filter((r) => r.isUserRoom)
+      .sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0))
+    return [...defaults, ...userCreated]
   }
 
   async buildRoomState(roomId: number): Promise<RoomStatePayload> {

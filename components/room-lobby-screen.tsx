@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { BottleSkin, InventoryItem, Player } from "@/lib/game-types"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
@@ -48,6 +49,9 @@ type LobbyRow = {
   name: string
   bottleSkin?: BottleSkin
   tableStyle?: RoomTableStyle
+  isUserRoom?: boolean
+  createdByUserId?: number
+  createdAtMs?: number
   livePlayerCount: number
   maxPlayers: number
 }
@@ -57,6 +61,7 @@ const BUY_HEARTS_AMOUNT = 200
 const BUY_HEARTS_VOTES = 9
 const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"
 const VISITED_TTL_MS = 24 * 60 * 60 * 1000
+type LobbyTab = "default" | "created"
 
 type CreateBottleOption = { id: BottleSkin; name: string; img?: string; cost: number }
 
@@ -171,6 +176,7 @@ export function RoomLobbyScreen() {
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState("")
   const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
+  const [activeTab, setActiveTab] = useState<LobbyTab>("default")
 
   const lobbyTableStyleOptions = useMemo(() => {
     const published = new Set(tableStyleRows.filter((r) => r.published).map((r) => r.id))
@@ -214,6 +220,12 @@ export function RoomLobbyScreen() {
   )
 
   const createBottleIds = useMemo(() => new Set(createBottleOptions.map((o) => o.id)), [createBottleOptions])
+  const defaultRoomsCount = useMemo(() => rows.filter((r) => !r.isUserRoom).length, [rows])
+  const createdRoomsCount = useMemo(() => rows.filter((r) => r.isUserRoom).length, [rows])
+  const filteredRows = useMemo(
+    () => rows.filter((r) => (activeTab === "default" ? !r.isUserRoom : r.isUserRoom)),
+    [rows, activeTab],
+  )
 
   useEffect(() => {
     if (!createBottleIds.has(createBottleSkin)) {
@@ -523,21 +535,46 @@ export function RoomLobbyScreen() {
             </div>
           ) : null}
 
+          <div className="shrink-0 border-b border-white/[0.06] px-3 pb-2 pt-2 sm:px-4">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as LobbyTab)} className="w-full">
+              <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl bg-slate-900/65 p-1">
+                <TabsTrigger
+                  value="default"
+                  className="rounded-lg text-xs font-semibold text-slate-200 data-[state=active]:bg-cyan-400/20 data-[state=active]:text-cyan-100 data-[state=active]:shadow-none"
+                >
+                  {`Игровые столы (${defaultRoomsCount})`}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="created"
+                  className="rounded-lg text-xs font-semibold text-slate-200 data-[state=active]:bg-cyan-400/20 data-[state=active]:text-cyan-100 data-[state=active]:shadow-none"
+                >
+                  {`Созданный стол (${createdRoomsCount})`}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-3 sm:px-4">
             <ul className="space-y-2.5 pb-1">
-              {rows.length === 0 && !lobbyLoaded && (
+              {filteredRows.length === 0 && !lobbyLoaded && (
                 <li className="flex items-center justify-center gap-2 py-10 text-slate-500">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                   <span>Загрузка игрового стола</span>
                 </li>
               )}
-              {rows.length === 0 && lobbyLoaded && (
+              {filteredRows.length === 0 && lobbyLoaded && (
                 <li className="flex flex-col items-center gap-2 py-10 text-center">
-                  <p className="text-sm font-medium text-slate-400">Столов пока нет</p>
-                  <p className="text-[11px] text-slate-500">Создайте свой стол или дождитесь появления новых</p>
+                  <p className="text-sm font-medium text-slate-400">
+                    {activeTab === "default" ? "Игровых столов пока нет" : "Созданных столов пока нет"}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {activeTab === "default"
+                      ? "Дождитесь появления столов по умолчанию"
+                      : "Создайте свой стол, и он появится здесь"}
+                  </p>
                 </li>
               )}
-              {rows.map((r) => {
+              {filteredRows.map((r) => {
                 const isFull = r.livePlayerCount >= r.maxPlayers
                 const fillPct = r.maxPlayers > 0 ? Math.min(100, Math.round((r.livePlayerCount / r.maxPlayers) * 100)) : 0
                 const wasHere = typeof visitedRooms[String(r.roomId)] === "number"

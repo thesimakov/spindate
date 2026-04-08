@@ -26,6 +26,9 @@ export interface LobbyRoomRow {
   name: string
   bottleSkin?: BottleSkin
   tableStyle?: RoomTableStyle
+  isUserRoom?: boolean
+  createdByUserId?: number
+  createdAtMs?: number
   livePlayerCount: number
   maxPlayers: number
 }
