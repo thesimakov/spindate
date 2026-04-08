@@ -2,6 +2,7 @@
 
 import { payVotesForPack } from "@/lib/heart-shop-pricing"
 import { appPath } from "@/lib/app-path"
+import { buildGameInviteClipboardText, getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
 
 /**
  * Обёртка над VK Bridge для мини-приложения ВКонтакте.
@@ -602,6 +603,42 @@ export async function recommendApp(): Promise<boolean> {
   return false
 }
 
+export type ShareGameInviteOutcome = "ok_full" | "ok_recommend" | "fail"
+
+/**
+ * «Рассказать про игру»: копирует текст приглашения в буфер, открывает нативный шаринг ссылки на приложение.
+ * Если не удалось — fallback на {@link recommendApp}.
+ */
+export async function shareGameInvite(): Promise<ShareGameInviteOutcome> {
+  await initVkResilient()
+  const b = await getBridgeAsync()
+  if (!b || !isVkMiniApp()) return "fail"
+
+  const copyText = buildGameInviteClipboardText()
+  const link = getVkMiniAppPageUrl()
+  let copyOk = false
+  let shareOk = false
+
+  try {
+    await b.send("VKWebAppCopyText", { text: copyText })
+    copyOk = true
+  } catch (e) {
+    console.warn("[VK] VKWebAppCopyText", e)
+  }
+
+  if (link) {
+    try {
+      await b.send("VKWebAppShare", { link })
+      shareOk = true
+    } catch (e) {
+      console.warn("[VK] VKWebAppShare", e)
+    }
+  }
+
+  if (copyOk || shareOk) return "ok_full"
+  return (await recommendApp()) ? "ok_recommend" : "fail"
+}
+
 /** Доступен ли нативный блок спонсоров VK (reward / interstitial). */
 export async function checkVkNativeAd(adFormat: "reward" | "interstitial"): Promise<boolean> {
   const b = await getBridgeAsync()
@@ -815,6 +852,7 @@ export const vkBridge = {
   inviteFriends,
   getFriends,
   recommendApp,
+  shareGameInvite,
   checkVkNativeAd,
   showVkNativeAd,
   showVkBannerAdCompact,

@@ -462,9 +462,16 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       showToast("Доступно только в VK", "error")
       return
     }
-    const ok = await vkBridge.recommendApp()
-    if (ok) showToast("Спасибо за рекомендацию!", "info")
-    else showToast("Не удалось рекомендовать", "error")
+    const outcome = await vkBridge.shareGameInvite()
+    if (outcome === "fail") {
+      showToast("Не удалось поделиться", "error")
+      return
+    }
+    if (outcome === "ok_recommend") {
+      showToast("Открыто окно ВК", "info")
+      return
+    }
+    showToast("Текст скопирован — вставьте в сообщение при отправке", "info")
   }
 
   const renderProfileFields = () => (
@@ -797,7 +804,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               className={`w-full px-5 text-xs ${secondaryBtnClass}`}
               onClick={handleRecommend}
             >
-              Рекомендовать приложение
+              Рассказать про игру
             </Button>
           </div>
         </div>
