@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { APP_BASE_PATH } from "@/lib/app-path"
 import { payVotesForPack } from "@/lib/heart-shop-pricing"
 import { verifyVkPaymentsSig } from "@/lib/vk-payments-sign"
 import { getDb } from "@/lib/db"
@@ -62,17 +63,31 @@ function normalizeNotificationType(t: string): string {
   return t.replace(/_test$/i, "")
 }
 
+/** Публичный HTTPS URL картинки товара для get_item (VK ожидает `photo_url`). */
+function vkPaymentItemPhotoUrl(itemKey: string): string {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")
+  const fallbackOrigin = "https://spindate.lemnity.ru"
+  const origin = base || fallbackOrigin
+  const m = /^hearts_(\d+)$/i.exec(itemKey)
+  const path = m
+    ? `${APP_BASE_PATH}/assets/${m[1]}.svg`
+    : `${APP_BASE_PATH}/favicon.svg`
+  return `${origin}${path}`
+}
+
 /** get_item — информация о товаре; в запросе поле `item` (как передал клиент). */
-function handleGetItem(itemKey: string): NextResponse {
+function handleGetItem(itemKey: string, isTest: boolean): NextResponse {
   const item = itemKey && VK_PAYMENT_ITEMS[itemKey as ItemId]
   if (!item) {
     return vkError(20, "Product does not exist", true)
   }
+  const title = isTest ? `${item.title} (тестовый режим)` : item.title
   return vkJson({
     response: {
-      title: item.title,
+      title,
       price: item.price,
       item_id: itemKey,
+      photo_url: vkPaymentItemPhotoUrl(itemKey),
     },
   })
 }
@@ -249,7 +264,8 @@ export async function POST(req: NextRequest) {
 
     if (baseType === "get_item") {
       const itemKey = String(params.get("item") ?? params.get("item_id") ?? "")
-      return handleGetItem(itemKey)
+      const isTest = /_test$/i.test(notificationType)
+      return handleGetItem(itemKey, isTest)
     }
 
     if (baseType === "order_status_change") {

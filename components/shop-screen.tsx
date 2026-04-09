@@ -20,6 +20,16 @@ type ShopScreenProps = {
   onClose?: () => void
 }
 
+/** Склонение «N голос(ов)» для цен в голосах VK. */
+function vkVotesWordRu(n: number): string {
+  const abs = Math.abs(Math.trunc(n))
+  const mod10 = abs % 10
+  const mod100 = abs % 100
+  if (mod10 === 1 && mod100 !== 11) return "голос"
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "голоса"
+  return "голосов"
+}
+
 export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) {
   const { state, dispatch } = useGame()
   const { currentUser, voiceBalance, players, inventory, tableId } = state
@@ -620,7 +630,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   className="w-full rounded-2xl border border-amber-500/45 bg-gradient-to-b from-amber-300 via-amber-400 to-orange-500 px-2 py-2.5 text-center text-[13px] font-black tracking-tight text-[#2f1a04] shadow-[0_6px_12px_rgba(217,119,6,0.32),inset_0_1px_0_rgba(255,255,255,0.55)] transition hover:brightness-105 active:translate-y-px active:shadow-[0_3px_7px_rgba(217,119,6,0.35)] sm:text-sm"
                 >
                   <span className="tabular-nums">{offer.votes}</span>
-                  <span className="hidden sm:inline"> голосов</span>
+                  <span className="hidden sm:inline"> {vkVotesWordRu(offer.votes)}</span>
                   <span className="sm:hidden"> гол.</span>
                 </button>
               </div>

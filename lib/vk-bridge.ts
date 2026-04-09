@@ -488,10 +488,13 @@ export async function showPaymentWall(
 
   if (itemId) {
     try {
-      const result = await b.send("VKWebAppShowOrderBox", {
+      const appIdForOrder = getVkAppId()
+      const orderBoxParams: Record<string, unknown> = {
         type: "item",
         item: itemId,
-      })
+      }
+      if (appIdForOrder) orderBoxParams.app_id = appIdForOrder
+      const result = await b.send("VKWebAppShowOrderBox", orderBoxParams)
       if (vkPayResultOk(result)) return true
       if (typeof result === "boolean" && result) return true
     } catch (e) {
