@@ -833,15 +833,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id
-  /** Единый драйвер раунда: только он запускает бот-автодействия, чтобы клиенты не расходились. */
-  const isRoundDriver = useCallback(() => {
-    if (!currentUser) return false
-    const liveIds = players
-      .filter((p) => !p.isBot)
-      .map((p) => p.id)
-      .sort((a, b) => a - b)
-    return liveIds.length > 0 && liveIds[0] === currentUser.id
-  }, [players, currentUser])
   const nowTs = Date.now()
   const isCurrentTurnDrunk =
     !!currentTurnPlayer &&
@@ -1921,7 +1912,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /* ---- боты рандомно нажимают «Спасибо» донору бутылочки ---- */
   useEffect(() => {
     if (!bottleDonorId || players.length === 0) return
-    if (!isRoundDriver()) return
+    if (!isRoundDriver) return
     const donorId = bottleDonorId
     const botsWhoCanThank = players.filter(
       (p) => p.isBot && p.id !== donorId && p.id !== currentUser?.id,
@@ -1940,7 +1931,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /* ---- bot auto-actions on result (random, 1–3 actions) ---- */
   useEffect(() => {
     if (!showResult || !currentTurnPlayer || !currentTurnPlayer.isBot) return
-    if (!isRoundDriver()) return
+    if (!isRoundDriver) return
     if (!targetPlayer || !targetPlayer2) return
     if (botActionRoundRef.current === roundNumber) return
 
