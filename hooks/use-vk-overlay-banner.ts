@@ -10,6 +10,9 @@ import { isVkMiniApp, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridg
 export function useVkMiniAppPersistentHorizontalBanner() {
   useEffect(() => {
     const vkMini = isVkMiniApp()
+    // #region agent log
+    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H1',location:'hooks/use-vk-overlay-banner.ts:13',message:'banner hook mount',data:{vkMini},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (!vkMini) return
 
     let cancelled = false
@@ -18,6 +21,9 @@ export function useVkMiniAppPersistentHorizontalBanner() {
 
     const run = () => {
       if (cancelled || running) return
+      // #region agent log
+      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H2',location:'hooks/use-vk-overlay-banner.ts:22',message:'banner run trigger',data:{cancelled,running,visibility:typeof document!=='undefined'?document.visibilityState:'na'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       running = true
       void refreshVkPersistentHorizontalBanner().finally(() => {
         running = false
