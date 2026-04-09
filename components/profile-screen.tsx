@@ -497,7 +497,14 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         delete next[achievementKey]
         return next
       })
-      showToast("Открыт пост на стену VK", "info")
+      showToast(
+        posted.usedStoryFallback
+          ? "Окно стены недоступно: открыт редактор истории со ссылкой на игру"
+          : posted.usedShareFallback
+            ? "Окно стены недоступно: текст скопирован, открыт шаринг со ссылкой на игру"
+            : "Открыт пост на стену VK",
+        "info",
+      )
       return true
     }
     setManualPublishKeys((prev) => ({ ...prev, [achievementKey]: true }))

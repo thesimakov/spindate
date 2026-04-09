@@ -42,6 +42,7 @@ import {
 } from "@/lib/bottle-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { useTableStyleCatalog } from "@/lib/use-table-style-catalog"
+import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
 import { buyHearts200, isVkRuntimeEnvironment, showVkWallPostConfirm } from "@/lib/vk-bridge"
 import { formatUserTableSharePostText } from "@/lib/achievement-posts-format"
 import { SHARE_USER_TABLE_POST_KEY } from "@/lib/achievement-posts-catalog"
@@ -417,9 +418,9 @@ export function RoomLobbyScreen() {
           return
         }
         const gameUrl =
-          typeof window !== "undefined" && window.location.origin
-            ? window.location.origin
-            : "https://vk.com/app54511363"
+          getVkMiniAppPageUrl() ||
+          (typeof window !== "undefined" && window.location.origin ? window.location.origin : "") ||
+          "https://vk.com/app54511363"
         const message = formatUserTableSharePostText({
           template: typeof template.postTextTemplate === "string" ? template.postTextTemplate : "",
           playerName,
@@ -432,7 +433,16 @@ export function RoomLobbyScreen() {
           imageUrl: img || undefined,
           gameUrl,
         })
-        if (posted.ok) showToast("Открыт пост на стену VK", "info")
+        if (posted.ok) {
+          showToast(
+            posted.usedStoryFallback
+              ? "Пост на стену недоступен: открыт редактор истории VK со ссылкой на игру"
+              : posted.usedShareFallback
+                ? "Пост на стену недоступен: текст скопирован, открыт шаринг со ссылкой на игру"
+                : "Открыт пост на стену VK",
+            "info",
+          )
+        }
       } catch {
         /* ignore */
       }

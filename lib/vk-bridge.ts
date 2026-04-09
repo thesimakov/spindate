@@ -915,36 +915,174 @@ export async function openVkUrl(url: string): Promise<boolean> {
   }
 }
 
+/**
+ * Публикация «на стену» из мини-приложения по документации VK:
+ * - основной путь — {@link https://dev.vk.com/ru/bridge/VKWebAppShowWallPostBox VKWebAppShowWallPostBox}
+ *   (окно подтверждения; это не прямой вызов API `wall.post` с фронта).
+ * - для Direct Games при недоступности стены — {@link https://dev.vk.com/ru/bridge/VKWebAppShowStoryBox VKWebAppShowStoryBox}.
+ */
+export type VkWallPostOutcome = {
+  ok: boolean
+  /** Сработал шаринг истории (рекомендуемая альтернатива стене для игр). */
+  usedStoryFallback?: boolean
+  /** Копирование текста + VKWebAppShare. */
+  usedShareFallback?: boolean
+}
+
+function isVkBridgeErrorShape(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") return false
+  const o = raw as Record<string, unknown>
+  if (typeof o.error_type === "string" && o.error_type.length > 0) return true
+  if (typeof o.error_code === "number") return true
+  const ed = o.error_data
+  if (ed && typeof ed === "object") {
+    const reason = (ed as Record<string, unknown>).error_reason
+    if (typeof reason === "string" && reason.length > 0) return true
+  }
+  const detail = o.detail
+  if (detail && typeof detail === "object") return isVkBridgeErrorShape(detail)
+  return false
+}
+
+/** Абсолютный https/http URL для вложений VK (стена / истории), относительные пути — через appPath и origin. */
+function resolvePublicUrlForVkAttachment(pathOrUrl: string | undefined): string | null {
+  if (!pathOrUrl || typeof pathOrUrl !== "string") return null
+  const t = pathOrUrl.trim()
+  if (!t) return null
+  if (/^https?:\/\//i.test(t)) return t.slice(0, 800)
+  const path = t.startsWith("/") ? t : `/${t}`
+  const resolved = appPath(path)
+  if (/^https?:\/\//i.test(resolved)) return resolved.slice(0, 800)
+  if (typeof window !== "undefined" && window.location?.origin?.startsWith("http")) {
+    return `${window.location.origin}${resolved}`.slice(0, 800)
+  }
+  return null
+}
+
+/** Явный отказ окна поста (в т.ч. «приложению недоступно создание постов»). */
+function wallPostBoxResponseFailed(raw: unknown): boolean {
+  if (raw == null) return false
+  if (typeof raw !== "object") return false
+  const o = raw as Record<string, unknown>
+  if (isVkBridgeErrorShape(o)) return true
+  if (o.result === false) return true
+  return false
+}
+
+/**
+ * Если VKWebAppShowWallPostBox недоступен (политика платформы для игр / мини-приложений):
+ * копируем текст поста и открываем нативный шаринг ссылки на приложение.
+ */
+/**
+ * Редактор историй с интерактивной ссылкой на приложение (Direct Games / мини-приложения).
+ * @see VKWebAppShowStoryBox
+ */
+async function tryVkShowStoryBoxShare(
+  b: Bridge,
+  args: { message: string; gameUrl: string; imageUrl?: string },
+): Promise<boolean> {
+  const link = resolvePublicUrlForVkAttachment(args.gameUrl) || getVkMiniAppPageUrl()
+  if (!link) return false
+  const stickerText = args.message.replace(/\s+/g, " ").trim().slice(0, 200)
+  const attachmentLabel = stickerText.slice(0, 72)
+
+  const attachment: { type: "url"; url: string; text?: string } = {
+    type: "url",
+    url: link,
+  }
+  if (attachmentLabel) attachment.text = attachmentLabel
+
+  const bgImage = resolvePublicUrlForVkAttachment(args.imageUrl)
+  const payload: Record<string, unknown> = { attachment }
+  if (bgImage) {
+    payload.background_type = "image"
+    payload.url = bgImage
+  } else {
+    payload.background_type = "none"
+  }
+
+  try {
+    const raw = await b.send("VKWebAppShowStoryBox" as never, payload as never)
+    if (wallPostBoxResponseFailed(raw)) return false
+    const o = raw as { result?: boolean } | null
+    if (o && typeof o === "object" && o.result === false) return false
+    return true
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowStoryBox", e)
+    return false
+  }
+}
+
+async function vkWallPostShareFallback(b: Bridge, postText: string, preferredLink: string): Promise<boolean> {
+  const link = preferredLink.trim() || getVkMiniAppPageUrl() || ""
+  let copyOk = false
+  try {
+    await b.send("VKWebAppCopyText", { text: postText })
+    copyOk = true
+  } catch (e) {
+    console.warn("[VK] VKWebAppCopyText (wall fallback)", e)
+  }
+  if (link) {
+    try {
+      await b.send("VKWebAppShare", { link })
+      return true
+    } catch (e) {
+      console.warn("[VK] VKWebAppShare (wall fallback)", e)
+    }
+  }
+  return copyOk
+}
+
 export async function showVkWallPostConfirm(
   payload: string | { message: string; imageUrl?: string; gameUrl?: string },
-): Promise<{ ok: boolean }> {
+): Promise<VkWallPostOutcome> {
   const message = typeof payload === "string" ? payload : payload.message
   const text = message.trim()
   if (!text) return { ok: false }
   const b = await getBridgeAsync()
   if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
-  try {
-    const attachments: string[] = []
-    if (typeof payload !== "string") {
-      const img = typeof payload.imageUrl === "string" ? payload.imageUrl.trim() : ""
-      const link = typeof payload.gameUrl === "string" ? payload.gameUrl.trim() : ""
-      if (img) attachments.push(img)
-      if (link) attachments.push(link)
+  const gameUrl = typeof payload !== "string" && typeof payload.gameUrl === "string" ? payload.gameUrl.trim() : ""
+  const rawImageUrl = typeof payload !== "string" && typeof payload.imageUrl === "string" ? payload.imageUrl.trim() : ""
+
+  const tryWallBox = async (withAttachments: boolean): Promise<boolean> => {
+    try {
+      const attachments: string[] = []
+      if (withAttachments && typeof payload !== "string") {
+        const img = resolvePublicUrlForVkAttachment(rawImageUrl) ?? rawImageUrl
+        const link = resolvePublicUrlForVkAttachment(gameUrl) ?? gameUrl
+        if (img) attachments.push(img)
+        if (link) attachments.push(link)
+      }
+      const raw = await b.send("VKWebAppShowWallPostBox" as never, {
+        message: text,
+        ...(attachments.length > 0 ? { attachments: attachments.join(",") } : {}),
+      } as never)
+      if (wallPostBoxResponseFailed(raw)) return false
+      const data = raw as { result?: boolean; post_id?: number } | null
+      if (data && typeof data === "object") {
+        if (data.result === false) return false
+        if (typeof data.post_id === "number" && data.post_id > 0) return true
+      }
+      return true
+    } catch (e) {
+      console.warn("[VK] VKWebAppShowWallPostBox", e)
+      return false
     }
-    const raw = await b.send("VKWebAppShowWallPostBox" as never, {
-      message: text,
-      ...(attachments.length > 0 ? { attachments: attachments.join(",") } : {}),
-    } as never)
-    const data = raw as { result?: boolean; post_id?: number } | null
-    if (data && typeof data === "object") {
-      if (data.result === false) return { ok: false }
-      if (typeof data.post_id === "number" && data.post_id > 0) return { ok: true }
-    }
-    return { ok: true }
-  } catch (e) {
-    console.warn("[VK] VKWebAppShowWallPostBox", e)
-    return { ok: false }
   }
+
+  let wallOk = await tryWallBox(true)
+  if (!wallOk) wallOk = await tryWallBox(false)
+  if (wallOk) return { ok: true }
+
+  const storyOk = await tryVkShowStoryBoxShare(b, {
+    message: text,
+    gameUrl: gameUrl || getVkMiniAppPageUrl() || "",
+    imageUrl: rawImageUrl || undefined,
+  })
+  if (storyOk) return { ok: true, usedStoryFallback: true }
+
+  const fallbackOk = await vkWallPostShareFallback(b, text, gameUrl)
+  return { ok: fallbackOk, usedShareFallback: true }
 }
 
 export const vkBridge = {
