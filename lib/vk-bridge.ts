@@ -687,12 +687,7 @@ export type VkBannerShowOptions = {
 export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Promise<boolean> {
   const b = await getBridgeAsync()
   const runtime = await isVkRuntimeEnvironment()
-  if (!b || !runtime) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H3',location:'lib/vk-bridge.ts:690',message:'show banner skipped runtime/bridge',data:{hasBridge:!!b,runtime},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    return false
-  }
+  if (!b || !runtime) return false
   const banner_location = options?.banner_location ?? "top"
   const layout_type = options?.layout_type ?? "resize"
   const height_type = options?.height_type ?? "compact"
@@ -707,14 +702,8 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
     if (options?.can_close != null) payload.can_close = options.can_close
     const res = await b.send("VKWebAppShowBannerAd", payload)
     const ok = (res as { result?: boolean })?.result === true
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H4',location:'lib/vk-bridge.ts:705',message:'show banner bridge result',data:{ok,payload,res},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return ok
   } catch (e) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H4',location:'lib/vk-bridge.ts:708',message:'show banner bridge error',data:{error:e instanceof Error?{name:e.name,message:e.message}:String(e)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.warn("[VK] VKWebAppShowBannerAd", e)
     return false
   }
@@ -763,9 +752,6 @@ export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
   if (now - vkPersistentBannerLastStartedAt < VK_PERSISTENT_BANNER_MIN_GAP_MS) return
 
   vkPersistentBannerLastStartedAt = now
-  // #region agent log
-  fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H2',location:'lib/vk-bridge.ts:758',message:'refresh banner start',data:{now},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   vkPersistentBannerRefreshInFlight = (async () => {
     await initVkResilient()
     let failStreak = 0
@@ -777,9 +763,6 @@ export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
       }
 
       const ok = await showVkBannerAdHorizontalPersistent()
-      // #region agent log
-      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H2',location:'lib/vk-bridge.ts:769',message:'refresh banner attempt result',data:{attempt:i+1,ok,failStreak},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (ok) return
       failStreak += 1
 

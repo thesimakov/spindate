@@ -8,6 +8,25 @@ const BONUS_HEARTS = 30
 
 export async function POST(req: Request) {
   const auth = getGameUserIdFromRequest(req)
+  // #region agent log
+  void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+    body: JSON.stringify({
+      sessionId: "ec43d5",
+      runId: "subscribe-debug-1",
+      hypothesisId: "H1",
+      location: "app/api/rewards/vk-group-subscribe/route.ts:11",
+      message: "reward route auth parsed",
+      data: {
+        hasAuth: !!auth,
+        userId: auth?.userId ?? null,
+        vkUserId: auth?.vkUserId ?? null,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
   if (!auth) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
@@ -31,6 +50,26 @@ export async function POST(req: Request) {
   }
 
   const memberCheck = await vkGroupsIsMember({ groupId: COMMUNITY_GROUP_ID, userId: vkUserId })
+  // #region agent log
+  void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+    body: JSON.stringify({
+      sessionId: "ec43d5",
+      runId: "subscribe-debug-1",
+      hypothesisId: "H2",
+      location: "app/api/rewards/vk-group-subscribe/route.ts:35",
+      message: "vk group membership check result",
+      data: {
+        ok: memberCheck.ok,
+        member: memberCheck.member ?? null,
+        reason: memberCheck.reason ?? null,
+        vkUserId,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
   if (!memberCheck.ok) {
     if (memberCheck.reason === "missing_service_token") {
       return NextResponse.json(
@@ -89,6 +128,21 @@ export async function POST(req: Request) {
        SET voice_balance = ?, vk_group_bonus_claimed = 1, updated_at = ?
        WHERE user_id = ?`,
     ).run(balance, now, auth.userId)
+    // #region agent log
+    void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+      body: JSON.stringify({
+        sessionId: "ec43d5",
+        runId: "subscribe-debug-1",
+        hypothesisId: "H3",
+        location: "app/api/rewards/vk-group-subscribe/route.ts:97",
+        message: "reward granted for user_game_state",
+        data: { userId: auth.userId, balance, granted: true },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
 
     return NextResponse.json({ ok: true, voiceBalance: balance, isMember: true, granted: true })
   }
@@ -125,6 +179,21 @@ export async function POST(req: Request) {
      SET voice_balance = ?, vk_group_bonus_claimed = 1, updated_at = ?
      WHERE vk_user_id = ?`,
   ).run(balanceVk, now, vkUserId)
+  // #region agent log
+  void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+    body: JSON.stringify({
+      sessionId: "ec43d5",
+      runId: "subscribe-debug-1",
+      hypothesisId: "H3",
+      location: "app/api/rewards/vk-group-subscribe/route.ts:133",
+      message: "reward granted for vk_user_game_state",
+      data: { vkUserId, balanceVk, granted: true },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
 
   return NextResponse.json({ ok: true, voiceBalance: balanceVk, isMember: true, granted: true })
 }

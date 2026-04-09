@@ -39,9 +39,6 @@ export function ClientBuildReload() {
         const serverBuild = typeof data?.buildId === "string" ? data.buildId.trim() : ""
         if (!serverBuild || serverBuild === "unknown") return
         if (serverBuild !== CLIENT_BUILD) {
-          // #region agent log
-          fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-debug-1',hypothesisId:'H5',location:'components/client-build-reload.tsx:42',message:'build mismatch detected',data:{clientBuild:CLIENT_BUILD,serverBuild,host:window.location.host},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           const now = Date.now()
           try {
             const raw = sessionStorage.getItem(RELOAD_GUARD_KEY)
