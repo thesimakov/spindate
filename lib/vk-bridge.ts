@@ -969,9 +969,14 @@ function wallPostBoxResponseFailed(raw: unknown): boolean {
   return false
 }
 
+/** Лимит текста для native_sticker action_type text (док: произвольный текст в истории). */
+const VK_STORY_NATIVE_TEXT_MAX = 500
+
 /**
  * Редактор историй с интерактивной ссылкой на приложение (Direct Games / мини-приложения).
- * У `StoryAttachment.text` в Bridge — ключ кнопки (как link_text в stories), не произвольная строка.
+ * По {@link https://dev.vk.com/ru/bridge/VKWebAppShowStoryBox}:
+ * - `attachment` обязателен; `attachment.text` — не подпись поста, а ключ кнопки (как `link_text` в stories API).
+ * - Произвольный текст — через `stickers` + `native_sticker` с `action_type: "text"` и `action.text`.
  * @see VKWebAppShowStoryBox
  */
 async function tryVkShowStoryBoxShare(
@@ -994,6 +999,19 @@ async function tryVkShowStoryBoxShare(
     payload.url = bgImage
   } else {
     payload.background_type = "none"
+  }
+
+  const storyText = args.message.trim().slice(0, VK_STORY_NATIVE_TEXT_MAX)
+  if (storyText.length > 0) {
+    payload.stickers = [
+      {
+        sticker_type: "native",
+        sticker: {
+          action_type: "text",
+          action: { text: storyText },
+        },
+      },
+    ]
   }
 
   try {
