@@ -663,6 +663,9 @@ export async function showVkNativeAd(adFormat: "reward" | "interstitial"): Promi
   } catch (e) {
     console.warn("[VK] VKWebAppShowNativeAds", e)
     return false
+  } finally {
+    // Клиент VK часто скрывает горизонтальный баннер на время полноэкранного native — восстанавливаем после выхода.
+    void refreshVkPersistentHorizontalBanner().catch(() => {})
   }
 }
 
