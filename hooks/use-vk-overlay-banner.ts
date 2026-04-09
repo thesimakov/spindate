@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { useGame } from "@/lib/game-context"
-import { hideVkBannerAd, isVkRuntimeEnvironment, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridge"
+import { hideVkBannerAd, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridge"
 
 /**
  * Горизонтальный overlay-баннер VK (compact, top): при маунте и при возврате вкладки.
@@ -24,6 +24,8 @@ export function useVkMiniAppPersistentHorizontalBanner() {
     let running = false
     const HEARTBEAT_MS = 120_000
     let heartbeat: number | null = null
+    let t1: number | null = null
+    let t2: number | null = null
 
     const run = () => {
       if (cancelled || running) return
@@ -34,6 +36,9 @@ export function useVkMiniAppPersistentHorizontalBanner() {
     }
 
     run()
+    // Дополнительные попытки после старта: bridge в VK WebView может инициализироваться с задержкой.
+    t1 = window.setTimeout(run, 1800)
+    t2 = window.setTimeout(run, 6500)
 
     const onVisibility = () => {
       if (cancelled || typeof document === "undefined") return
@@ -48,22 +53,18 @@ export function useVkMiniAppPersistentHorizontalBanner() {
       run()
     }
 
-    void (async () => {
-      const vkRuntime = await isVkRuntimeEnvironment()
-      if (cancelled || !vkRuntime) return
-
-      run()
-      document.addEventListener("visibilitychange", onVisibility)
-      window.addEventListener("focus", onFocus)
-      window.addEventListener("pageshow", onPageShow)
-      heartbeat = window.setInterval(run, HEARTBEAT_MS)
-    })()
+    document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("focus", onFocus)
+    window.addEventListener("pageshow", onPageShow)
+    heartbeat = window.setInterval(run, HEARTBEAT_MS)
 
     return () => {
       cancelled = true
       document.removeEventListener("visibilitychange", onVisibility)
       window.removeEventListener("focus", onFocus)
       window.removeEventListener("pageshow", onPageShow)
+      if (t1 !== null) window.clearTimeout(t1)
+      if (t2 !== null) window.clearTimeout(t2)
       if (heartbeat !== null) window.clearInterval(heartbeat)
     }
   }, [vipActive])
