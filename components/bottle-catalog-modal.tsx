@@ -114,7 +114,7 @@ export function BottleCatalogModal({
               ? `Через ${formatCooldown(cooldownLeftMs)}`
               : fallbackToHearts
                 ? `${skin.cost} ❤`
-                : "Просмотр видео"
+          : ""
 
       const applyPurchase = (chargeHearts: boolean) => {
         if (chargeHearts) {
@@ -335,14 +335,16 @@ export function BottleCatalogModal({
               </div>
 
               <div className="mt-2 w-full min-w-0">
-                <div className="flex items-center justify-center">
-                  <span
-                    className="rounded-full px-3 py-1.5 text-base font-extrabold tracking-tight sm:text-lg"
-                    style={badgeTone}
-                  >
-                    {e.status}
-                  </span>
-                </div>
+                {e.status ? (
+                  <div className="flex items-center justify-center">
+                    <span
+                      className="rounded-full px-3 py-1.5 text-base font-extrabold tracking-tight sm:text-lg"
+                      style={badgeTone}
+                    >
+                      {e.status}
+                    </span>
+                  </div>
+                ) : null}
                 {e.fallbackToHearts && !e.owned && !e.vipLocked && !e.purchaseLocked && (
                   <div className="mt-1.5 flex items-center justify-center">
                     <span

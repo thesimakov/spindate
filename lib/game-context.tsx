@@ -362,7 +362,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       let admirers: Player[] = []
       let favorites: Player[] = []
       let restoredFrameId: string | null = null
-      let restoredBottleSkin: GameState["bottleSkin"] | null = null
       try {
         if (typeof window !== "undefined") {
           const raw = window.localStorage.getItem(ADMIRERS_LS_KEY(action.user.id))
@@ -373,22 +372,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           if (rawFav) favorites = parseAdmirersFromStorage(rawFav)
           const savedFrame = window.localStorage.getItem(AVATAR_FRAME_LS_KEY(action.user.id))
           if (savedFrame && savedFrame !== "none") restoredFrameId = savedFrame
-          const savedBottle = window.localStorage.getItem(BOTTLE_SKIN_LS_KEY(action.user.id)) as GameState["bottleSkin"] | null
-          const savedCdRaw = window.localStorage.getItem(BOTTLE_COOLDOWN_LS_KEY(action.user.id))
-          const savedCd = savedCdRaw != null ? Number(savedCdRaw) : NaN
-          const cdValid = Number.isFinite(savedCd)
-          const cdExpired = cdValid && Date.now() > savedCd
-          if (savedBottle && cdExpired) {
-            restoredBottleSkin = "classic"
-            try {
-              window.localStorage.setItem(BOTTLE_SKIN_LS_KEY(action.user.id), "classic")
-              window.localStorage.removeItem(BOTTLE_COOLDOWN_LS_KEY(action.user.id))
-            } catch {
-              /* ignore */
-            }
-          } else if (savedBottle) {
-            restoredBottleSkin = savedBottle
-          }
         }
       } catch {
         admirers = []
@@ -409,9 +392,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       }
       const nextFrames = { ...(state.avatarFrames ?? {}) }
       if (restoredFrameId) nextFrames[action.user.id] = restoredFrameId
-      const nextOwnedBottleSkins = Array.from(
-        new Set([...(state.ownedBottleSkins ?? ["classic"]), restoredBottleSkin ?? "classic"]),
-      )
       const uid = mergedUser.id
       return {
         ...state,
@@ -419,8 +399,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         admirers,
         favorites,
         avatarFrames: nextFrames,
-        bottleSkin: restoredBottleSkin ?? state.bottleSkin,
-        ownedBottleSkins: nextOwnedBottleSkins,
+        bottleSkin: "classic",
+        ownedBottleSkins: ["classic"],
+        bottleCooldownUntil: undefined,
+        bottleDonorId: undefined,
+        bottleDonorName: undefined,
         courtshipProfileAllowed: {
           ...(state.courtshipProfileAllowed ?? {}),
           [uid]: mergedUser.showVkAfterCare !== false,
@@ -572,6 +555,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       // не делаем жёсткий сброс раунда/очереди, а создаём состояние,
       // похожее на уже активную комнату.
       {
+        const tableChanged = action.tableId !== state.tableId
         const now = Date.now()
         const nextPlayersRaw = action.players
         const existingById = new Map(state.players.map((p) => [p.id, p]))
@@ -681,7 +665,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         isSpinning: false,
         countdown: null,
         bottleAngle,
-        bottleSkin: action.bottleSkin ?? state.bottleSkin ?? "classic",
+        bottleSkin: tableChanged ? (action.bottleSkin ?? "classic") : (action.bottleSkin ?? state.bottleSkin ?? "classic"),
+        ownedBottleSkins: tableChanged ? ["classic"] : (state.ownedBottleSkins ?? ["classic"]),
+        bottleCooldownUntil: tableChanged ? undefined : state.bottleCooldownUntil,
+        bottleDonorId: tableChanged ? undefined : state.bottleDonorId,
+        bottleDonorName: tableChanged ? undefined : state.bottleDonorName,
         tableStyle: action.tableStyle ?? state.tableStyle ?? "classic_night",
         targetPlayer,
         targetPlayer2,

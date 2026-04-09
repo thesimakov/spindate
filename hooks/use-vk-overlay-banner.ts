@@ -22,7 +22,7 @@ export function useVkMiniAppPersistentHorizontalBanner() {
 
     let cancelled = false
     let running = false
-    const HEARTBEAT_MS = 45_000
+    const HEARTBEAT_MS = 30_000
     let heartbeat: number | null = null
     let t1: number | null = null
     let t2: number | null = null
@@ -37,8 +37,8 @@ export function useVkMiniAppPersistentHorizontalBanner() {
 
     run()
     // Дополнительные попытки после старта: bridge в VK WebView может инициализироваться с задержкой.
-    t1 = window.setTimeout(run, 1800)
-    t2 = window.setTimeout(run, 6500)
+    t1 = window.setTimeout(run, 700)
+    t2 = window.setTimeout(run, 2400)
 
     const onVisibility = () => {
       if (cancelled || typeof document === "undefined") return

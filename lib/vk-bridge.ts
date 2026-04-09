@@ -333,7 +333,7 @@ export async function initVk(): Promise<void> {
   await requestVkWidescreen()
 }
 
-const VK_INIT_TIMEOUT_MS = 8000
+const VK_INIT_TIMEOUT_MS = 2500
 
 /**
  * То же, что initVk, но не ждёт дольше VK_INIT_TIMEOUT_MS.
@@ -751,9 +751,9 @@ function vkPersistentBannerRetryDelay(ms: number): Promise<void> {
 }
 
 const VK_PERSISTENT_BANNER_MAX_ATTEMPTS = 6
-const VK_PERSISTENT_BANNER_BASE_DELAY_MS = 450
-const VK_PERSISTENT_BANNER_MAX_DELAY_MS = 3600
-const VK_PERSISTENT_BANNER_MIN_GAP_MS = 1200
+const VK_PERSISTENT_BANNER_BASE_DELAY_MS = 220
+const VK_PERSISTENT_BANNER_MAX_DELAY_MS = 1200
+const VK_PERSISTENT_BANNER_MIN_GAP_MS = 600
 
 let vkPersistentBannerRefreshInFlight: Promise<void> | null = null
 let vkPersistentBannerLastStartedAt = 0
@@ -780,6 +780,10 @@ export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
 
   vkPersistentBannerLastStartedAt = now
   vkPersistentBannerRefreshInFlight = (async () => {
+    // Fast-first: на части клиентов bridge уже готов, и баннер можно показать без ожидания init.
+    const fastFirstOk = await showVkBannerAdHorizontalPersistent()
+    if (fastFirstOk) return
+
     await initVkResilient()
     let failStreak = 0
 
