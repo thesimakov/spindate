@@ -1,7 +1,20 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Bell, Flower2, Heart, Sparkles, Trash2, Trophy, Users, Volume2, VolumeX, X } from "lucide-react"
+import {
+  Bell,
+  Flower2,
+  Heart,
+  Smartphone,
+  Sparkles,
+  Star,
+  Trash2,
+  Trophy,
+  Users,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
@@ -312,6 +325,17 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     return baseDone + eventsDone
   }, [achievementStats, heartbreakerCount, giftSpent, spinCount])
 
+  /** Опционально: открыть запись на стене через VKWebAppOpenWallPost (задайте в .env). */
+  const vkOpenWallNews = useMemo(() => {
+    const o = process.env.NEXT_PUBLIC_VK_OPEN_WALL_OWNER_ID
+    const p = process.env.NEXT_PUBLIC_VK_OPEN_WALL_POST_ID
+    if (!o || !p) return null
+    const ownerId = Number(o)
+    const postId = Number(p)
+    if (!Number.isFinite(ownerId) || !Number.isFinite(postId) || postId <= 0) return null
+    return { ownerId, postId }
+  }, [])
+
   if (!currentUser) return null
 
   const myPlayer = players.find((p) => p.id === currentUser.id)
@@ -333,6 +357,10 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   /** Анимация «как за столом» после успешной отправки розы */
   const [roseGiftFx, setRoseGiftFx] = useState(false)
   const [vkNotifyBusy, setVkNotifyBusy] = useState(false)
+  const [vkFavBusy, setVkFavBusy] = useState(false)
+  const [vkHomeBusy, setVkHomeBusy] = useState(false)
+  const [vkLeaderBusy, setVkLeaderBusy] = useState(false)
+  const [vkWallBusy, setVkWallBusy] = useState(false)
   const roseGiftFxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { toast, showToast } = useInlineToast(1700)
   const nameTrimmed = name.trim()
@@ -586,6 +614,82 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       return
     }
     showToast("Текст скопирован — вставьте в сообщение при отправке", "info")
+  }
+
+  const handleVkAddToFavorites = async () => {
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "info")
+      return
+    }
+    setVkFavBusy(true)
+    try {
+      const ok = await vkBridge.addVkAppToFavorites()
+      showToast(
+        ok ? "Если вы подтвердили в окне ВК, приложение в избранном" : "Не удалось открыть окно (нужна модерация приложения)",
+        ok ? "success" : "info",
+      )
+    } finally {
+      setVkFavBusy(false)
+    }
+  }
+
+  const handleVkAddToHomeScreen = async () => {
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "info")
+      return
+    }
+    if (!vkBridge.isVkAndroidClientFromLocation()) {
+      showToast("Ярлык на главный экран доступен в приложении VK для Android", "info")
+      return
+    }
+    setVkHomeBusy(true)
+    try {
+      const info = await vkBridge.getVkAddToHomeScreenInfo()
+      if (info.isAdded) {
+        showToast("Ярлык уже на главном экране", "success")
+        return
+      }
+      const ok = await vkBridge.addVkAppToHomeScreen()
+      showToast(
+        ok ? "Если вы согласились, ярлык будет на главном экране" : "Не удалось показать окно",
+        ok ? "success" : "info",
+      )
+    } finally {
+      setVkHomeBusy(false)
+    }
+  }
+
+  /** user_result должен соответствовать типу таблицы в кабинете VK (здесь: число кручений бутылочки). */
+  const handleVkLeaderBoard = async () => {
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "info")
+      return
+    }
+    setVkLeaderBusy(true)
+    try {
+      const ok = await vkBridge.showVkLeaderBoardBox({ user_result: spinCount, global: 0 })
+      showToast(
+        ok ? "Турнирная таблица открыта" : "Таблица недоступна (проверьте настройки игры в кабинете VK)",
+        ok ? "success" : "info",
+      )
+    } finally {
+      setVkLeaderBusy(false)
+    }
+  }
+
+  const handleVkOpenWallNews = async () => {
+    if (!vkOpenWallNews) return
+    if (!vkBridge.isVkMiniApp()) {
+      showToast("Доступно только в VK", "info")
+      return
+    }
+    setVkWallBusy(true)
+    try {
+      const ok = await vkBridge.openVkWallPost(vkOpenWallNews.ownerId, vkOpenWallNews.postId)
+      showToast(ok ? "Запись открыта" : "Не удалось открыть запись (часто доступно в веб-версии VK)", ok ? "success" : "info")
+    } finally {
+      setVkWallBusy(false)
+    }
   }
 
   const renderProfileFields = () => (
@@ -920,6 +1024,55 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             >
               Рассказать про игру
             </Button>
+            {vkBridge.isVkMiniApp() ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={vkFavBusy}
+                    className={`flex items-center justify-center gap-1.5 px-2 text-xs ${secondaryBtnClass}`}
+                    onClick={() => void handleVkAddToFavorites()}
+                  >
+                    <Star className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+                    В избранное
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={vkLeaderBusy}
+                    className={`flex items-center justify-center gap-1.5 px-2 text-xs ${secondaryBtnClass}`}
+                    onClick={() => void handleVkLeaderBoard()}
+                  >
+                    <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
+                    Турнир
+                  </Button>
+                </div>
+                {vkBridge.isVkAndroidClientFromLocation() ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={vkHomeBusy}
+                    className={`flex w-full items-center justify-center gap-2 px-3 text-xs ${secondaryBtnClass}`}
+                    onClick={() => void handleVkAddToHomeScreen()}
+                  >
+                    <Smartphone className="h-4 w-4 text-slate-600" aria-hidden />
+                    Ярлык на главный экран
+                  </Button>
+                ) : null}
+                {vkOpenWallNews ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={vkWallBusy}
+                    className={`w-full px-3 text-xs ${secondaryBtnClass}`}
+                    onClick={() => void handleVkOpenWallNews()}
+                  >
+                    Новость сообщества
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
 

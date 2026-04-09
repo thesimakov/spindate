@@ -130,6 +130,37 @@ export function readVkUserIdFromClientLocation(): number | null {
   return n
 }
 
+/**
+ * Параметр запуска VK из search/hash (например `vk_is_recommended`, `vk_platform`).
+ * @see https://dev.vk.com/mini-apps/development/launch-params
+ */
+export function readVkLaunchParamValue(paramName: string): string | null {
+  if (typeof window === "undefined") return null
+  const fromSearch = new URLSearchParams(window.location.search).get(paramName)
+  if (fromSearch != null && fromSearch !== "") return fromSearch
+  const hash = window.location.hash
+  const qi = hash.indexOf("?")
+  if (qi >= 0) {
+    const v = new URLSearchParams(hash.slice(qi + 1)).get(paramName)
+    if (v != null && v !== "") return v
+  }
+  const m = hash.match(new RegExp(`[#&]${paramName.replace(/[\\^$*+?.()|[\\]{}]/g, "\\$&")}=([^&]+)`))
+  return m ? decodeURIComponent(m[1]) : null
+}
+
+/** Пользователь уже отправил рекомендацию приложения — не показывать {@link VKWebAppRecommend} повторно. */
+export function readVkIsRecommendedFromLocation(): boolean {
+  const v = readVkLaunchParamValue("vk_is_recommended")
+  return v === "1" || v === "true"
+}
+
+/** Клиент VK Android — для {@link VKWebAppAddToHomeScreen} (ярлык только на Android). */
+export function isVkAndroidClientFromLocation(): boolean {
+  const p = readVkLaunchParamValue("vk_platform")
+  if (!p) return false
+  return p === "android" || /^android_/i.test(p) || p === "mobile_android"
+}
+
 /** Сообщество Lemnity (бонус за подписку, экран «мобильная версия»). */
 export const VK_COMMUNITY_GROUP_ID = 236519647
 export const VK_COMMUNITY_PUBLIC_URL = "https://vk.com/lemnitygame"
@@ -543,13 +574,16 @@ export async function buyVip(): Promise<boolean> {
 
 /**
  * Показать диалог приглашения друзей в приложение.
+ * @param opts.requestKey — для игр: передаётся в запуск как `vk_request_key` ([док](https://dev.vk.com/ru/bridge/VKWebAppShowInviteBox)).
  * @see https://dev.vk.com/bridge/VKWebAppShowInviteBox
  */
-export async function inviteFriends(): Promise<boolean> {
+export async function inviteFriends(opts?: { requestKey?: string }): Promise<boolean> {
   const b = await getBridgeAsync()
   if (b && isVkMiniApp()) {
     try {
-      const res = await b.send("VKWebAppShowInviteBox", {})
+      const key = typeof opts?.requestKey === "string" ? opts.requestKey.trim() : ""
+      const payload = key ? { requestKey: key.slice(0, 500) } : {}
+      const res = await b.send("VKWebAppShowInviteBox", payload)
       const r = res as { success?: boolean; result?: boolean }
       return r?.success === true || r?.result === true || res != null
     } catch (e) {
@@ -609,13 +643,16 @@ export type ShareGameInviteOutcome = "ok_full" | "ok_recommend" | "fail"
 
 /**
  * «Рассказать про игру»: копирует текст приглашения в буфер, открывает нативный шаринг ссылки на приложение.
- * Если не удалось — fallback на {@link recommendApp}.
+ * Если пользователь уже рекомендовал приложение (`vk_is_recommended`), окно VKWebAppRecommend не вызывается.
+ * Иначе при неудаче копирования/шаринга — fallback на {@link recommendApp}.
+ * @see https://dev.vk.com/ru/bridge/VKWebAppRecommend
  */
 export async function shareGameInvite(): Promise<ShareGameInviteOutcome> {
   await initVkResilient()
   const b = await getBridgeAsync()
   if (!b || !isVkMiniApp()) return "fail"
 
+  const alreadyRecommended = readVkIsRecommendedFromLocation()
   const copyText = buildGameInviteClipboardText()
   const link = getVkMiniAppPageUrl()
   let copyOk = false
@@ -638,6 +675,7 @@ export async function shareGameInvite(): Promise<ShareGameInviteOutcome> {
   }
 
   if (copyOk || shareOk) return "ok_full"
+  if (alreadyRecommended) return "fail"
   return (await recommendApp()) ? "ok_recommend" : "fail"
 }
 
@@ -848,7 +886,7 @@ export async function showVkBannerAdOverlayRightVertical(): Promise<boolean> {
  */
 export async function requestVkAllowNotifications(): Promise<{ ok: boolean }> {
   const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return { ok: false }
+  if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
   try {
     const raw = await b.send("VKWebAppAllowNotifications", {})
     const data = raw as { result?: boolean } | null
@@ -865,12 +903,169 @@ export async function requestVkAllowNotifications(): Promise<{ ok: boolean }> {
  */
 export async function requestVkDenyNotifications(): Promise<{ ok: boolean }> {
   const b = await getBridgeAsync()
-  if (!b || !isVkMiniApp()) return { ok: false }
+  if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
   try {
     await b.send("VKWebAppDenyNotifications", {})
     return { ok: true }
   } catch {
     return { ok: false }
+  }
+}
+
+/**
+ * Добавить мини-приложение в избранное (левое меню / Сервисы → Избранное).
+ * После прохождения модерации приложения.
+ * @see https://dev.vk.com/ru/bridge/VKWebAppAddToFavorites
+ */
+export async function addVkAppToFavorites(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return false
+  try {
+    const raw = await b.send("VKWebAppAddToFavorites", {})
+    const data = raw as { result?: boolean } | null
+    return data?.result === true
+  } catch (e) {
+    console.warn("[VK] VKWebAppAddToFavorites", e)
+    return false
+  }
+}
+
+export type VkAddToHomeScreenInfo = {
+  /** Ярлык уже на главном экране (поля зависят от версии клиента). */
+  isAdded?: boolean
+}
+
+/**
+ * Узнать, добавлен ли ярлык на главный экран (перед {@link addVkAppToHomeScreen}).
+ * @see https://dev.vk.com/ru/bridge/VKWebAppAddToHomeScreenInfo
+ */
+export async function getVkAddToHomeScreenInfo(): Promise<VkAddToHomeScreenInfo> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return {}
+  try {
+    const raw = await b.send("VKWebAppAddToHomeScreenInfo", {})
+    if (raw == null || typeof raw !== "object") return {}
+    const o = raw as Record<string, unknown>
+    const nested = o.data && typeof o.data === "object" ? (o.data as Record<string, unknown>) : o
+    const isAdded =
+      nested.is_installed_to_home_screen === true ||
+      nested.is_added === true ||
+      nested.is_installed === true ||
+      o.is_installed_to_home_screen === true
+    return { isAdded: isAdded === true ? true : undefined }
+  } catch (e) {
+    console.warn("[VK] VKWebAppAddToHomeScreenInfo", e)
+    return {}
+  }
+}
+
+/**
+ * Предложить добавить ярлык на главный экран (только Android).
+ * @see https://dev.vk.com/ru/bridge/VKWebAppAddToHomeScreen
+ */
+export async function addVkAppToHomeScreen(): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return false
+  try {
+    const raw = await b.send("VKWebAppAddToHomeScreen", {})
+    const data = raw as { result?: boolean } | null
+    return data?.result === true
+  } catch (e) {
+    console.warn("[VK] VKWebAppAddToHomeScreen", e)
+    return false
+  }
+}
+
+/**
+ * Открыть запись на стене пользователя или сообщества в оверлее (в основном Web).
+ * @see https://dev.vk.com/ru/bridge/VKWebAppOpenWallPost
+ */
+export async function openVkWallPost(ownerId: number, postId: number): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return false
+  if (!Number.isFinite(ownerId) || !Number.isFinite(postId) || postId <= 0) return false
+  try {
+    const raw = await b.send("VKWebAppOpenWallPost", {
+      owner_id: Math.trunc(ownerId),
+      post_id: Math.trunc(postId),
+    })
+    const data = raw as { result?: boolean } | null
+    return data?.result !== false
+  } catch (e) {
+    console.warn("[VK] VKWebAppOpenWallPost", e)
+    return false
+  }
+}
+
+export type VkLeaderBoardOptions = {
+  /** Значение для строки игрока в таблице (тип задаётся в кабинете VK). */
+  user_result?: number
+  /** 0 — друзья, 1 — глобально. */
+  global?: 0 | 1
+  app_id?: number
+}
+
+/**
+ * Турнирная таблица VK (настройка в кабинете игры).
+ * @see https://dev.vk.com/ru/bridge/VKWebAppShowLeaderBoardBox
+ */
+export async function showVkLeaderBoardBox(opts?: VkLeaderBoardOptions): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return false
+  try {
+    const payload: Record<string, unknown> = {}
+    if (opts?.user_result != null && Number.isFinite(opts.user_result)) {
+      payload.user_result = Math.max(0, Math.min(2_000_000_000, Math.trunc(opts.user_result)))
+    }
+    if (opts?.global === 0 || opts?.global === 1) payload.global = opts.global
+    if (opts?.app_id != null && Number.isFinite(opts.app_id)) payload.app_id = Math.trunc(opts.app_id)
+    const raw = await b.send("VKWebAppShowLeaderBoardBox", payload)
+    if (raw == null || typeof raw !== "object") return false
+    const o = raw as Record<string, unknown>
+    if (o.success === true) return true
+    const d = o.data
+    if (d && typeof d === "object" && (d as { success?: boolean }).success === true) return true
+    return false
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowLeaderBoardBox", e)
+    return false
+  }
+}
+
+const VK_TRANSLATE_MAX_LINES = 10
+const VK_TRANSLATE_MAX_CHARS = 1024
+
+/**
+ * Перевод строк через VK (лимиты: ≤10 строк, ≤1024 символов на строку; не чаще ~10 раз/мин).
+ * @see https://dev.vk.com/ru/bridge/VKWebAppTranslate
+ */
+export async function translateVkTexts(
+  texts: string[],
+  translationLanguage: string,
+): Promise<{ texts: string[]; source_lang?: string } | null> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return null
+  const lang = translationLanguage.trim().slice(0, 32)
+  if (!lang) return null
+  const sanitized = texts
+    .slice(0, VK_TRANSLATE_MAX_LINES)
+    .map((t) => (typeof t === "string" ? t.slice(0, VK_TRANSLATE_MAX_CHARS) : ""))
+  if (sanitized.length === 0) return null
+  try {
+    const raw = await b.send("VKWebAppTranslate", {
+      texts: sanitized,
+      translation_language: lang,
+    })
+    if (raw == null || typeof raw !== "object") return null
+    const o = raw as Record<string, unknown>
+    const out = o.texts ?? (o.result && typeof o.result === "object" ? (o.result as Record<string, unknown>).texts : null)
+    const arr = Array.isArray(out) ? out.map((x) => (typeof x === "string" ? x : "")) : null
+    if (!arr) return null
+    const source_lang = typeof o.source_lang === "string" ? o.source_lang : undefined
+    return { texts: arr, source_lang }
+  } catch (e) {
+    console.warn("[VK] VKWebAppTranslate", e)
+    return null
   }
 }
 
@@ -1131,6 +1326,15 @@ export const vkBridge = {
   openVkUrl,
   showVkWallPostConfirm,
   readVkUserIdFromClientLocation,
+  readVkLaunchParamValue,
+  readVkIsRecommendedFromLocation,
+  isVkAndroidClientFromLocation,
+  addVkAppToFavorites,
+  getVkAddToHomeScreenInfo,
+  addVkAppToHomeScreen,
+  openVkWallPost,
+  showVkLeaderBoardBox,
+  translateVkTexts,
   VK_COMMUNITY_GROUP_ID,
   VK_COMMUNITY_PUBLIC_URL,
   VK_ITEM_IDS,

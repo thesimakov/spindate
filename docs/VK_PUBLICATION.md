@@ -60,6 +60,19 @@
 - **Друзья в игре**: через [VK API friends.get](https://dev.vk.com/method/friends.get) можно получать список друзей и подставлять их в комнаты (нужен серверный доступ с токеном и правами).
 - **Расширенная виральность**: короткая ссылка вида `https://vk.com/app12345678` — уже есть у приложения в настройках; её можно использовать в постах и рассылках.
 
+### Другие методы VK Bridge (`lib/vk-bridge.ts`)
+
+| Метод | Назначение | Ограничения |
+|--------|------------|-------------|
+| [VKWebAppAddToFavorites](https://dev.vk.com/ru/bridge/VKWebAppAddToFavorites) | Добавить приложение в избранное | Доступно пользователям после **модерации** приложения. |
+| [VKWebAppAddToHomeScreen](https://dev.vk.com/ru/bridge/VKWebAppAddToHomeScreen) + Info | Ярлык на главный экран | Только **Android**; перед вызовом можно проверить `VKWebAppAddToHomeScreenInfo`. |
+| [VKWebAppRecommend](https://dev.vk.com/ru/bridge/VKWebAppRecommend) | Рекомендовать друзьям | Только приложения **из каталога**; в коде учитывается `vk_is_recommended`, чтобы не показывать окно повторно. |
+| [VKWebAppAllowNotifications](https://dev.vk.com/ru/bridge/VKWebAppAllowNotifications) | Разрешение push от приложения | На сервере нужен сервисный ключ для `notifications.sendMessage`. |
+| [VKWebAppOpenWallPost](https://dev.vk.com/ru/bridge/VKWebAppOpenWallPost) | Открыть запись на стене в оверлее | В основном **Web**; опционально `NEXT_PUBLIC_VK_OPEN_WALL_OWNER_ID` / `POST_ID`. |
+| [VKWebAppShowInviteBox](https://dev.vk.com/ru/bridge/VKWebAppShowInviteBox) | Диалог приглашения друзей | Опциональный `requestKey` для игр. |
+| [VKWebAppShowLeaderBoardBox](https://dev.vk.com/ru/bridge/VKWebAppShowLeaderBoardBox) | Турнирная таблица | Тип таблицы и метрика задаются в **кабинете игры**; `user_result` в коде должен соответствовать этой метрике. |
+| [VKWebAppTranslate](https://dev.vk.com/ru/bridge/VKWebAppTranslate) | Перевод строк | Лимиты: до 10 строк, до 1024 символов на строку; экспорт в `vkBridge`, без отдельной кнопки в UI. |
+
 ---
 
 ## 4. Масштабирование

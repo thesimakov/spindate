@@ -49,6 +49,9 @@ import { SHARE_USER_TABLE_POST_KEY } from "@/lib/achievement-posts-catalog"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { InlineToast } from "@/components/ui/inline-toast"
 
+/** Временно: чекбокс «Рассказать на стене» и окно VK после создания стола отключены. */
+const LOBBY_SHARE_TO_WALL_ENABLED = false
+
 type LobbyRow = {
   roomId: number
   name: string
@@ -511,7 +514,8 @@ export function RoomLobbyScreen() {
       } else {
         dispatch({ type: "PAY_VOICES", amount: totalCharge })
       }
-      const wantsWallShare = shareToWall && vkUserIdForApi(user) != null
+      const wantsWallShare =
+        LOBBY_SHARE_TO_WALL_ENABLED && shareToWall && vkUserIdForApi(user) != null
       const roomMeta = data.room as { name?: string } | undefined
       const resolvedRoomName =
         typeof roomMeta?.name === "string" && roomMeta.name.trim() ? roomMeta.name.trim() : createName.trim()
@@ -955,7 +959,7 @@ export function RoomLobbyScreen() {
               </div>
             </div>
 
-            {isVkUserForWall ? (
+            {LOBBY_SHARE_TO_WALL_ENABLED && isVkUserForWall ? (
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-700/80 bg-slate-900/50 px-3 py-3 text-left">
                 <input
                   type="checkbox"
