@@ -1111,9 +1111,9 @@ export async function showVkWallPostConfirm(
     try {
       const attachments: string[] = []
       if (withAttachments && typeof payload !== "string") {
-        const img = resolvePublicUrlForVkAttachment(rawImageUrl) ?? rawImageUrl
         const link = resolvePublicUrlForVkAttachment(gameUrl) ?? gameUrl
-        if (img) attachments.push(img)
+        // Прямой URL картинки в `attachments` нельзя: клиент VK часто дублирует его в тексте поста
+        // поверх уже встроенного превью. Картинку передаём только через upload_attachments.
         if (link) attachments.push(link)
       }
       const raw = await b.send("VKWebAppShowWallPostBox" as never, {
@@ -1135,10 +1135,10 @@ export async function showVkWallPostConfirm(
     }
   }
 
-  // Сначала message + attachments строкой — в окне VK обычно виден текст из админки.
-  // upload_attachments на части клиентов открывает диалог без текста или с пустым полем.
-  let wallOk = await tryWallBox(true)
-  if (!wallOk) wallOk = await tryWallBoxUploadPhoto()
+  // При наличии картинки сначала upload_attachments — фото без «голого» URL в тексте.
+  // Затем текст + ссылка на приложение в attachments (не URL изображения — см. tryWallBox).
+  let wallOk = await tryWallBoxUploadPhoto()
+  if (!wallOk) wallOk = await tryWallBox(true)
   if (!wallOk) wallOk = await tryWallBox(false)
   if (wallOk) return { ok: true }
 
