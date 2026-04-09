@@ -735,15 +735,50 @@ function vkPersistentBannerRetryDelay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+const VK_PERSISTENT_BANNER_MAX_ATTEMPTS = 6
+const VK_PERSISTENT_BANNER_BASE_DELAY_MS = 450
+const VK_PERSISTENT_BANNER_MAX_DELAY_MS = 3600
+const VK_PERSISTENT_BANNER_MIN_GAP_MS = 1200
+
+let vkPersistentBannerRefreshInFlight: Promise<void> | null = null
+let vkPersistentBannerLastStartedAt = 0
+
 /**
  * Повторные попытки показать горизонтальный persistent-баннер (после {@link initVkResilient}).
  */
 export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
-  await initVkResilient()
-  for (let i = 0; i < 3; i++) {
-    const ok = await showVkBannerAdHorizontalPersistent()
-    if (ok) break
-    await vkPersistentBannerRetryDelay(400 + i * 250)
+  const now = Date.now()
+  if (vkPersistentBannerRefreshInFlight) return vkPersistentBannerRefreshInFlight
+  if (now - vkPersistentBannerLastStartedAt < VK_PERSISTENT_BANNER_MIN_GAP_MS) return
+
+  vkPersistentBannerLastStartedAt = now
+  vkPersistentBannerRefreshInFlight = (async () => {
+    await initVkResilient()
+    let failStreak = 0
+
+    for (let i = 0; i < VK_PERSISTENT_BANNER_MAX_ATTEMPTS; i++) {
+      // При длительной серии неудач повторно инициализируем bridge/runtime.
+      if (i > 0 && failStreak >= 2) {
+        await initVkResilient()
+      }
+
+      const ok = await showVkBannerAdHorizontalPersistent()
+      if (ok) return
+      failStreak += 1
+
+      const backoff = Math.min(
+        VK_PERSISTENT_BANNER_MAX_DELAY_MS,
+        VK_PERSISTENT_BANNER_BASE_DELAY_MS * 2 ** i,
+      )
+      const jitter = Math.floor(Math.random() * 220)
+      await vkPersistentBannerRetryDelay(backoff + jitter)
+    }
+  })()
+
+  try {
+    await vkPersistentBannerRefreshInFlight
+  } finally {
+    vkPersistentBannerRefreshInFlight = null
   }
 }
 

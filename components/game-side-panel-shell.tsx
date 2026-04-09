@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 
 type GameSidePanelShellProps = {
@@ -35,7 +34,6 @@ export function GameSidePanelShell({
   closeButtonClassName,
   overlayClassName,
 }: GameSidePanelShellProps) {
-  const closeBtnRef = useRef<HTMLButtonElement | null>(null)
   const isMaterial = variant === "material"
   const basePanel =
     "side-panel-slide-in fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col border-l shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
@@ -61,15 +59,6 @@ export function GameSidePanelShell({
   const closeDefaults = isMaterial
     ? "text-slate-300 hover:bg-white/10 hover:text-white"
     : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-
-  useEffect(() => {
-    const el = closeBtnRef.current
-    if (!el || typeof window === "undefined") return
-    const cs = window.getComputedStyle(el)
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H3',location:'components/game-side-panel-shell.tsx:67',message:'side panel close computed style',data:{host:window.location.host,transform:cs.transform,left:cs.left,right:cs.right,top:cs.top,width:cs.width,height:cs.height,borderRadius:cs.borderRadius},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [])
 
   return (
     <>
@@ -107,7 +96,6 @@ export function GameSidePanelShell({
             {headerRight}
           </div>
           <button
-            ref={closeBtnRef}
             type="button"
             onClick={onClose}
             className={
