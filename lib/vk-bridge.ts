@@ -919,14 +919,14 @@ export async function openVkUrl(url: string): Promise<boolean> {
  * Публикация «на стену» из мини-приложения по документации VK:
  * - основной путь — {@link https://dev.vk.com/ru/bridge/VKWebAppShowWallPostBox VKWebAppShowWallPostBox}
  *   (окно подтверждения; это не прямой вызов API `wall.post` с фронта).
- * - для Direct Games при недоступности стены — {@link https://dev.vk.com/ru/bridge/VKWebAppShowStoryBox VKWebAppShowStoryBox}.
+ * - при недоступности стены — {@link https://dev.vk.com/ru/bridge/VKWebAppShare VKWebAppShare} (ЛС); буфер только если шаринг не открылся.
  */
 export type VkWallPostOutcome = {
   ok: boolean
-  /** Сработал шаринг истории (рекомендуемая альтернатива стене для игр). */
-  usedStoryFallback?: boolean
-  /** Копирование текста + VKWebAppShare. */
+  /** Сработал шаринг в ЛС вместо стены. */
   usedShareFallback?: boolean
+  /** Текст удалось положить только в буфер — VKWebAppShare не сработал. */
+  usedClipboardFallback?: boolean
 }
 
 function isVkBridgeErrorShape(raw: unknown): boolean {
@@ -944,7 +944,7 @@ function isVkBridgeErrorShape(raw: unknown): boolean {
   return false
 }
 
-/** Абсолютный https/http URL для вложений VK (стена / истории), относительные пути — через appPath и origin. */
+/** Абсолютный https/http URL для вложений VK (стена / шаринг), относительные пути — через appPath и origin. */
 function resolvePublicUrlForVkAttachment(pathOrUrl: string | undefined): string | null {
   if (!pathOrUrl || typeof pathOrUrl !== "string") return null
   const t = pathOrUrl.trim()
@@ -969,103 +969,50 @@ function wallPostBoxResponseFailed(raw: unknown): boolean {
   return false
 }
 
-/** Лимит текста для native_sticker action_type text (док: произвольный текст в истории). */
-const VK_STORY_NATIVE_TEXT_MAX = 500
-
-/**
- * Редактор историй с интерактивной ссылкой на приложение (Direct Games / мини-приложения).
- * По {@link https://dev.vk.com/ru/bridge/VKWebAppShowStoryBox}:
- * - `attachment` обязателен; `attachment.text` — не подпись поста, а ключ кнопки (как `link_text` в stories API).
- * - Произвольный текст — через `stickers` + `native_sticker` с `action_type: "text"` и `action.text`.
- * @see VKWebAppShowStoryBox
- */
-async function tryVkShowStoryBoxShare(
-  b: Bridge,
-  args: { message: string; gameUrl: string; imageUrl?: string },
-): Promise<boolean> {
-  const link = resolvePublicUrlForVkAttachment(args.gameUrl) || getVkMiniAppPageUrl()
-  if (!link) return false
-
-  const attachment: { type: "url"; url: string; text: string } = {
-    type: "url",
-    url: link,
-    text: "play",
-  }
-
-  const bgImage = resolvePublicUrlForVkAttachment(args.imageUrl)
-  const payload: Record<string, unknown> = { attachment }
-  if (bgImage) {
-    payload.background_type = "image"
-    payload.url = bgImage
-  } else {
-    payload.background_type = "none"
-  }
-
-  const storyText = args.message.trim().slice(0, VK_STORY_NATIVE_TEXT_MAX)
-  if (storyText.length > 0) {
-    payload.stickers = [
-      {
-        sticker_type: "native",
-        sticker: {
-          action_type: "text",
-          action: { text: storyText },
-        },
-      },
-    ]
-  }
-
-  try {
-    const raw = await b.send("VKWebAppShowStoryBox" as never, payload as never)
-    if (wallPostBoxResponseFailed(raw)) return false
-    const o = raw as { result?: boolean } | null
-    if (o && typeof o === "object" && o.result === false) return false
-    return true
-  } catch (e) {
-    console.warn("[VK] VKWebAppShowStoryBox", e)
-    return false
-  }
-}
-
-/** Текст для буфера: пост + прямая ссылка на картинку (VKWebAppShare в ЛС передаёт только link). */
-function buildShareFallbackClipboard(postText: string, rawImagePath?: string): string {
+/** Полный текст для ЛС: пост + при необходимости прямая ссылка на картинку (вложение photo… через Bridge в шаринг не передать). */
+function buildLmMessageBody(postText: string, rawImagePath?: string): string {
   const base = postText.trim()
   const imgAbs = resolvePublicUrlForVkAttachment(rawImagePath)
   if (!imgAbs || base.includes(imgAbs)) return base.slice(0, 12000)
   return `${base}\n\n${imgAbs}`.slice(0, 12000)
 }
 
+/** Ограничение длины подписи к VKWebAppShare (неофициальный `text`). */
+const LM_SHARE_TEXT_MAX = 3500
+
 /**
- * VKWebAppShare по контракту Bridge передаёт в диалог в основном `link`;
- * текст и фото в ЛС — через буфер (CopyText) и подсказку пользователю.
+ * ЛС без предварительного буфера: сначала VKWebAppShare с link + text (часть клиентов подставляет text в поле сообщения).
+ * Вложение-картинку как photo123_456 Bridge из мини-приложения не передаёт — только ссылка на файл в тексте.
+ * CopyText — только если шаринг выбросил ошибку.
  */
 async function vkWallPostShareFallback(
   b: Bridge,
   postText: string,
   preferredLink: string,
   rawImagePath?: string,
-): Promise<boolean> {
+): Promise<{ ok: boolean; clipboardOnly: boolean }> {
   const link = preferredLink.trim() || getVkMiniAppPageUrl() || ""
-  const clipboard = buildShareFallbackClipboard(postText, rawImagePath)
-  let copyOk = false
-  try {
-    await b.send("VKWebAppCopyText", { text: clipboard })
-    copyOk = true
-  } catch (e) {
-    console.warn("[VK] VKWebAppCopyText (wall fallback)", e)
-  }
+  const messageBody = buildLmMessageBody(postText, rawImagePath).slice(0, LM_SHARE_TEXT_MAX)
+
   if (link) {
     try {
-      // В типах только `link`; часть клиентов понимает подпись — не ломает старые версии.
       await b.send(
         "VKWebAppShare" as never,
-        { link, text: postText.trim().slice(0, 2000) } as never,
+        { link, text: messageBody } as never,
       )
-      return true
+      return { ok: true, clipboardOnly: false }
     } catch (e) {
       console.warn("[VK] VKWebAppShare (wall fallback)", e)
     }
   }
-  return copyOk
+
+  try {
+    await b.send("VKWebAppCopyText", { text: messageBody })
+    return { ok: true, clipboardOnly: true }
+  } catch (e) {
+    console.warn("[VK] VKWebAppCopyText (wall fallback)", e)
+  }
+  return { ok: false, clipboardOnly: false }
 }
 
 export async function showVkWallPostConfirm(
@@ -1142,15 +1089,12 @@ export async function showVkWallPostConfirm(
   if (!wallOk) wallOk = await tryWallBox(false)
   if (wallOk) return { ok: true }
 
-  const storyOk = await tryVkShowStoryBoxShare(b, {
-    message: text,
-    gameUrl: gameUrl || getVkMiniAppPageUrl() || "",
-    imageUrl: rawImageUrl || undefined,
-  })
-  if (storyOk) return { ok: true, usedStoryFallback: true }
-
-  const fallbackOk = await vkWallPostShareFallback(b, text, gameUrl, rawImageUrl || undefined)
-  return { ok: fallbackOk, usedShareFallback: true }
+  const fb = await vkWallPostShareFallback(b, text, gameUrl, rawImageUrl || undefined)
+  return {
+    ok: fb.ok,
+    usedShareFallback: fb.ok,
+    usedClipboardFallback: fb.clipboardOnly,
+  }
 }
 
 export const vkBridge = {
