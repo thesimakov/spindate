@@ -62,7 +62,7 @@ export function FortuneWheelSidePanel({
         aria-modal="true"
         aria-label="Колесо фортуны"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-cyan-500/15 px-4 py-3">
+        <div className="relative flex shrink-0 items-center justify-between border-b border-cyan-500/15 px-4 py-3 pl-10">
           <div className="flex items-center gap-2">
             <span className="text-xl" aria-hidden>🎡</span>
             <span className="font-bold text-slate-100">Колесо фортуны</span>
@@ -70,7 +70,7 @@ export function FortuneWheelSidePanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-400 hover:bg-slate-600/50 hover:text-slate-200"
+            className="side-panel-close-outside-left rounded-full p-1.5 text-slate-300 transition hover:bg-slate-600/50 hover:text-white hover:brightness-110"
             aria-label="Закрыть"
           >
             <X className="h-5 w-5" />

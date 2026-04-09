@@ -180,7 +180,7 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
         className="side-panel-slide-in fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col border-l border-cyan-500/20 bg-[rgba(2,6,23,0.98)] shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-cyan-500/15 px-4 py-3">
+        <div className="relative flex shrink-0 items-center gap-3 border-b border-cyan-500/15 px-4 py-3 pr-10">
           <div className="shrink-0">
             <PlayerAvatar player={player} frameId={frameId} compact size={40} />
           </div>
@@ -201,15 +201,15 @@ export function PlayerChatPanel({ player, onClose, onOpenProfile }: Props) {
                 <User className="h-5 w-5" strokeWidth={2} />
               </button>
             )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-100"
-              aria-label="Закрыть"
-            >
-              <X className="h-5 w-5" strokeWidth={2} />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="side-panel-close-outside-right rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-800/60 hover:text-white hover:brightness-110"
+            aria-label="Закрыть"
+          >
+            <X className="h-5 w-5" strokeWidth={2} />
+          </button>
         </div>
 
         {/* Messages */}

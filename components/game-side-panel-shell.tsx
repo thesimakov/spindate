@@ -37,7 +37,7 @@ export function GameSidePanelShell({
   const isMaterial = variant === "material"
   const basePanel =
     "side-panel-slide-in fixed inset-y-0 right-0 z-[60] flex h-app max-h-app w-full max-w-md flex-col border-l shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
-  const baseHeader = "flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3"
+  const baseHeader = "relative flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3 pr-10"
   const baseTitle = "truncate text-lg font-black tracking-tight"
   const baseContent = "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4"
   const baseClose =
@@ -94,17 +94,18 @@ export function GameSidePanelShell({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {headerRight}
-            <button
-              type="button"
-              onClick={onClose}
-              className={
-                `${baseClose} ${closeDefaults} ` + (closeButtonClassName ?? "")
-              }
-              aria-label="Закрыть"
-            >
-              <X className="h-5 w-5" strokeWidth={2} />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={
+              `side-panel-close-outside-right ${baseClose} ${closeDefaults} hover:brightness-110 ` +
+              (closeButtonClassName ?? "")
+            }
+            aria-label="Закрыть"
+          >
+            <X className="h-5 w-5" strokeWidth={2} />
+          </button>
         </div>
         <div className={`${baseContent} ${contentDefaults} ` + (contentClassName ?? "")}>
           {children}
