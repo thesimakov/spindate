@@ -31,6 +31,12 @@ export function GameApp() {
   /** Один раз на всё приложение в VK: лобби/регистрация/магазин не монтируют GameRoom — баннер только так показывается «везде». */
   useVkMiniAppPersistentHorizontalBanner()
 
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H5',location:'components/game-app.tsx:35',message:'game app mounted debug channel probe',data:{href:typeof window!=='undefined'?window.location.href:'no-window'},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [])
+
   const { state, dispatch } = useGame()
   const { isDesktopUser, deviceClassResolved } = useGameLayoutMode()
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
