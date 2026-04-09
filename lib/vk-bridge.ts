@@ -709,12 +709,12 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
   const banner_location = options?.banner_location ?? "top"
   const layout_type = options?.layout_type ?? "resize"
   const height_type = options?.height_type ?? "compact"
+  const payload: Record<string, unknown> = {
+    banner_location,
+    layout_type,
+    height_type,
+  }
   try {
-    const payload: Record<string, unknown> = {
-      banner_location,
-      layout_type,
-      height_type,
-    }
     if (options?.banner_align != null) payload.banner_align = options.banner_align
     if (options?.orientation != null) payload.orientation = options.orientation
     if (options?.can_close != null) payload.can_close = options.can_close
