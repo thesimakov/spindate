@@ -8,11 +8,13 @@ import {
   type Dispatch,
   type PointerEvent,
 } from "react"
+import { Video } from "lucide-react"
 import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
 import { DEFAULT_BOTTLE_CATALOG_ROWS } from "@/lib/bottle-catalog"
 import { generateLogId } from "@/lib/game-context"
 import type { BottleSkin, GameAction, Player } from "@/lib/game-types"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
+import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
 function formatCooldown(ms: number) {
@@ -51,6 +53,8 @@ export function BottleCatalogModal({
   showToast,
 }: BottleCatalogModalProps) {
   const [tick, setTick] = useState(0)
+  const [adBusySkinId, setAdBusySkinId] = useState<string | null>(null)
+  const [adFallbackToHearts, setAdFallbackToHearts] = useState<Record<string, boolean>>({})
   const { rows: catalogRows, mainBottleId } = useBottleCatalog()
 
   useEffect(() => {
@@ -95,6 +99,7 @@ export function BottleCatalogModal({
       const purchaseLocked = cooldownActive && !owned && !freeSkin
       const notEnough = !owned && !freeSkin && voiceBalance < skin.cost
       const vipLocked = vipSkin && !owned && !currentUser?.isVip
+      const fallbackToHearts = adFallbackToHearts[skin.id] === true
       const disabled = purchaseLocked || notEnough || vipLocked
 
       const status = owned
@@ -107,9 +112,40 @@ export function BottleCatalogModal({
             ? "Только VIP"
             : purchaseLocked
               ? `Через ${formatCooldown(cooldownLeftMs)}`
-              : `${skin.cost} ❤`
+              : fallbackToHearts
+                ? `${skin.cost} ❤`
+                : "Просмотр видео"
 
-      const handleClick = () => {
+      const applyPurchase = (chargeHearts: boolean) => {
+        if (chargeHearts) {
+          dispatch({ type: "PAY_VOICES", amount: skin.cost })
+        }
+        const cdUntil = Date.now() + 30 * 60 * 1000
+        if (currentUser) {
+          dispatch({
+            type: "SET_BOTTLE_TABLE_PURCHASE",
+            skin: skin.id,
+            cooldownUntil: cdUntil,
+            donorId: currentUser.id,
+            donorName: currentUser.name,
+          })
+          dispatch({
+            type: "ADD_LOG",
+            entry: {
+              id: generateLogId(),
+              type: "system",
+              fromPlayer: currentUser,
+              text: `${currentUser.name} купил(а) бутылочку «${skin.name}»`,
+              timestamp: Date.now(),
+            },
+          })
+        } else {
+          dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
+          dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: cdUntil })
+        }
+      }
+
+      const handleClick = async () => {
         // #region agent log
         fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
           method: "POST",
@@ -147,10 +183,16 @@ export function BottleCatalogModal({
           showToast(`Следующая покупка через ${formatCooldown(cooldownLeftMs)}`, "info")
           return
         }
-        if (voiceBalance < skin.cost) {
-          showToast("Недостаточно сердец", "error")
+        if (fallbackToHearts) {
+          if (voiceBalance < skin.cost) {
+            showToast("Недостаточно сердец", "error")
+            return
+          }
+          applyPurchase(true)
+          showToast("Бутылочка куплена", "success")
           return
         }
+
         // #region agent log
         fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
           method: "POST",
@@ -166,49 +208,42 @@ export function BottleCatalogModal({
           }),
         }).catch(() => {})
         // #endregion
-        dispatch({ type: "PAY_VOICES", amount: skin.cost })
-        const cdUntil = Date.now() + 30 * 60 * 1000
-        if (currentUser) {
-          dispatch({
-            type: "SET_BOTTLE_TABLE_PURCHASE",
-            skin: skin.id,
-            cooldownUntil: cdUntil,
-            donorId: currentUser.id,
-            donorName: currentUser.name,
-          })
-          dispatch({
-            type: "ADD_LOG",
-            entry: {
-              id: generateLogId(),
-              type: "system",
-              fromPlayer: currentUser,
-              text: `${currentUser.name} купил(а) бутылочку «${skin.name}»`,
-              timestamp: Date.now(),
-            },
-          })
-        } else {
-          dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
-          dispatch({ type: "SET_BOTTLE_COOLDOWN_UNTIL", ts: cdUntil })
+        if (adBusySkinId) return
+        setAdBusySkinId(skin.id)
+        try {
+          const runtime = await isVkRuntimeEnvironment()
+          let shown = false
+          if (runtime) {
+            try {
+              shown = await showVkNativeAd("reward")
+            } catch {
+              shown = false
+            }
+          }
+          if (shown) {
+            applyPurchase(false)
+            showToast("Бутылочка разблокирована за просмотр", "success")
+            return
+          }
+          setAdFallbackToHearts((prev) => ({ ...prev, [skin.id]: true }))
+          showToast("Реклама недоступна. Можно купить за сердца.", "info")
+        } finally {
+          setAdBusySkinId(null)
         }
-        // #region agent log
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-          body: JSON.stringify({
-            sessionId: "ec43d5",
-            runId: "bottle-buy-debug-1",
-            hypothesisId: "H2",
-            location: "components/bottle-catalog-modal.tsx:handleClick:purchase-dispatched",
-            message: "purchase actions dispatched",
-            data: { skinId: skin.id, hasCurrentUser: !!currentUser, cooldownUntil: cdUntil },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
-        showToast("Бутылочка куплена", "success")
       }
 
-      return { skin, owned, selected, disabled, notEnough, purchaseLocked, vipLocked, status, handleClick }
+      return {
+        skin,
+        owned,
+        selected,
+        disabled,
+        notEnough,
+        purchaseLocked,
+        vipLocked,
+        status,
+        fallbackToHearts,
+        handleClick,
+      }
     })
   }, [
     catalogRows,
@@ -221,6 +256,8 @@ export function BottleCatalogModal({
     dispatch,
     showToast,
     currentUser,
+    adBusySkinId,
+    adFallbackToHearts,
   ])
 
   const free = entries.filter((e) => isFreeSkin(e.skin.cost, e.skin.section))
@@ -260,9 +297,13 @@ export function BottleCatalogModal({
               ? "Купите VIP в магазине"
               : e.purchaseLocked
                 ? `Подать через ${formatCooldown(cooldownLeftMs)}`
-                : e.notEnough
+                : adBusySkinId === e.skin.id
+                  ? "Загрузка..."
+                  : e.fallbackToHearts && e.notEnough
                   ? "Недостаточно ❤"
-                  : "Подать на стол"
+                  : e.fallbackToHearts
+                    ? "Купить за ❤"
+                    : "Смотреть"
 
           return (
             <div
@@ -302,6 +343,19 @@ export function BottleCatalogModal({
                     {e.status}
                   </span>
                 </div>
+                {e.fallbackToHearts && !e.owned && !e.vipLocked && !e.purchaseLocked && (
+                  <div className="mt-1.5 flex items-center justify-center">
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide text-amber-100"
+                      style={{
+                        background: "rgba(251, 191, 36, 0.14)",
+                        border: "1px solid rgba(251, 191, 36, 0.35)",
+                      }}
+                    >
+                      Реклама недоступна: можно купить за ❤
+                    </span>
+                  </div>
+                )}
               </div>
 
               <button
@@ -324,7 +378,13 @@ export function BottleCatalogModal({
                   // #endregion
                 }}
                 onClick={() => e.handleClick()}
-                disabled={e.disabled || e.selected}
+                disabled={
+                  e.selected ||
+                  e.vipLocked ||
+                  e.purchaseLocked ||
+                  (e.fallbackToHearts && e.notEnough) ||
+                  (adBusySkinId != null && adBusySkinId !== e.skin.id)
+                }
                 className={
                   "mt-2 w-full touch-manipulation rounded-xl px-2 py-2.5 text-center text-[11px] font-extrabold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 " +
                   (e.selected
@@ -339,7 +399,14 @@ export function BottleCatalogModal({
                     : { background: "linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%)" }
                 }
               >
-                {ctaLabel}
+                {!e.selected && !e.fallbackToHearts && !e.vipLocked && !e.purchaseLocked && adBusySkinId !== e.skin.id ? (
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    <Video className="h-3.5 w-3.5" />
+                    {ctaLabel}
+                  </span>
+                ) : (
+                  ctaLabel
+                )}
               </button>
             </div>
           )
