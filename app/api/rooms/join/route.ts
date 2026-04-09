@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getRoomServices } from "@/lib/rooms/room-services"
-import { loadRoomRegistry } from "@/lib/rooms/room-registry"
+import { isRoomDisabledForJoin, loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { parsePlayerFromClientBody } from "@/lib/rooms/parse-live-player"
 import { getTableInfo } from "@/lib/live-tables-server"
 import { getDb } from "@/lib/db"
@@ -53,9 +53,22 @@ export async function POST(req: Request) {
   if (!regBeforeJoin.rooms.some((r) => r.roomId === roomId)) {
     return NextResponse.json({ ok: false, error: "Комната не активна (TTL 24ч)" }, { status: 410, headers: NO_CACHE })
   }
+  const joinMeta = regBeforeJoin.rooms.find((r) => r.roomId === roomId)
+  if (isRoomDisabledForJoin(joinMeta)) {
+    return NextResponse.json(
+      { ok: false, error: "Стол отключён модератором" },
+      { status: 410, headers: NO_CACHE },
+    )
+  }
 
   const { rooms } = getRoomServices()
   const result = await rooms.tryEnterRoom(player, roomId)
+  if (result.kind === "disabled") {
+    return NextResponse.json(
+      { ok: false, error: "Стол отключён модератором" },
+      { status: 410, headers: NO_CACHE },
+    )
+  }
   if (result.kind === "queued") {
     return NextResponse.json(
       { ok: true, queued: true, position: result.position },

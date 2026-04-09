@@ -146,31 +146,6 @@ export function BottleCatalogModal({
       }
 
       const handleClick = async () => {
-        // #region agent log
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-          body: JSON.stringify({
-            sessionId: "ec43d5",
-            runId: "bottle-buy-debug-1",
-            hypothesisId: "H1-H4",
-            location: "components/bottle-catalog-modal.tsx:handleClick:start",
-            message: "bottle buy click received",
-            data: {
-              skinId: skin.id,
-              owned,
-              freeSkin,
-              vipLocked,
-              purchaseLocked,
-              voiceBalance,
-              cost: skin.cost,
-              cooldownLeftMs,
-              hasCurrentUser: !!currentUser,
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
         if (owned || freeSkin) {
           dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
           return
@@ -193,21 +168,6 @@ export function BottleCatalogModal({
           return
         }
 
-        // #region agent log
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-          body: JSON.stringify({
-            sessionId: "ec43d5",
-            runId: "bottle-buy-debug-1",
-            hypothesisId: "H2",
-            location: "components/bottle-catalog-modal.tsx:handleClick:purchase-allowed",
-            message: "purchase path entered, dispatching actions",
-            data: { skinId: skin.id, cost: skin.cost, voiceBalance },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-        // #endregion
         if (adBusySkinId) return
         setAdBusySkinId(skin.id)
         try {
@@ -362,23 +322,6 @@ export function BottleCatalogModal({
 
               <button
                 type="button"
-                onPointerDown={() => {
-                  // #region agent log
-                  fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-                    body: JSON.stringify({
-                      sessionId: "ec43d5",
-                      runId: "bottle-buy-debug-1",
-                      hypothesisId: "H4",
-                      location: "components/bottle-catalog-modal.tsx:button:pointerdown",
-                      message: "pointerdown on bottle cta",
-                      data: { skinId: e.skin.id, disabled: e.disabled, selected: e.selected },
-                      timestamp: Date.now(),
-                    }),
-                  }).catch(() => {})
-                  // #endregion
-                }}
                 onClick={() => e.handleClick()}
                 disabled={
                   e.selected ||

@@ -11,6 +11,7 @@ import { AdminTableStyleContent } from "@/components/admin-table-style-content"
 import { AdminTickerAnnouncementsContent } from "@/components/admin-ticker-announcements-content"
 import { AdminContentPagePlaceholder } from "@/components/admin-content-page-placeholder"
 import { AdminAchievementPostsContent } from "@/components/admin-achievement-posts-content"
+import { AdminTablesContent } from "@/components/admin-tables-content"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
@@ -41,7 +42,8 @@ export function DevScreen() {
     stats?: { totalActions: number; counts: Record<string, number> } | null
   }>>([])
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"users" | "content">("users")
+  const [activeTab, setActiveTab] = useState<"users" | "content" | "tables">("users")
+  const [tablesRefreshNonce, setTablesRefreshNonce] = useState(0)
   const [contentPage, setContentPage] = useState<
     | "bottles"
     | "gifts"
@@ -238,10 +240,13 @@ export function DevScreen() {
             >
               Выйти
             </button>
-            {activeTab === "users" && (
+            {(activeTab === "users" || activeTab === "tables") && (
               <button
                 type="button"
-                onClick={refresh}
+                onClick={() => {
+                  if (activeTab === "users") void refresh()
+                  else setTablesRefreshNonce((n) => n + 1)
+                }}
                 className="rounded-lg border border-slate-500 bg-slate-700/80 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600"
               >
                 Обновить
@@ -288,10 +293,23 @@ export function DevScreen() {
           >
             Контент
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("tables")}
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              activeTab === "tables"
+                ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
+                : "border-slate-500 bg-slate-700/80 text-slate-200 hover:bg-slate-600"
+            }`}
+          >
+            Столы
+          </button>
         </div>
 
         <div className="pr-1">
-          {activeTab === "users" ? (
+          {activeTab === "tables" ? (
+            <AdminTablesContent token={getAdminToken()} refreshTrigger={tablesRefreshNonce} />
+          ) : activeTab === "users" ? (
             <>
               <div className="max-h-[78dvh] overflow-x-auto overflow-y-auto rounded-xl border border-slate-600 bg-slate-800/40">
               <table className="w-full min-w-[760px] text-left text-sm">

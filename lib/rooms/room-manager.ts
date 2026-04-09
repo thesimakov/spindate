@@ -2,7 +2,7 @@ import type { LivePlayer } from "@/lib/live-tables-core"
 import type { Player } from "@/lib/game-types"
 import { joinSpecificRoom, leaveLiveTable, getTableInfo } from "@/lib/live-tables-server"
 import { ensureTableAuthority, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
-import { loadRoomRegistry } from "@/lib/rooms/room-registry"
+import { isRoomDisabledForJoin, loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
 import type { LobbyRoomRow, RoomStatePayload } from "@/lib/rooms/types"
 import { DEFAULT_ROOM_BOTTLE_SKIN, normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
@@ -18,6 +18,7 @@ export function toLivePlayer(player: Player): LivePlayer {
 export type EnterRoomResult =
   | { kind: "joined"; roomId: number; tablesCount: number }
   | { kind: "queued"; position: number }
+  | { kind: "disabled" }
 
 export class RoomManager {
   constructor(private readonly queue: QueueManager) {}
@@ -26,6 +27,7 @@ export class RoomManager {
     const reg = await loadRoomRegistry()
     const rows: LobbyRoomRow[] = []
     for (const m of reg.rooms) {
+      if (isRoomDisabledForJoin(m)) continue
       const info = await getTableInfo(m.roomId)
       const n = info?.livePlayers.length ?? 0
       rows.push({
@@ -74,7 +76,11 @@ export class RoomManager {
   async tryEnterRoom(player: Player, requestedRoomId: number): Promise<EnterRoomResult> {
     const live = toLivePlayer({ ...player, isBot: false })
     const reg = await loadRoomRegistry()
-    const ids = reg.rooms.map((r) => r.roomId)
+    const requestedMeta = reg.rooms.find((r) => r.roomId === requestedRoomId)
+    if (isRoomDisabledForJoin(requestedMeta)) {
+      return { kind: "disabled" }
+    }
+    const ids = reg.rooms.filter((r) => !isRoomDisabledForJoin(r)).map((r) => r.roomId)
     if (!ids.includes(requestedRoomId)) {
       await this.tryEnqueue(live, requestedRoomId)
       return { kind: "queued", position: (await this.queue.position(live.id)) ?? 1 }
@@ -118,9 +124,10 @@ export class RoomManager {
     if (!next) return null
     const live = toLivePlayer(next.player)
     const reg = await loadRoomRegistry()
+    const allowedIds = reg.rooms.filter((r) => !isRoomDisabledForJoin(r)).map((r) => r.roomId)
     const tryOrder = [
       next.requestedRoomId,
-      ...reg.rooms.map((r) => r.roomId).filter((id) => id !== next.requestedRoomId),
+      ...allowedIds.filter((id) => id !== next.requestedRoomId),
     ]
     const seen = new Set<number>()
     for (const rid of tryOrder) {

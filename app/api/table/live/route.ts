@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import type { Player } from "@/lib/game-types"
 import { joinOrSyncLiveTable, leaveLiveTable } from "@/lib/live-tables-server"
 import { ensureTableAuthority } from "@/lib/table-authority-server"
-import { loadRoomRegistry } from "@/lib/rooms/room-registry"
+import { isRoomDisabledForJoin, loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { getDb } from "@/lib/db"
 import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 
@@ -121,6 +121,13 @@ export async function POST(req: Request) {
     if (!exists) {
       return NextResponse.json(
         { ok: false, error: "Комната больше не активна (TTL 24ч). Выберите другой стол." },
+        { status: 410, headers: NO_CACHE },
+      )
+    }
+    const roomMeta = reg.rooms.find((r) => r.roomId === requestedTableId)
+    if (isRoomDisabledForJoin(roomMeta)) {
+      return NextResponse.json(
+        { ok: false, error: "Стол отключён модератором. Выберите другой стол в лобби." },
         { status: 410, headers: NO_CACHE },
       )
     }

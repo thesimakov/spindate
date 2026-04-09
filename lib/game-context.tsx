@@ -814,21 +814,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       return { ...state, intergameChatMessages: kept }
     }
     case "PAY_VOICES":
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-        body: JSON.stringify({
-          sessionId: "ec43d5",
-          runId: "bottle-buy-debug-1",
-          hypothesisId: "H2",
-          location: "lib/game-context.tsx:reducer:PAY_VOICES",
-          message: "PAY_VOICES reducer hit",
-          data: { amount: action.amount, voiceBefore: state.voiceBalance },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       return { ...state, voiceBalance: Math.max(0, state.voiceBalance - action.amount) }
     case "ADD_VOICES":
       return { ...state, voiceBalance: state.voiceBalance + action.amount }
@@ -892,27 +877,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "SET_BOTTLE_DONOR":
       return { ...state, bottleDonorId: action.playerId, bottleDonorName: action.playerName }
     case "SET_BOTTLE_TABLE_PURCHASE": {
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-        body: JSON.stringify({
-          sessionId: "ec43d5",
-          runId: "bottle-buy-debug-1",
-          hypothesisId: "H2-H3",
-          location: "lib/game-context.tsx:reducer:SET_BOTTLE_TABLE_PURCHASE",
-          message: "SET_BOTTLE_TABLE_PURCHASE reducer hit",
-          data: {
-            skin: action.skin,
-            cooldownUntil: action.cooldownUntil,
-            donorId: action.donorId,
-            hadOwned: (state.ownedBottleSkins ?? ["classic"]).includes(action.skin),
-            ownedCountBefore: (state.ownedBottleSkins ?? ["classic"]).length,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       try {
         if (typeof window !== "undefined" && state.currentUser?.id != null) {
           const uid = state.currentUser.id
@@ -1251,27 +1215,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "SYNC_TABLE_AUTHORITY": {
       const lease = authoritySnapshotExpiredBottleLease(action.payload, Date.now())
       const p = lease.snapshot
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
-        body: JSON.stringify({
-          sessionId: "ec43d5",
-          runId: "bottle-buy-debug-1",
-          hypothesisId: "H3",
-          location: "lib/game-context.tsx:reducer:SYNC_TABLE_AUTHORITY",
-          message: "SYNC_TABLE_AUTHORITY applies bottle fields",
-          data: {
-            stateBottleSkin: state.bottleSkin,
-            payloadBottleSkin: p.bottleSkin ?? null,
-            nextBottleSkin: p.bottleSkin ?? state.bottleSkin ?? "classic",
-            payloadCooldownUntil: p.bottleCooldownUntil ?? null,
-            stateCooldownUntil: state.bottleCooldownUntil ?? null,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       if (lease.changed) {
         try {
           if (typeof window !== "undefined" && state.currentUser?.id != null) {

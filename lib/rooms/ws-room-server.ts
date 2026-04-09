@@ -124,6 +124,16 @@ export class WsRoomServer {
     ctx.player = player
 
     const result = await this.rooms.tryEnterRoom(player, msg.roomId)
+    if (result.kind === "disabled") {
+      send(ws, {
+        type: "error",
+        code: "room_disabled",
+        message: "Стол отключён модератором",
+        clientRequestId: reqId,
+      })
+      await this.broadcastLobby()
+      return
+    }
     if (result.kind === "queued") {
       this.lobbySockets.add(ws)
       send(ws, {

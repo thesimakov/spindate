@@ -230,6 +230,39 @@ export async function createUserRoomPaid(
   return meta
 }
 
+/**
+ * Модерация: отключить/включить пользовательский стол.
+ * Системные столы (1…SEED_COUNT без isUserRoom) не трогаем.
+ */
+export async function setRoomDisabledByAdmin(
+  roomId: number,
+  disabled: boolean,
+): Promise<{ ok: true; room: RoomMeta } | { ok: false; error: string }> {
+  const tid = Math.floor(roomId)
+  if (!Number.isInteger(tid) || tid <= 0) {
+    return { ok: false, error: "Некорректный номер стола" }
+  }
+  const state = await loadRoomRegistry()
+  const room = state.rooms.find((r) => r.roomId === tid)
+  if (!room) return { ok: false, error: "Стол не найден" }
+  if (room.isUserRoom !== true) {
+    return { ok: false, error: "Можно отключать только столы, созданные игроками" }
+  }
+  room.disabledByAdmin = disabled
+  await saveRoomRegistry(state)
+  if (disabled) {
+    const info = await getTableInfo(tid)
+    for (const p of info?.livePlayers ?? []) {
+      await leaveLiveTable(p.id)
+    }
+  }
+  return { ok: true, room }
+}
+
+export function isRoomDisabledForJoin(meta: RoomMeta | undefined): boolean {
+  return meta?.disabledByAdmin === true
+}
+
 /** Тест/админ: начислить «голоса» для создания комнаты */
 export async function grantRoomVotes(userId: number, amount: number): Promise<void> {
   const r = getRedis()

@@ -13,6 +13,8 @@ export interface RoomMeta {
   createdByUserId?: number
   /** Unix ms: время создания пользовательской комнаты (TTL 24ч). */
   createdAtMs?: number
+  /** Отключено модератором: не в лобби, вход запрещён, игроки выкинуты при отключении. */
+  disabledByAdmin?: boolean
 }
 
 export interface RoomRegistryState {
