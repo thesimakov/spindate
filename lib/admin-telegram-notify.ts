@@ -19,9 +19,12 @@ function normalizeTelegramChatId(raw: string): string | number {
   return s
 }
 
-function adminPanelAbsoluteUrl(): string | null {
-  const origin = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "")
-  if (!origin) return null
+/** Как в `app/layout.tsx` — чтобы ссылка в Telegram совпадала с прод-доменом, если в env не задан URL. */
+const APP_PUBLIC_ORIGIN_FALLBACK = "https://spindate.lemnity.ru"
+
+function adminPanelAbsoluteUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "")
+  const origin = raw || APP_PUBLIC_ORIGIN_FALLBACK
   const base = APP_BASE_PATH || ""
   return `${origin}${base}/admin-lemnity`
 }
@@ -55,10 +58,8 @@ export async function notifyTelegramTickerModerationQueued(input: {
     `Текст: ${preview}${longBody ? "…" : ""}`,
     `Ссылка: ${input.linkUrl}`,
     `Оплачено: ${input.costHearts} сердец`,
+    `Админка: ${adminUrl} (вкладка «Объявления»)`,
   ]
-  if (adminUrl) {
-    lines.push(`Админка: ${adminUrl} (вкладка «Объявления»)`)
-  }
 
   const text = lines.join("\n")
   const url = `https://api.telegram.org/bot${token}/sendMessage`
