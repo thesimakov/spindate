@@ -241,24 +241,11 @@ export function isVkMiniApp(): boolean {
  */
 export async function isVkRuntimeEnvironment(): Promise<boolean> {
   const mini = isVkMiniApp()
-  if (mini) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H3',location:'lib/vk-bridge.ts:246',message:'runtime env true via isVkMiniApp',data:{mini},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    return true
-  }
+  if (mini) return true
   const b = await getBridgeAsync()
-  if (!b) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H3',location:'lib/vk-bridge.ts:253',message:'runtime env false no bridge',data:{mini,hasBridge:false},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    return false
-  }
+  if (!b) return false
   try {
     const embedded = typeof b.isEmbedded === "function" ? b.isEmbedded() : false
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H3',location:'lib/vk-bridge.ts:260',message:'runtime env embedded check',data:{embedded,hasBridge:true},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (embedded) return true
   } catch {
     /* ignore */
@@ -700,12 +687,7 @@ export type VkBannerShowOptions = {
 export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Promise<boolean> {
   const b = await getBridgeAsync()
   const runtime = await isVkRuntimeEnvironment()
-  if (!b || !runtime) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H3',location:'lib/vk-bridge.ts:700',message:'show banner skipped before bridge send',data:{hasBridge:!!b,runtime},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    return false
-  }
+  if (!b || !runtime) return false
   const banner_location = options?.banner_location ?? "top"
   const layout_type = options?.layout_type ?? "resize"
   const height_type = options?.height_type ?? "compact"
@@ -720,14 +702,8 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
     if (options?.can_close != null) payload.can_close = options.can_close
     const res = await b.send("VKWebAppShowBannerAd", payload)
     const ok = (res as { result?: boolean })?.result === true
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H4',location:'lib/vk-bridge.ts:715',message:'VKWebAppShowBannerAd result',data:{ok,payload,res},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return ok
   } catch (e) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H4',location:'lib/vk-bridge.ts:719',message:'VKWebAppShowBannerAd error',data:{error:e instanceof Error?{name:e.name,message:e.message}:String(e),payload},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.warn("[VK] VKWebAppShowBannerAd", e)
     return false
   }
@@ -763,15 +739,9 @@ function vkPersistentBannerRetryDelay(ms: number): Promise<void> {
  * Повторные попытки показать горизонтальный persistent-баннер (после {@link initVkResilient}).
  */
 export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
-  // #region agent log
-  fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H2',location:'lib/vk-bridge.ts:754',message:'refresh persistent banner start',data:{},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   await initVkResilient()
   for (let i = 0; i < 3; i++) {
     const ok = await showVkBannerAdHorizontalPersistent()
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'pre-fix',hypothesisId:'H2',location:'lib/vk-bridge.ts:759',message:'refresh banner attempt',data:{attempt:i+1,ok},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (ok) break
     await vkPersistentBannerRetryDelay(400 + i * 250)
   }
