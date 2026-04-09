@@ -19,6 +19,9 @@ export function ClientBuildReload() {
   useEffect(() => {
     if (typeof window === "undefined") return
     if (process.env.NODE_ENV === "development") return
+    // В VK Mini App авто-reload при новом build часто срывает состояние bridge/баннера.
+    // Для VK-пользователей обновление происходит на следующем ручном открытии приложения.
+    if (isVkMiniApp()) return
     if (!CLIENT_BUILD || CLIENT_BUILD === "unknown") return
     // GitHub Pages собирается отдельно от VPS, build-id почти всегда отличается.
     // Иначе получится бесконечный reload при сравнении с /api/client-build на боевом сервере.
@@ -69,12 +72,10 @@ export function ClientBuildReload() {
             // ignore storage failures
           }
 
-          if (isVkMiniApp()) {
-            try {
-              await refreshVkPersistentHorizontalBanner()
-            } catch {
-              // best-effort before reload
-            }
+          try {
+            await refreshVkPersistentHorizontalBanner()
+          } catch {
+            // best-effort before reload
           }
           window.location.reload()
         }
