@@ -50,6 +50,8 @@ export async function POST(req: Request) {
   }
 
   const memberCheck = await vkGroupsIsMember({ groupId: COMMUNITY_GROUP_ID, userId: vkUserId })
+  const memberValue = "member" in memberCheck ? memberCheck.member : null
+  const reasonValue = "reason" in memberCheck ? memberCheck.reason : null
   // #region agent log
   void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
     method: "POST",
@@ -62,8 +64,8 @@ export async function POST(req: Request) {
       message: "vk group membership check result",
       data: {
         ok: memberCheck.ok,
-        member: memberCheck.member ?? null,
-        reason: memberCheck.reason ?? null,
+        member: memberValue,
+        reason: reasonValue,
         vkUserId,
       },
       timestamp: Date.now(),
