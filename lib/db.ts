@@ -160,6 +160,17 @@ function migrate(database: Database.Database) {
       style_id TEXT NOT NULL DEFAULT 'classic_night',
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS achievement_post_templates (
+      achievement_key TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      image_url TEXT NOT NULL DEFAULT '',
+      post_text_template TEXT NOT NULL DEFAULT '',
+      vk_enabled INTEGER NOT NULL DEFAULT 0,
+      published INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_achievement_post_templates_published ON achievement_post_templates(published, updated_at);
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]

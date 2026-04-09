@@ -10,6 +10,7 @@ import { AdminStatusLineContent } from "@/components/admin-status-line-content"
 import { AdminTableStyleContent } from "@/components/admin-table-style-content"
 import { AdminTickerAnnouncementsContent } from "@/components/admin-ticker-announcements-content"
 import { AdminContentPagePlaceholder } from "@/components/admin-content-page-placeholder"
+import { AdminAchievementPostsContent } from "@/components/admin-achievement-posts-content"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
@@ -48,6 +49,7 @@ export function DevScreen() {
     | "status"
     | "tickerAnnouncements"
     | "tableStyles"
+    | "achievementPosts"
     | "emotions"
     | "vip"
     | "hearts"
@@ -438,6 +440,7 @@ export function DevScreen() {
                     { id: "status", label: "Статус" },
                     { id: "tickerAnnouncements", label: "Объявления" },
                     { id: "tableStyles", label: "Стили стола" },
+                    { id: "achievementPosts", label: "Посты достижений" },
                     { id: "emotions", label: "Эмоции" },
                     { id: "vip", label: "VIP" },
                     { id: "hearts", label: "Сердечки" },
@@ -464,6 +467,7 @@ export function DevScreen() {
               {contentPage === "status" && <AdminStatusLineContent token={getAdminToken()} />}
               {contentPage === "tickerAnnouncements" && <AdminTickerAnnouncementsContent token={getAdminToken()} />}
               {contentPage === "tableStyles" && <AdminTableStyleContent token={getAdminToken()} />}
+              {contentPage === "achievementPosts" && <AdminAchievementPostsContent token={getAdminToken()} />}
               {contentPage === "emotions" && (
                 <AdminContentPagePlaceholder
                   title="Контент: эмоции"

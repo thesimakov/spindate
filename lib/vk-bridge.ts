@@ -882,6 +882,38 @@ export async function openVkUrl(url: string): Promise<boolean> {
   }
 }
 
+export async function showVkWallPostConfirm(
+  payload: string | { message: string; imageUrl?: string; gameUrl?: string },
+): Promise<{ ok: boolean }> {
+  const message = typeof payload === "string" ? payload : payload.message
+  const text = message.trim()
+  if (!text) return { ok: false }
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
+  try {
+    const attachments: string[] = []
+    if (typeof payload !== "string") {
+      const img = typeof payload.imageUrl === "string" ? payload.imageUrl.trim() : ""
+      const link = typeof payload.gameUrl === "string" ? payload.gameUrl.trim() : ""
+      if (img) attachments.push(img)
+      if (link) attachments.push(link)
+    }
+    const raw = await b.send("VKWebAppShowWallPostBox" as never, {
+      message: text,
+      ...(attachments.length > 0 ? { attachments: attachments.join(",") } : {}),
+    } as never)
+    const data = raw as { result?: boolean; post_id?: number } | null
+    if (data && typeof data === "object") {
+      if (data.result === false) return { ok: false }
+      if (typeof data.post_id === "number" && data.post_id > 0) return { ok: true }
+    }
+    return { ok: true }
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowWallPostBox", e)
+    return { ok: false }
+  }
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -914,6 +946,7 @@ export const vkBridge = {
   requestVkDenyNotifications,
   joinVkCommunityGroup,
   openVkUrl,
+  showVkWallPostConfirm,
   readVkUserIdFromClientLocation,
   VK_COMMUNITY_GROUP_ID,
   VK_COMMUNITY_PUBLIC_URL,

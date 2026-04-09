@@ -11,7 +11,7 @@ import { PAIR_ACTIONS } from "@/lib/game-types"
 import type { GameLogEntry } from "@/lib/game-types"
 import { effectiveOpenToChatInvites, effectiveShowVkAfterCare } from "@/lib/player-profile-prefs"
 import { generateLogId } from "@/lib/ids"
-import { assetUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
+import { resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
@@ -19,6 +19,11 @@ import { apiFetch } from "@/lib/api-fetch"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
 import { getTableSyncDispatch } from "@/lib/table-sync-registry"
+import {
+  ACHIEVEMENT_POST_CATALOG,
+  ACHIEVEMENT_POST_CATALOG_BY_KEY,
+} from "@/lib/achievement-posts-catalog"
+import { formatAchievementPostText } from "@/lib/achievement-posts-format"
 
 function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
@@ -26,6 +31,20 @@ function genderLabel(g: string) {
 
 const GIFT_IDS = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "tools", "lipstick"])
 const PROFILE_LEVEL_MAX = 30
+type AchievementPostTemplateRow = {
+  achievementKey: string
+  title: string
+  imageUrl: string
+  postTextTemplate: string
+  vkEnabled: boolean
+  published: boolean
+}
+
+function getAchievementStatusByKey(key: string, fallbackTitle: string): string {
+  const fromCatalog = ACHIEVEMENT_POST_CATALOG_BY_KEY.get(key)
+  const text = fromCatalog?.defaultStatus || fallbackTitle
+  return text.trim().slice(0, 15)
+}
 
 function getDailyLevelByPoints(points: number): number {
   let spent = 0
@@ -307,6 +326,8 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [profileDailyLevel, setProfileDailyLevel] = useState(1)
   const [profileTab, setProfileTab] = useState<"profile" | "achievements">("profile")
   const [showReceivedOnly, setShowReceivedOnly] = useState(false)
+  const [achievementPostTemplates, setAchievementPostTemplates] = useState<AchievementPostTemplateRow[]>([])
+  const [manualPublishKeys, setManualPublishKeys] = useState<Record<string, true>>({})
   /** В модалке рамок: наведение на карточку — крупное превью; иначе показываем текущую рамку */
   const [frameHoverPreviewId, setFrameHoverPreviewId] = useState<string | null>(null)
   /** Анимация «как за столом» после успешной отправки розы */
@@ -324,6 +345,11 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const secondaryBtnClass =
     "rounded-2xl border border-slate-200 bg-white text-[15px] font-extrabold text-slate-900 shadow-[0_6px_14px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.9)] transition hover:bg-slate-50 active:translate-y-px active:shadow-[0_3px_8px_rgba(15,23,42,0.10)] disabled:opacity-55"
   const valueTextClass = "text-[15px] font-black text-slate-900"
+  const templateByKey = useMemo(() => {
+    const map = new Map<string, AchievementPostTemplateRow>()
+    for (const row of achievementPostTemplates) map.set(row.achievementKey, row)
+    return map
+  }, [achievementPostTemplates])
 
   useEffect(() => {
     setName(initialName)
@@ -336,6 +362,43 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   useEffect(() => {
     if (showFramesModal) setFrameHoverPreviewId(null)
   }, [showFramesModal])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/catalog/achievement-posts", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const data = (await res.json().catch(() => null)) as { ok?: boolean; rows?: unknown } | null
+        if (!res.ok || data?.ok !== true || !Array.isArray(data.rows) || cancelled) return
+        const rows = data.rows
+          .map((row) => {
+            if (!row || typeof row !== "object") return null
+            const x = row as Partial<AchievementPostTemplateRow>
+            if (typeof x.achievementKey !== "string" || !x.achievementKey) return null
+            if (typeof x.title !== "string") return null
+            return {
+              achievementKey: x.achievementKey,
+              title: x.title,
+              imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : "",
+              postTextTemplate: typeof x.postTextTemplate === "string" ? x.postTextTemplate : "",
+              vkEnabled: x.vkEnabled === true,
+              published: x.published === true,
+            } satisfies AchievementPostTemplateRow
+          })
+          .filter((x): x is AchievementPostTemplateRow => x != null)
+        setAchievementPostTemplates(rows)
+      } catch {
+        // optional content
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!currentUser) {
@@ -388,20 +451,64 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     showToast("Имя сохранено", "success")
   }
 
-  const handleSaveStatus = async () => {
-    if (!canSaveStatus) return
-    dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: statusTrimmed })
+  const saveStatus = async (nextStatus: string, successMessage = "Статус обновлен") => {
+    const normalized = nextStatus.trim().slice(0, 15)
+    dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: normalized })
+    setStatus(normalized)
     try {
       await apiFetch("/api/user/state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status: statusTrimmed }),
+        body: JSON.stringify({ status: normalized }),
       })
-      showToast("Статус обновлен", "success")
+      showToast(successMessage, "success")
     } catch {
       showToast("Статус обновлен локально", "info")
     }
+  }
+
+  const handleSaveStatus = async () => {
+    if (!canSaveStatus) return
+    await saveStatus(statusTrimmed)
+  }
+
+  const handlePublishAchievementPost = async (achievementKey: string, title: string) => {
+    const template = templateByKey.get(achievementKey)
+    if (!template || !template.vkEnabled || !template.published) {
+      showToast("Шаблон VK для этого достижения отключён", "info")
+      return false
+    }
+    const gameUrl = typeof window !== "undefined" ? window.location.origin : "https://vk.com/app54511363"
+    const message = formatAchievementPostText({
+      template: template.postTextTemplate,
+      playerName: currentUser.name,
+      achievementTitle: title,
+      gameUrl,
+    })
+    const posted = await vkBridge.showVkWallPostConfirm({
+      message,
+      imageUrl: template.imageUrl || undefined,
+      gameUrl,
+    })
+    if (posted.ok) {
+      setManualPublishKeys((prev) => {
+        const next = { ...prev }
+        delete next[achievementKey]
+        return next
+      })
+      showToast("Открыт пост на стену VK", "info")
+      return true
+    }
+    setManualPublishKeys((prev) => ({ ...prev, [achievementKey]: true }))
+    showToast("Автопубликация недоступна — используйте кнопку «Публикация»", "info")
+    return false
+  }
+
+  const handleClaimAchievementStatus = async (achievementKey: string, title: string) => {
+    const claimedStatus = getAchievementStatusByKey(achievementKey, title)
+    await saveStatus(claimedStatus, "Статус получен")
+    void handlePublishAchievementPost(achievementKey, title)
   }
 
   const handleClearStatus = async () => {
@@ -903,6 +1010,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             {(
               [
                 {
+                  achievementKey: "base_heartbreaker",
                   key: "heartbreaker",
                   label: "Сердцеед",
                   hint: "поцелуи в игре",
@@ -912,6 +1020,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                   done: heartbreakerCount >= 100,
                 },
                 {
+                  achievementKey: "base_generous",
                   key: "generous",
                   label: "Щедрый",
                   hint: "потрачено ❤ на подарки",
@@ -921,6 +1030,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                   done: giftSpent >= 1000,
                 },
                 {
+                  achievementKey: "base_soul",
                   key: "soul",
                   label: "Душа компании",
                   hint: "раз крутили бутылочку",
@@ -948,15 +1058,48 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                       <span className="text-base font-black text-slate-900">{row.label}</span>
                       <span className="mt-1 block text-[15px] font-medium text-slate-700">{row.hint}</span>
                     </div>
-                    <span
-                      className={
-                        "shrink-0 tabular-nums text-[15px] font-bold " +
-                        (row.done ? "text-emerald-700" : "text-slate-600")
-                      }
-                      title={`${shown} из ${row.target}`}
-                    >
-                      {shown}/{row.target}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={
+                          "tabular-nums text-[15px] font-bold " +
+                          (row.done ? "text-emerald-700" : "text-slate-600")
+                        }
+                        title={`${shown} из ${row.target}`}
+                      >
+                        {shown}/{row.target}
+                      </span>
+                      {row.done && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void handleClaimAchievementStatus(row.achievementKey, row.label)}
+                            className="rounded-lg border border-cyan-300 bg-cyan-50 px-2 py-1 text-xs font-black text-cyan-700 transition hover:bg-cyan-100"
+                          >
+                            Получить статус
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handlePublishAchievementPost(row.achievementKey, row.label)}
+                            className="rounded-lg border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-black text-indigo-700 transition hover:bg-indigo-100"
+                          >
+                            Публикация
+                          </button>
+                          {manualPublishKeys[row.achievementKey] && (
+                            <button
+                              type="button"
+                              onClick={() => setManualPublishKeys((prev) => {
+                                const next = { ...prev }
+                                delete next[row.achievementKey]
+                                return next
+                              })}
+                              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-black text-slate-700 transition hover:bg-slate-100"
+                            >
+                              Удалить
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div
                     className="h-2 w-full overflow-hidden rounded-full bg-slate-200 ring-1 ring-slate-200"
@@ -996,71 +1139,60 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             </div>
             <ul className="flex flex-col gap-2">
               {(
-                [
-                  ["Любитель кваса", "подарил на стол Закваску"],
-                  ["Заквасочник", "подарил на стол квас"],
-                  ["Мастер закваски", "Квасить подряд 40 раз"],
-                  ["Душа стола", "Квасить подряд 20 раз"],
-                  ["Любитель отдыха", "попарить 10 раз друга"],
-                  ["Транжира", "подарить красотке 20 бриллиантов"],
-                  ["Бонжур", "подарить на стол квас"],
-                  ["Пушистость", "получить 10 мягких игрушек"],
-                  ["Чайная церемония", "условие будет добавлено"],
-                  ["Утренник", "подарить всем игрокам игрушки"],
-                  ["Фермер", "купить рамку и получить в подарок корову"],
-                  ["Душа компании", "получить 100 квасов (для парня)"],
-                  ["Подручная", "получить 100 заквасок (для девушек)"],
-                  ["Гуляка", "сменить 5 столов за 10 минут"],
-                  ["8 марта", "получить 100 цветов за час (для девушек)"],
-                  ["Одиночка", "не получить поцелуя в ответ"],
-                  ["Монах", "прожить в игре 30 дней подряд"],
-                  ["Принц", "поцеловать 50 раз девушку с рамкой принцесса"],
-                  ["Ювелир", "подарить 300 бриллиантов"],
-                  ["Мужская дружба", "собрать 20 друзей мужиков"],
-                  ["Женская дружба", "собрать 20 друзей женщин"],
-                  ["Новый год", "подарить новогодний стол"],
-                  ["Пират", "купить 30 сундуков"],
-                  ["Принцесса", "поцеловать 200 раз парня с рамкой принц"],
-                  ["Закваска", "купить 10 раз Закваску"],
-                  ["Снежный бой", "во время зимней игры запустить снежком 300 раз в игроков"],
-                  ["Сладкоежка", "получить в подарок 20 сладостей"],
-                  ["Сердцеед (ка)", "собрать 500 сердец за неделю"],
-                  ["Купидон (ка)", "подарить 100 роз"],
-                  ["Маг", "купить 10 раз рамку магия"],
-                  ["Помощь новичкам", "подарить 50 подарков новичкам"],
-                  ["Дедушка Мороз", "отправить 300 новогодних подарков"],
-                  ["Турист", "играй с разных городов и стран"],
-                  ["Фея", "с рамкой фея поцелуй 300 раз"],
-                  ["Первый парень", "продержаться в топ-10 3 недели (для парней)"],
-                  ["Первая леди", "продержаться в топ-10 3 недели (для девушек)"],
-                  ["Дружбанио", "пригласить 10 друзей за месяц"],
-                  ["Экстрасенс", "выиграть 10 турниров в мини-игре"],
-                  ["Культурный игрок", "сказать «привет» всем игрокам 20 раз"],
-                  ["Ведьмак (Ведьма)", "во время хэллоуинского ивента собрать коллекцию из 5 разных «проклятых» предметов"],
-                  ["Валентин", "отправить 100 «валентинок» за день 14 февраля"],
-                  ["Дачник", "во время летнего ивента посадить и вырастить 20 виртуальных растений"],
-                  ["Снегурочка", "помочь «Деду Морозу» за одним столом не менее 2 часов"],
-                ] as const
+                ACHIEVEMENT_POST_CATALOG.filter((x) => x.group === "events")
               )
-                .map(([title, hint]) => {
+                .map(({ key, title, hint }) => {
                   const stat = achievementStats[title]
                   const current = stat?.current ?? 0
                   const target = stat?.target ?? 1
                   const known = stat?.known ?? false
                   const progressPct = Math.max(0, Math.min(100, Math.round((current / Math.max(1, target)) * 100)))
-                  return { title, hint, progressPct, done: progressPct >= 100, known, current, target }
+                  return { key, title, hint, progressPct, done: progressPct >= 100, known, current, target }
                 })
                 .filter((row) => (showReceivedOnly ? row.done : true))
-                .map(({ title, hint, progressPct, known, current, target }) => {
+                .map(({ key, title, hint, progressPct, known, current, target, done }) => {
                 return (
-                  <li key={title} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+                  <li key={key} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
                     <div className="flex items-start gap-3">
                       <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-100 to-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
                         {/* Placeholder: сюда можно подставить картинку достижения */}
                         <div className="flex h-full w-full items-center justify-center text-[15px] font-black text-slate-500">+</div>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[15px] font-black text-slate-900">{title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[15px] font-black text-slate-900">{title}</p>
+                          {done && (
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => void handleClaimAchievementStatus(key, title)}
+                                className="rounded-lg border border-cyan-300 bg-cyan-50 px-2 py-1 text-xs font-black text-cyan-700 transition hover:bg-cyan-100"
+                              >
+                                Получить статус
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handlePublishAchievementPost(key, title)}
+                                className="rounded-lg border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-black text-indigo-700 transition hover:bg-indigo-100"
+                              >
+                                Публикация
+                              </button>
+                              {manualPublishKeys[key] && (
+                                <button
+                                  type="button"
+                                  onClick={() => setManualPublishKeys((prev) => {
+                                    const next = { ...prev }
+                                    delete next[key]
+                                    return next
+                                  })}
+                                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-black text-slate-700 transition hover:bg-slate-100"
+                                >
+                                  Удалить
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <p className="mt-0.5 text-[15px] font-medium text-slate-700">{hint}</p>
                         <p className="mt-1 text-[13px] font-semibold text-slate-500">
                           {known ? `${current}/${target}` : "нет данных"}

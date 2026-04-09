@@ -45,6 +45,8 @@ export function VkBankRewardVideoButton({
 }) {
   const { dispatch, state } = useGame()
   const { currentUser, voiceBalance } = state
+  const vipActive =
+    !!currentUser?.isVip && (currentUser.vipUntilTs == null || currentUser.vipUntilTs > Date.now())
   const [busy, setBusy] = useState(false)
   const [vkEnv, setVkEnv] = useState(false)
   const [gateOpen, setGateOpen] = useState(false)
@@ -141,7 +143,7 @@ export function VkBankRewardVideoButton({
     setGateOpen(true)
   }, [busy, currentUser, onNotify, runAdAndClaim])
 
-  if (!vkEnv || !currentUser || currentUser.authProvider !== "vk") return null
+  if (!vkEnv || !currentUser || currentUser.authProvider !== "vk" || vipActive) return null
 
   return (
     <>

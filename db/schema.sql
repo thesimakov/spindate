@@ -37,3 +37,14 @@ CREATE TABLE IF NOT EXISTS player_profiles (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS achievement_post_templates (
+  achievement_key TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  image_url TEXT NOT NULL DEFAULT '',
+  post_text_template TEXT NOT NULL DEFAULT '',
+  vk_enabled INTEGER NOT NULL DEFAULT 0,
+  published INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_achievement_post_templates_published ON achievement_post_templates(published, updated_at);
