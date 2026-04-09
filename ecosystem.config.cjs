@@ -41,11 +41,15 @@ function parseDotEnvFile(filePath) {
 
 const sharedEnvPath = path.join(__dirname, "..", "..", "shared", ".env.local")
 const sharedEnv = parseDotEnvFile(sharedEnvPath)
+/** Переменные из корня приложения (VK, Telegram и т.д.) — иначе PM2 их не видит, только Next при старте. */
+const projectEnvPath = path.join(__dirname, ".env.local")
+const projectEnv = parseDotEnvFile(projectEnvPath)
 
 const baseEnv = {
   ...sharedEnv,
+  ...projectEnv,
   NODE_ENV: "production",
-  PORT: process.env.PORT || sharedEnv.PORT || "3002",
+  PORT: process.env.PORT || projectEnv.PORT || sharedEnv.PORT || "3002",
 }
 
 module.exports = {

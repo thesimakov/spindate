@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: result.error }, { status })
   }
 
-  void notifyTelegramTickerModerationQueued({
+  await notifyTelegramTickerModerationQueued({
     adId: result.id,
     authorDisplayName: authorDisplayName.trim() || "—",
     body: text,
