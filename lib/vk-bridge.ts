@@ -743,6 +743,7 @@ const VK_PERSISTENT_BANNER_MIN_GAP_MS = 1200
 
 let vkPersistentBannerRefreshInFlight: Promise<void> | null = null
 let vkPersistentBannerLastStartedAt = 0
+let vkPersistentBannerDeferredTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Повторные попытки показать горизонтальный persistent-баннер (после {@link initVkResilient}).
@@ -750,7 +751,16 @@ let vkPersistentBannerLastStartedAt = 0
 export async function refreshVkPersistentHorizontalBanner(): Promise<void> {
   const now = Date.now()
   if (vkPersistentBannerRefreshInFlight) return vkPersistentBannerRefreshInFlight
-  if (now - vkPersistentBannerLastStartedAt < VK_PERSISTENT_BANNER_MIN_GAP_MS) return
+  if (now - vkPersistentBannerLastStartedAt < VK_PERSISTENT_BANNER_MIN_GAP_MS) {
+    const waitMs = VK_PERSISTENT_BANNER_MIN_GAP_MS - (now - vkPersistentBannerLastStartedAt)
+    if (vkPersistentBannerDeferredTimer == null) {
+      vkPersistentBannerDeferredTimer = setTimeout(() => {
+        vkPersistentBannerDeferredTimer = null
+        void refreshVkPersistentHorizontalBanner()
+      }, Math.max(20, waitMs))
+    }
+    return
+  }
 
   vkPersistentBannerLastStartedAt = now
   vkPersistentBannerRefreshInFlight = (async () => {
