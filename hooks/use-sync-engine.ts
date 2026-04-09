@@ -78,37 +78,6 @@ export function useSyncEngine(): SyncEngineResult {
   const pushTableAction = useCallback(async (action: GameAction) => {
     const current = syncMetaRef.current
     const tid = Math.floor(Number(current.tableId))
-    const bottle =
-      action.type === "SET_BOTTLE_SKIN" ||
-      action.type === "SET_BOTTLE_DONOR" ||
-      action.type === "SET_BOTTLE_COOLDOWN_UNTIL" ||
-      action.type === "SET_BOTTLE_TABLE_PURCHASE"
-    // #region agent log
-    if (bottle) {
-      const skipNoMeta = !current.userId || !Number.isInteger(tid) || tid <= 0
-      const skipNoSeat = !seatConfirmedRef.current
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c301a2" },
-        body: JSON.stringify({
-          sessionId: "c301a2",
-          runId: "pre-fix",
-          hypothesisId: "H1",
-          location: "use-sync-engine.ts:pushTableAction",
-          message: "bottle push gate",
-          data: {
-            actionType: action.type,
-            tid,
-            userId: current.userId,
-            seatConfirmed: seatConfirmedRef.current,
-            skipNoMeta,
-            skipNoSeat,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-    }
-    // #endregion
     if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
     if (!seatConfirmedRef.current) return
     try {
@@ -124,42 +93,8 @@ export function useSyncEngine(): SyncEngineResult {
           action,
         }),
       })
-      // #region agent log
-      if (bottle) {
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c301a2" },
-          body: JSON.stringify({
-            sessionId: "c301a2",
-            runId: "pre-fix",
-            hypothesisId: "H1",
-            location: "use-sync-engine.ts:pushTableAction",
-            message: "bottle push api ok",
-            data: { actionType: action.type, tid },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-      }
-      // #endregion
     } catch {
       // state will converge on next authority poll
-      // #region agent log
-      if (bottle) {
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c301a2" },
-          body: JSON.stringify({
-            sessionId: "c301a2",
-            runId: "pre-fix",
-            hypothesisId: "H5",
-            location: "use-sync-engine.ts:pushTableAction",
-            message: "bottle push api error",
-            data: { actionType: action.type, tid },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {})
-      }
-      // #endregion
     }
   }, [])
 

@@ -1227,33 +1227,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "SYNC_TABLE_AUTHORITY": {
       const lease = authoritySnapshotExpiredBottleLease(action.payload, Date.now())
       const p = lease.snapshot
-      // #region agent log
-      try {
-        if (typeof fetch !== "undefined") {
-          fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c301a2" },
-            body: JSON.stringify({
-              sessionId: "c301a2",
-              runId: "pre-fix",
-              hypothesisId: "H3-H4",
-              location: "game-context.tsx:SYNC_TABLE_AUTHORITY",
-              message: "authority merge incoming",
-              data: {
-                revision: p.revision,
-                bottleCooldownUntil: p.bottleCooldownUntil ?? null,
-                bottleDonorId: p.bottleDonorId ?? null,
-                hasDonorName: Boolean(p.bottleDonorName),
-                selfId: state.currentUser?.id ?? null,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-        }
-      } catch {
-        /* ignore */
-      }
-      // #endregion
       if (lease.changed) {
         try {
           if (typeof window !== "undefined" && state.currentUser?.id != null) {

@@ -17,9 +17,6 @@ const RELOAD_GUARD_WINDOW_MS = 2 * 60_000
  */
 export function ClientBuildReload() {
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-rootcause-1',hypothesisId:'H1',location:'components/client-build-reload.tsx:20',message:'client build reload mounted',data:{host:typeof window!=='undefined'?window.location.host:'no-window',clientBuild:CLIENT_BUILD,nodeEnv:process.env.NODE_ENV},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (typeof window === "undefined") return
     if (process.env.NODE_ENV === "development") return
     if (!CLIENT_BUILD || CLIENT_BUILD === "unknown") return
@@ -40,9 +37,6 @@ export function ClientBuildReload() {
         if (!res.ok) return
         const data = (await res.json().catch(() => null)) as { buildId?: string } | null
         const serverBuild = typeof data?.buildId === "string" ? data.buildId.trim() : ""
-        // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-rootcause-1',hypothesisId:'H1',location:'components/client-build-reload.tsx:40',message:'client build poll result',data:{serverBuild,clientBuild:CLIENT_BUILD,status:res.status},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (!serverBuild || serverBuild === "unknown") return
         if (serverBuild !== CLIENT_BUILD) {
           const now = Date.now()
@@ -82,9 +76,6 @@ export function ClientBuildReload() {
               // best-effort before reload
             }
           }
-          // #region agent log
-          fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-rootcause-1',hypothesisId:'H1',location:'components/client-build-reload.tsx:79',message:'client build triggers reload',data:{clientBuild:CLIENT_BUILD,serverBuild,guardWindowMs:RELOAD_GUARD_WINDOW_MS},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           window.location.reload()
         }
       } catch {

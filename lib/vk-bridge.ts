@@ -688,9 +688,6 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
   const b = await getBridgeAsync()
   const runtime = await isVkRuntimeEnvironment()
   if (!b || !runtime) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-rootcause-1',hypothesisId:'H3',location:'lib/vk-bridge.ts:690',message:'showVkBannerAdCompact skipped',data:{hasBridge:!!b,runtime},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return false
   }
   const banner_location = options?.banner_location ?? "top"
@@ -706,15 +703,8 @@ export async function showVkBannerAdCompact(options?: VkBannerShowOptions): Prom
     if (options?.orientation != null) payload.orientation = options.orientation
     if (options?.can_close != null) payload.can_close = options.can_close
     const res = await b.send("VKWebAppShowBannerAd", payload)
-    const ok = (res as { result?: boolean })?.result === true
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-rootcause-1',hypothesisId:'H4',location:'lib/vk-bridge.ts:705',message:'VKWebAppShowBannerAd result',data:{ok,payload,res},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    return ok
+    return (res as { result?: boolean })?.result === true
   } catch (e) {
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'banner-rootcause-1',hypothesisId:'H4',location:'lib/vk-bridge.ts:708',message:'VKWebAppShowBannerAd error',data:{error:e instanceof Error?{name:e.name,message:e.message}:String(e)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.warn("[VK] VKWebAppShowBannerAd", e)
     return false
   }

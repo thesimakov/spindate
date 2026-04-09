@@ -52,18 +52,11 @@ export function MobileAppBlockedScreen() {
 
   const tryClaimBonus = useCallback(async (): Promise<SubscribeSuccess> => {
     setHint(null)
-    const rewardUrl = buildSubscribeRewardUrl(user)
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'subscribe-debug-1',hypothesisId:'H1',location:'components/mobile-app-blocked-screen.tsx:56',message:'tryClaimBonus request start',data:{rewardUrl,hasUser:!!user,authProvider:user?.authProvider ?? null,userId:user?.id ?? null,vkUserId:user?.vkUserId ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const res = await apiFetch(buildSubscribeRewardUrl(user), {
       method: "POST",
       credentials: "include",
     })
     const data = (await res.json().catch(() => null)) as Record<string, unknown> | null
-    // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'subscribe-debug-1',hypothesisId:'H2',location:'components/mobile-app-blocked-screen.tsx:63',message:'tryClaimBonus response',data:{status:res.status,ok:data?.ok ?? null,error:data?.error ?? null,isMember:data?.isMember ?? null,granted:data?.granted ?? null,alreadyClaimed:data?.alreadyClaimed ?? null,voiceBalance:data?.voiceBalance ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     if (res.status === 401) {
       setHint(
@@ -102,9 +95,6 @@ export function MobileAppBlockedScreen() {
     }
 
     if (typeof data.voiceBalance === "number") {
-      // #region agent log
-      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'subscribe-debug-1',hypothesisId:'H3',location:'components/mobile-app-blocked-screen.tsx:103',message:'dispatch restore game state after reward',data:{voiceBalance:data.voiceBalance,inventorySize:(state.inventory ?? []).length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       dispatch({
         type: "RESTORE_GAME_STATE",
         voiceBalance: data.voiceBalance,
@@ -209,17 +199,6 @@ export function MobileAppBlockedScreen() {
             </>
           )}
         </Button>
-        {/* #region agent log */}
-        {typeof window !== "undefined" ? (
-          <span className="hidden">
-            {(() => {
-              const vw = window.innerWidth
-              fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ec43d5'},body:JSON.stringify({sessionId:'ec43d5',runId:'subscribe-debug-1',hypothesisId:'H4',location:'components/mobile-app-blocked-screen.tsx:201',message:'subscribe button rendered mobile screen',data:{vw,cardMaxWidth:'max-w-md',buttonClass:'h-12 w-full rounded-2xl'},timestamp:Date.now()})}).catch(()=>{});
-              return ""
-            })()}
-          </span>
-        ) : null}
-        {/* #endregion */}
 
         {successFooter ? (
           <p className="mt-4 text-center text-sm leading-relaxed text-slate-300">{successFooter}</p>
