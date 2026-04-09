@@ -12,7 +12,7 @@ export function formatAchievementPostText(input: AchievementPostTemplateInput): 
   const source = input.template.trim()
   const base =
     source ||
-    `Игрок {name} получил достижение «{achievement}» в SpinDate!\n{game_url}`
+    `Игрок {name} получил достижение «{achievement}» в Крути и знакомься!\n{game_url}`
   return base
     .replaceAll("{name}", safeName)
     .replaceAll("{achievement}", safeAchievement)

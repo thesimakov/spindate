@@ -25,6 +25,12 @@ type DbRow = {
 }
 
 const MAX_TEMPLATE_LEN = 1200
+const BRAND_OLD = "SpinDate"
+const BRAND_NEW = "Крути и знакомься!"
+
+function normalizeBrandText(value: string): string {
+  return value.replaceAll(BRAND_OLD, BRAND_NEW)
+}
 
 function normalizeImageUrl(raw: unknown): string {
   if (typeof raw !== "string") return ""
@@ -37,7 +43,7 @@ function normalizeImageUrl(raw: unknown): string {
 
 function normalizeTemplate(raw: unknown): string {
   if (typeof raw !== "string") return ""
-  return raw.trim().slice(0, MAX_TEMPLATE_LEN)
+  return normalizeBrandText(raw.trim()).slice(0, MAX_TEMPLATE_LEN)
 }
 
 export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean }): AchievementPostTemplateRow[] {
@@ -60,8 +66,8 @@ export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean })
         group: item.group,
         imageUrl: fromDb?.image_url ?? "",
         postTextTemplate:
-          fromDb?.post_text_template?.trim() ||
-          `Игрок {name} получил достижение «{achievement}» в SpinDate!\n${"{game_url}"}`,
+          normalizeBrandText(fromDb?.post_text_template?.trim() || "") ||
+          `Игрок {name} получил достижение «{achievement}» в Крути и знакомься!\n${"{game_url}"}`,
         vkEnabled: fromDb?.vk_enabled === 1,
         published: fromDb?.published === 1,
         updatedAt: fromDb?.updated_at ?? 0,

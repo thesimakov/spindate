@@ -93,7 +93,7 @@ export function scheduleVkNotificationForTableAction(action: GameAction): void {
   if (!recipientVkId) return
 
   const fromName = entry.fromPlayer.name?.trim() || "Игрок"
-  const text = `${fromName} приглашает вас общаться в SpinDate`
+  const text = `${fromName} приглашает вас общаться в Крути и знакомься!`
 
   void sendVkMiniAppNotifications({
     vkUserIds: [recipientVkId],

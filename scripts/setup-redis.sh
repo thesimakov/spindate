@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # =============================================================
-# SpinDate: Установка и настройка Redis на Ubuntu VPS
+# Крути и знакомься!: Установка и настройка Redis на Ubuntu VPS
 # Запуск: bash scripts/setup-redis.sh
 # Должен выполняться от root на сервере.
 # =============================================================
@@ -52,7 +52,7 @@ else
   echo "Добавлено: REDIS_URL=redis://127.0.0.1:6379/0"
 fi
 
-echo "=== 5/5  Перезапуск SpinDate ==="
+echo "=== 5/5  Перезапуск Крути и знакомься! ==="
 cd "$APP_DIR"
 if command -v pm2 &>/dev/null; then
   pm2 restart spindate || pm2 start ecosystem.config.cjs --env production
@@ -68,4 +68,4 @@ echo "=== Готово! ==="
 echo "Проверка ключей (появятся после входа игрока):"
 redis-cli keys "spindate:*"
 echo ""
-echo "Redis успешно подключён к SpinDate."
+echo "Redis успешно подключён к Крути и знакомься!"
