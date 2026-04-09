@@ -66,6 +66,17 @@ export class ChatService {
   }
 }
 
+/** Удалить историю чата одной комнаты (Redis + память). */
+export async function purgeRoomChatHistory(roomId: number): Promise<void> {
+  const rid = Math.floor(roomId)
+  if (!Number.isInteger(rid) || rid <= 0) return
+  mem().delete(rid)
+  const r = getRedis()
+  if (r) {
+    await r.del(roomChatKey(rid))
+  }
+}
+
 /** Вся история чатов комнат: Redis (все ключи `…:chat:*`) + in-memory fallback. */
 export async function purgeAllRoomChatHistory(): Promise<void> {
   mem().clear()

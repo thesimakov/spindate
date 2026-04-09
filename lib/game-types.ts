@@ -245,6 +245,7 @@ export interface GameState {
   screen:
     | "registration"
     | "daily-streak"
+    | "ui-tour"
     | "lobby"
     | "payment"
     | "game"

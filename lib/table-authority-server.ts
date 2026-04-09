@@ -263,3 +263,16 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
     return next
   })
 }
+
+/** Админ: полностью убрать снимок авторитета стола (Redis + память процесса). */
+export async function purgeTableAuthoritySnapshot(tableId: number): Promise<void> {
+  const tid = Math.floor(tableId)
+  if (!Number.isInteger(tid) || tid <= 0) return
+  const redis = getRedis()
+  if (redis) {
+    await redis.del(authorityRedisKey(tid))
+  }
+  await runMemoryAuthorityOp(tid, async () => {
+    getMemoryStore().delete(tid)
+  })
+}

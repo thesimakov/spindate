@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/admin-auth"
 import { getTableInfo } from "@/lib/live-tables-server"
 import { getTableAuthoritySnapshot } from "@/lib/table-authority-server"
+import { deleteUserRoomCompletely } from "@/lib/rooms/admin-room-delete"
 import { loadRoomRegistry, setRoomDisabledByAdmin } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
 import { resolveEffectiveTableStyle } from "@/lib/table-style-global-server"
@@ -76,6 +77,14 @@ export async function POST(req: Request) {
     if (!Number.isInteger(roomId) || roomId <= 0) {
       return NextResponse.json({ ok: false, error: "bad_room_id" }, { status: 400, headers: NO_CACHE })
     }
+    if (action === "delete") {
+      const del = await deleteUserRoomCompletely(roomId)
+      if (!del.ok) {
+        return NextResponse.json({ ok: false, error: del.error }, { status: 400, headers: NO_CACHE })
+      }
+      return NextResponse.json({ ok: true, deleted: true }, { headers: NO_CACHE })
+    }
+
     if (action !== "disable" && action !== "enable") {
       return NextResponse.json({ ok: false, error: "bad_action" }, { status: 400, headers: NO_CACHE })
     }

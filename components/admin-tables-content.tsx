@@ -85,6 +85,39 @@ export function AdminTablesContent({ token, refreshTrigger = 0 }: AdminTablesCon
     }
   }
 
+  const deleteRoom = async (roomId: number, name: string) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Удалить стол #${roomId} «${name}» безвозвратно?\n\n` +
+          "Комната исчезнет из лобби, все игроки будут выгнаны, на сервере будут очищены состояние стола, лента событий и чат комнаты.",
+      )
+    ) {
+      return
+    }
+    setBusyRoomId(roomId)
+    setError("")
+    try {
+      const res = await apiFetch("/api/admin/tables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        cache: "no-store",
+        credentials: "include",
+        body: JSON.stringify({ roomId, action: "delete" }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok) {
+        setError(`Удаление не выполнено: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+        return
+      }
+      await fetchData()
+    } catch {
+      setError("Ошибка сети")
+    } finally {
+      setBusyRoomId(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -185,33 +218,43 @@ export function AdminTablesContent({ token, refreshTrigger = 0 }: AdminTablesCon
                   )}
                 </td>
                 <td className="px-3 py-2.5">
-                  {r.disabledByAdmin ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {r.disabledByAdmin ? (
+                      <button
+                        type="button"
+                        disabled={busyRoomId === r.roomId}
+                        onClick={() => void toggleDisabled(r.roomId, false)}
+                        className="rounded border border-emerald-500/45 bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                      >
+                        Включить
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busyRoomId === r.roomId}
+                        onClick={() => {
+                          if (
+                            typeof window !== "undefined" &&
+                            !window.confirm(`Отключить стол #${r.roomId}? Игроки будут выкинуты из live.`)
+                          ) {
+                            return
+                          }
+                          void toggleDisabled(r.roomId, true)
+                        }}
+                        className="rounded border border-rose-500/45 bg-rose-500/15 px-2 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
+                      >
+                        Отключить
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={busyRoomId === r.roomId}
-                      onClick={() => void toggleDisabled(r.roomId, false)}
-                      className="rounded border border-emerald-500/45 bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                      onClick={() => void deleteRoom(r.roomId, r.name)}
+                      className="rounded border border-red-600/50 bg-red-950/40 px-2 py-1 text-xs font-semibold text-red-200 hover:bg-red-900/50 disabled:opacity-50"
                     >
-                      Включить
+                      Удалить
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={busyRoomId === r.roomId}
-                      onClick={() => {
-                        if (
-                          typeof window !== "undefined" &&
-                          !window.confirm(`Отключить стол #${r.roomId}? Игроки будут выкинуты из live.`)
-                        ) {
-                          return
-                        }
-                        void toggleDisabled(r.roomId, true)
-                      }}
-                      className="rounded border border-rose-500/45 bg-rose-500/15 px-2 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
-                    >
-                      Отключить
-                    </button>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}

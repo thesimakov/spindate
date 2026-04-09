@@ -176,3 +176,14 @@ export async function pullTableEvents(args: { tableId: number; sinceSeq: number 
     events,
   }
 }
+
+/** Админ: удалить ленту событий стола (Redis + память). */
+export async function purgeTableEventsArchive(tableId: number): Promise<void> {
+  const tid = Math.floor(tableId)
+  if (!Number.isInteger(tid) || tid <= 0) return
+  const redis = getRedis()
+  if (redis) {
+    await redis.del(eventsRedisKey(tid))
+  }
+  getMemoryStore().delete(tid)
+}

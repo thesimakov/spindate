@@ -11,6 +11,7 @@ import { AppLoader } from "@/components/app-loader"
 import { RegistrationScreen } from "@/components/registration-screen"
 import { RoomLobbyScreen } from "@/components/room-lobby-screen"
 import { DailyStreakGateScreen } from "@/components/daily-streak-gate-screen"
+import { UiTourScreen } from "@/components/ui-tour-screen"
 import { GameRoom } from "@/components/game-room"
 import { ChatScreen } from "@/components/chat-screen"
 import { FavoritesScreen } from "@/components/favorites-screen"
@@ -127,7 +128,10 @@ export function GameApp() {
 
   useEffect(() => {
     if (
-      (state.screen !== "game" && state.screen !== "lobby" && state.screen !== "daily-streak") ||
+      (state.screen !== "game" &&
+        state.screen !== "lobby" &&
+        state.screen !== "daily-streak" &&
+        state.screen !== "ui-tour") ||
       !state.currentUser
     ) {
       setBlockStatus(null)
@@ -167,7 +171,11 @@ export function GameApp() {
     }
   }
 
-  if (state.screen === "game" && state.currentUser && blockStatus) {
+  if (
+    (state.screen === "game" || state.screen === "ui-tour") &&
+    state.currentUser &&
+    blockStatus
+  ) {
     const isBlocked = blockStatus === "blocked"
     const until = !isBlocked && typeof blockStatus === "object" ? blockStatus.until : null
     return (
@@ -214,6 +222,8 @@ export function GameApp() {
       return <RegistrationScreen />
     case "daily-streak":
       return <DailyStreakGateScreen />
+    case "ui-tour":
+      return <UiTourScreen />
     case "lobby":
       return <RoomLobbyScreen />
     case "game":

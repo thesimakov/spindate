@@ -63,10 +63,15 @@ export async function GET(req: Request) {
       hint: "Токен и chat_id заданы. Оформите тестовое объявление в тикере и смотрите pm2 logs spindate — строка [admin-telegram]",
     })
   } catch (e) {
+    const err = e as Error & { code?: string; cause?: unknown }
+    const cause = err.cause as { code?: string; message?: string } | undefined
     return NextResponse.json({
       ok: false,
       ...base,
-      error: e instanceof Error ? e.message : "fetch_failed",
+      error: err.message || "fetch_failed",
+      errorCode: err.code ?? cause?.code,
+      hint:
+        "Исходящий HTTPS с этого сервера до api.telegram.org не проходит (фаервол, DNS, блокировка). Проверьте: curl -sI https://api.telegram.org и curl с getMe на том же VPS.",
     })
   }
 }

@@ -67,6 +67,33 @@ export class QueueManager {
     memQueue().push(...f)
   }
 
+  /** Убрать из очереди всех, кто ждал конкретную комнату (например после удаления стола). */
+  async removeEntriesForRequestedRoom(roomId: number): Promise<void> {
+    const tid = Math.floor(roomId)
+    if (!Number.isInteger(tid) || tid <= 0) return
+    const r = getRedis()
+    if (r) {
+      const items = await r.lrange(roomQueueKey(), 0, -1)
+      const next = items.filter((raw) => {
+        try {
+          const e = JSON.parse(raw) as QueueEntry
+          return e.requestedRoomId !== tid
+        } catch {
+          return true
+        }
+      })
+      const pipeline = r.pipeline()
+      pipeline.del(roomQueueKey())
+      if (next.length) pipeline.rpush(roomQueueKey(), ...next)
+      await pipeline.exec()
+      return
+    }
+    const q = memQueue()
+    const f = q.filter((e) => e.requestedRoomId !== tid)
+    memQueue().length = 0
+    memQueue().push(...f)
+  }
+
   /** FIFO: забрать следующего ожидающего */
   async dequeue(): Promise<QueueEntry | null> {
     const r = getRedis()
