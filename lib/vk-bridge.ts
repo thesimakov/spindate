@@ -970,11 +970,8 @@ function wallPostBoxResponseFailed(raw: unknown): boolean {
 }
 
 /**
- * Если VKWebAppShowWallPostBox недоступен (политика платформы для игр / мини-приложений):
- * копируем текст поста и открываем нативный шаринг ссылки на приложение.
- */
-/**
  * Редактор историй с интерактивной ссылкой на приложение (Direct Games / мини-приложения).
+ * У `StoryAttachment.text` в Bridge — ключ кнопки (как link_text в stories), не произвольная строка.
  * @see VKWebAppShowStoryBox
  */
 async function tryVkShowStoryBoxShare(
@@ -983,14 +980,12 @@ async function tryVkShowStoryBoxShare(
 ): Promise<boolean> {
   const link = resolvePublicUrlForVkAttachment(args.gameUrl) || getVkMiniAppPageUrl()
   if (!link) return false
-  const stickerText = args.message.replace(/\s+/g, " ").trim().slice(0, 200)
-  const attachmentLabel = stickerText.slice(0, 72)
 
-  const attachment: { type: "url"; url: string; text?: string } = {
+  const attachment: { type: "url"; url: string; text: string } = {
     type: "url",
     url: link,
+    text: "play",
   }
-  if (attachmentLabel) attachment.text = attachmentLabel
 
   const bgImage = resolvePublicUrlForVkAttachment(args.imageUrl)
   const payload: Record<string, unknown> = { attachment }
@@ -1013,18 +1008,40 @@ async function tryVkShowStoryBoxShare(
   }
 }
 
-async function vkWallPostShareFallback(b: Bridge, postText: string, preferredLink: string): Promise<boolean> {
+/** Текст для буфера: пост + прямая ссылка на картинку (VKWebAppShare в ЛС передаёт только link). */
+function buildShareFallbackClipboard(postText: string, rawImagePath?: string): string {
+  const base = postText.trim()
+  const imgAbs = resolvePublicUrlForVkAttachment(rawImagePath)
+  if (!imgAbs || base.includes(imgAbs)) return base.slice(0, 12000)
+  return `${base}\n\n${imgAbs}`.slice(0, 12000)
+}
+
+/**
+ * VKWebAppShare по контракту Bridge передаёт в диалог в основном `link`;
+ * текст и фото в ЛС — через буфер (CopyText) и подсказку пользователю.
+ */
+async function vkWallPostShareFallback(
+  b: Bridge,
+  postText: string,
+  preferredLink: string,
+  rawImagePath?: string,
+): Promise<boolean> {
   const link = preferredLink.trim() || getVkMiniAppPageUrl() || ""
+  const clipboard = buildShareFallbackClipboard(postText, rawImagePath)
   let copyOk = false
   try {
-    await b.send("VKWebAppCopyText", { text: postText })
+    await b.send("VKWebAppCopyText", { text: clipboard })
     copyOk = true
   } catch (e) {
     console.warn("[VK] VKWebAppCopyText (wall fallback)", e)
   }
   if (link) {
     try {
-      await b.send("VKWebAppShare", { link })
+      // В типах только `link`; часть клиентов понимает подпись — не ломает старые версии.
+      await b.send(
+        "VKWebAppShare" as never,
+        { link, text: postText.trim().slice(0, 2000) } as never,
+      )
       return true
     } catch (e) {
       console.warn("[VK] VKWebAppShare (wall fallback)", e)
@@ -1044,6 +1061,34 @@ export async function showVkWallPostConfirm(
   const gameUrl = typeof payload !== "string" && typeof payload.gameUrl === "string" ? payload.gameUrl.trim() : ""
   const rawImageUrl = typeof payload !== "string" && typeof payload.imageUrl === "string" ? payload.imageUrl.trim() : ""
 
+  const tryWallBoxUploadPhoto = async (): Promise<boolean> => {
+    const imgAbs = resolvePublicUrlForVkAttachment(rawImageUrl)
+    if (!imgAbs) return false
+    try {
+      const linkAbs = resolvePublicUrlForVkAttachment(gameUrl) ?? gameUrl
+      const parts: string[] = []
+      if (linkAbs) parts.push(linkAbs)
+      const req: Record<string, unknown> = {
+        message: text,
+        upload_attachments: [{ type: "photo", link: imgAbs }],
+      }
+      if (parts.length > 0) req.attachments = parts.join(",")
+      const raw = await b.send("VKWebAppShowWallPostBox" as never, req as never)
+      if (wallPostBoxResponseFailed(raw)) return false
+      const data = raw as { result?: boolean; post_id?: number } | null
+      if (data && typeof data === "object") {
+        if (data.result === false) return false
+        const pid = data.post_id
+        if (typeof pid === "number" && pid > 0) return true
+        if (typeof pid === "string" && /^\d+$/.test(pid) && Number(pid) > 0) return true
+      }
+      return true
+    } catch (e) {
+      console.warn("[VK] VKWebAppShowWallPostBox upload_attachments", e)
+      return false
+    }
+  }
+
   const tryWallBox = async (withAttachments: boolean): Promise<boolean> => {
     try {
       const attachments: string[] = []
@@ -1061,7 +1106,9 @@ export async function showVkWallPostConfirm(
       const data = raw as { result?: boolean; post_id?: number } | null
       if (data && typeof data === "object") {
         if (data.result === false) return false
-        if (typeof data.post_id === "number" && data.post_id > 0) return true
+        const pid = data.post_id
+        if (typeof pid === "number" && pid > 0) return true
+        if (typeof pid === "string" && /^\d+$/.test(pid) && Number(pid) > 0) return true
       }
       return true
     } catch (e) {
@@ -1070,7 +1117,8 @@ export async function showVkWallPostConfirm(
     }
   }
 
-  let wallOk = await tryWallBox(true)
+  let wallOk = await tryWallBoxUploadPhoto()
+  if (!wallOk) wallOk = await tryWallBox(true)
   if (!wallOk) wallOk = await tryWallBox(false)
   if (wallOk) return { ok: true }
 
@@ -1081,7 +1129,7 @@ export async function showVkWallPostConfirm(
   })
   if (storyOk) return { ok: true, usedStoryFallback: true }
 
-  const fallbackOk = await vkWallPostShareFallback(b, text, gameUrl)
+  const fallbackOk = await vkWallPostShareFallback(b, text, gameUrl, rawImageUrl || undefined)
   return { ok: fallbackOk, usedShareFallback: true }
 }
 
