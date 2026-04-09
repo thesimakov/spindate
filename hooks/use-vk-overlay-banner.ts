@@ -15,7 +15,43 @@ export function useVkMiniAppPersistentHorizontalBanner() {
     !!currentUser?.isVip && (currentUser.vipUntilTs == null || currentUser.vipUntilTs > Date.now())
 
   useEffect(() => {
+    // #region agent log
+    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+      body: JSON.stringify({
+        sessionId: "ec43d5",
+        runId: "banner-debug-1",
+        hypothesisId: "H1-H4",
+        location: "hooks/use-vk-overlay-banner.ts:effect",
+        message: "banner hook effect started",
+        data: {
+          vipActive,
+          hasUser: !!currentUser,
+          userId: currentUser?.id ?? null,
+          screen: state.screen,
+          visibility: typeof document !== "undefined" ? document.visibilityState : "na",
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
     if (vipActive) {
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+        body: JSON.stringify({
+          sessionId: "ec43d5",
+          runId: "banner-debug-1",
+          hypothesisId: "H4",
+          location: "hooks/use-vk-overlay-banner.ts:vip",
+          message: "banner hidden because vipActive",
+          data: { userId: currentUser?.id ?? null },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
       void hideVkBannerAd().catch(() => {})
       return
     }
@@ -29,6 +65,25 @@ export function useVkMiniAppPersistentHorizontalBanner() {
 
     const run = () => {
       if (cancelled || running) return
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ec43d5" },
+        body: JSON.stringify({
+          sessionId: "ec43d5",
+          runId: "banner-debug-1",
+          hypothesisId: "H1-H2",
+          location: "hooks/use-vk-overlay-banner.ts:run",
+          message: "banner refresh requested by hook",
+          data: {
+            cancelled,
+            running,
+            visibility: typeof document !== "undefined" ? document.visibilityState : "na",
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
       running = true
       void refreshVkPersistentHorizontalBanner().finally(() => {
         running = false
@@ -67,7 +122,7 @@ export function useVkMiniAppPersistentHorizontalBanner() {
       if (t2 !== null) window.clearTimeout(t2)
       if (heartbeat !== null) window.clearInterval(heartbeat)
     }
-  }, [vipActive])
+  }, [vipActive, currentUser, state.screen])
 }
 
 /** @deprecated Используйте {@link useVkMiniAppPersistentHorizontalBanner}; имя сохранено для GameRoom. */
