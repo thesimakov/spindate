@@ -68,6 +68,12 @@ export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean })
   return ACHIEVEMENT_POST_CATALOG
     .map((item) => {
       const fromDb = dbMap.get(item.key)
+      const dbTextRaw = typeof fromDb?.post_text_template === "string" ? fromDb.post_text_template : ""
+      const dbTextTrimmed = dbTextRaw.trim()
+      const postTextTemplate =
+        dbTextTrimmed.length > 0
+          ? normalizeBrandText(dbTextTrimmed)
+          : defaultPostTextTemplateForCatalogKey(item.key)
       const row: AchievementPostTemplateRow = {
         achievementKey: item.key,
         title: item.title,
@@ -75,9 +81,7 @@ export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean })
         defaultStatus: item.defaultStatus,
         group: item.group,
         imageUrl: fromDb?.image_url ?? "",
-        postTextTemplate:
-          normalizeBrandText(fromDb?.post_text_template?.trim() || "") ||
-          defaultPostTextTemplateForCatalogKey(item.key),
+        postTextTemplate,
         vkEnabled: fromDb?.vk_enabled === 1,
         published: fromDb?.published === 1,
         updatedAt: fromDb?.updated_at ?? 0,
@@ -98,7 +102,15 @@ export function upsertAchievementPostTemplate(input: {
   const catalogItem = ACHIEVEMENT_POST_CATALOG.find((x) => x.key === input.achievementKey)
   if (!catalogItem) throw new Error("unknown_achievement_key")
   const imageUrl = normalizeImageUrl(input.imageUrl)
-  const postTextTemplate = normalizeTemplate(input.postTextTemplate)
+  const hasPostTextKey = Object.prototype.hasOwnProperty.call(input, "postTextTemplate")
+  const existing = db
+    .prepare(`SELECT post_text_template FROM achievement_post_templates WHERE achievement_key = ?`)
+    .get(catalogItem.key) as { post_text_template: string } | undefined
+  const postTextTemplate = hasPostTextKey
+    ? normalizeTemplate(input.postTextTemplate)
+    : existing
+      ? normalizeTemplate(existing.post_text_template)
+      : ""
   const vkEnabled = input.vkEnabled === true ? 1 : 0
   const published = input.published === true ? 1 : 0
   const now = Date.now()

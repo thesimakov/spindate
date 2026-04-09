@@ -414,7 +414,10 @@ export function RoomLobbyScreen() {
         type Row = { achievementKey?: string; postTextTemplate?: string; imageUrl?: string; vkEnabled?: boolean }
         const template = (data.rows as Row[]).find((r) => r.achievementKey === SHARE_USER_TABLE_POST_KEY)
         if (!template || template.vkEnabled !== true) {
-          showToast("Пост на стену не включён (админка → посты достижений)", "info")
+          showToast(
+            "Шаблон не в каталоге: в админке включите «Публикация в VK», «Публиковать шаблон» и нажмите «Публикация» для share_user_table",
+            "info",
+          )
           return
         }
         const gameUrl =

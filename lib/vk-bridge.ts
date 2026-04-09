@@ -1117,8 +1117,10 @@ export async function showVkWallPostConfirm(
     }
   }
 
-  let wallOk = await tryWallBoxUploadPhoto()
-  if (!wallOk) wallOk = await tryWallBox(true)
+  // Сначала message + attachments строкой — в окне VK обычно виден текст из админки.
+  // upload_attachments на части клиентов открывает диалог без текста или с пустым полем.
+  let wallOk = await tryWallBox(true)
+  if (!wallOk) wallOk = await tryWallBoxUploadPhoto()
   if (!wallOk) wallOk = await tryWallBox(false)
   if (wallOk) return { ok: true }
 
