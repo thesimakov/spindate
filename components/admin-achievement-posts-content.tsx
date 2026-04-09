@@ -10,7 +10,7 @@ type RowDraft = {
   title: string
   hint: string
   defaultStatus: string
-  group: "base" | "events"
+  group: "base" | "events" | "system"
   imageUrl: string
   postTextTemplate: string
   vkEnabled: boolean
@@ -25,7 +25,7 @@ function parseRows(raw: unknown): RowDraft[] {
     const x = row as Partial<RowDraft>
     if (typeof x.achievementKey !== "string" || !x.achievementKey) continue
     if (typeof x.title !== "string" || !x.title) continue
-    if (x.group !== "base" && x.group !== "events") continue
+    if (x.group !== "base" && x.group !== "events" && x.group !== "system") continue
     out.push({
       achievementKey: x.achievementKey,
       title: x.title,
@@ -174,9 +174,10 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-amber-200">Контент: посты достижений</h2>
+          <h2 className="text-lg font-semibold text-amber-200">Контент: посты достижений и стола</h2>
           <p className="text-xs text-slate-400">
-            Всего: {rows.length} · опубликовано: {publishedCount}. Плейсхолдеры текста: {"{name}"}, {"{achievement}"}, {"{game_url}"}.
+            Всего: {rows.length} · опубликовано: {publishedCount}. Достижения: {"{name}"}, {"{achievement}"}, {"{game_url}"}.
+            Пост «созданный стол»: {"{name}"}, {"{table_name}"}, {"{game_url}"}.
           </p>
         </div>
         <button
@@ -204,7 +205,15 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
                   <div className="truncate text-sm font-semibold text-slate-100">{row.title}</div>
                   <div className="text-xs text-slate-500">{row.hint}</div>
                 </div>
-                <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${row.group === "base" ? "bg-cyan-500/20 text-cyan-200" : "bg-violet-500/20 text-violet-200"}`}>
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                    row.group === "base"
+                      ? "bg-cyan-500/20 text-cyan-200"
+                      : row.group === "events"
+                        ? "bg-violet-500/20 text-violet-200"
+                        : "bg-amber-500/20 text-amber-200"
+                  }`}
+                >
                   {row.group}
                 </span>
               </div>

@@ -19,3 +19,25 @@ export function formatAchievementPostText(input: AchievementPostTemplateInput): 
     .replaceAll("{game_url}", safeGameUrl)
     .slice(0, 1200)
 }
+
+export type UserTableSharePostInput = {
+  template: string
+  playerName: string
+  tableName: string
+  gameUrl: string
+}
+
+export function formatUserTableSharePostText(input: UserTableSharePostInput): string {
+  const safeName = input.playerName.trim() || "Игрок"
+  const safeTable = input.tableName.trim() || "Стол"
+  const safeGameUrl = input.gameUrl.trim()
+  const source = input.template.trim()
+  const base =
+    source ||
+    `{name} создал(а) стол «{table_name}». Заходи в «Крути и знакомься» поиграть вместе!\n{game_url}`
+  return base
+    .replaceAll("{name}", safeName)
+    .replaceAll("{table_name}", safeTable)
+    .replaceAll("{game_url}", safeGameUrl)
+    .slice(0, 1200)
+}

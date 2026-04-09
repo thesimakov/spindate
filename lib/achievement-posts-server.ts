@@ -1,4 +1,4 @@
-import { ACHIEVEMENT_POST_CATALOG } from "@/lib/achievement-posts-catalog"
+import { ACHIEVEMENT_POST_CATALOG, SHARE_USER_TABLE_POST_KEY } from "@/lib/achievement-posts-catalog"
 import { getDb } from "@/lib/db"
 
 export type AchievementPostTemplateRow = {
@@ -6,7 +6,7 @@ export type AchievementPostTemplateRow = {
   title: string
   hint: string
   defaultStatus: string
-  group: "base" | "events"
+  group: "base" | "events" | "system"
   imageUrl: string
   postTextTemplate: string
   vkEnabled: boolean
@@ -46,6 +46,16 @@ function normalizeTemplate(raw: unknown): string {
   return normalizeBrandText(raw.trim()).slice(0, MAX_TEMPLATE_LEN)
 }
 
+const DEFAULT_ACHIEVEMENT_POST_BODY = `Игрок {name} получил достижение «{achievement}» в Крути и знакомься!\n{game_url}`
+
+const DEFAULT_SHARE_USER_TABLE_POST_BODY =
+  `{name} создал(а) стол «{table_name}». Заходи в «Крути и знакомься» поиграть вместе!\n{game_url}`
+
+function defaultPostTextTemplateForCatalogKey(key: string): string {
+  if (key === SHARE_USER_TABLE_POST_KEY) return DEFAULT_SHARE_USER_TABLE_POST_BODY
+  return DEFAULT_ACHIEVEMENT_POST_BODY
+}
+
 export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean }): AchievementPostTemplateRow[] {
   const db = getDb()
   const rows = db
@@ -67,7 +77,7 @@ export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean })
         imageUrl: fromDb?.image_url ?? "",
         postTextTemplate:
           normalizeBrandText(fromDb?.post_text_template?.trim() || "") ||
-          `Игрок {name} получил достижение «{achievement}» в Крути и знакомься!\n${"{game_url}"}`,
+          defaultPostTextTemplateForCatalogKey(item.key),
         vkEnabled: fromDb?.vk_enabled === 1,
         published: fromDb?.published === 1,
         updatedAt: fromDb?.updated_at ?? 0,

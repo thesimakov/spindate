@@ -3,8 +3,11 @@ export type AchievementCatalogEntry = {
   title: string
   hint: string
   defaultStatus: string
-  group: "base" | "events"
+  group: "base" | "events" | "system"
 }
+
+/** Шаблон поста на стену VK после создания стола (галочка в лобби). */
+export const SHARE_USER_TABLE_POST_KEY = "share_user_table" as const
 
 export const ACHIEVEMENT_POST_CATALOG: AchievementCatalogEntry[] = [
   { key: "base_heartbreaker", title: "Сердцеед", hint: "поцелуи в игре", defaultStatus: "Сердцеед", group: "base" },
@@ -53,6 +56,13 @@ export const ACHIEVEMENT_POST_CATALOG: AchievementCatalogEntry[] = [
   { key: "event_valentine", title: "Валентин", hint: "отправить 100 «валентинок» за день 14 февраля", defaultStatus: "Валентин", group: "events" },
   { key: "event_gardener", title: "Дачник", hint: "во время летнего ивента посадить и вырастить 20 виртуальных растений", defaultStatus: "Дачник", group: "events" },
   { key: "event_snowgirl", title: "Снегурочка", hint: "помочь «Деду Морозу» за одним столом не менее 2 часов", defaultStatus: "Снегурочка", group: "events" },
+  {
+    key: SHARE_USER_TABLE_POST_KEY,
+    title: "Пост: созданный стол",
+    hint: "Галочка «Рассказать на стене» при создании стола (VK). Плейсхолдеры: {name}, {table_name}, {game_url}",
+    defaultStatus: "Стол",
+    group: "system",
+  },
 ]
 
 export const ACHIEVEMENT_POST_CATALOG_BY_KEY = new Map(

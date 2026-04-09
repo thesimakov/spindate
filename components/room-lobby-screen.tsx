@@ -42,7 +42,11 @@ import {
 } from "@/lib/bottle-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { useTableStyleCatalog } from "@/lib/use-table-style-catalog"
-import { buyHearts200 } from "@/lib/vk-bridge"
+import { buyHearts200, isVkRuntimeEnvironment, showVkWallPostConfirm } from "@/lib/vk-bridge"
+import { formatUserTableSharePostText } from "@/lib/achievement-posts-format"
+import { SHARE_USER_TABLE_POST_KEY } from "@/lib/achievement-posts-catalog"
+import { useInlineToast } from "@/hooks/use-inline-toast"
+import { InlineToast } from "@/components/ui/inline-toast"
 
 type LobbyRow = {
   roomId: number
@@ -157,6 +161,7 @@ export function RoomLobbyScreen() {
   const { state, dispatch } = useGame()
   const { isDesktopUser } = useGameLayoutMode()
   const user = state.currentUser
+  const isVkUserForWall = user != null && vkUserIdForApi(user) != null
   const voiceBalance = state.voiceBalance ?? 0
   const { rows: catalogRows } = useBottleCatalog()
   const { rows: tableStyleRows } = useTableStyleCatalog()
@@ -175,6 +180,8 @@ export function RoomLobbyScreen() {
   const [createTableStyle, setCreateTableStyle] = useState<RoomTableStyle>(DEFAULT_ROOM_TABLE_STYLE)
   const [createLoading, setCreateLoading] = useState(false)
   const [createError, setCreateError] = useState("")
+  const [shareToWall, setShareToWall] = useState(false)
+  const { toast, showToast } = useInlineToast(2200)
   const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
   const [activeTab, setActiveTab] = useState<LobbyTab>("default")
 
@@ -240,6 +247,10 @@ export function RoomLobbyScreen() {
       setCreateTableStyle(lobbyTableStyleOptions[0]?.id ?? DEFAULT_ROOM_TABLE_STYLE)
     }
   }, [lobbyStyleIds, lobbyTableStyleOptions, createTableStyle])
+
+  useEffect(() => {
+    if (createOpen) setShareToWall(false)
+  }, [createOpen])
 
   const fetchLobby = useCallback(async () => {
     try {
@@ -385,6 +396,50 @@ export function RoomLobbyScreen() {
     setJoiningId(null)
   }
 
+  const offerWallPostAfterTableCreate = useCallback(
+    async (roomName: string, playerName: string) => {
+      const vkOk = await isVkRuntimeEnvironment()
+      if (!vkOk) {
+        showToast("Публикация на стену доступна в приложении VK", "info")
+        return
+      }
+      try {
+        const res = await apiFetch("/api/catalog/achievement-posts", {
+          cache: "no-store",
+          credentials: "include",
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || !Array.isArray(data.rows)) return
+        type Row = { achievementKey?: string; postTextTemplate?: string; imageUrl?: string; vkEnabled?: boolean }
+        const template = (data.rows as Row[]).find((r) => r.achievementKey === SHARE_USER_TABLE_POST_KEY)
+        if (!template || template.vkEnabled !== true) {
+          showToast("Пост на стену не включён (админка → посты достижений)", "info")
+          return
+        }
+        const gameUrl =
+          typeof window !== "undefined" && window.location.origin
+            ? window.location.origin
+            : "https://vk.com/app54511363"
+        const message = formatUserTableSharePostText({
+          template: typeof template.postTextTemplate === "string" ? template.postTextTemplate : "",
+          playerName,
+          tableName: roomName,
+          gameUrl,
+        })
+        const img = typeof template.imageUrl === "string" ? template.imageUrl.trim() : ""
+        const posted = await showVkWallPostConfirm({
+          message,
+          imageUrl: img || undefined,
+          gameUrl,
+        })
+        if (posted.ok) showToast("Открыт пост на стену VK", "info")
+      } catch {
+        /* ignore */
+      }
+    },
+    [showToast],
+  )
+
   const handleCreateRoom = async () => {
     if (!user) return
     setCreateLoading(true)
@@ -443,8 +498,15 @@ export function RoomLobbyScreen() {
       } else {
         dispatch({ type: "PAY_VOICES", amount: totalCharge })
       }
+      const wantsWallShare = shareToWall && vkUserIdForApi(user) != null
+      const roomMeta = data.room as { name?: string } | undefined
+      const resolvedRoomName =
+        typeof roomMeta?.name === "string" && roomMeta.name.trim() ? roomMeta.name.trim() : createName.trim()
       setCreateOpen(false)
       void fetchLobby()
+      if (wantsWallShare) {
+        void offerWallPostAfterTableCreate(resolvedRoomName, user.name)
+      }
     } catch {
       setCreateError("Ошибка сети")
     }
@@ -489,6 +551,7 @@ export function RoomLobbyScreen() {
 
   return (
     <div className="relative flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden">
+      {toast ? <InlineToast toast={toast} /> : null}
       <div className="lobby-bg-animated fixed inset-0 -z-0" aria-hidden />
       <div
         className="lobby-orb pointer-events-none fixed -left-1/4 top-[15%] h-[min(55vw,420px)] w-[min(55vw,420px)] rounded-full bg-fuchsia-600/25 blur-[100px]"
@@ -878,6 +941,23 @@ export function RoomLobbyScreen() {
                 </div>
               </div>
             </div>
+
+            {isVkUserForWall ? (
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-700/80 bg-slate-900/50 px-3 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={shareToWall}
+                  onChange={(e) => setShareToWall(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-500 bg-slate-950"
+                />
+                <span className="text-sm leading-snug text-slate-300">
+                  <span className="font-semibold text-slate-100">Рассказать на стене</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    После создания откроется окно VK — можно опубликовать пост друзьям со ссылкой на игру.
+                  </span>
+                </span>
+              </label>
+            ) : null}
 
             {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
           </div>
