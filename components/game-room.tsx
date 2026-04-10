@@ -5805,11 +5805,14 @@ function TableChatPanel({
 }) {
   const chatEntries = gameLog.filter((entry) => entry.type === "chat")
   return (
-    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-xl", className)}
-      style={{ background: "rgba(2,6,23,0.45)" }}
+    <div
+      className={cn(
+        "table-chat-panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10",
+        className,
+      )}
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2.5">
         <MessageCircle className="h-4 w-4 shrink-0 text-cyan-400/70 md:h-[1.125rem] md:w-[1.125rem]" />
         <span className="text-sm font-bold tracking-tight text-slate-200 md:text-base">Чат комнаты</span>
         <span className="ml-auto text-[10px] tabular-nums text-slate-600">{chatEntries.length}</span>
@@ -5829,9 +5832,9 @@ function TableChatPanel({
       </div>
 
       {/* Input */}
-      <div className="shrink-0 px-2 pb-2 pt-1" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <div className="shrink-0 border-t border-white/10 px-2 pb-2 pt-1">
         <div
-          className="flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-cyan-500/35 bg-slate-900/90 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_1px_0_rgba(0,0,0,0.2)] transition-[border-color,box-shadow] focus-within:border-cyan-400/60 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(34,211,238,0.2)]"
+          className="table-chat-input-row flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-cyan-500/35 bg-slate-900/90 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_1px_0_rgba(0,0,0,0.2)] transition-[border-color,box-shadow] focus-within:border-cyan-400/60 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(34,211,238,0.2)]"
           role="group"
           aria-label="Поле ввода сообщения"
         >

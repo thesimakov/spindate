@@ -30,7 +30,7 @@ export function TableChatEmojiPicker({ disabled, onEmojiSelect, className }: Tab
           type="button"
           disabled={disabled}
           className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 disabled:opacity-40",
+            "table-chat-emoji-trigger flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 disabled:opacity-40",
             className,
           )}
           style={{
