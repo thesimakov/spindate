@@ -585,21 +585,23 @@ export function RoomLobbyScreen() {
       >
         <div
           className={cn(
-            "mx-auto flex w-full max-w-lg flex-col overflow-hidden rounded-[1.35rem] border border-white/[0.12]",
-            "bg-[rgba(8,12,22,0.88)] shadow-[0_24px_64px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.07)]",
+            "lobby-casual-shell mx-auto flex w-full max-w-lg flex-col overflow-hidden rounded-[1.5rem] border border-white/[0.14]",
+            "bg-[rgba(8,12,22,0.9)] shadow-[0_24px_64px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.07)]",
             "backdrop-blur-xl",
             "h-[min(82vh,calc(100dvh-20px))] max-h-[calc(100dvh-12px)]",
           )}
         >
-          <div className="shrink-0 border-b border-white/[0.06] px-4 pb-3 pt-4 text-center sm:px-5">
-            <div className="mb-1.5 inline-flex items-center gap-2 text-cyan-200/95">
+          <div className="lobby-casual-hero shrink-0 border-b border-white/[0.08] px-4 pb-3.5 pt-[1.125rem] text-center sm:px-5">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-200/25 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">
               <Sparkles className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden />
               <span className="text-[11px] font-semibold leading-tight tracking-wide sm:text-xs">
                 Крути и знакомься
               </span>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-white drop-shadow-sm sm:text-2xl">Выбор стола</h1>
-            <p className="mx-auto mt-1.5 max-w-sm text-[11px] leading-snug text-slate-400 sm:text-sm">
+            <h1 className="text-[1.65rem] font-extrabold tracking-tight text-white drop-shadow-[0_2px_14px_rgba(34,211,238,0.22)] sm:text-3xl">
+              Выбор стола
+            </h1>
+            <p className="mx-auto mt-2 max-w-sm text-[11px] leading-snug text-slate-300 sm:text-sm">
               Игровой стол обновляется в реальном времени. В игре откройте отдельный чат комнаты — кнопка слева внизу.
             </p>
           </div>
@@ -615,18 +617,18 @@ export function RoomLobbyScreen() {
             </div>
           ) : null}
 
-          <div className="shrink-0 border-b border-white/[0.06] px-3 pb-2 pt-2 sm:px-4">
+          <div className="shrink-0 border-b border-white/[0.07] px-3 pb-2.5 pt-2.5 sm:px-4">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as LobbyTab)} className="w-full">
-              <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl bg-slate-900/65 p-1">
+              <TabsList className="grid h-11 w-full grid-cols-2 rounded-2xl border border-white/10 bg-slate-900/70 p-1">
                 <TabsTrigger
                   value="default"
-                  className="rounded-lg text-xs font-semibold text-slate-200 data-[state=active]:bg-cyan-400/20 data-[state=active]:text-cyan-100 data-[state=active]:shadow-none"
+                  className="rounded-xl text-xs font-bold text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
                 >
                   {`Игровые столы (${defaultRoomsCount})`}
                 </TabsTrigger>
                 <TabsTrigger
                   value="created"
-                  className="rounded-lg text-xs font-semibold text-slate-200 data-[state=active]:bg-cyan-400/20 data-[state=active]:text-cyan-100 data-[state=active]:shadow-none"
+                  className="rounded-xl text-xs font-bold text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
                 >
                   {`Созданный стол (${createdRoomsCount})`}
                 </TabsTrigger>
@@ -672,30 +674,30 @@ export function RoomLobbyScreen() {
                   <li
                     key={r.roomId}
                     className={cn(
-                      "flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 shadow-inner transition",
+                      "lobby-casual-card flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 shadow-inner transition",
                       isFull
-                        ? "border-red-500/20 bg-red-950/30 hover:bg-red-950/40"
-                        : "border-white/8 bg-slate-900/55 hover:border-emerald-500/25 hover:bg-slate-900/80",
+                        ? "border-red-400/30 bg-red-950/35 hover:bg-red-950/45"
+                        : "border-white/10 bg-slate-900/65 hover:border-emerald-400/30 hover:bg-slate-900/85",
                     )}
                   >
                     <div className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-slate-100">
+                      <span className="block truncate text-base font-bold text-slate-50">
                         {roomNameForDisplay(r.name, r.roomId)}
                       </span>
-                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-300">
-                        <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-slate-900/50 px-2 py-0.5">
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-200">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-slate-900/70 px-2 py-0.5">
                           <CreateBottleOptionPreview opt={bottleOption} className="!h-4 !w-4 rounded-full" />
                           {bottleOption.name}
                         </span>
                         <span
-                          className="inline-flex items-center rounded-full border border-white/15 px-2 py-0.5"
+                          className="inline-flex items-center rounded-full border border-white/20 px-2 py-0.5 text-white/95"
                           style={{ background: TABLE_STYLE_PREVIEW[roomStyle] }}
                         >
                           {styleName}
                         </span>
                       </div>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-700/60">
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-700/65">
                           <div
                             className={cn(
                               "h-full rounded-full transition-all duration-300",
@@ -704,11 +706,11 @@ export function RoomLobbyScreen() {
                             style={{ width: `${fillPct}%` }}
                           />
                         </div>
-                        <span className={cn("text-xs tabular-nums", isFull ? "text-red-300" : "text-slate-400")}>
+                        <span className={cn("text-xs font-semibold tabular-nums", isFull ? "text-red-300" : "text-slate-300")}>
                           {r.livePlayerCount}/{r.maxPlayers}
                         </span>
                         {isFull && (
-                          <span className="rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-300">
+                          <span className="rounded-full border border-red-300/30 bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-200">
                             Занят
                           </span>
                         )}
@@ -726,10 +728,10 @@ export function RoomLobbyScreen() {
                         disabled={joiningId !== null || isFull}
                         onClick={() => void handleJoin(r.roomId)}
                         className={cn(
-                          "shrink-0 rounded-full px-5 font-semibold text-white",
+                          "h-10 shrink-0 rounded-full px-5 font-bold text-white",
                           isFull
                             ? "cursor-not-allowed bg-slate-600 opacity-50"
-                            : "bg-emerald-600 shadow-[0_4px_14px_rgba(22,163,74,0.45)] hover:bg-emerald-500",
+                            : "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-[0_6px_18px_rgba(74,222,128,0.46)] hover:from-emerald-400 hover:to-lime-300",
                         )}
                       >
                         {joiningId === r.roomId ? (
@@ -747,16 +749,11 @@ export function RoomLobbyScreen() {
             </ul>
           </div>
 
-          <div
-            className={cn(
-              "shrink-0 border-t border-white/[0.08] bg-slate-950/55 px-4 py-3 backdrop-blur-sm",
-              "rounded-b-[1.25rem]",
-            )}
-          >
+          <div className="lobby-casual-footer shrink-0 rounded-b-[1.4rem] border-t border-white/[0.09] bg-slate-950/65 px-4 py-3 backdrop-blur-sm">
             <div className="flex w-full flex-col gap-1.5">
-              <p className="text-center text-[11px] text-slate-400">
+              <p className="rounded-xl border border-white/10 bg-slate-900/55 py-1.5 text-center text-[11px] text-slate-300">
                 На балансе:{" "}
-                <span className="font-semibold tabular-nums text-white">{voiceBalance}</span>{" "}
+                <span className="font-extrabold tabular-nums text-white">{voiceBalance}</span>{" "}
                 <span className="text-rose-300" aria-hidden>
                   ❤
                 </span>
@@ -773,9 +770,9 @@ export function RoomLobbyScreen() {
                     setCreateOpen(true)
                   }}
                   className={cn(
-                    "h-12 flex-1 rounded-2xl border border-emerald-400/45",
-                    "bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400",
-                    "text-sm font-semibold text-emerald-950 shadow-[0_6px_26px_rgba(16,185,129,0.45)] sm:text-base",
+                    "h-12 flex-1 rounded-2xl border border-emerald-300/60",
+                    "bg-gradient-to-r from-emerald-400 via-lime-300 to-teal-300",
+                    "text-sm font-extrabold text-emerald-950 shadow-[0_8px_26px_rgba(74,222,128,0.45)] sm:text-base",
                     "hover:from-emerald-400 hover:via-emerald-300 hover:to-teal-300 disabled:opacity-40",
                   )}
                 >
@@ -788,9 +785,9 @@ export function RoomLobbyScreen() {
                     disabled={buyLoading}
                     onClick={() => void handleBuyHearts()}
                     className={cn(
-                      "h-12 shrink-0 rounded-2xl border border-violet-400/40",
+                      "h-12 shrink-0 rounded-2xl border border-violet-300/45",
                       "bg-gradient-to-r from-violet-600 via-violet-500 to-fuchsia-500",
-                      "px-3 text-xs font-semibold text-white shadow-[0_6px_22px_rgba(139,92,246,0.4)] sm:px-4 sm:text-sm",
+                      "px-3 text-xs font-bold text-white shadow-[0_8px_22px_rgba(139,92,246,0.42)] sm:px-4 sm:text-sm",
                       "hover:from-violet-500 hover:via-violet-400 hover:to-fuchsia-400",
                     )}
                   >
@@ -816,15 +813,15 @@ export function RoomLobbyScreen() {
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="border-slate-600/90 bg-slate-950 text-slate-100 shadow-2xl sm:max-w-lg">
+        <DialogContent className="lobby-casual-dialog border-cyan-300/30 bg-slate-950 text-slate-100 shadow-2xl sm:max-w-lg">
           <DialogHeader className="space-y-1.5 text-left">
-            <DialogTitle className="text-lg font-bold tracking-tight text-slate-50">Новый стол</DialogTitle>
+            <DialogTitle className="text-xl font-extrabold tracking-tight text-slate-50 sm:text-2xl">Новый стол</DialogTitle>
             <DialogDescription asChild>
-              <p className="text-sm leading-relaxed text-slate-400">
+              <p className="text-sm leading-relaxed text-slate-300">
                 {createBottlePremiumHearts > 0 ? (
                   <>
                     С баланса спишется{" "}
-                    <span className="font-bold tabular-nums text-amber-200/95">{totalCreateCost} ❤</span>
+                    <span className="font-extrabold tabular-nums text-amber-200">{totalCreateCost} ❤</span>
                     : {createCost} ❤ за стол +{" "}
                     <span className="font-semibold tabular-nums text-amber-200/80">
                       {createBottlePremiumHearts} ❤
@@ -853,12 +850,12 @@ export function RoomLobbyScreen() {
                 onChange={(e) => setCreateName(e.target.value)}
                 placeholder="Например: Вечеринка у бассейна"
                 maxLength={64}
-                className="h-11 rounded-xl border-slate-600 bg-slate-900/90 text-[15px] placeholder:text-slate-600 focus-visible:border-violet-400/50 focus-visible:ring-violet-500/25"
+                className="h-11 rounded-xl border-cyan-300/40 bg-slate-900/90 text-[15px] font-semibold placeholder:text-slate-500 focus-visible:border-cyan-300/80 focus-visible:ring-cyan-400/30"
               />
             </div>
 
             <div
-              className="rounded-2xl border border-slate-700/90 bg-gradient-to-b from-slate-900/80 to-slate-950/90 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              className="rounded-2xl border border-slate-600/80 bg-gradient-to-b from-slate-900/85 to-slate-950/95 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
               role="group"
               aria-label="Оформление стола"
             >
@@ -869,7 +866,7 @@ export function RoomLobbyScreen() {
                   <label htmlFor="create-room-bottle" className="text-sm font-semibold text-slate-200">
                     Бутылочка
                   </label>
-                  <span id="create-room-bottle-hint" className="text-[11px] text-slate-500">
+                  <span id="create-room-bottle-hint" className="text-[11px] text-slate-400">
                     Скин в центре · цены как при покупке в каталоге
                   </span>
                 </div>
@@ -882,10 +879,10 @@ export function RoomLobbyScreen() {
                     aria-describedby="create-room-bottle-hint"
                     aria-label="Выбор скина бутылочки, открыть список"
                     className={cn(
-                      "h-auto min-h-[3.25rem] w-full gap-3 rounded-xl border border-slate-600/90 bg-slate-950/60 px-3 py-2.5 text-left text-slate-100 shadow-sm transition-all",
-                      "hover:border-slate-500 hover:bg-slate-900/70",
-                      "focus-visible:border-violet-400/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
-                      "data-[state=open]:border-violet-400/50 data-[state=open]:bg-slate-900/80 data-[state=open]:shadow-[0_0_20px_-4px_rgba(167,139,250,0.35)]",
+                      "h-auto min-h-[3.25rem] w-full gap-3 rounded-xl border border-cyan-300/35 bg-slate-950/70 px-3 py-2.5 text-left text-slate-100 shadow-sm transition-all",
+                      "hover:border-cyan-300/55 hover:bg-slate-900/80",
+                      "focus-visible:border-cyan-300/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/35 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
+                      "data-[state=open]:border-cyan-300/70 data-[state=open]:bg-slate-900/90 data-[state=open]:shadow-[0_0_20px_-4px_rgba(34,211,238,0.4)]",
                       "data-[state=open]:[&_svg:last-child]:border-white",
                       "[&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:flex-1",
                       "[&_svg:last-child]:ml-auto [&_svg:last-child]:size-6 [&_svg:last-child]:shrink-0 [&_svg:last-child]:rounded-full [&_svg:last-child]:border-2 [&_svg:last-child]:border-white/90 [&_svg:last-child]:bg-slate-950 [&_svg:last-child]:p-1 [&_svg:last-child]:!text-white [&_svg:last-child]:opacity-100 [&_svg:last-child]:[stroke-width:3]",
@@ -931,7 +928,7 @@ export function RoomLobbyScreen() {
 
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-200">Стилистика стола</p>
-                <p className="text-[11px] leading-snug text-slate-500">Фон и атмосфера комнаты для всех игроков</p>
+                <p className="text-[11px] leading-snug text-slate-400">Фон и атмосфера комнаты для всех игроков</p>
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   {lobbyTableStyleOptions.map((opt) => {
                     const selected = createTableStyle === opt.id
@@ -943,7 +940,7 @@ export function RoomLobbyScreen() {
                         className={cn(
                           "rounded-xl border p-2.5 text-left text-xs font-medium transition-all",
                           selected
-                            ? "border-cyan-400/70 bg-cyan-500/12 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,0.06)]"
+                            ? "border-cyan-200/90 bg-cyan-500/22 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.28),0_0_24px_rgba(34,211,238,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]"
                             : "border-slate-700/90 bg-slate-950/50 text-slate-300 hover:border-slate-500 hover:bg-slate-900/60",
                         )}
                       >
@@ -951,7 +948,7 @@ export function RoomLobbyScreen() {
                           className="mb-2 block h-7 rounded-lg border border-white/15 shadow-inner"
                           style={{ background: TABLE_STYLE_PREVIEW[opt.id] }}
                         />
-                        {opt.name}
+                        <span className={cn(selected ? "font-bold" : "font-medium")}>{opt.name}</span>
                       </button>
                     )
                   })}
@@ -979,14 +976,19 @@ export function RoomLobbyScreen() {
             {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} className="border-slate-600">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              className="border-slate-500 bg-slate-900/60 text-slate-100 hover:bg-slate-800"
+            >
               Отмена
             </Button>
             <Button
               type="button"
               disabled={createLoading || !canAffordCreate}
               onClick={() => void handleCreateRoom()}
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 font-semibold text-emerald-950 hover:from-emerald-400 hover:to-teal-400"
+              className="border border-emerald-200/60 bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-300 font-extrabold text-emerald-950 shadow-[0_10px_26px_rgba(74,222,128,0.45)] hover:from-emerald-300 hover:via-lime-200 hover:to-emerald-200"
             >
               {createLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
