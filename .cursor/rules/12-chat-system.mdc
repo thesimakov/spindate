@@ -9,7 +9,7 @@ alwaysApply: false
 ## Общий чат стола (generalChatMessages)
 
 1. `SEND_GENERAL_CHAT { message: GeneralChatMessage }`
-2. Хранится: `generalChatMessages[]`, лимит **50 сообщений** (slice -50)
+2. Хранится: `generalChatMessages[]`, **последние 24 часа** по `message.timestamp` ([`trimRoomChatMessages`](lib/room-chat-retention.ts)), запасной потолок **500** сообщений
 3. **Синхронизируется** через isTableSyncedAction → передаётся на сервер
 4. При SYNC_TABLE_AUTHORITY: перезаписывается из payload
 

@@ -1,79 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Trophy, X } from "lucide-react"
-import { useGame } from "@/lib/game-context"
-import type { GameLogEntry } from "@/lib/game-types"
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-
-/** Стоимость действий для рейтинга «Самые добрые» */
-const KIND_ACTION_COST: Record<string, number> = {
-  beer: 1,
-  banya: 5,
-  flowers: 5,
-  diamond: 20,
-  tools: 1,
-  lipstick: 5,
-}
-
-const GIFT_TYPES = new Set(["rose", "flowers", "song", "diamond", "gift_voice", "tools", "lipstick"])
-
-function useWeekLog(gameLog: GameLogEntry[]) {
-  return useMemo(() => {
-    const weekAgo = Date.now() - WEEK_MS
-    return gameLog.filter((e) => e.timestamp >= weekAgo && e.fromPlayer)
-  }, [gameLog])
-}
-
-function useLoveLeaderboard(weekLog: GameLogEntry[]) {
-  return useMemo(() => {
-    const counts: Record<number, { name: string; avatar: string; count: number }> = {}
-    for (const e of weekLog) {
-      if (e.type !== "kiss" || !e.fromPlayer) continue
-      const id = e.fromPlayer.id
-      if (!counts[id]) counts[id] = { name: e.fromPlayer.name, avatar: e.fromPlayer.avatar ?? "", count: 0 }
-      counts[id].count++
-    }
-    return Object.entries(counts)
-      .map(([id, data]) => ({ playerId: Number(id), ...data }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
-  }, [weekLog])
-}
-
-function useGiftsLeaderboard(weekLog: GameLogEntry[]) {
-  return useMemo(() => {
-    const counts: Record<number, { name: string; avatar: string; count: number }> = {}
-    for (const e of weekLog) {
-      if (!GIFT_TYPES.has(e.type) || !e.fromPlayer) continue
-      const id = e.fromPlayer.id
-      if (!counts[id]) counts[id] = { name: e.fromPlayer.name, avatar: e.fromPlayer.avatar ?? "", count: 0 }
-      counts[id].count++
-    }
-    return Object.entries(counts)
-      .map(([id, data]) => ({ playerId: Number(id), ...data }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
-  }, [weekLog])
-}
-
-function useKindLeaderboard(weekLog: GameLogEntry[]) {
-  return useMemo(() => {
-    const sums: Record<number, { name: string; avatar: string; sum: number }> = {}
-    for (const e of weekLog) {
-      const cost = KIND_ACTION_COST[e.type]
-      if (cost == null || !e.fromPlayer) continue
-      const id = e.fromPlayer.id
-      if (!sums[id]) sums[id] = { name: e.fromPlayer.name, avatar: e.fromPlayer.avatar ?? "", sum: 0 }
-      sums[id].sum += cost
-    }
-    return Object.entries(sums)
-      .map(([id, data]) => ({ playerId: Number(id), ...data }))
-      .sort((a, b) => b.sum - a.sum)
-      .slice(0, 10)
-  }, [weekLog])
-}
+import { apiFetch } from "@/lib/api-fetch"
+import type { RatingPeriod } from "@/lib/rating-periods"
 
 type TabId = "love" | "gifts" | "kind"
 
@@ -83,89 +13,109 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "kind", label: "Добрые" },
 ]
 
-/** Табы и списки рейтинга — для боковой панели или модалки */
-export function RatingLeaderboardBody() {
-  const { state } = useGame()
-  const { gameLog } = state
-  const [activeTab, setActiveTab] = useState<TabId>("love")
-  const weekLog = useWeekLog(gameLog)
-  const love = useLoveLeaderboard(weekLog)
-  const gifts = useGiftsLeaderboard(weekLog)
-  const kind = useKindLeaderboard(weekLog)
+const PERIODS: { id: RatingPeriod; label: string }[] = [
+  { id: "day", label: "День" },
+  { id: "week", label: "Неделя" },
+  { id: "month", label: "Месяц" },
+]
 
-  const content = () => {
-    const avatarEl = (avatar: string, name: string) => (
-      <span className="flex items-center gap-2 min-w-0">
-        <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-600 bg-slate-700">
-          {avatar ? (
-            <img src={avatar} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center text-xs text-slate-400">?</span>
-          )}
-        </span>
-        <span className="text-amber-50 truncate">{name}</span>
+type LeaderboardApiRow = {
+  rank: number
+  actorKey: string
+  name: string
+  avatar: string
+  score: number
+}
+
+/** Табы, период и списки глобального рейтинга (все столы, SQLite) */
+export function RatingLeaderboardBody() {
+  const [period, setPeriod] = useState<RatingPeriod>("week")
+  const [activeTab, setActiveTab] = useState<TabId>("love")
+  const [rows, setRows] = useState<LeaderboardApiRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await apiFetch(
+        `/api/rating/leaderboard?period=${encodeURIComponent(period)}&tab=${encodeURIComponent(activeTab)}`,
+      )
+      const json = (await res.json().catch(() => null)) as
+        | { ok?: boolean; rows?: LeaderboardApiRow[]; error?: string }
+        | null
+      if (!res.ok || !json?.ok || !Array.isArray(json.rows)) {
+        setRows([])
+        setError(json?.error ?? "Не удалось загрузить рейтинг")
+        return
+      }
+      setRows(json.rows)
+    } catch {
+      setRows([])
+      setError("Ошибка сети")
+    } finally {
+      setLoading(false)
+    }
+  }, [period, activeTab])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const periodHint =
+    period === "day"
+      ? "Календарный день (МСК)"
+      : period === "week"
+        ? "Календарная неделя пн–вс (МСК)"
+        : "Календарный месяц (МСК)"
+
+  const avatarEl = (avatar: string, name: string) => (
+    <span className="flex items-center gap-2 min-w-0">
+      <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-600 bg-slate-700">
+        {avatar ? (
+          <img src={avatar} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center text-xs text-slate-400">?</span>
+        )}
       </span>
-    )
-    if (activeTab === "love") {
-      if (love.length === 0) return <p className="text-sm text-amber-300/70 py-4">Пока ни одного поцелуя за неделю</p>
-      return (
-        <ul className="space-y-2">
-          {love.map((item, i) => (
-            <li key={item.playerId} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="text-amber-400/90 font-medium w-6 shrink-0">{i + 1}.</span>
-                {avatarEl(item.avatar, item.name)}
-              </span>
-              <span className="text-amber-200 font-semibold shrink-0">{item.count}</span>
-            </li>
-          ))}
-        </ul>
-      )
-    }
-    if (activeTab === "gifts") {
-      if (gifts.length === 0) return <p className="text-sm text-amber-300/70 py-4">Пока нет подарков за неделю</p>
-      return (
-        <ul className="space-y-2">
-          {gifts.map((item, i) => (
-            <li key={item.playerId} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="text-amber-400/90 font-medium w-6 shrink-0">{i + 1}.</span>
-                {avatarEl(item.avatar, item.name)}
-              </span>
-              <span className="text-amber-200 font-semibold shrink-0">{item.count}</span>
-            </li>
-          ))}
-        </ul>
-      )
-    }
-    if (activeTab === "kind") {
-      if (kind.length === 0) return <p className="text-sm text-amber-300/70 py-4">Пока нет трат за неделю</p>
-      return (
-        <ul className="space-y-2">
-          {kind.map((item, i) => (
-            <li key={item.playerId} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="text-amber-400/90 font-medium w-6 shrink-0">{i + 1}.</span>
-                {avatarEl(item.avatar, item.name)}
-              </span>
-              <span className="text-amber-200 font-semibold shrink-0">{item.sum} ❤</span>
-            </li>
-          ))}
-        </ul>
-      )
-    }
-    return null
-  }
+      <span className="text-amber-50 truncate">{name}</span>
+    </span>
+  )
 
   const subtitle =
     activeTab === "love"
-      ? "Количество поцелуев"
+      ? "Количество поцелуев (все столы)"
       : activeTab === "gifts"
         ? "Кто больше всего подарил подарков"
         : "Кто больше всего потратил на квас, парить, бриллианты, цветы"
 
+  const emptyMessage =
+    activeTab === "love"
+      ? "Пока ни одного поцелуя за выбранный период"
+      : activeTab === "gifts"
+        ? "Пока нет подарков за выбранный период"
+        : "Пока нет трат за выбранный период"
+
   return (
     <>
+      <div className="mb-3 flex shrink-0 gap-1 rounded-lg border border-slate-600/80 bg-slate-900/40 p-1">
+        {PERIODS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => setPeriod(p.id)}
+            className="flex-1 rounded-md px-2 py-2 text-center text-xs font-semibold transition-colors sm:text-sm"
+            style={{
+              background: period === p.id ? "rgba(250, 204, 21, 0.15)" : "transparent",
+              color: period === p.id ? "#facc15" : "#94a3b8",
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="mb-2 text-[11px] text-slate-500">{periodHint}</p>
       <div className="flex shrink-0 border-b border-slate-600 px-0 -mx-0 mb-3">
         {TABS.map((tab) => (
           <button
@@ -183,7 +133,27 @@ export function RatingLeaderboardBody() {
         ))}
       </div>
       <p className="mb-3 text-xs text-slate-400">{subtitle}</p>
-      {content()}
+      {loading ? (
+        <p className="py-6 text-sm text-slate-400">Загрузка…</p>
+      ) : error ? (
+        <p className="py-4 text-sm text-rose-300/90">{error}</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-amber-300/70 py-4">{emptyMessage}</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((item) => (
+            <li key={item.actorKey} className="flex items-center justify-between gap-2 text-sm">
+              <span className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="text-amber-400/90 font-medium w-6 shrink-0">{item.rank}.</span>
+                {avatarEl(item.avatar, item.name)}
+              </span>
+              <span className="text-amber-200 font-semibold shrink-0 tabular-nums">
+                {activeTab === "kind" ? `${item.score} ❤` : item.score}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   )
 }
@@ -216,7 +186,7 @@ export function RatingModal({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-100">Рейтинг</h2>
-              <p className="text-[11px] text-slate-400">За последние 7 дней</p>
+              <p className="text-[11px] text-slate-400">Все столы · МСК</p>
             </div>
           </div>
           <button

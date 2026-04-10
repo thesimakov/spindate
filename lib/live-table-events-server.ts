@@ -1,4 +1,5 @@
 import type { GameAction } from "@/lib/game-types"
+import { tryInsertGlobalRatingFromAddLog } from "@/lib/global-rating-store"
 import { applyAuthorityEvent, ensureTableAuthority } from "@/lib/table-authority-server"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
@@ -80,6 +81,11 @@ function senderMatchesAction(senderId: number, action: GameAction): boolean {
   if (action.type === "SET_CLIENT_TAB_AWAY") {
     return senderId === action.playerId
   }
+  if (action.type === "ADD_LOG") {
+    const fp = action.entry?.fromPlayer
+    if (!fp || fp.isBot) return false
+    if (fp.id !== senderId) return false
+  }
   return true
 }
 
@@ -116,6 +122,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     await ensureTableAuthority(tableId)
     await applyAuthorityEvent(tableId, args.action)
     scheduleVkNotificationForTableAction(args.action)
+    tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
     return { ok: true as const, seq }
   }
 
@@ -137,6 +144,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   await ensureTableAuthority(tableId)
   await applyAuthorityEvent(tableId, args.action)
   scheduleVkNotificationForTableAction(args.action)
+  tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
   return { ok: true as const, seq: bucket.seq }
 }
 

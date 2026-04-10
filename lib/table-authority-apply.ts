@@ -1,5 +1,6 @@
 import type { GameAction, Player, TableAuthorityPayload } from "@/lib/game-types"
 import { GAME_TABLE_LOG_MAX_ENTRIES } from "@/lib/game-types"
+import { trimRoomChatMessages } from "@/lib/room-chat-retention"
 
 function playerById(players: Player[], id: number): Player | undefined {
   return players.find((p) => p.id === id)
@@ -24,7 +25,7 @@ export function applyTableAuthorityAction(
       }
     case "SEND_GENERAL_CHAT": {
       const list = [...(snapshot.generalChatMessages ?? []), action.message]
-      return { ...snapshot, generalChatMessages: list.slice(-50) }
+      return { ...snapshot, generalChatMessages: trimRoomChatMessages(list) }
     }
     case "START_COUNTDOWN":
       return { ...snapshot, countdown: 3, spinStartedAtMs: null }

@@ -20,6 +20,7 @@ import { generateLogId as generateLogIdImpl, generateMessageId as generateMessag
 import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
+import { trimRoomChatMessages } from "@/lib/room-chat-retention"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
 export { AVATAR_FRAME_IDS }
@@ -805,8 +806,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     }
     case "SEND_GENERAL_CHAT": {
       const list = [...(state.generalChatMessages ?? []), action.message]
-      const kept = list.slice(-50)
-      return { ...state, generalChatMessages: kept }
+      return { ...state, generalChatMessages: trimRoomChatMessages(list) }
     }
     case "SEND_INTERGAME_CHAT": {
       const list = [...(state.intergameChatMessages ?? []), action.message]
@@ -1306,7 +1306,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         spinSkips: { ...p.spinSkips },
         gameLog: [...p.gameLog],
         emotionUseTodayByPlayer,
-        generalChatMessages: [...(p.generalChatMessages ?? [])],
+        generalChatMessages: trimRoomChatMessages(p.generalChatMessages),
         avatarFrames: mergedFrames,
         drunkUntil: (() => {
           const merged: Record<number, number> = { ...(state.drunkUntil ?? {}) }

@@ -293,7 +293,7 @@ export function GameApp() {
           {state.gameSidePanel === "rating" && (
             <GameSidePanelShell
               title="Рейтинг"
-              subtitle="За последние 7 дней"
+              subtitle="Все столы · периоды по МСК"
               onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
             >
               <RatingLeaderboardBody />

@@ -171,6 +171,20 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_achievement_post_templates_published ON achievement_post_templates(published, updated_at);
+
+    CREATE TABLE IF NOT EXISTS global_rating_events (
+      dedupe_id TEXT PRIMARY KEY,
+      table_id INTEGER NOT NULL,
+      actor_key TEXT NOT NULL,
+      category TEXT NOT NULL,
+      weight INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_global_rating_events_created ON global_rating_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_global_rating_events_actor_created ON global_rating_events(actor_key, created_at);
+    CREATE INDEX IF NOT EXISTS idx_global_rating_events_cat_created ON global_rating_events(category, created_at);
   `)
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
