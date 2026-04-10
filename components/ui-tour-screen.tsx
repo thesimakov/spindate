@@ -11,6 +11,7 @@ import {
 } from "react"
 import { Flower2, Gem, Gift, Heart, MessageCircle, Plus, Sparkles, User, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useGame } from "@/lib/game-context"
 import { markUiTourDone } from "@/lib/ui-tour-storage"
 import { formatVoiceBalanceCompact } from "@/lib/format-voice-balance"
@@ -644,15 +645,25 @@ export function UiTourScreen() {
                 Добро пожаловать в игру • Нажмите «+», чтобы добавить своё объявление…
               </p>
             </div>
-            <button
-              type="button"
-              tabIndex={-1}
-              className="shrink-0 rounded-lg border border-cyan-400/45 bg-cyan-500/15 p-1.5 text-cyan-100"
-              title="табло объявлений"
-              aria-label="табло объявлений"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="pointer-events-auto shrink-0 rounded-lg border border-cyan-400/45 bg-cyan-500/15 p-1.5 text-cyan-100"
+                  aria-label="табло объявлений"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+                className="border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-100 shadow-xl"
+              >
+                табло объявлений
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Plus } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useTickerFeed } from "@/lib/use-ticker-feed"
 import { cn } from "@/lib/utils"
 
@@ -98,18 +99,28 @@ export function GameStatusTicker({ className, showAnnouncementCta, onOpenAnnounc
           </div>
         </div>
         {showPlus ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onOpenAnnouncement?.()
-            }}
-            className="pointer-events-auto shrink-0 rounded-lg border border-cyan-400/45 bg-cyan-500/15 p-1.5 text-cyan-100 transition hover:bg-cyan-500/25"
-            title="табло объявлений"
-            aria-label="табло объявлений"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenAnnouncement?.()
+                }}
+                className="pointer-events-auto shrink-0 rounded-lg border border-cyan-400/45 bg-cyan-500/15 p-1.5 text-cyan-100 transition hover:bg-cyan-500/25"
+                aria-label="табло объявлений"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              sideOffset={8}
+              className="border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-100 shadow-xl"
+            >
+              табло объявлений
+            </TooltipContent>
+          </Tooltip>
         ) : null}
       </div>
       <style jsx>{`
