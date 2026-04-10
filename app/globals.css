@@ -3049,3 +3049,25 @@
     0 0 42px rgba(34, 211, 238, 0.14);
 }
 
+.lobby-style-card-active {
+  position: relative;
+}
+.lobby-style-card-active::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgba(165, 243, 252, 0.7);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.22),
+    0 0 18px rgba(34, 211, 238, 0.35),
+    0 0 34px rgba(34, 211, 238, 0.2);
+}
+
+.lobby-soft-readable {
+  text-shadow:
+    0 1px 0 rgba(2, 6, 23, 0.65),
+    0 0 8px rgba(2, 6, 23, 0.35);
+}
+

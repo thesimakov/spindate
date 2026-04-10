@@ -601,7 +601,7 @@ export function RoomLobbyScreen() {
             <h1 className="text-[1.65rem] font-extrabold tracking-tight text-white drop-shadow-[0_2px_14px_rgba(34,211,238,0.22)] sm:text-3xl">
               Выбор стола
             </h1>
-            <p className="mx-auto mt-2 max-w-sm text-[11px] leading-snug text-slate-300 sm:text-sm">
+            <p className="lobby-soft-readable mx-auto mt-2 max-w-sm text-[11px] leading-snug text-slate-200 sm:text-sm">
               Игровой стол обновляется в реальном времени. В игре откройте отдельный чат комнаты — кнопка слева внизу.
             </p>
           </div>
@@ -622,13 +622,13 @@ export function RoomLobbyScreen() {
               <TabsList className="grid h-11 w-full grid-cols-2 rounded-2xl border border-white/10 bg-slate-900/70 p-1">
                 <TabsTrigger
                   value="default"
-                  className="rounded-xl text-xs font-bold text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+                  className="rounded-xl border border-transparent text-xs font-bold text-white data-[state=inactive]:border-white/15 data-[state=inactive]:bg-white/5 data-[state=inactive]:text-white data-[state=inactive]:opacity-100 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-white data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_0_0_1px_rgba(255,255,255,0.18)]"
                 >
                   {`Игровые столы (${defaultRoomsCount})`}
                 </TabsTrigger>
                 <TabsTrigger
                   value="created"
-                  className="rounded-xl text-xs font-bold text-slate-200 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-cyan-50 data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+                  className="rounded-xl border border-transparent text-xs font-bold text-white data-[state=inactive]:border-white/15 data-[state=inactive]:bg-white/5 data-[state=inactive]:text-white data-[state=inactive]:opacity-100 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-white data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_0_0_1px_rgba(255,255,255,0.18)]"
                 >
                   {`Созданный стол (${createdRoomsCount})`}
                 </TabsTrigger>
@@ -646,10 +646,10 @@ export function RoomLobbyScreen() {
               )}
               {filteredRows.length === 0 && lobbyLoaded && (
                 <li className="flex flex-col items-center gap-2 py-10 text-center">
-                  <p className="text-sm font-medium text-slate-400">
+                  <p className="text-sm font-semibold text-slate-300">
                     {activeTab === "default" ? "Игровых столов пока нет" : "Созданных столов пока нет"}
                   </p>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-slate-400">
                     {activeTab === "default"
                       ? "Дождитесь появления столов по умолчанию"
                       : "Создайте свой стол, и он появится здесь"}
@@ -728,10 +728,10 @@ export function RoomLobbyScreen() {
                         disabled={joiningId !== null || isFull}
                         onClick={() => void handleJoin(r.roomId)}
                         className={cn(
-                          "h-10 shrink-0 rounded-full px-5 font-bold text-white",
+                          "h-10 shrink-0 rounded-full border px-5 font-extrabold",
                           isFull
-                            ? "cursor-not-allowed bg-slate-600 opacity-50"
-                            : "bg-gradient-to-r from-emerald-500 to-lime-400 text-emerald-950 shadow-[0_6px_18px_rgba(74,222,128,0.46)] hover:from-emerald-400 hover:to-lime-300",
+                            ? "cursor-not-allowed border-slate-500 bg-slate-600 text-slate-200 opacity-50"
+                            : "border-emerald-200/80 bg-gradient-to-b from-lime-300 via-emerald-300 to-emerald-500 text-emerald-950 shadow-[0_6px_18px_rgba(74,222,128,0.46)] hover:from-lime-200 hover:via-emerald-200 hover:to-emerald-400",
                         )}
                       >
                         {joiningId === r.roomId ? (
@@ -739,7 +739,7 @@ export function RoomLobbyScreen() {
                         ) : isFull ? (
                           "Занят"
                         ) : (
-                          "Войти"
+                          "Войти в игру"
                         )}
                       </Button>
                     </div>
@@ -751,7 +751,7 @@ export function RoomLobbyScreen() {
 
           <div className="lobby-casual-footer shrink-0 rounded-b-[1.4rem] border-t border-white/[0.09] bg-slate-950/65 px-4 py-3 backdrop-blur-sm">
             <div className="flex w-full flex-col gap-1.5">
-              <p className="rounded-xl border border-white/10 bg-slate-900/55 py-1.5 text-center text-[11px] text-slate-300">
+              <p className="rounded-xl border border-white/10 bg-slate-900/55 py-1.5 text-center text-[11px] text-slate-200">
                 На балансе:{" "}
                 <span className="font-extrabold tabular-nums text-white">{voiceBalance}</span>{" "}
                 <span className="text-rose-300" aria-hidden>
@@ -855,18 +855,20 @@ export function RoomLobbyScreen() {
             </div>
 
             <div
-              className="rounded-2xl border border-slate-600/80 bg-gradient-to-b from-slate-900/85 to-slate-950/95 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+              className="rounded-2xl border border-cyan-300/20 bg-gradient-to-b from-slate-900/85 to-slate-950/95 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(34,211,238,0.08)]"
               role="group"
               aria-label="Оформление стола"
             >
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-500">Оформление стола</p>
+              <p className="mb-3 inline-flex items-center rounded-full border border-cyan-200/30 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider text-cyan-100">
+                Оформление стола
+              </p>
 
               <div className="space-y-2">
                 <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
                   <label htmlFor="create-room-bottle" className="text-sm font-semibold text-slate-200">
                     Бутылочка
                   </label>
-                  <span id="create-room-bottle-hint" className="text-[11px] text-slate-400">
+                  <span id="create-room-bottle-hint" className="lobby-soft-readable text-[11px] text-slate-300">
                     Скин в центре · цены как при покупке в каталоге
                   </span>
                 </div>
@@ -928,7 +930,9 @@ export function RoomLobbyScreen() {
 
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-200">Стилистика стола</p>
-                <p className="text-[11px] leading-snug text-slate-400">Фон и атмосфера комнаты для всех игроков</p>
+                <p className="lobby-soft-readable text-[11px] leading-snug text-slate-300">
+                  Фон и атмосфера комнаты для всех игроков
+                </p>
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   {lobbyTableStyleOptions.map((opt) => {
                     const selected = createTableStyle === opt.id
@@ -940,7 +944,7 @@ export function RoomLobbyScreen() {
                         className={cn(
                           "rounded-xl border p-2.5 text-left text-xs font-medium transition-all",
                           selected
-                            ? "border-cyan-200/90 bg-cyan-500/22 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.28),0_0_24px_rgba(34,211,238,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]"
+                            ? "lobby-style-card-active border-cyan-200/90 bg-cyan-500/24 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.3),0_0_28px_rgba(34,211,238,0.34),inset_0_1px_0_rgba(255,255,255,0.14)]"
                             : "border-slate-700/90 bg-slate-950/50 text-slate-300 hover:border-slate-500 hover:bg-slate-900/60",
                         )}
                       >
@@ -975,7 +979,7 @@ export function RoomLobbyScreen() {
 
             {createError ? <p className="text-sm text-red-300">{createError}</p> : null}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-3 sm:gap-4">
             <Button
               type="button"
               variant="outline"
@@ -988,12 +992,14 @@ export function RoomLobbyScreen() {
               type="button"
               disabled={createLoading || !canAffordCreate}
               onClick={() => void handleCreateRoom()}
-              className="border border-emerald-200/60 bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-300 font-extrabold text-emerald-950 shadow-[0_10px_26px_rgba(74,222,128,0.45)] hover:from-emerald-300 hover:via-lime-200 hover:to-emerald-200"
+              className="border border-emerald-200/70 bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-300 font-extrabold text-emerald-950 shadow-[0_12px_30px_rgba(74,222,128,0.5)] hover:from-emerald-300 hover:via-lime-200 hover:to-emerald-200"
             >
               {createLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                `Создать за ${totalCreateCost} ❤`
+                <span className="inline-flex items-center gap-1 text-[1.02rem] sm:text-[1.08rem]">
+                  Создать за <span className="font-black tabular-nums">{totalCreateCost} ❤</span>
+                </span>
               )}
             </Button>
           </DialogFooter>
