@@ -3006,6 +3006,97 @@
   animation-delay: -6s;
 }
 
+/* Глобальный скин стола: Светлый день (включается классом на <html>) */
+.theme-light-day {
+  color-scheme: light;
+  --background: #f4f8ff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0ea5e9;
+  --primary-foreground: #f8fafc;
+  --secondary: #dbeafe;
+  --secondary-foreground: #1e293b;
+  --muted: #e2e8f0;
+  --muted-foreground: #475569;
+  --accent: #22d3ee;
+  --accent-foreground: #082f49;
+  --border: #cbd5e1;
+  --input: #f8fafc;
+  --ring: #38bdf8;
+}
+
+.theme-light-day body {
+  background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 50%, #f0f9ff 100%);
+  color: #0f172a;
+}
+
+.theme-light-day .lobby-bg-animated {
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 35%, #edf9ff 70%, #f6fffb 100%);
+  animation-duration: 28s;
+}
+
+.theme-light-day .lobby-orb {
+  background: rgba(56, 189, 248, 0.16) !important;
+}
+
+.theme-light-day .lobby-orb-delayed {
+  background: rgba(52, 211, 153, 0.14) !important;
+}
+
+.theme-light-day .game-bg-animated {
+  background-color: #f8fbff;
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.16), transparent 52%),
+    radial-gradient(circle at 100% 100%, rgba(45, 212, 191, 0.14), transparent 52%),
+    radial-gradient(circle at 50% 120%, rgba(226, 232, 240, 0.75), transparent 68%),
+    linear-gradient(180deg, #f8fbff 0%, #eef6ff 42%, #eaf7ff 100%);
+}
+
+.theme-light-day .text-slate-50,
+.theme-light-day .text-slate-100,
+.theme-light-day .text-slate-200,
+.theme-light-day .text-slate-300,
+.theme-light-day .text-slate-400,
+.theme-light-day .text-slate-500 {
+  color: #1e293b !important;
+}
+
+.theme-light-day .text-white {
+  color: #0f172a !important;
+}
+
+.theme-light-day .bg-slate-950,
+.theme-light-day .bg-slate-950\/95,
+.theme-light-day .bg-slate-950\/90,
+.theme-light-day .bg-slate-950\/80,
+.theme-light-day .bg-slate-950\/70,
+.theme-light-day .bg-slate-950\/65,
+.theme-light-day .bg-slate-950\/60,
+.theme-light-day .bg-slate-950\/55,
+.theme-light-day .bg-slate-900,
+.theme-light-day .bg-slate-900\/95,
+.theme-light-day .bg-slate-900\/90,
+.theme-light-day .bg-slate-900\/85,
+.theme-light-day .bg-slate-900\/80,
+.theme-light-day .bg-slate-900\/70,
+.theme-light-day .bg-slate-900\/65,
+.theme-light-day .bg-slate-900\/60,
+.theme-light-day .bg-slate-900\/55,
+.theme-light-day .bg-slate-900\/50,
+.theme-light-day .bg-slate-800\/40 {
+  background-color: rgba(255, 255, 255, 0.86) !important;
+}
+
+.theme-light-day .border-white\/10,
+.theme-light-day .border-white\/12,
+.theme-light-day .border-white\/15,
+.theme-light-day .border-white\/20 {
+  border-color: rgba(148, 163, 184, 0.55) !important;
+}
+
 /* Лобби (казуальный стиль): общий каркас/карточки/модалка */
 .lobby-casual-shell {
   position: relative;

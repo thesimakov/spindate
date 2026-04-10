@@ -102,6 +102,8 @@ const TABLE_STYLE_PREVIEW: Record<RoomTableStyle, string> = {
   violet_dream: "linear-gradient(135deg, rgba(91,33,182,0.92), rgba(147,51,234,0.88))",
   cosmic_rockets:
     "radial-gradient(circle at 30% 20%, rgba(56,189,248,0.35), transparent 55%), radial-gradient(circle at 80% 70%, rgba(147,51,234,0.25), transparent 55%), linear-gradient(135deg, rgba(2,6,23,0.95), rgba(15,23,42,0.92))",
+  light_day:
+    "linear-gradient(135deg, rgba(236,253,245,0.95), rgba(224,242,254,0.92) 45%, rgba(250,245,255,0.9))",
 }
 
 /** VK: query нужен, если нет cookie-сессии (мини-приложение). */

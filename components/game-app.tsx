@@ -150,6 +150,16 @@ export function GameApp() {
     setBlockStatus(null)
   }, [state.screen, state.currentUser?.id])
 
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    const root = document.documentElement
+    const enabled = state.tableStyle === "light_day"
+    root.classList.toggle("theme-light-day", enabled)
+    return () => {
+      root.classList.remove("theme-light-day")
+    }
+  }, [state.tableStyle])
+
   // Лоадер с цитатой находится внутри GameRoom (tableLoading), поэтому
   // общий AppLoader показываем только до появления пользователя.
   const showEntryLoader = state.screen === "game" && !state.currentUser

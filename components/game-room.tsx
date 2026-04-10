@@ -413,7 +413,7 @@ const MOBILE_EMOTION_STRIP_BTN =
 
 const GAME_ROOM_DUST_SEED = 0x51ab1e
 const TABLE_STYLE_BACKGROUNDS: Record<
-  "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream" | "cosmic_rockets",
+  "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream" | "cosmic_rockets" | "light_day",
   string
 > = {
   classic_night: "linear-gradient(180deg, rgba(3,8,18,0.72) 0%, rgba(15,23,42,0.52) 40%, rgba(2,6,23,0.72) 100%)",
@@ -422,6 +422,8 @@ const TABLE_STYLE_BACKGROUNDS: Record<
   violet_dream: "linear-gradient(180deg, rgba(91,33,182,0.50) 0%, rgba(147,51,234,0.36) 44%, rgba(15,23,42,0.72) 100%)",
   cosmic_rockets:
     "linear-gradient(180deg, rgba(2,6,23,0.78) 0%, rgba(15,23,42,0.42) 45%, rgba(2,6,23,0.78) 100%)",
+  light_day:
+    "linear-gradient(180deg, rgba(236,253,245,0.72) 0%, rgba(224,242,254,0.45) 45%, rgba(248,250,252,0.74) 100%)",
 }
 
 type GameRoomProps = {

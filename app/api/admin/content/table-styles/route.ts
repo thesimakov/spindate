@@ -13,6 +13,7 @@ const STYLE_IDS = new Set<RoomTableStyle>([
   "ocean_breeze",
   "violet_dream",
   "cosmic_rockets",
+  "light_day",
 ])
 
 export async function GET(req: Request) {

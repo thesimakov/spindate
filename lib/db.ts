@@ -327,6 +327,7 @@ function migrate(database: Database.Database) {
     { id: "ocean_breeze", name: "Океанский бриз", published: 1 },
     { id: "violet_dream", name: "Фиолетовый сон", published: 1 },
     { id: "cosmic_rockets", name: "Космос и ракеты", published: 0 },
+    { id: "light_day", name: "Светлый день", published: 1 },
   ] as const
   const insertTableStyle = database.prepare(
     `INSERT INTO table_style_catalog (id, name, published, sort_order, updated_at)

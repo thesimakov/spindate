@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
-import { notifyTelegramTickerModerationQueued } from "@/lib/admin-telegram-notify"
+import { notifyVkTickerModerationQueued } from "@/lib/admin-vk-notify"
 import {
   createTickerPlayerAdOrder,
   normalizeTickerAdLink,
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: result.error }, { status })
   }
 
-  await notifyTelegramTickerModerationQueued({
+  await notifyVkTickerModerationQueued({
     adId: result.id,
     authorDisplayName: authorDisplayName.trim() || "—",
     body: text,

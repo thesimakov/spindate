@@ -155,7 +155,13 @@ export type BottleSkin =
   | "frame_80"
   | "fortune_wheel"
 
-export type TableStyle = "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream" | "cosmic_rockets"
+export type TableStyle =
+  | "classic_night"
+  | "sunset_lounge"
+  | "ocean_breeze"
+  | "violet_dream"
+  | "cosmic_rockets"
+  | "light_day"
 
 /* ---- Prediction system ---- */
 export interface Prediction {
