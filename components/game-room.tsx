@@ -4975,41 +4975,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         const zodiacDisplay = ZODIAC_SIGNS[zodiacIdx]
         const zodiacSymbol = ZODIAC_SYMBOLS[zodiacIdx]
         return (
-        <div
-          className="player-menu-backdrop fixed inset-0 z-50 flex items-stretch justify-end overflow-hidden bg-black/60 p-0"
-          onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-          role="presentation"
+        <GameSidePanelShell
+          title="Профиль игрока"
+          onClose={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
+          variant="material"
+          overlayClassName="bg-black/65"
+          contentClassName="relative min-h-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-[15px] sm:px-4 sm:pb-5 sm:pt-3"
         >
-          <div
-            className="player-menu-modal player-menu-modal-drawer relative flex h-app max-h-app w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
-            style={{
-              background: "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(255,255,255,0.98) 40%, rgba(241,245,249,0.98) 100%)",
-              border: "1px solid rgba(148,163,184,0.45)",
-              borderRightWidth: 0,
-              fontSize: "15px",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="pointer-events-none absolute inset-0 rounded-l-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(56,189,248,0.14)_0%,transparent_55%)]"
-              aria-hidden
-            />
-            {/* Шапка: закрытие всегда на месте при прокрутке контента */}
-            <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-slate-800/70 bg-slate-950/90 px-3 py-2 backdrop-blur-md sm:px-4 sm:py-2.5">
-              <div className="min-w-0">
-                <span className="truncate text-[15px] font-black tracking-tight text-slate-100">Профиль игрока</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "CLOSE_PLAYER_MENU" })}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-300 transition-all duration-200 hover:scale-110 hover:bg-white/10 hover:text-white sm:h-10 sm:w-10"
-                aria-label="Закрыть"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-5 sm:pt-3">
-            <div className="relative flex min-w-0 flex-col gap-5">
+          <>
+            <div className="relative min-h-0">
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(56,189,248,0.12)_0%,transparent_55%)]"
+                aria-hidden
+              />
+              <div className="relative z-[1] flex min-w-0 flex-col gap-5">
               {/* Профиль и действия — одна вертикальная колонка (боковая панель справа) */}
               <div
                 className="player-menu-left w-full shrink-0 overflow-hidden rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 p-4 shadow-[0_10px_26px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.85)]"
@@ -5448,7 +5427,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             {/* Окно выбора рамки для подарка — поверх модалки игрока */}
             {showFramePicker && (
               <div
-                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 overflow-y-auto overscroll-contain"
+                className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 overflow-y-auto overscroll-contain"
                 onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
               >
                 <div
@@ -5552,59 +5531,30 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </>
+        </GameSidePanelShell>
         );
       })()}
 
-      {/* Каталог подарков — правая панель как у профиля (из мини-меню аватара) */}
+      {/* Каталог подарков — та же оболочка, что у магазина (GameSidePanelShell) */}
       {giftCatalogDrawerPlayer && currentUser && (
-        <div
-          className="gift-catalog-backdrop fixed inset-0 z-[55] flex items-stretch justify-end overflow-visible bg-transparent p-0"
-          role="presentation"
+        <GameSidePanelShell
+          title={`Подарки для ${giftCatalogDrawerPlayer.name}`}
+          subtitle="до 10 ❤ за подарок"
+          onClose={() => setGiftCatalogDrawerPlayer(null)}
+          variant="material"
+          overlayClassName="bg-black/65"
+          panelClassName="!border-amber-500/25 !bg-[linear-gradient(165deg,rgba(30,41,59,0.98)_0%,rgba(15,23,42,0.98)_50%,rgba(30,41,59,0.98)_100%)] !shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
+          headerRight={
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500/25 to-amber-500/20 ring-1 ring-rose-400/20">
+              <Gift className="h-[18px] w-[18px] text-rose-300/90" strokeWidth={2} aria-hidden />
+            </span>
+          }
+          headerClassName="!border-slate-600/25 !bg-slate-900/95"
+          contentClassName="relative min-h-0 !bg-gradient-to-b !from-slate-900 !via-[#0f172a] !to-slate-950 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-[14px] sm:px-4 sm:pb-5 sm:pt-3"
         >
-          <div
-            className="gift-catalog-panel gift-catalog-drawer relative flex h-app max-h-app w-full max-w-[min(100vw,400px)] shrink-0 flex-col overflow-hidden rounded-none rounded-l-2xl border-y-0 border-r-0 sm:max-w-[380px]"
-            style={{
-              background: "linear-gradient(165deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.98) 100%)",
-              border: "2px solid rgba(251, 191, 36, 0.25)",
-              borderRightWidth: 0,
-              fontSize: "14px",
-            }}
-          >
-            <div className="pointer-events-none absolute inset-0 rounded-l-2xl bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
-            <div className="relative z-20 flex shrink-0 justify-end border-b border-slate-600/25 bg-slate-900/95 px-3 py-2 sm:px-4 sm:py-2.5">
-              <button
-                type="button"
-                onClick={() => setGiftCatalogDrawerPlayer(null)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:scale-110 hover:bg-slate-600/60 hover:text-slate-100 sm:h-10 sm:w-10"
-                aria-label="Закрыть"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pb-5 sm:pt-4">
-              <div className="player-menu-catalog flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4">
-                <div className="shrink-0 px-0.5">
-                  <div className="flex items-start gap-2">
-                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500/25 to-amber-500/20 ring-1 ring-rose-400/20">
-                      <Gift className="h-[18px] w-[18px] text-rose-300/90" strokeWidth={2} aria-hidden />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h2 className="bg-gradient-to-r from-slate-50 via-white to-slate-200 bg-clip-text text-[17px] font-extrabold leading-snug tracking-tight text-transparent sm:text-xl">
-                        {`Подарки для ${giftCatalogDrawerPlayer.name}`}
-                      </h2>
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
-                        <Sparkles className="h-3 w-3 text-amber-400/70" aria-hidden />
-                        <span>до 10</span>
-                        <span className="text-rose-400" aria-hidden>
-                          ❤
-                        </span>
-                        <span className="text-slate-500">за подарок</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
+          <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col">
                 <div
                   className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
                   style={{
@@ -5771,9 +5721,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
+        </GameSidePanelShell>
       )}
 
       {/* магазин теперь отдельным экраном (ShopScreen) */}
@@ -5805,14 +5753,11 @@ function TableChatPanel({
 }) {
   const chatEntries = gameLog.filter((entry) => entry.type === "chat")
   return (
-    <div
-      className={cn(
-        "table-chat-panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10",
-        className,
-      )}
+    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-xl", className)}
+      style={{ background: "rgba(2,6,23,0.45)" }}
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2.5">
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <MessageCircle className="h-4 w-4 shrink-0 text-cyan-400/70 md:h-[1.125rem] md:w-[1.125rem]" />
         <span className="text-sm font-bold tracking-tight text-slate-200 md:text-base">Чат комнаты</span>
         <span className="ml-auto text-[10px] tabular-nums text-slate-600">{chatEntries.length}</span>
@@ -5832,9 +5777,9 @@ function TableChatPanel({
       </div>
 
       {/* Input */}
-      <div className="shrink-0 border-t border-white/10 px-2 pb-2 pt-1">
+      <div className="shrink-0 px-2 pb-2 pt-1" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
         <div
-          className="table-chat-input-row flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-cyan-500/35 bg-slate-900/90 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_1px_0_rgba(0,0,0,0.2)] transition-[border-color,box-shadow] focus-within:border-cyan-400/60 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(34,211,238,0.2)]"
+          className="flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-cyan-500/35 bg-slate-900/90 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_1px_0_rgba(0,0,0,0.2)] transition-[border-color,box-shadow] focus-within:border-cyan-400/60 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(34,211,238,0.2)]"
           role="group"
           aria-label="Поле ввода сообщения"
         >
