@@ -32,6 +32,11 @@ const VK_PAYMENT_ITEMS = {
 
 type ItemId = keyof typeof VK_PAYMENT_ITEMS
 
+/** Диагностика без утечки секретов: не логируем `sig`, полные payload и id пользователей. */
+function vkPaymentDiag(extra: Record<string, string | number | boolean | undefined>) {
+  console.info("[vk/payments]", JSON.stringify({ ts: Date.now(), ...extra }))
+}
+
 function vkJson(body: unknown, status = 200) {
   return new NextResponse(JSON.stringify(body), { status, headers: JSON_VK })
 }
@@ -79,9 +84,21 @@ function vkPaymentItemPhotoUrl(itemKey: string): string {
 function handleGetItem(itemKey: string, isTest: boolean): NextResponse {
   const item = itemKey && VK_PAYMENT_ITEMS[itemKey as ItemId]
   if (!item) {
+    vkPaymentDiag({
+      phase: "get_item",
+      outcome: "unknown_product",
+      item: itemKey ? itemKey.slice(0, 96) : "",
+    })
     return vkError(20, "Product does not exist", true)
   }
   const title = isTest ? `${item.title} (тестовый режим)` : item.title
+  vkPaymentDiag({
+    phase: "get_item",
+    outcome: "ok",
+    item: itemKey.slice(0, 96),
+    price: item.price,
+    test: isTest,
+  })
   return vkJson({
     response: {
       title,
@@ -199,6 +216,13 @@ function handleOrderStatusChange(params: URLSearchParams, orderIdRaw: string, it
 
   const paymentStatus = String(params.get("status") ?? params.get("order_status") ?? "")
   const grantable = isGrantableOrderStatus(paymentStatus)
+  vkPaymentDiag({
+    phase: "order_status_change",
+    order_id: orderId,
+    item: itemKey.slice(0, 96),
+    grantable,
+    status: paymentStatus ? paymentStatus.slice(0, 48) : "(empty)",
+  })
   const now = Date.now()
   const providerOrderId = String(orderId)
   const notificationType = String(params.get("notification_type") ?? "order_status_change")
@@ -256,11 +280,24 @@ export async function POST(req: NextRequest) {
       return vkError(10, "Payment secret not configured", true)
     }
     if (!verifyVkPaymentsSig(params, sig, VK_PAYMENTS_SECRET)) {
+      vkPaymentDiag({
+        phase: "reject",
+        reason: "invalid_signature",
+        notification_type: String(params.get("notification_type") ?? "").slice(0, 64),
+      })
       return vkError(10, "The calculated and sent signatures do not match", true)
     }
 
     const notificationType = String(params.get("notification_type") ?? "")
     const baseType = normalizeNotificationType(notificationType)
+    const itemParam = String(params.get("item") ?? params.get("item_id") ?? "").slice(0, 96)
+    vkPaymentDiag({
+      phase: "inbound",
+      notification_type: notificationType.slice(0, 80),
+      base_type: baseType.slice(0, 64),
+      item: itemParam,
+      order_id_present: Boolean(String(params.get("order_id") ?? "").length),
+    })
 
     if (baseType === "get_item") {
       const itemKey = String(params.get("item") ?? params.get("item_id") ?? "")
@@ -274,6 +311,11 @@ export async function POST(req: NextRequest) {
       return handleOrderStatusChange(params, orderId, itemKey)
     }
 
+    vkPaymentDiag({
+      phase: "reject",
+      reason: "unknown_notification_type",
+      notification_type: notificationType.slice(0, 80),
+    })
     return vkError(1, `${notificationType || "empty"} not processed`, true)
   } catch (e) {
     console.error("[vk/payments]", e)
