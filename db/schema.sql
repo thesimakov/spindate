@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS achievement_post_templates (
   post_text_template TEXT NOT NULL DEFAULT '',
   vk_enabled INTEGER NOT NULL DEFAULT 0,
   published INTEGER NOT NULL DEFAULT 0,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  display_title TEXT NOT NULL DEFAULT '',
+  hint_custom TEXT NOT NULL DEFAULT '',
+  default_status_custom TEXT NOT NULL DEFAULT '',
+  target_count INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_achievement_post_templates_published ON achievement_post_templates(published, updated_at);

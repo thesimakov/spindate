@@ -7,6 +7,7 @@ type AdminAchievementPostsContentProps = { token: string }
 
 type RowDraft = {
   achievementKey: string
+  statsKeyTitle: string
   title: string
   hint: string
   defaultStatus: string
@@ -15,6 +16,7 @@ type RowDraft = {
   postTextTemplate: string
   vkEnabled: boolean
   published: boolean
+  targetCount: number | null
 }
 
 function parseRows(raw: unknown): RowDraft[] {
@@ -22,12 +24,20 @@ function parseRows(raw: unknown): RowDraft[] {
   const out: RowDraft[] = []
   for (const row of raw) {
     if (!row || typeof row !== "object") continue
-    const x = row as Partial<RowDraft>
+    const x = row as Partial<RowDraft> & { statsKeyTitle?: string }
     if (typeof x.achievementKey !== "string" || !x.achievementKey) continue
     if (typeof x.title !== "string" || !x.title) continue
     if (x.group !== "base" && x.group !== "events" && x.group !== "system") continue
+    const statsKeyTitle =
+      typeof x.statsKeyTitle === "string" && x.statsKeyTitle.trim()
+        ? x.statsKeyTitle.trim()
+        : x.title
+    const tc = x.targetCount
+    const targetCount =
+      tc != null && typeof tc === "number" && Number.isFinite(tc) ? Math.floor(tc) : null
     out.push({
       achievementKey: x.achievementKey,
+      statsKeyTitle,
       title: x.title,
       hint: typeof x.hint === "string" ? x.hint : "",
       defaultStatus: typeof x.defaultStatus === "string" ? x.defaultStatus : x.title.slice(0, 15),
@@ -36,6 +46,7 @@ function parseRows(raw: unknown): RowDraft[] {
       postTextTemplate: typeof x.postTextTemplate === "string" ? x.postTextTemplate : "",
       vkEnabled: x.vkEnabled === true,
       published: x.published === true,
+      targetCount,
     })
   }
   return out
@@ -62,7 +73,7 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
         setError(`Не удалось загрузить шаблоны: ${res.status} ${(data?.error as string) ?? ""}`.trim())
         return
       }
-      setRows(parseRows(data.rows))
+      setRows(parseRows(data.rows).filter((r) => r.group !== "events"))
     } catch {
       setError("Ошибка сети при загрузке шаблонов постов")
     } finally {
@@ -94,6 +105,10 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
             postTextTemplate: row.postTextTemplate,
             vkEnabled: row.vkEnabled,
             published: row.published,
+            displayTitle: row.title,
+            hintCustom: row.hint,
+            defaultStatusCustom: row.defaultStatus,
+            targetCount: row.targetCount,
           }),
         })
         const data = await res.json().catch(() => null)
@@ -101,7 +116,7 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
           setError(`Не удалось сохранить ${row.title}: ${res.status} ${(data?.error as string) ?? ""}`.trim())
           return
         }
-        setRows(parseRows(data.rows))
+        setRows(parseRows(data.rows).filter((r) => r.group !== "events"))
       } catch {
         setError("Ошибка сети при сохранении шаблона")
       } finally {
@@ -127,7 +142,7 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
           setError(`Не удалось удалить ${row.title}: ${res.status} ${(data?.error as string) ?? ""}`.trim())
           return
         }
-        setRows(parseRows(data.rows))
+        setRows(parseRows(data.rows).filter((r) => r.group !== "events"))
       } catch {
         setError("Ошибка сети при удалении шаблона")
       } finally {
@@ -174,10 +189,11 @@ export function AdminAchievementPostsContent({ token }: AdminAchievementPostsCon
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-amber-200">Контент: посты достижений и стола</h2>
+          <h2 className="text-lg font-semibold text-amber-200">Посты: базовые достижения и стол</h2>
           <p className="text-xs text-slate-400">
-            Всего: {rows.length} · опубликовано: {publishedCount}. Достижения: {"{name}"}, {"{achievement}"}, {"{game_url}"}.
-            Пост «созданный стол»: {"{name}"}, {"{table_name}"}, {"{game_url}"}.
+            Без блока «Рейтинги и ивенты» — тот список вынесен на отдельную вкладку. Здесь: {rows.length} шт. ·
+            опубликовано: {publishedCount}. Плейсхолдеры: {"{name}"}, {"{achievement}"}, {"{game_url}"}. Пост «созданный
+            стол»: {"{name}"}, {"{table_name}"}, {"{game_url}"}.
           </p>
         </div>
         <button

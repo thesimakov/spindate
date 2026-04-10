@@ -168,7 +168,11 @@ function migrate(database: Database.Database) {
       post_text_template TEXT NOT NULL DEFAULT '',
       vk_enabled INTEGER NOT NULL DEFAULT 0,
       published INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      display_title TEXT NOT NULL DEFAULT '',
+      hint_custom TEXT NOT NULL DEFAULT '',
+      default_status_custom TEXT NOT NULL DEFAULT '',
+      target_count INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_achievement_post_templates_published ON achievement_post_templates(published, updated_at);
 
@@ -186,6 +190,22 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_global_rating_events_actor_created ON global_rating_events(actor_key, created_at);
     CREATE INDEX IF NOT EXISTS idx_global_rating_events_cat_created ON global_rating_events(category, created_at);
   `)
+
+  const achievementPostCols = database.prepare(`PRAGMA table_info(achievement_post_templates)`).all() as { name: string }[]
+  if (achievementPostCols.length > 0) {
+    if (!achievementPostCols.some((c) => c.name === "display_title")) {
+      database.exec(`ALTER TABLE achievement_post_templates ADD COLUMN display_title TEXT NOT NULL DEFAULT ''`)
+    }
+    if (!achievementPostCols.some((c) => c.name === "hint_custom")) {
+      database.exec(`ALTER TABLE achievement_post_templates ADD COLUMN hint_custom TEXT NOT NULL DEFAULT ''`)
+    }
+    if (!achievementPostCols.some((c) => c.name === "default_status_custom")) {
+      database.exec(`ALTER TABLE achievement_post_templates ADD COLUMN default_status_custom TEXT NOT NULL DEFAULT ''`)
+    }
+    if (!achievementPostCols.some((c) => c.name === "target_count")) {
+      database.exec(`ALTER TABLE achievement_post_templates ADD COLUMN target_count INTEGER`)
+    }
+  }
 
   const userCols = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
   if (!userCols.some((c) => c.name === "vk_user_id")) {
