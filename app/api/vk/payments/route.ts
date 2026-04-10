@@ -12,8 +12,15 @@ import { payVotesForPack } from "@/lib/heart-shop-pricing"
 import { verifyVkPaymentsSig } from "@/lib/vk-payments-sign"
 import { getDb } from "@/lib/db"
 
-/** Защищённый ключ приложения (совпадает с полем в настройках VK). Обязателен для проверки sig в продакшене. */
-const VK_PAYMENTS_SECRET = process.env.VK_PAYMENTS_SECRET ?? ""
+/**
+ * Защищённый ключ приложения (как в кабинете VK).
+ * Дублирует логику `app/api/auth/vk`: сначала `VK_PAYMENTS_SECRET`, иначе `VK_MINI_APP_SECRET` — один и тот же ключ.
+ */
+function vkPaymentsSecretFromEnv(): string {
+  const a = process.env.VK_PAYMENTS_SECRET?.trim()
+  const b = process.env.VK_MINI_APP_SECRET?.trim()
+  return a || b || ""
+}
 
 const JSON_VK = { "Content-Type": "application/json; encoding=utf-8" } as const
 
@@ -274,9 +281,12 @@ export async function POST(req: NextRequest) {
   try {
     const params = await bodyToUrlParams(req)
     const sig = params.get("sig") ?? undefined
+    const VK_PAYMENTS_SECRET = vkPaymentsSecretFromEnv()
 
     if (!VK_PAYMENTS_SECRET) {
-      console.error("[vk/payments] VK_PAYMENTS_SECRET is not configured — rejecting request")
+      console.error(
+        "[vk/payments] Neither VK_PAYMENTS_SECRET nor VK_MINI_APP_SECRET is configured — rejecting request",
+      )
       return vkError(10, "Payment secret not configured", true)
     }
     if (!verifyVkPaymentsSig(params, sig, VK_PAYMENTS_SECRET)) {

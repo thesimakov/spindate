@@ -105,8 +105,8 @@ export function GameStatusTicker({ className, showAnnouncementCta, onOpenAnnounc
               onOpenAnnouncement?.()
             }}
             className="pointer-events-auto shrink-0 rounded-lg border border-cyan-400/45 bg-cyan-500/15 p-1.5 text-cyan-100 transition hover:bg-cyan-500/25"
-            title="Добавить объявление в бегущую строку"
-            aria-label="Добавить объявление"
+            title="табло объявлений"
+            aria-label="табло объявлений"
           >
             <Plus className="h-4 w-4" />
           </button>

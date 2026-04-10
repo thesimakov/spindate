@@ -648,8 +648,8 @@ export function UiTourScreen() {
               type="button"
               tabIndex={-1}
               className="shrink-0 rounded-lg border border-cyan-400/45 bg-cyan-500/15 p-1.5 text-cyan-100"
-              title="Добавить объявление в бегущую строку"
-              aria-label="Добавить объявление"
+              title="табло объявлений"
+              aria-label="табло объявлений"
             >
               <Plus className="h-4 w-4" />
             </button>
