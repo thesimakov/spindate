@@ -5551,10 +5551,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </span>
           }
           headerClassName="!border-slate-600/25 !bg-slate-900/95"
-          contentClassName="relative min-h-0 !bg-gradient-to-b !from-slate-900 !via-[#0f172a] !to-slate-950 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-[14px] sm:px-4 sm:pb-5 sm:pt-3"
+          contentClassName="relative flex min-h-0 w-full flex-col !overflow-hidden !bg-gradient-to-b !from-slate-900 !via-[#0f172a] !to-slate-950 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-[14px] sm:px-4 sm:pb-5 sm:pt-3"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
-          <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="relative z-[1] flex min-h-0 min-w-0 w-full flex-1 flex-col">
                 <div
                   className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
                   style={{

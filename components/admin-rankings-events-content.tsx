@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
 
 type AdminRankingsEventsContentProps = { token: string }
@@ -13,15 +13,10 @@ type RowDraft = {
   defaultStatus: string
   group: "base" | "events" | "system"
   imageUrl: string
-  postTextTemplate: string
-  vkEnabled: boolean
-  published: boolean
   targetCount: number | null
   /** Запись только в БД (ключ custom_*) */
   isCustom?: boolean
 }
-
-const DEFAULT_VK_POST = `Игрок {name} получил достижение «{achievement}» в Крути и знакомься!\n{game_url}`
 
 function makeNewEventDraft(): RowDraft {
   return {
@@ -32,9 +27,6 @@ function makeNewEventDraft(): RowDraft {
     defaultStatus: "",
     group: "events",
     imageUrl: "",
-    postTextTemplate: DEFAULT_VK_POST,
-    vkEnabled: false,
-    published: false,
     targetCount: null,
     isCustom: true,
   }
@@ -64,9 +56,6 @@ function parseRows(raw: unknown): RowDraft[] {
       defaultStatus: typeof x.defaultStatus === "string" ? x.defaultStatus : x.title.slice(0, 15),
       group: x.group,
       imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : "",
-      postTextTemplate: typeof x.postTextTemplate === "string" ? x.postTextTemplate : "",
-      vkEnabled: x.vkEnabled === true,
-      published: x.published === true,
       targetCount,
       isCustom: x.isCustom === true,
     })
@@ -134,9 +123,6 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
           achievementKey: newDraft.achievementKey,
           statsKeyTitle: newDraft.statsKeyTitle,
           imageUrl: newDraft.imageUrl,
-          postTextTemplate: newDraft.postTextTemplate,
-          vkEnabled: newDraft.vkEnabled,
-          published: newDraft.published,
           displayTitle: newDraft.title,
           hintCustom: newDraft.hint,
           defaultStatusCustom: newDraft.defaultStatus,
@@ -202,9 +188,6 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
           body: JSON.stringify({
             achievementKey: row.achievementKey,
             imageUrl: row.imageUrl,
-            postTextTemplate: row.postTextTemplate,
-            vkEnabled: row.vkEnabled,
-            published: row.published,
             displayTitle: row.title,
             hintCustom: row.hint,
             defaultStatusCustom: row.defaultStatus,
@@ -284,8 +267,6 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
     [token],
   )
 
-  const publishedCount = useMemo(() => rows.filter((x) => x.published).length, [rows])
-
   return (
     <section className="rounded-xl border border-slate-600 bg-slate-800/40 p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -293,8 +274,7 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
           <h2 className="text-lg font-semibold text-amber-200">Рейтинги и ивенты</h2>
           <p className="text-xs text-slate-400">
             Ивенты из кода + свои записи (<span className="font-mono text-slate-300">custom_*</span>). Ключ статистики должен
-            совпадать с полем в <span className="font-mono">achievementStats</span> в игре. Всего: {rows.length} ·
-            опубликовано шаблонов: {publishedCount}. Пост: {"{name}"}, {"{achievement}"}, {"{game_url}"}.
+            совпадать с полем в <span className="font-mono">achievementStats</span> в игре. Всего: {rows.length}.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -420,35 +400,6 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
               </label>
             </div>
           </label>
-          <label className="mt-2 block text-[11px] text-slate-400">
-            Текст поста ВК
-            <textarea
-              value={newDraft.postTextTemplate}
-              onChange={(e) => setNewDraft((d) => (d ? { ...d, postTextTemplate: e.target.value } : null))}
-              rows={4}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
-            />
-          </label>
-          <div className="mt-2 flex flex-wrap gap-3">
-            <label className="flex items-center gap-2 text-xs text-slate-300">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-                checked={newDraft.vkEnabled}
-                onChange={(e) => setNewDraft((d) => (d ? { ...d, vkEnabled: e.target.checked } : null))}
-              />
-              Публикация в VK
-            </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-                checked={newDraft.published}
-                onChange={(e) => setNewDraft((d) => (d ? { ...d, published: e.target.checked } : null))}
-              />
-              Публиковать шаблон
-            </label>
-          </div>
           <div className="mt-3">
             <button
               type="button"
@@ -580,37 +531,6 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
                 </div>
               ) : null}
 
-              <label className="mt-2 block text-[11px] text-slate-400">
-                Текст поста ВК
-                <textarea
-                  value={row.postTextTemplate}
-                  onChange={(e) => updateRow(row.achievementKey, { postTextTemplate: e.target.value })}
-                  rows={4}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
-                />
-              </label>
-
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-                    checked={row.vkEnabled}
-                    onChange={(e) => updateRow(row.achievementKey, { vkEnabled: e.target.checked })}
-                  />
-                  Публикация в VK
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-                    checked={row.published}
-                    onChange={(e) => updateRow(row.achievementKey, { published: e.target.checked })}
-                  />
-                  Публиковать шаблон
-                </label>
-              </div>
-
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -618,7 +538,7 @@ export function AdminRankingsEventsContent({ token }: AdminRankingsEventsContent
                   onClick={() => void saveRow(row)}
                   className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-medium text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50"
                 >
-                  Публикация
+                  Сохранить
                 </button>
                 <button
                   type="button"
