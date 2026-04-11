@@ -3162,3 +3162,71 @@
     0 0 8px rgba(2, 6, 23, 0.35);
 }
 
+/* Полоса мини-игр: колокольчик — непрерывное «биение сердца» (два удара + диастола, по кругу) */
+@keyframes game-room-bell-heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(251, 191, 36, 0),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  8% {
+    transform: scale(1.14);
+    box-shadow:
+      0 0 0 2px rgba(251, 191, 36, 0.65),
+      0 0 18px 6px rgba(251, 191, 36, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  16% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(251, 191, 36, 0),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+  28% {
+    transform: scale(1.1);
+    box-shadow:
+      0 0 0 2px rgba(251, 191, 36, 0.5),
+      0 0 14px 5px rgba(251, 191, 36, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  38% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(251, 191, 36, 0),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+}
+
+.animate-game-room-bell {
+  animation: game-room-bell-heartbeat 1.05s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center center;
+  will-change: transform, box-shadow;
+}
+
+/* Иконка колокольчика: непрерывное качание (ось сверху), независимо от «сердца» кнопки */
+@keyframes game-room-bell-swing {
+  0%,
+  100% {
+    transform: rotate(-18deg);
+  }
+  50% {
+    transform: rotate(18deg);
+  }
+}
+
+.animate-game-room-bell-icon {
+  display: inline-flex;
+  animation: game-room-bell-swing 0.52s ease-in-out infinite;
+  transform-origin: 50% 6%;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-game-room-bell,
+  .animate-game-room-bell-icon {
+    animation: none !important;
+  }
+}
+

@@ -33,6 +33,7 @@ import {
   Menu,
   Plus,
   Headphones,
+  Bell,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -67,6 +68,7 @@ import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
 import { TickerAnnouncementModal } from "@/components/ticker-announcement-modal"
 import { ContactUsModal } from "@/components/contact-us-modal"
+import { VkGroupNewsModal } from "@/components/vk-group-news-modal"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
@@ -611,6 +613,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [tableLoading, setTableLoading] = useState(true)
   const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
   const [contactUsOpen, setContactUsOpen] = useState(false)
+  const [vkGroupNewsOpen, setVkGroupNewsOpen] = useState(false)
   const [bankHeartPulseActive, setBankHeartPulseActive] = useState(false)
   const prevVoiceBalanceRef = useRef<number | null>(null)
   const bankHeartPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2630,6 +2633,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           authProvider: currentUser?.authProvider,
         }}
       />
+      <VkGroupNewsModal open={vkGroupNewsOpen} onOpenChange={setVkGroupNewsOpen} />
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
 
       <TableLoaderOverlay
@@ -4506,63 +4510,87 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           style={{ boxShadow: "inset 1px 0 0 rgba(255,255,255,0.04)" }}
           aria-label="Мини-игры"
         >
-          <p className="pointer-events-none shrink-0 px-1 pb-2 text-center text-[8px] font-bold uppercase leading-tight tracking-wide text-slate-500">
-            Игры
-          </p>
-          <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overscroll-contain px-1.5">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto overscroll-contain px-1.5">
+            <p className="pointer-events-none shrink-0 px-1 pb-2 text-center text-[8px] font-bold uppercase leading-tight tracking-wide text-slate-500">
+              Игры
+            </p>
+            <div className="flex shrink-0 flex-col items-center gap-2">
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
+                    className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-fuchsia-400/45 bg-fuchsia-900/25 transition-all hover:scale-105 hover:border-fuchsia-300/55 active:scale-95"
+                    aria-label="Открыть мини-игру Угадай-ка"
+                  >
+                    <img src={assetUrl("Frame 1171276192.webp")} alt="" className="size-[1.85rem] object-contain" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="left"
+                  sideOffset={8}
+                  className="max-w-[14rem] border border-fuchsia-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
+                >
+                  <span className="font-semibold text-fuchsia-200">Угадай-ка</span>
+                  {" — "}
+                  мини-игра со слотами: угадывайте пары и крутите барабан за столом.
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex shrink-0">
+                    <button
+                      type="button"
+                      disabled={!FORTUNE_WHEEL_ENABLED}
+                      onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
+                      className="flex size-10 items-center justify-center rounded-md border border-cyan-400/45 bg-cyan-900/20 text-lg transition-all hover:scale-105 hover:border-cyan-300/55 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                      aria-label="Открыть мини-игру Колесо фортуны"
+                    >
+                      <span aria-hidden>{"🎡"}</span>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="left"
+                  sideOffset={8}
+                  className="max-w-[14rem] border border-cyan-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
+                >
+                  {FORTUNE_WHEEL_ENABLED ? (
+                    <>
+                      <span className="font-semibold text-cyan-200">Колесо фортуны</span>
+                      {" — "}
+                      крутите колесо и выигрывайте призы за столом.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-cyan-200/80">Колесо фортуны</span>
+                      {" — "}
+                      скоро появится в комнате.
+                    </>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="min-h-2 shrink-0" aria-hidden />
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => dispatch({ type: "SET_SCREEN", screen: "ugadaika" })}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fuchsia-400/35 bg-fuchsia-900/25 transition-all hover:scale-105 hover:border-fuchsia-300/55 active:scale-95"
-                  aria-label="Открыть мини-игру Угадай-ка"
+                  onClick={() => setVkGroupNewsOpen(true)}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-md border-2 border-amber-400/55 bg-amber-950/50 text-amber-100 transition-all hover:scale-110 hover:border-amber-300/75 hover:bg-amber-900/40 active:scale-95 animate-game-room-bell"
+                  aria-label="Новости: группа ВК — нажмите"
                 >
-                  <img src={assetUrl("Frame 1171276192.webp")} alt="" className="h-8 w-8 object-contain" />
+                  <span className="animate-game-room-bell-icon text-amber-200">
+                    <Bell className="size-[1.35rem]" strokeWidth={2.5} aria-hidden />
+                  </span>
                 </button>
               </TooltipTrigger>
               <TooltipContent
                 side="left"
                 sideOffset={8}
-                className="max-w-[14rem] border border-fuchsia-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
+                className="max-w-[14rem] border border-amber-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
               >
-                <span className="font-semibold text-fuchsia-200">Угадай-ка</span>
-                {" — "}
-                мини-игра со слотами: угадывайте пары и крутите барабан за столом.
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip delayDuration={200}>
-              <TooltipTrigger asChild>
-                <span className="inline-flex shrink-0">
-                  <button
-                    type="button"
-                    disabled={!FORTUNE_WHEEL_ENABLED}
-                    onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "fortune-wheel" })}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/35 bg-cyan-900/20 text-lg transition-all hover:scale-105 hover:border-cyan-300/55 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
-                    aria-label="Открыть мини-игру Колесо фортуны"
-                  >
-                    <span aria-hidden>{"🎡"}</span>
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent
-                side="left"
-                sideOffset={8}
-                className="max-w-[14rem] border border-cyan-500/35 bg-slate-950 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-100 shadow-xl"
-              >
-                {FORTUNE_WHEEL_ENABLED ? (
-                  <>
-                    <span className="font-semibold text-cyan-200">Колесо фортуны</span>
-                    {" — "}
-                    крутите колесо и выигрывайте призы за столом.
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold text-cyan-200/80">Колесо фортуны</span>
-                    {" — "}
-                    скоро появится в комнате.
-                  </>
-                )}
+                Нажми на меня — откроется группа ВК с новостями.
               </TooltipContent>
             </Tooltip>
           </div>
