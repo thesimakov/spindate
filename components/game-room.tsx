@@ -69,6 +69,7 @@ import { GameStatusTicker } from "@/components/game-status-ticker"
 import { TickerAnnouncementModal } from "@/components/ticker-announcement-modal"
 import { ContactUsModal } from "@/components/contact-us-modal"
 import { VkGroupNewsModal } from "@/components/vk-group-news-modal"
+import { isVkGroupBellAnimationOff, VK_GROUP_BELL_STORAGE_EVENT } from "@/lib/vk-group-news-bell"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
@@ -614,6 +615,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
   const [contactUsOpen, setContactUsOpen] = useState(false)
   const [vkGroupNewsOpen, setVkGroupNewsOpen] = useState(false)
+  const [vkBellIdle, setVkBellIdle] = useState(false)
   const [bankHeartPulseActive, setBankHeartPulseActive] = useState(false)
   const prevVoiceBalanceRef = useRef<number | null>(null)
   const bankHeartPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -624,6 +626,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
     return ""
   }, [currentUser])
+
+  useEffect(() => {
+    setVkBellIdle(isVkGroupBellAnimationOff())
+    const sync = () => setVkBellIdle(isVkGroupBellAnimationOff())
+    window.addEventListener(VK_GROUP_BELL_STORAGE_EVENT, sync)
+    window.addEventListener("storage", sync)
+    return () => {
+      window.removeEventListener(VK_GROUP_BELL_STORAGE_EVENT, sync)
+      window.removeEventListener("storage", sync)
+    }
+  }, [])
 
   const isRoundDriver = useMemo(() => {
     if (!currentUser) return false
@@ -2633,7 +2646,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           authProvider: currentUser?.authProvider,
         }}
       />
-      <VkGroupNewsModal open={vkGroupNewsOpen} onOpenChange={setVkGroupNewsOpen} />
+      <VkGroupNewsModal open={vkGroupNewsOpen} onOpenChange={setVkGroupNewsOpen} onNotify={showToast} />
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
 
       <TableLoaderOverlay
@@ -4577,10 +4590,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 <button
                   type="button"
                   onClick={() => setVkGroupNewsOpen(true)}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-md border-2 border-amber-400/55 bg-amber-950/50 text-amber-100 transition-all hover:scale-110 hover:border-amber-300/75 hover:bg-amber-900/40 active:scale-95 animate-game-room-bell"
+                  className={cn(
+                    "flex size-10 shrink-0 items-center justify-center rounded-md border-2 border-amber-400/55 bg-amber-950/50 text-amber-100 transition-all hover:scale-110 hover:border-amber-300/75 hover:bg-amber-900/40 active:scale-95",
+                    !vkBellIdle && "animate-game-room-bell",
+                  )}
                   aria-label="Новости: группа ВК — нажмите"
                 >
-                  <span className="animate-game-room-bell-icon text-amber-200">
+                  <span className={cn("text-amber-200", !vkBellIdle && "animate-game-room-bell-icon")}>
                     <Bell className="size-[1.35rem]" strokeWidth={2.5} aria-hidden />
                   </span>
                 </button>

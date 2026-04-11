@@ -9,13 +9,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { publicUrl } from "@/lib/assets"
+import { apiFetch } from "@/lib/api-fetch"
+import { useGame } from "@/lib/game-context"
+import type { InlineToastType } from "@/hooks/use-inline-toast"
 import {
-  initVkResilient,
-  isVkMiniApp,
-  joinVkCommunityGroup,
-  openVkUrl,
-  VK_COMMUNITY_PUBLIC_URL,
-} from "@/lib/vk-bridge"
+  buildVkGroupSubscribeRewardUrl,
+  markVkGroupBellAnimationOff,
+} from "@/lib/vk-group-news-bell"
+import { initVkResilient, joinVkCommunityGroup } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
 const PROMO_IMAGE = publicUrl("/assets/vk-group-promo.png")
@@ -23,23 +24,46 @@ const PROMO_IMAGE = publicUrl("/assets/vk-group-promo.png")
 type VkGroupNewsModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Тосты при успехе/ошибке подписки */
+  onNotify?: (message: string, type?: InlineToastType) => void
 }
 
-export function VkGroupNewsModal({ open, onOpenChange }: VkGroupNewsModalProps) {
+export function VkGroupNewsModal({ open, onOpenChange, onNotify }: VkGroupNewsModalProps) {
+  const { state } = useGame()
+  const currentUser = state.currentUser
   const [busy, setBusy] = useState(false)
 
   const handleSubscribe = useCallback(async () => {
     setBusy(true)
     try {
       await initVkResilient()
-      if (isVkMiniApp()) {
-        await joinVkCommunityGroup()
+      /** Подписка только через VK Bridge (без открытия браузера) */
+      const joined = await joinVkCommunityGroup()
+      if (joined.ok) {
+        markVkGroupBellAnimationOff()
+        onNotify?.("Вы подписались на сообщество", "success")
+        onOpenChange(false)
+        return
       }
-      await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
+      if (currentUser && (currentUser.authProvider === "vk" || typeof currentUser.vkUserId === "number")) {
+        const url = buildVkGroupSubscribeRewardUrl(currentUser)
+        const res = await apiFetch(url, { method: "POST", credentials: "include" })
+        const data = (await res.json().catch(() => null)) as { ok?: boolean } | null
+        if (data?.ok === true) {
+          markVkGroupBellAnimationOff()
+          onNotify?.("Вы уже в сообществе", "success")
+          onOpenChange(false)
+          return
+        }
+      }
+      onNotify?.(
+        "Подписка одним нажатием доступна в мини-приложении ВК. В обычном браузере вступите в сообщество вручную (ссылка в профиле или vk.com/lemnitygame).",
+        "info",
+      )
     } finally {
       setBusy(false)
     }
-  }, [])
+  }, [currentUser, onNotify, onOpenChange])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
