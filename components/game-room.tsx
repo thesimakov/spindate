@@ -32,6 +32,7 @@ import {
   ChevronRight,
   Menu,
   Plus,
+  Headphones,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -65,6 +66,7 @@ import { TableLoaderOverlay } from "@/components/table-loader-overlay"
 import { FortuneWheelSidePanel } from "@/components/fortune-wheel-side-panel"
 import { GameStatusTicker } from "@/components/game-status-ticker"
 import { TickerAnnouncementModal } from "@/components/ticker-announcement-modal"
+import { ContactUsModal } from "@/components/contact-us-modal"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
@@ -608,6 +610,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   const [tableLoading, setTableLoading] = useState(true)
   const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
+  const [contactUsOpen, setContactUsOpen] = useState(false)
   const [bankHeartPulseActive, setBankHeartPulseActive] = useState(false)
   const prevVoiceBalanceRef = useRef<number | null>(null)
   const bankHeartPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2616,6 +2619,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           showToast={showToast}
         />
       )}
+      <ContactUsModal
+        open={contactUsOpen}
+        onOpenChange={setContactUsOpen}
+        onNotify={showToast}
+        diagnosticsExtra={{
+          tableId,
+          voiceBalance,
+          currentUserId: currentUser?.id,
+          authProvider: currentUser?.authProvider,
+        }}
+      />
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
 
       <TableLoaderOverlay
@@ -3542,6 +3556,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   Ежедневные задачи
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+                onSelect={() => setContactUsOpen(true)}
+              >
+                <Headphones className="h-4 w-4 shrink-0 text-cyan-300" />
+                Связаться с нами
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

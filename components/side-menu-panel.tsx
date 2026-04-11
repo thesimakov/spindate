@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import {
   Heart,
   RotateCw,
@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Plus,
   Menu,
+  Headphones,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -22,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
+import { ContactUsModal } from "@/components/contact-us-modal"
 import { cn } from "@/lib/utils"
 import type { GameAction } from "@/lib/game-types"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
@@ -73,6 +75,7 @@ function SideMenuPanelInner({
   emotionContent,
   onNotify,
 }: SideMenuPanelProps) {
+  const [contactUsOpen, setContactUsOpen] = useState(false)
   const sideBtnClass =
     "flex items-center gap-1.5 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
     (!leftSideMenuExpanded
@@ -240,8 +243,17 @@ function SideMenuPanelInner({
                 Ежедневные задачи
               </DropdownMenuItem>
             ) : null}
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 focus:bg-slate-800 focus:text-slate-100"
+              onSelect={() => setContactUsOpen(true)}
+            >
+              <Headphones className="h-4 w-4 shrink-0 text-cyan-300" />
+              Связаться с нами
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <ContactUsModal open={contactUsOpen} onOpenChange={setContactUsOpen} onNotify={onNotify} />
 
         {SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON && (
           <div className="lg:hidden w-full">

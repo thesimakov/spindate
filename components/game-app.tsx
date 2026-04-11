@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { getLayoutConstraintDebug, useGameLayoutMode } from "@/lib/use-media-query"
@@ -27,6 +27,9 @@ import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
 import { PrivateInboxPanel } from "@/components/private-inbox-panel"
 import { MobileAppBlockedScreen } from "@/components/mobile-app-blocked-screen"
 import { useVkMiniAppPersistentHorizontalBanner } from "@/hooks/use-vk-overlay-banner"
+import { reportGameClientError } from "@/lib/report-game-client-error"
+
+const AUTO_ERROR_THROTTLE_MS = 25_000
 
 export function GameApp() {
   /** Один раз на всё приложение в VK: лобби/регистрация/магазин не монтируют GameRoom — баннер только так показывается «везде». */
@@ -34,6 +37,79 @@ export function GameApp() {
 
   const { state, dispatch } = useGame()
   const { isDesktopUser, deviceClassResolved } = useGameLayoutMode()
+
+  const gameCtxRef = useRef({
+    tableId: state.tableId,
+    screen: state.screen,
+    currentUserId: state.currentUser?.id as number | undefined,
+  })
+  gameCtxRef.current.tableId = state.tableId
+  gameCtxRef.current.screen = state.screen
+  gameCtxRef.current.currentUserId = state.currentUser?.id
+
+  const lastAutoClientErrorAt = useRef(0)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const buildPayload = (extra: Record<string, unknown>) => ({
+      t: new Date().toISOString(),
+      href: window.location.href,
+      ua: navigator.userAgent,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      tableId: gameCtxRef.current.tableId,
+      screen: gameCtxRef.current.screen,
+      currentUserId: gameCtxRef.current.currentUserId,
+      ...extra,
+    })
+
+    const maybeReport = (source: "window_error" | "unhandledrejection", message: string, stack: string | null) => {
+      const now = Date.now()
+      if (now - lastAutoClientErrorAt.current < AUTO_ERROR_THROTTLE_MS) return
+      lastAutoClientErrorAt.current = now
+      void reportGameClientError({
+        source,
+        message: message.slice(0, 2000),
+        stack: stack ? stack.slice(0, 12000) : null,
+        payload: buildPayload({ auto: true }),
+      })
+    }
+
+    const onWindowError = (ev: ErrorEvent) => {
+      const msg = ev.message || "script error"
+      const stack =
+        ev.error && typeof ev.error === "object" && "stack" in ev.error
+          ? String((ev.error as Error).stack)
+          : `${ev.filename ?? "?"}:${ev.lineno}:${ev.colno}`
+      maybeReport("window_error", msg, stack)
+    }
+
+    const onRejection = (ev: PromiseRejectionEvent) => {
+      const r = ev.reason
+      let msg: string
+      let stack: string | null = null
+      if (r instanceof Error) {
+        msg = r.message || "Unhandled rejection"
+        stack = r.stack ?? null
+      } else if (typeof r === "string") {
+        msg = r
+      } else {
+        try {
+          msg = JSON.stringify(r)
+        } catch {
+          msg = String(r)
+        }
+      }
+      maybeReport("unhandledrejection", msg, stack)
+    }
+
+    window.addEventListener("error", onWindowError)
+    window.addEventListener("unhandledrejection", onRejection)
+    return () => {
+      window.removeEventListener("error", onWindowError)
+      window.removeEventListener("unhandledrejection", onRejection)
+    }
+  }, [])
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
   const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
   const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)

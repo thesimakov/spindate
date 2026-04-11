@@ -306,6 +306,18 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_ticker_player_ads_queue ON ticker_player_ads(status, queue_start_ms, queue_end_ms);
   `)
 
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS game_client_errors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      message TEXT NOT NULL DEFAULT '',
+      stack TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS idx_game_client_errors_created ON game_client_errors(created_at);
+  `)
+
   const now = Date.now()
   const insertBottle = database.prepare(
     `INSERT INTO bottle_catalog (id, name, img, section, cost, published, deleted, sort_order, updated_at)

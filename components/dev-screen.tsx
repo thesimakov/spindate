@@ -13,6 +13,7 @@ import { AdminContentPagePlaceholder } from "@/components/admin-content-page-pla
 import { AdminAchievementPostsContent } from "@/components/admin-achievement-posts-content"
 import { AdminRankingsEventsContent } from "@/components/admin-rankings-events-content"
 import { AdminTablesContent } from "@/components/admin-tables-content"
+import { AdminGameErrorsContent } from "@/components/admin-game-errors-content"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
@@ -43,7 +44,7 @@ export function DevScreen() {
     stats?: { totalActions: number; counts: Record<string, number> } | null
   }>>([])
   const [busyUserId, setBusyUserId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"users" | "content" | "tables">("users")
+  const [activeTab, setActiveTab] = useState<"users" | "content" | "tables" | "errors">("users")
   const [tablesRefreshNonce, setTablesRefreshNonce] = useState(0)
   const [contentPage, setContentPage] = useState<
     | "bottles"
@@ -306,10 +307,23 @@ export function DevScreen() {
           >
             Столы
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("errors")}
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              activeTab === "errors"
+                ? "border-amber-400/50 bg-amber-500/20 text-amber-100"
+                : "border-slate-500 bg-slate-700/80 text-slate-200 hover:bg-slate-600"
+            }`}
+          >
+            Ошибки
+          </button>
         </div>
 
         <div className="pr-1">
-          {activeTab === "tables" ? (
+          {activeTab === "errors" ? (
+            <AdminGameErrorsContent token={getAdminToken()} />
+          ) : activeTab === "tables" ? (
             <AdminTablesContent token={getAdminToken()} refreshTrigger={tablesRefreshNonce} />
           ) : activeTab === "users" ? (
             <>
