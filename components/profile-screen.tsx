@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { PlayerAvatar } from "@/components/player-avatar"
+import { ProfileReceivedGiftsSection } from "@/components/profile-received-gifts-section"
 import { useGame } from "@/lib/game-context"
 import { PAIR_ACTIONS } from "@/lib/game-types"
 import type { GameLogEntry } from "@/lib/game-types"
@@ -31,6 +32,7 @@ import { vkBridge } from "@/lib/vk-bridge"
 import { apiFetch } from "@/lib/api-fetch"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
+import { useGiftCatalog } from "@/lib/use-gift-catalog"
 import { getTableSyncDispatch } from "@/lib/table-sync-registry"
 import {
   ACHIEVEMENT_POST_CATALOG,
@@ -110,6 +112,7 @@ type ProfileScreenProps = {
 export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps = {}) {
   const { state, dispatch } = useGame()
   const { rows: frameCatalogRows } = useFrameCatalog()
+  const { rows: giftCatalogRows } = useGiftCatalog()
   const {
     currentUser,
     players,
@@ -203,6 +206,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     () => (currentUser && rosesGiven ? rosesGiven.filter((r) => r.toPlayerId === currentUser.id).length : 0),
     [currentUser, rosesGiven],
   )
+
   const hasTrueFeelingsAchievement = useMemo(() => {
     if (!currentUser || !rosesGiven) return false
     const byTarget: Record<number, number> = {}
@@ -332,7 +336,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [showGiveRoseModal, setShowGiveRoseModal] = useState(false)
   const [showFramesModal, setShowFramesModal] = useState(false)
   const [profileDailyLevel, setProfileDailyLevel] = useState(1)
-  const [profileTab, setProfileTab] = useState<"profile" | "achievements">("profile")
+  const [profileTab, setProfileTab] = useState<"profile" | "achievements" | "gifts">("profile")
   const [showReceivedOnly, setShowReceivedOnly] = useState(false)
   const [claimedAchievementStatusKeys, setClaimedAchievementStatusKeys] = useState<Record<string, boolean>>({})
   const [eventsCatalogRows, setEventsCatalogRows] = useState<ProfileEventsCatalogRow[]>([])
@@ -676,11 +680,11 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const renderProfileFields = () => (
     <>
         <div className={`${sectionCardClass} p-2`}>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200">
+          <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200 sm:gap-2">
             <button
               type="button"
               onClick={() => setProfileTab("profile")}
-              className={`rounded-xl px-3 py-2 text-[15px] font-black transition ${
+              className={`rounded-xl px-2 py-2 text-[13px] font-black transition sm:px-3 sm:text-[15px] ${
                 profileTab === "profile" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
               }`}
               aria-pressed={profileTab === "profile"}
@@ -690,7 +694,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             <button
               type="button"
               onClick={() => setProfileTab("achievements")}
-              className={`relative rounded-xl px-3 py-2 text-[15px] font-black transition ${
+              className={`relative rounded-xl px-2 py-2 text-[13px] font-black transition sm:px-3 sm:text-[15px] ${
                 profileTab === "achievements" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
               }`}
               aria-pressed={profileTab === "achievements"}
@@ -704,6 +708,16 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 </span>
               )}
               Достижения
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileTab("gifts")}
+              className={`rounded-xl px-2 py-2 text-[13px] font-black transition sm:px-3 sm:text-[15px] ${
+                profileTab === "gifts" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
+              }`}
+              aria-pressed={profileTab === "gifts"}
+            >
+              Подарки
             </button>
           </div>
         </div>
@@ -1351,6 +1365,17 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
           </div>
         </section>
         </>
+        )}
+
+        {profileTab === "gifts" && currentUser && (
+          <ProfileReceivedGiftsSection
+            targetUserId={currentUser.id}
+            inventory={inventory}
+            rosesGiven={rosesGiven}
+            catalogRows={giftCatalogRows}
+            perspective="self"
+            className={sectionCardClass}
+          />
         )}
 
       {profileTab === "profile" && (

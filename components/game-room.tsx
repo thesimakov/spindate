@@ -52,6 +52,7 @@ import { PlayerAvatar } from "@/components/player-avatar"
 import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { ProfileReceivedGiftsSection } from "@/components/profile-received-gifts-section"
 import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
 import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
 import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
@@ -802,9 +803,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   useEffect(() => {
     if (!playerMenuTarget) {
-      setShowFramePicker(false)
       setSelectedFrameForGift(null)
     } else {
+      setPlayerMenuTab("profile")
       setGiftCatalogDrawerPlayer(null)
     }
   }, [playerMenuTarget])
@@ -812,7 +813,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   // Result UI state (for center overlay)
 
   const [showBottleCatalog, setShowBottleCatalog] = useState(false)
-  const [showFramePicker, setShowFramePicker] = useState(false)
+  /** Вкладки карточки «Профиль игрока» (как в основном профиле) */
+  const [playerMenuTab, setPlayerMenuTab] = useState<"profile" | "gifts" | "frame">("profile")
   const [selectedFrameForGift, setSelectedFrameForGift] = useState<string | null>(null)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -5087,108 +5089,244 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   <h2 className="relative z-[1] mt-3 max-w-full px-1 text-center text-xl font-black leading-tight tracking-tight text-slate-900 sm:text-2xl">
                     {playerMenuTarget.name}
                   </h2>
-                  <div className="relative z-[1] mt-3 grid w-full min-w-0 grid-cols-[1fr_auto] items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {}}
-                      className="group flex h-11 min-w-0 flex-row flex-nowrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:bg-slate-50 sm:h-12 sm:gap-2.5 sm:px-4"
-                      aria-label="Сколько роз получил игрок"
-                    >
-                      <Flower2 className="h-6 w-6 shrink-0 text-fuchsia-600" strokeWidth={2.25} aria-hidden />
-                      <span className="shrink-0 text-base font-black tabular-nums text-slate-900 sm:text-lg">
-                        {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
-                      </span>
-                      <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-slate-700">
-                        получено
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowFramePicker(true)}
-                      className="inline-flex h-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3.5 text-[15px] font-black text-slate-900 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition hover:bg-slate-50 active:translate-y-px sm:h-12 sm:px-4"
-                    >
-                      Рамка
-                    </button>
-                  </div>
-                  {currentUser && currentUser.id !== playerMenuTarget.id && !playerMenuTarget.isBot && (
-                    <div className="relative z-[1] mt-3 w-full max-w-sm px-0.5">
-                      {admirers.some((a) => a.id === playerMenuTarget.id) ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            dispatch({ type: "REMOVE_ADMIRER", playerId: playerMenuTarget.id })
-                            showToast("Убрано из поклонников", "info")
-                          }}
-                          className="w-full rounded-xl border border-amber-500/50 bg-slate-900/80 px-3 py-2.5 text-center text-xs font-bold text-amber-100 transition-all hover:bg-slate-800/90 sm:text-sm"
-                        >
-                          В поклонниках — нажмите, чтобы убрать
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!currentUser) return
-                            // Поклонники синхронизируются через gameLog (type="care")
-                            dispatch({
-                              type: "ADD_LOG",
-                              entry: {
-                                id: generateLogId(),
-                                type: "care",
-                                fromPlayer: currentUser,
-                                toPlayer: playerMenuTarget,
-                                text: `${currentUser.name} стал(а) поклонником игрока ${playerMenuTarget.name}`,
-                                timestamp: Date.now(),
-                              } as GameLogEntry,
-                            })
-                            showToast("Отправлено — игрок увидит вас в списке поклонников", "success")
-                          }}
-                          className="w-full rounded-xl px-3 py-2.5 text-center text-xs font-extrabold text-[#0f172a] shadow-md transition-all hover:brightness-110 active:scale-[0.99] sm:text-sm"
-                          style={{
-                            background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)",
-                            border: "2px solid rgba(250,204,21,0.6)",
-                            boxShadow: "0 2px 0 #92400e",
-                          }}
-                        >
-                          Стать поклонником
-                        </button>
-                      )}
+                  <div className="relative z-[1] mt-3 w-full min-w-0 px-0">
+                    <div className="rounded-3xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 p-2 shadow-[0_10px_26px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.85)]">
+                    <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-100 p-1 ring-1 ring-slate-200 sm:gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPlayerMenuTab("profile")}
+                        className={`rounded-xl px-2 py-2 text-[13px] font-black transition sm:px-3 sm:text-[15px] ${
+                          playerMenuTab === "profile" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
+                        }`}
+                        aria-pressed={playerMenuTab === "profile"}
+                      >
+                        Профиль
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlayerMenuTab("gifts")}
+                        className={`rounded-xl px-2 py-2 text-[13px] font-black transition sm:px-3 sm:text-[15px] ${
+                          playerMenuTab === "gifts" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
+                        }`}
+                        aria-pressed={playerMenuTab === "gifts"}
+                      >
+                        Подарки
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlayerMenuTab("frame")}
+                        className={`rounded-xl px-2 py-2 text-[13px] font-black transition sm:px-3 sm:text-[15px] ${
+                          playerMenuTab === "frame" ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-white/70"
+                        }`}
+                        aria-pressed={playerMenuTab === "frame"}
+                      >
+                        Рамка
+                      </button>
                     </div>
+                    </div>
+                  </div>
+                  {playerMenuTab === "profile" && (
+                    <>
+                      <div className="relative z-[1] mt-3 flex w-full min-w-0 flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {}}
+                          className="group flex h-11 min-w-0 w-full flex-row flex-nowrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:bg-slate-50 sm:h-12 sm:gap-2.5 sm:px-4"
+                          aria-label="Сколько роз получил игрок"
+                        >
+                          <Flower2 className="h-6 w-6 shrink-0 text-fuchsia-600" strokeWidth={2.25} aria-hidden />
+                          <span className="shrink-0 text-base font-black tabular-nums text-slate-900 sm:text-lg">
+                            {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
+                          </span>
+                          <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-slate-700">
+                            получено
+                          </span>
+                        </button>
+                      </div>
+                      {currentUser && currentUser.id !== playerMenuTarget.id && !playerMenuTarget.isBot && (
+                        <div className="relative z-[1] mt-3 w-full max-w-sm px-0.5">
+                          {admirers.some((a) => a.id === playerMenuTarget.id) ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dispatch({ type: "REMOVE_ADMIRER", playerId: playerMenuTarget.id })
+                                showToast("Убрано из поклонников", "info")
+                              }}
+                              className="w-full rounded-xl border border-amber-500/50 bg-slate-900/80 px-3 py-2.5 text-center text-xs font-bold text-amber-100 transition-all hover:bg-slate-800/90 sm:text-sm"
+                            >
+                              В поклонниках — нажмите, чтобы убрать
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!currentUser) return
+                                dispatch({
+                                  type: "ADD_LOG",
+                                  entry: {
+                                    id: generateLogId(),
+                                    type: "care",
+                                    fromPlayer: currentUser,
+                                    toPlayer: playerMenuTarget,
+                                    text: `${currentUser.name} стал(а) поклонником игрока ${playerMenuTarget.name}`,
+                                    timestamp: Date.now(),
+                                  } as GameLogEntry,
+                                })
+                                showToast("Отправлено — игрок увидит вас в списке поклонников", "success")
+                              }}
+                              className="w-full rounded-xl px-3 py-2.5 text-center text-xs font-extrabold text-[#0f172a] shadow-md transition-all hover:brightness-110 active:scale-[0.99] sm:text-sm"
+                              style={{
+                                background: "linear-gradient(180deg, #fbbf24 0%, #d97706 100%)",
+                                border: "2px solid rgba(250,204,21,0.6)",
+                                boxShadow: "0 2px 0 #92400e",
+                              }}
+                            >
+                              Стать поклонником
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-                <div className="mt-4 border-t border-slate-200 pt-3">
-                  <p className="mb-2.5 text-[15px] font-black tracking-tight text-slate-900">Анкета</p>
-                  <ul className="space-y-2.5 text-left text-[15px] font-medium text-slate-700">
-                    <li className="flex items-baseline gap-2.5 border-b border-slate-200 pb-2.5">
-                      <User className="mt-0.5 h-6 w-6 shrink-0 text-slate-500" strokeWidth={2.25} aria-hidden />
-                      <span className="min-w-0 font-semibold text-slate-900">
-                        {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
-                      </span>
-                    </li>
-                    {playerMenuTarget.city && (
-                      <li className="flex items-start gap-2.5 border-b border-slate-200 pb-2.5">
-                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-slate-500" aria-hidden>
-                          <span className="h-2 w-2 rounded-full bg-rose-500 ring-2 ring-rose-200" />
+                {playerMenuTab === "profile" && (
+                  <div className="mt-4 border-t border-slate-200 pt-3">
+                    <p className="mb-2.5 text-[15px] font-black tracking-tight text-slate-900">Анкета</p>
+                    <ul className="space-y-2.5 text-left text-[15px] font-medium text-slate-700">
+                      <li className="flex items-baseline gap-2.5 border-b border-slate-200 pb-2.5">
+                        <User className="mt-0.5 h-6 w-6 shrink-0 text-slate-500" strokeWidth={2.25} aria-hidden />
+                        <span className="min-w-0 font-semibold text-slate-900">
+                          {playerMenuTarget.gender === "male" ? "М" : "Ж"}, {playerMenuTarget.age} лет
                         </span>
-                        <span className="min-w-0 leading-snug">{playerMenuTarget.city}</span>
                       </li>
-                    )}
-                    {playerMenuTarget.interests && (
-                      <li className="flex items-start gap-2.5 border-b border-slate-200 pb-2.5">
-                        <Target className="mt-0.5 h-6 w-6 shrink-0 text-slate-500" strokeWidth={2.25} aria-hidden />
-                        <span className="min-w-0 leading-snug">{playerMenuTarget.interests}</span>
+                      {playerMenuTarget.city && (
+                        <li className="flex items-start gap-2.5 border-b border-slate-200 pb-2.5">
+                          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-slate-500" aria-hidden>
+                            <span className="h-2 w-2 rounded-full bg-rose-500 ring-2 ring-rose-200" />
+                          </span>
+                          <span className="min-w-0 leading-snug">{playerMenuTarget.city}</span>
+                        </li>
+                      )}
+                      {playerMenuTarget.interests && (
+                        <li className="flex items-start gap-2.5 border-b border-slate-200 pb-2.5">
+                          <Target className="mt-0.5 h-6 w-6 shrink-0 text-slate-500" strokeWidth={2.25} aria-hidden />
+                          <span className="min-w-0 leading-snug">{playerMenuTarget.interests}</span>
+                        </li>
+                      )}
+                      <li className="flex items-center gap-2.5 pt-0.5 text-fuchsia-700">
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-100 to-violet-100 text-[18px] font-black text-fuchsia-700 shadow-[0_10px_18px_rgba(236,72,153,0.12),inset_0_1px_0_rgba(255,255,255,0.8)]"
+                          aria-hidden
+                        >
+                          {zodiacSymbol}
+                        </span>
+                        <span className="font-semibold">{zodiacDisplay}</span>
                       </li>
-                    )}
-                    <li className="flex items-center gap-2.5 pt-0.5 text-fuchsia-700">
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-100 to-violet-100 text-[18px] font-black text-fuchsia-700 shadow-[0_10px_18px_rgba(236,72,153,0.12),inset_0_1px_0_rgba(255,255,255,0.8)]"
-                        aria-hidden
+                    </ul>
+                  </div>
+                )}
+                {playerMenuTab === "gifts" && (
+                  <div className="mt-4 min-h-0 w-full min-w-0 border-t border-slate-200 pt-3">
+                    <ProfileReceivedGiftsSection
+                      targetUserId={playerMenuTarget.id}
+                      inventory={inventory}
+                      rosesGiven={rosesGiven}
+                      catalogRows={giftCatalogSource}
+                      perspective="other"
+                      className="rounded-2xl border border-slate-200/85 bg-gradient-to-b from-white to-slate-50 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] sm:px-4 sm:py-4"
+                    />
+                  </div>
+                )}
+                {playerMenuTab === "frame" && (
+                  <div className="mt-4 flex max-h-[min(60vh,28rem)] w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-600/40 shadow-xl">
+                    <div
+                      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-4"
+                      style={{ background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)" }}
+                    >
+                      <p className="shrink-0 text-center text-[16px] font-bold text-slate-100">Подарить рамку</p>
+                      <p className="text-[13px] font-semibold text-slate-300">Бесплатные</p>
+                      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+                        {giftableFramesFree.map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setSelectedFrameForGift(f.id)}
+                            className={`flex flex-col items-center gap-1.5 rounded-xl py-2 transition-colors hover:bg-slate-600/50 ${selectedFrameForGift === f.id ? "bg-slate-600/50 ring-2 ring-sky-400" : ""}`}
+                          >
+                            <div className="relative h-12 w-12 flex-shrink-0 sm:h-14 sm:w-14">
+                              <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
+                              {f.svgPath && (
+                                <img src={resolveFrameCatalogAssetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
+                              )}
+                            </div>
+                            <span className="text-[10px] leading-tight text-slate-300 text-center">{f.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[13px] font-semibold text-amber-200">Доступно / VIP — цены из каталога</p>
+                      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+                        {giftableFramesPremium.map((f) => {
+                          const canAfford = voiceBalance >= f.cost
+                          return (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => setSelectedFrameForGift(f.id)}
+                              disabled={!canAfford}
+                              className={`flex flex-col items-center gap-1.5 rounded-xl py-2 transition-colors hover:bg-slate-600/50 disabled:cursor-not-allowed disabled:opacity-50 ${selectedFrameForGift === f.id ? "bg-slate-600/50 ring-2 ring-amber-400" : ""}`}
+                            >
+                              <div className="relative h-12 w-12 flex-shrink-0 sm:h-14 sm:w-14">
+                                <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
+                                {f.svgPath && (
+                                  <img src={resolveFrameCatalogAssetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
+                                )}
+                              </div>
+                              <span className="text-[10px] leading-tight text-slate-300 text-center">{f.label}</span>
+                              <span className="text-[10px] font-medium text-amber-400">{f.cost} ❤</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="shrink-0 border-t border-slate-600/50 bg-slate-900/95 p-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedFrameForGift == null) {
+                            showToast("Выберите рамку", "info")
+                            return
+                          }
+                          const cost = giftableFrameById.get(selectedFrameForGift)?.cost ?? 0
+                          if (cost > 0 && voiceBalance < cost) {
+                            showToast("Недостаточно сердец для рамки", "error")
+                            return
+                          }
+                          if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
+                          dispatch({ type: "SET_AVATAR_FRAME", playerId: playerMenuTarget.id, frameId: selectedFrameForGift })
+                          setSelectedFrameForGift(null)
+                          setPlayerMenuTab("profile")
+                          showToast("Рамка подарена", "success")
+                        }}
+                        disabled={
+                          selectedFrameForGift == null ||
+                          (selectedFrameForGift != null &&
+                            (giftableFrameById.get(selectedFrameForGift)?.cost ?? 0) > voiceBalance)
+                        }
+                        className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold transition-all disabled:opacity-40"
+                        style={{
+                          background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
+                          color: "#0f172a",
+                          border: "2px solid #475569",
+                        }}
                       >
-                        {zodiacSymbol}
-                      </span>
-                      <span className="font-semibold">{zodiacDisplay}</span>
-                    </li>
-                  </ul>
-                </div>
+                        <Heart className="h-4 w-4" fill="currentColor" />
+                        {selectedFrameForGift != null
+                          ? `Подарить рамку${(giftableFrameById.get(selectedFrameForGift)?.cost ?? 0) > 0 ? ` — ${giftableFrameById.get(selectedFrameForGift)?.cost ?? 0} ❤` : ""}`
+                          : "Подарить рамку"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Действия */}
@@ -5489,113 +5627,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </div>
             </div>
 
-            {/* Окно выбора рамки для подарка — поверх модалки игрока */}
-            {showFramePicker && (
-              <div
-                className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 overflow-y-auto overscroll-contain"
-                onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
-              >
-                <div
-                  className="flex min-h-0 max-h-[90dvh] w-full max-w-lg flex-col gap-4 overflow-hidden rounded-2xl p-5 shadow-xl"
-                  style={{ background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)", border: "1px solid #334155" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <p className="shrink-0 text-center text-[16px] font-bold text-slate-100">Подарить рамку</p>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-4">
-                  <p className="text-[13px] font-semibold text-slate-300">Бесплатные</p>
-                  <div className="grid grid-cols-4 gap-3">
-                    {giftableFramesFree.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setSelectedFrameForGift(f.id)}
-                        className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 transition-colors hover:bg-slate-600/50 ${selectedFrameForGift === f.id ? "ring-2 ring-sky-400 bg-slate-600/50" : ""}`}
-                      >
-                        <div className="relative h-14 w-14 flex-shrink-0">
-                          <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
-                          {f.svgPath && (
-                            <img src={resolveFrameCatalogAssetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
-                          )}
-                        </div>
-                        <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <p className="text-[13px] font-semibold text-amber-200">Доступно / VIP — цены из каталога</p>
-                  <div className="grid grid-cols-4 gap-3">
-                    {giftableFramesPremium.map((f) => {
-                      const canAfford = voiceBalance >= f.cost
-                      return (
-                        <button
-                          key={f.id}
-                          type="button"
-                          onClick={() => setSelectedFrameForGift(f.id)}
-                          disabled={!canAfford}
-                          className={`flex flex-col items-center gap-1.5 rounded-xl py-2.5 transition-colors hover:bg-slate-600/50 disabled:opacity-50 disabled:cursor-not-allowed ${selectedFrameForGift === f.id ? "ring-2 ring-amber-400 bg-slate-600/50" : ""}`}
-                        >
-                          <div className="relative h-14 w-14 flex-shrink-0">
-                            <div className="h-full w-full overflow-hidden rounded-full bg-slate-700" style={{ border: f.border, boxShadow: f.shadow, padding: 2 }} />
-                            {f.svgPath && (
-                              <img src={resolveFrameCatalogAssetUrl(f.svgPath)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-contain" aria-hidden />
-                            )}
-                          </div>
-                          <span className="text-[10px] text-slate-300 leading-tight text-center">{f.label}</span>
-                          <span className="text-[10px] text-amber-400 font-medium">{f.cost} ❤</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  </div>
-
-                  <div className="flex shrink-0 flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedFrameForGift == null) {
-                          showToast("Выберите рамку", "info")
-                          return
-                        }
-                        const cost = giftableFrameById.get(selectedFrameForGift)?.cost ?? 0
-                        if (cost > 0 && voiceBalance < cost) {
-                          showToast("Недостаточно сердец для рамки", "error")
-                          return
-                        }
-                        if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
-                        dispatch({ type: "SET_AVATAR_FRAME", playerId: playerMenuTarget.id, frameId: selectedFrameForGift })
-                        setShowFramePicker(false)
-                        setSelectedFrameForGift(null)
-                        showToast("Рамка подарена", "success")
-                      }}
-                      disabled={
-                        selectedFrameForGift == null ||
-                        (selectedFrameForGift != null &&
-                          (giftableFrameById.get(selectedFrameForGift)?.cost ?? 0) > voiceBalance)
-                      }
-                      className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[14px] font-bold transition-all disabled:opacity-40"
-                      style={{
-                        background: "linear-gradient(180deg, #e8c06a 0%, #c4943a 100%)",
-                        color: "#0f172a",
-                        border: "2px solid #475569",
-                      }}
-                    >
-                      <Heart className="h-4 w-4" fill="currentColor" />
-                      {selectedFrameForGift != null
-                        ? `Подарить рамку${(giftableFrameById.get(selectedFrameForGift)?.cost ?? 0) > 0 ? ` — ${giftableFrameById.get(selectedFrameForGift)?.cost ?? 0} ❤` : ""}`
-                        : "Подарить рамку"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowFramePicker(false); setSelectedFrameForGift(null) }}
-                      className="rounded-xl bg-slate-600/80 px-4 py-2 text-[13px] text-slate-200 hover:bg-slate-500/80"
-                    >
-                      Закрыть
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         </GameSidePanelShell>
         );
