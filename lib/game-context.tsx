@@ -22,6 +22,7 @@ import { apiFetch } from "@/lib/api-fetch"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 import { trimRoomChatMessages } from "@/lib/room-chat-retention"
 import { mergeGameLogsForSync } from "@/lib/table-authority-merge"
+import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
 export { AVATAR_FRAME_IDS }
@@ -1275,10 +1276,13 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       // Active phase: initiator (or roundDriver for bots) keeps local gameplay state
       const turnPlayer = state.players[state.currentTurnIndex]
       const isMyTurnDirect = state.currentUser != null && turnPlayer?.id === state.currentUser.id
-      const isBotTurnAndDriver = !!(turnPlayer?.isBot && state.currentUser && (() => {
-        const liveIds = state.players.filter((pl) => !pl.isBot).map((pl) => pl.id).sort((a, b) => a - b)
-        return liveIds.length > 0 && liveIds[0] === state.currentUser!.id
-      })())
+      const roundDriverId = getRoundDriverPlayerId(state.players)
+      const isBotTurnAndDriver = !!(
+        turnPlayer?.isBot &&
+        state.currentUser &&
+        roundDriverId != null &&
+        roundDriverId === state.currentUser.id
+      )
       const isInitiator = isMyTurnDirect || isBotTurnAndDriver
       const inActivePhase = state.countdown !== null || state.isSpinning || state.showResult
       const keepLocal = isInitiator && inActivePhase

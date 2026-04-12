@@ -1,6 +1,7 @@
 import type { GameAction } from "@/lib/game-types"
 import { tryInsertGlobalRatingFromAddLog } from "@/lib/global-rating-store"
-import { applyAuthorityEvent, ensureTableAuthority } from "@/lib/table-authority-server"
+import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
+import { applyAuthorityEvent, ensureTableAuthority, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import { scheduleVkNotificationForTableAction } from "@/lib/vk-app-notifications-server"
@@ -77,16 +78,33 @@ function isActionAllowed(action: GameAction): boolean {
   }
 }
 
-function senderMatchesAction(senderId: number, action: GameAction): boolean {
+function senderMatchesActionSync(senderId: number, action: GameAction): boolean {
   if (action.type === "SET_CLIENT_TAB_AWAY") {
     return senderId === action.playerId
   }
   if (action.type === "ADD_LOG") {
     const fp = action.entry?.fromPlayer
-    if (!fp || fp.isBot) return false
+    if (!fp) return false
+    if (fp.isBot) return false
     if (fp.id !== senderId) return false
   }
   return true
+}
+
+/** ADD_LOG с автором-ботом принимает только round driver; бот должен быть в снимке стола. */
+async function senderMatchesAddLogBotFromSnapshot(
+  tableId: number,
+  senderId: number,
+  action: Extract<GameAction, { type: "ADD_LOG" }>,
+): Promise<boolean> {
+  const fp = action.entry?.fromPlayer
+  if (!fp?.isBot) return false
+  const snap = await getTableAuthoritySnapshot(tableId)
+  if (!snap) return false
+  const roundDriverId = getRoundDriverPlayerId(snap.players)
+  if (roundDriverId == null || senderId !== roundDriverId) return false
+  const fromInTable = snap.players.find((p) => p.id === fp.id)
+  return !!fromInTable?.isBot
 }
 
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
@@ -95,7 +113,13 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   if (!Number.isInteger(tableId) || tableId <= 0) return { ok: false as const }
   if (!Number.isInteger(args.senderId) || args.senderId <= 0) return { ok: false as const }
   if (!isActionAllowed(args.action)) return { ok: false as const }
-  if (!senderMatchesAction(args.senderId, args.action)) return { ok: false as const }
+  if (args.action.type === "ADD_LOG" && args.action.entry?.fromPlayer?.isBot) {
+    if (!(await senderMatchesAddLogBotFromSnapshot(tableId, args.senderId, args.action))) {
+      return { ok: false as const }
+    }
+  } else if (!senderMatchesActionSync(args.senderId, args.action)) {
+    return { ok: false as const }
+  }
 
   const redis = getRedis()
   if (redis) {

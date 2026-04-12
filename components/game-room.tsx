@@ -47,6 +47,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
+import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
@@ -982,11 +983,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   const isRoundDriver = useMemo(() => {
     if (!currentUser) return false
-    const liveIds = players
-      .filter((p) => !p.isBot)
-      .map((p) => p.id)
-      .sort((a, b) => a - b)
-    return liveIds.length > 0 && liveIds[0] === currentUser.id
+    const id = getRoundDriverPlayerId(players)
+    return id != null && id === currentUser.id
   }, [players, currentUser?.id])
 
   const isClientTabAway =

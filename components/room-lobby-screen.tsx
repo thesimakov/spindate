@@ -64,7 +64,8 @@ type LobbyRow = {
   maxPlayers: number
 }
 
-const DEFAULT_CREATE_COST = 100
+/** До ответа /api/rooms/lobby — совпадает с дешёвым тарифом в `getCreateRoomCost()` (lib/rooms/room-registry). */
+const DEFAULT_CREATE_COST = 50
 const BUY_HEARTS_AMOUNT = 400
 const BUY_HEARTS_VOTES = 25
 const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { generateLogId } from "@/lib/game-context"
 import type { Player, GameAction } from "@/lib/game-types"
+import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 
 const TURN_MS = 15_000
 const RESULT_AUTO_ADVANCE_MS = 8000
@@ -90,11 +91,8 @@ export function useGameTimers({
   const isRoundDriver = useCallback(() => {
     const me = currentUserRef.current
     if (!me) return false
-    const liveIds = playersRef.current
-      .filter((p) => !p.isBot)
-      .map((p) => p.id)
-      .sort((a, b) => a - b)
-    return liveIds.length > 0 && liveIds[0] === me.id
+    const id = getRoundDriverPlayerId(playersRef.current)
+    return id != null && id === me.id
   }, [playersRef])
 
   const afkGuardRef = useRef<{ key: string | null; startedAt: number }>({ key: null, startedAt: 0 })
@@ -202,8 +200,8 @@ export function useGameTimers({
     if (afkTimeoutRef.current) clearTimeout(afkTimeoutRef.current)
     afkTimeoutRef.current = setTimeout(() => {
       afkTimeoutRef.current = null
-      const liveIds = playersRef.current.filter(p => !p.isBot).map(p => p.id).sort((a, b) => a - b)
-      if (!currentUser || liveIds[0] !== currentUser.id) return
+      const rd = getRoundDriverPlayerId(playersRef.current)
+      if (!currentUser || rd !== currentUser.id) return
 
       dispatch({
         type: "ADD_LOG",
@@ -357,8 +355,8 @@ export function useGameTimers({
           !showResultRef.current &&
           countdownRef.current === null
         ) {
-          const liveIds = playersRef.current.filter((p) => !p.isBot).map((p) => p.id).sort((a, b) => a - b)
-          if (curUser && liveIds[0] === curUser.id) {
+          const rd = getRoundDriverPlayerId(playersRef.current)
+          if (curUser && rd === curUser.id) {
             if (afkTimeoutRef.current) {
               clearTimeout(afkTimeoutRef.current)
               afkTimeoutRef.current = null
