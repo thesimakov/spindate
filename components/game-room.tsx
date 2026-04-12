@@ -3000,13 +3000,44 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const handleChangeTable = async () => {
     if (!currentUser) return
     try {
-      await apiFetch("/api/rooms/leave", {
+      const res = await apiFetch("/api/rooms/leave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ userId: currentUser.id }),
       })
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
+        body: JSON.stringify({
+          sessionId: "1a9f11",
+          location: "game-room.tsx:handleChangeTable",
+          message: "rooms/leave response",
+          data: {
+            userId: currentUser.id,
+            ok: res.ok,
+            status: res.status,
+            hypothesisId: "H3",
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
     } catch {
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
+        body: JSON.stringify({
+          sessionId: "1a9f11",
+          location: "game-room.tsx:handleChangeTable",
+          message: "rooms/leave threw",
+          data: { userId: currentUser.id, hypothesisId: "H3" },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
       // при размонтировании GameRoom всё равно уйдёт leave через sync-engine
     }
     dispatch({ type: "SET_SCREEN", screen: "lobby" })

@@ -475,10 +475,45 @@ export function useSyncEngine(): SyncEngineResult {
     if (!currentUserId) return
     leaveSentRef.current = false
     const payload = JSON.stringify({ mode: "leave", userId: currentUserId })
-    const sendLeave = () => {
-      if (leaveSentRef.current) return
+    const sendLeave = (reason: string) => {
+      if (leaveSentRef.current) {
+        // #region agent log
+        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
+          body: JSON.stringify({
+            sessionId: "1a9f11",
+            location: "use-sync-engine.ts:sendLeave",
+            message: "leave skipped (already sent)",
+            data: { reason, userId: currentUserId, hypothesisId: "H2" },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {})
+        // #endregion
+        return
+      }
       leaveSentRef.current = true
-      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      const useBeacon =
+        typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function"
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
+        body: JSON.stringify({
+          sessionId: "1a9f11",
+          location: "use-sync-engine.ts:sendLeave",
+          message: "leave sending",
+          data: {
+            reason,
+            userId: currentUserId,
+            transport: useBeacon ? "beacon" : "fetch_keepalive",
+            hypothesisId: "H1",
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
+      if (useBeacon) {
         navigator.sendBeacon(appPath("/api/table/live"), new Blob([payload], { type: "application/json" }))
       } else {
         void apiFetch("/api/table/live", {
@@ -490,13 +525,15 @@ export function useSyncEngine(): SyncEngineResult {
       }
     }
 
-    window.addEventListener("beforeunload", sendLeave)
-    window.addEventListener("pagehide", sendLeave)
+    const onBeforeUnload = () => sendLeave("beforeunload")
+    const onPageHide = () => sendLeave("pagehide")
+    window.addEventListener("beforeunload", onBeforeUnload)
+    window.addEventListener("pagehide", onPageHide)
 
     return () => {
-      window.removeEventListener("beforeunload", sendLeave)
-      window.removeEventListener("pagehide", sendLeave)
-      sendLeave()
+      window.removeEventListener("beforeunload", onBeforeUnload)
+      window.removeEventListener("pagehide", onPageHide)
+      sendLeave("unmount_cleanup")
     }
   }, [currentUserId])
 

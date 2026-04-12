@@ -196,15 +196,11 @@ export async function addUserRoom(name: string, createdByUserId: number): Promis
   return meta
 }
 
-const CHEAP_TIER_LIMIT = 20
-const CHEAP_COST = 50
-const EXPENSIVE_COST = 150
+/** Стоимость создания пользовательского стола (сердечки), единая для всех. */
+const CREATE_ROOM_COST_HEARTS = 50
 
-/** Цена создания следующего пользовательского стола (первые 20 — 50❤, далее — 150❤). */
 export async function getCreateRoomCost(): Promise<number> {
-  const state = await loadRoomRegistry()
-  const userRoomCount = state.rooms.filter((r) => r.isUserRoom).length
-  return userRoomCount < CHEAP_TIER_LIMIT ? CHEAP_COST : EXPENSIVE_COST
+  return CREATE_ROOM_COST_HEARTS
 }
 
 /** Создание пользовательской комнаты без оплаты «голосами» (оплата сердцами — в API). */

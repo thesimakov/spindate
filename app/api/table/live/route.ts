@@ -71,6 +71,23 @@ export async function POST(req: Request) {
 
   if (mode === "leave") {
     const userId = Number(body?.userId)
+    // #region agent log
+    void fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
+      body: JSON.stringify({
+        sessionId: "1a9f11",
+        location: "api/table/live:POST",
+        message: "leave mode",
+        data: {
+          userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+          valid: Number.isInteger(userId) && userId > 0,
+          hypothesisId: "H4",
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
     if (Number.isInteger(userId) && userId > 0) {
       await leaveLiveTable(userId)
     }
