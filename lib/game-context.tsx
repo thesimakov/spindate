@@ -22,7 +22,6 @@ import { apiFetch } from "@/lib/api-fetch"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 import { trimRoomChatMessages } from "@/lib/room-chat-retention"
 import { mergeGameLogsForSync } from "@/lib/table-authority-merge"
-import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
 export { AVATAR_FRAME_IDS }
@@ -613,9 +612,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         let targetPlayer2: Player | null = null
         let seedLog: GameState["gameLog"] = state.gameLog.slice(-20)
 
-        const uJoin = state.currentUser
-        const joinText = tableJoinAnnouncementText(uJoin?.name?.trim() || "Игрок", uJoin?.gender)
-
         if (spinner && target1 && target2 && nextPlayers.length >= 3) {
           const targetIdx = nextPlayers.findIndex((p) => p.id === target1.id)
           const segmentDeg = 360 / nextPlayers.length
@@ -637,27 +633,9 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
             {
               id: generateLogId(),
               type: "system",
-              fromPlayer: state.currentUser ?? undefined,
-              text: joinText,
-              timestamp: now,
-            },
-            {
-              id: generateLogId(),
-              type: "system",
               fromPlayer: spinner,
               toPlayer: target1,
               text: `Выпала пара: ${pairText}`,
-              timestamp: now,
-            },
-          ]
-        } else {
-          seedLog = [
-            ...seedLog,
-            {
-              id: generateLogId(),
-              type: "system",
-              fromPlayer: state.currentUser ?? undefined,
-              text: joinText,
               timestamp: now,
             },
           ]
@@ -1052,10 +1030,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "ADD_INVENTORY_ITEM":
       return { ...state, inventory: [...state.inventory, action.item] }
     case "GIVE_ROSE": {
-      if (state.voiceBalance < 25) return state
+      const roseCost = 50
+      if (state.voiceBalance < roseCost) return state
       return {
         ...state,
-        voiceBalance: state.voiceBalance - 25,
+        voiceBalance: state.voiceBalance - roseCost,
         rosesGiven: [
           ...(state.rosesGiven ?? []),
           {

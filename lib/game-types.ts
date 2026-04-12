@@ -64,6 +64,8 @@ export interface GameLogEntry {
     | "skip"
     | "invite"
     | "join"
+    /** Поздоровались с вошедшим игроком (кнопка «Привет» у строки входа) */
+    | "hello"
     | "system"
     | "hug"
     | "selfie"
@@ -100,6 +102,11 @@ export interface GameLogEntry {
   bottleSkinChange?: {
     fromSkinId: string
     toSkinId: string
+  }
+  /** Подарок рамки аватара — отображение в ленте чата как пара (как эмоции). */
+  frameGift?: {
+    frameId: string
+    frameName: string
   }
   text: string
   timestamp: number
@@ -434,7 +441,7 @@ export type GameAction =
   | { type: "RESET_POT" }
   // Inventory
   | { type: "ADD_INVENTORY_ITEM"; item: InventoryItem }
-  /** Подарить розу игроку (25 сердец). Повышает рейтинг симпатии. */
+  /** Подарить розы игроку (50 сердец). Повышает рейтинг симпатии. */
   | { type: "GIVE_ROSE"; fromPlayerId: number; toPlayerId: number }
   /** Обменять розы на голоса: 1 роза = 15 сердец. */
   | { type: "EXCHANGE_ROSES_FOR_VOICES"; amount: number }

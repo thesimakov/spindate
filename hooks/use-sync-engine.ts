@@ -6,6 +6,8 @@ import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
 import { composeTablePlayers } from "@/lib/table-composition"
 import { registerTableSyncDispatch } from "@/lib/table-sync-registry"
+import { generateLogId } from "@/lib/ids"
+import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
 import type { Player, GameAction, TableAuthorityPayload } from "@/lib/game-types"
 
 function isTableSyncedAction(action: GameAction): boolean {
@@ -32,8 +34,8 @@ function isTableSyncedAction(action: GameAction): boolean {
   }
 }
 
-const LIVE_POLL_MS = 3000
-const AUTHORITY_POLL_MS = 1200
+const LIVE_POLL_MS = 2500
+const AUTHORITY_POLL_MS = 650
 const MAX_TABLE_SIZE = 10
 const TARGET_MALES = 5
 const TARGET_FEMALES = 5
@@ -75,13 +77,16 @@ export function useSyncEngine(): SyncEngineResult {
   /** Обновляется ниже из seatConfirmed — пушим события только после подтверждённого места за live-столом. */
   const seatConfirmedRef = useRef(false)
 
+  /** Заполняется после объявления fetchTableAuthority — для догонки снимка после успешного push. */
+  const fetchTableAuthorityRef = useRef<((tid: number) => Promise<void>) | null>(null)
+
   const pushTableAction = useCallback(async (action: GameAction) => {
     const current = syncMetaRef.current
     const tid = Math.floor(Number(current.tableId))
     if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
     if (!seatConfirmedRef.current) return
     try {
-      await apiFetch("/api/table/events", {
+      const res = await apiFetch("/api/table/events", {
         method: "POST",
         cache: "no-store" as RequestCache,
         headers: { "Content-Type": "application/json" },
@@ -93,6 +98,14 @@ export function useSyncEngine(): SyncEngineResult {
           action,
         }),
       })
+      if (res.ok) {
+        const pull = fetchTableAuthorityRef.current
+        if (pull) {
+          window.setTimeout(() => {
+            void pull(tid)
+          }, 120)
+        }
+      }
     } catch {
       // state will converge on next authority poll
     }
@@ -115,7 +128,9 @@ export function useSyncEngine(): SyncEngineResult {
   const syncDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const liveSyncInFlightRef = useRef(false)
   const authorityPollInFlightRef = useRef(false)
-  const SYNC_DEBOUNCE_MS = 500
+  /** Если запрос /table/state уже идёт — догоняющий poll запоминаем и выполняем сразу после. */
+  const pendingAuthorityTableIdRef = useRef<number | null>(null)
+  const SYNC_DEBOUNCE_MS = 200
 
   const doApply = useCallback(
     (payload: TableAuthorityPayload) => {
@@ -190,7 +205,10 @@ export function useSyncEngine(): SyncEngineResult {
 
   const fetchTableAuthority = useCallback(
     async (tid: number) => {
-      if (authorityPollInFlightRef.current) return
+      if (authorityPollInFlightRef.current) {
+        pendingAuthorityTableIdRef.current = tid
+        return
+      }
       authorityPollInFlightRef.current = true
       const maxAttempts = 12
       try {
@@ -223,10 +241,21 @@ export function useSyncEngine(): SyncEngineResult {
         setTableAuthorityReady(true)
       } finally {
         authorityPollInFlightRef.current = false
+        const queued = pendingAuthorityTableIdRef.current
+        pendingAuthorityTableIdRef.current = null
+        if (queued != null && Number.isInteger(queued) && queued > 0) {
+          queueMicrotask(() => {
+            void fetchTableAuthority(queued)
+          })
+        }
       }
     },
     [applyAuthoritySnapshot],
   )
+
+  useEffect(() => {
+    fetchTableAuthorityRef.current = fetchTableAuthority
+  }, [fetchTableAuthority])
 
   const composePlayersFromLive = useCallback(
     (livePlayers: Player[]) => {
@@ -247,6 +276,10 @@ export function useSyncEngine(): SyncEngineResult {
 
   const tableIdRef = useRef(tableId)
   useEffect(() => { tableIdRef.current = tableId }, [tableId])
+
+  /** Кто уже был в списке живых за этим столом — чтобы один раз писать в общий лог «присоединился». */
+  const prevLiveHumanIdsRef = useRef<Set<number>>(new Set())
+  const prevTrackedTableIdForLiveRef = useRef<number>(0)
 
   const syncLiveTable = useCallback(
     async (mode: "join" | "sync", forceNew = false) => {
@@ -277,6 +310,7 @@ export function useSyncEngine(): SyncEngineResult {
         const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
         const seated = livePlayers.some((p: Player) => p.id === currentUser.id)
         if (!seated) {
+          prevLiveHumanIdsRef.current = new Set()
           if (!loseSeatDebounceRef.current) {
             loseSeatDebounceRef.current = setTimeout(() => {
               loseSeatDebounceRef.current = null
@@ -291,6 +325,7 @@ export function useSyncEngine(): SyncEngineResult {
           loseSeatDebounceRef.current = null
         }
         setSeatConfirmed(true)
+        seatConfirmedRef.current = true
         setLiveHumanCount(livePlayers.length)
         const nextPlayers = composePlayersFromLive(livePlayers)
         const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
@@ -313,6 +348,29 @@ export function useSyncEngine(): SyncEngineResult {
         if (typeof data.tablesCount === "number") {
           dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })
         }
+
+        if (prevTrackedTableIdForLiveRef.current !== nextTableId) {
+          prevTrackedTableIdForLiveRef.current = nextTableId
+          prevLiveHumanIdsRef.current = new Set()
+        }
+        const incomingHumanIds = new Set<number>(livePlayers.map((p: Player) => p.id))
+        for (const hid of incomingHumanIds) {
+          if (prevLiveHumanIdsRef.current.has(hid)) continue
+          if (hid !== currentUser.id) continue
+          dispatch({
+            type: "ADD_LOG",
+            entry: {
+              id: generateLogId(),
+              type: "join",
+              fromPlayer: currentUser,
+              text: tableJoinAnnouncementText(currentUser.name.trim() || "Игрок", currentUser.gender),
+              timestamp: Date.now(),
+            },
+          })
+          break
+        }
+        prevLiveHumanIdsRef.current = incomingHumanIds
+
         // Первый вход/смена стола: сразу тянем authority.
         // Обычные sync-тиki не должны каждый раз дублировать /api/table/state,
         // этим занимается отдельный authority-poller.

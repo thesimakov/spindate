@@ -342,6 +342,21 @@
   }
 }
 
+/* Полноэкранный «шторм» приветов за столом (синхронно у всех по записи в gameLog) */
+@keyframes tableHelloEmojiPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(-18deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.15) rotate(12deg);
+  }
+}
+
 /* Лёгкое покачивание содержимого облачка на фоне полёта */
 @keyframes thanksCloudInner {
   0% {

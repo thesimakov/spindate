@@ -35,6 +35,7 @@ import {
   Plus,
   Headphones,
   Bell,
+  Hand,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -112,6 +113,16 @@ function sortedPairIds(a: Player, b: Player): [number, number] {
   return a.id < b.id ? [a.id, b.id] : [b.id, a.id]
 }
 
+/** Детерминированное [0,1) от строки — одинаковые позиции приветов на всех клиентах для одного id лога. */
+function hashUnit01(seed: string, salt: number): number {
+  let h = salt | 0
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i)
+  }
+  h = Math.imul(h ^ (h >>> 15), 0x45d9f3b | 0)
+  return (Math.abs(h) % 10000) / 10000
+}
+
 /** Левый = инициатор (from), правый — второй участник пары. */
 function resolvePairAvatarsForLog(entry: GameLogEntry, players: Player[]): { left: Player; right: Player } | null {
   const fp = entry.fromPlayer
@@ -141,6 +152,8 @@ function resolvePairAvatarsForLog(entry: GameLogEntry, players: Player[]): { lef
 const CHAT_PAIR_ACTION_PHRASE: Partial<Record<GameLogEntry["type"], string>> = {
   kiss: "Подарил(а) поцелуй",
   flowers: "Подарил(а) цветы",
+  rose: "Подарил(а) розы",
+  hello: "Поприветствовал(а)",
   cocktail: "Подарил(а) коктейль",
   diamond: "Подарил(а) бриллианты",
   beer: "Подарил(а) по квасику",
@@ -151,7 +164,10 @@ const CHAT_PAIR_ACTION_PHRASE: Partial<Record<GameLogEntry["type"], string>> = {
 }
 
 /** Эмодзи для строки чата «аватар — аватар — эмоция — число». */
-function logEventEmotionEmoji(entry: GameLogEntry): string | null {
+function logEventEmotionEmoji(entry: GameLogEntry, giftById?: ReadonlyMap<string, GiftChatDisplayMeta>): string | null {
+  if (entry.frameGift) return "\uD83D\uDDBC\uFE0F"
+  const dyn = giftById?.get(String(entry.type))
+  if (dyn?.emoji?.trim()) return dyn.emoji.trim()
   const giftRow = DEFAULT_GIFT_CATALOG_ROWS.find((r) => r.id === entry.type && r.published)
   if (giftRow?.emoji) return giftRow.emoji
   const map: Partial<Record<GameLogEntry["type"], string>> = {
@@ -172,27 +188,43 @@ function logEventEmotionEmoji(entry: GameLogEntry): string | null {
     chat: "💬",
     invite: "💌",
     care: "💝",
-    bottle_thanks: "⭐",
     prediction: "🎯",
     join: "🚪",
+    hello: "👋",
     gift_voice: "🎙️",
-    system: "ℹ️",
   }
+  if (entry.type === "system") return null
   return map[entry.type] ?? null
 }
 
 /** Подсказка на центральный объект в строке «аватар » эмодзи ×N аватар». */
-function pairChatCentralObjectHint(entry: GameLogEntry): "Подарил подарок" | "Подарил эмоцию" {
+/** Мета подарка для чата: дефолтный каталог + строки из API (админка). */
+type GiftChatDisplayMeta = { emoji: string; img: string; name: string }
+
+function pairChatCentralObjectHint(
+  entry: GameLogEntry,
+  giftById?: ReadonlyMap<string, GiftChatDisplayMeta>,
+): "Подарил подарок" | "Подарил эмоцию" | "Подарил рамку" | "Спасибо за бутылочку" | "Поприветствовал за столом" {
+  if (entry.type === "bottle_thanks") return "Спасибо за бутылочку"
+  if (entry.type === "hello") return "Поприветствовал за столом"
+  if (entry.frameGift) return "Подарил рамку"
+  const id = String(entry.type)
+  if (giftById?.has(id)) return "Подарил подарок"
   const gift = DEFAULT_GIFT_CATALOG_ROWS.find((r) => r.id === entry.type && r.published)
   if (gift) return "Подарил подарок"
   return "Подарил эмоцию"
 }
 
-function logEventActionShortLabel(entry: GameLogEntry): string | null {
+function logEventActionShortLabel(entry: GameLogEntry, giftById?: ReadonlyMap<string, GiftChatDisplayMeta>): string | null {
+  if (entry.frameGift?.frameName?.trim()) {
+    return `Подарил(а) рамку «${entry.frameGift.frameName.trim()}»`
+  }
   const phrase = CHAT_PAIR_ACTION_PHRASE[entry.type]
   if (phrase) return phrase
   const pa = PAIR_ACTIONS.find((x) => x.id === entry.type)
   if (pa) return pa.label
+  const dynName = giftById?.get(String(entry.type))?.name?.trim()
+  if (dynName) return dynName
   const giftRow = DEFAULT_GIFT_CATALOG_ROWS.find((r) => r.id === entry.type && r.published)
   if (giftRow) return giftRow.name
   const extra: Partial<Record<GameLogEntry["type"], string>> = {
@@ -200,7 +232,6 @@ function logEventActionShortLabel(entry: GameLogEntry): string | null {
     invite: "Приглашение",
     bottle_thanks: "Спасибо",
     prediction: "Прогноз",
-    rose: "Роза",
     join: "Зашёл за стол",
     gift_voice: "Голос",
     hug: "Объятия",
@@ -244,6 +275,12 @@ function bottleSkinChangeSig(e: GameLogEntry): string {
   return `${b.fromSkinId}\t${b.toSkinId}`
 }
 
+function frameGiftSig(e: GameLogEntry): string {
+  const f = e.frameGift
+  if (!f) return ""
+  return `${f.frameId}\t${f.frameName}`
+}
+
 /** Миниатюра бутылочки в ленте чата (каталог API + дефолт; колесо фортуны — эмодзи, если нет картинки). */
 function resolveBottleSkinChatVisual(
   rows: { id: string; img: string }[],
@@ -284,7 +321,8 @@ function aggregateConsecutiveTableLogRows(sorted: GameLogEntry[]): { entry: Game
       e.type === prev.entry.type &&
       sameFrom &&
       e.text === prev.entry.text &&
-      bottleSkinChangeSig(e) === bottleSkinChangeSig(prev.entry)
+      bottleSkinChangeSig(e) === bottleSkinChangeSig(prev.entry) &&
+      frameGiftSig(e) === frameGiftSig(prev.entry)
     if (mergeable) {
       prev.count += 1
     } else {
@@ -295,12 +333,17 @@ function aggregateConsecutiveTableLogRows(sorted: GameLogEntry[]): { entry: Game
 }
 
 /** Строка ленты чата с парой (эмодзи/подарок), не чат и не смена бутылочки. */
-function isPairFeedDisplayRow(entry: GameLogEntry, players: Player[]): boolean {
+function isPairFeedDisplayRow(
+  entry: GameLogEntry,
+  players: Player[],
+  giftById?: ReadonlyMap<string, GiftChatDisplayMeta>,
+): boolean {
   if (entry.type === "chat") return false
   if (entry.type === "system" && entry.bottleSkinChange) return false
+  if (entry.type === "system" && !entry.frameGift) return false
   const pairAvatars = resolvePairAvatarsForLog(entry, players)
-  const emotionEmoji = logEventEmotionEmoji(entry)
-  const actionShort = logEventActionShortLabel(entry)
+  const emotionEmoji = logEventEmotionEmoji(entry, giftById)
+  const actionShort = logEventActionShortLabel(entry, giftById)
   return Boolean(pairAvatars && (emotionEmoji || actionShort))
 }
 
@@ -321,11 +364,12 @@ type MergedTableChatFeedRow =
 function mergeConsecutivePairFeedRows(
   rows: { entry: GameLogEntry; count: number }[],
   players: Player[],
+  giftById?: ReadonlyMap<string, GiftChatDisplayMeta>,
 ): MergedTableChatFeedRow[] {
   const out: MergedTableChatFeedRow[] = []
   for (const row of rows) {
     const { entry, count } = row
-    if (!isPairFeedDisplayRow(entry, players)) {
+    if (!isPairFeedDisplayRow(entry, players, giftById)) {
       out.push({ kind: "item", entry, count })
       continue
     }
@@ -483,16 +527,21 @@ interface FlyingEmoji {
   toY: number
 }
 
-function ThanksCloudBubble() {
+function ThanksCloudBubble({ variant = "fly" }: { variant?: "fly" | "chat" }) {
   const uid = useId().replace(/:/g, "")
-  const gid = `tcg-${uid}`
+  const gid = `tcg-${variant}-${uid}`
+  const isChat = variant === "chat"
 
   return (
     <div
-      className="thanks-cloud-bubble__inner relative inline-flex h-14 w-[132px] select-none items-center justify-center"
+      className={cn(
+        "thanks-cloud-bubble__inner relative inline-flex select-none items-center justify-center",
+        isChat ? "h-7 w-[4.75rem] max-w-[min(100%,5.75rem)]" : "h-14 w-[132px]",
+      )}
       style={{
-        filter:
-          "drop-shadow(0 10px 22px rgba(59, 130, 246, 0.42)) drop-shadow(0 3px 6px rgba(15, 23, 42, 0.18))",
+        filter: isChat
+          ? "drop-shadow(0 2px 5px rgba(59, 130, 246, 0.38))"
+          : "drop-shadow(0 10px 22px rgba(59, 130, 246, 0.42)) drop-shadow(0 3px 6px rgba(15, 23, 42, 0.18))",
       }}
     >
       <svg
@@ -517,7 +566,10 @@ function ThanksCloudBubble() {
         <ellipse cx="66" cy="40" rx="52" ry="14" fill={`url(#${gid})`} />
       </svg>
       <span
-        className="relative z-10 text-center text-[13px] font-extrabold tracking-[0.06em]"
+        className={cn(
+          "relative z-10 text-center font-extrabold tracking-[0.04em]",
+          isChat ? "text-[9px] leading-none sm:text-[10px]" : "text-[13px] tracking-[0.06em]",
+        )}
         style={{
           color: "#0c1e3d",
           textShadow:
@@ -847,12 +899,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     [inventory],
   )
   const giftDisplayById = useMemo(() => {
-    const m = new Map<string, { emoji: string; img: string }>()
+    const m = new Map<string, GiftChatDisplayMeta>()
     for (const row of DEFAULT_GIFT_CATALOG_ROWS) {
-      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim() })
+      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim(), name: row.name })
     }
     for (const row of giftCatalogRows) {
-      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim() })
+      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim(), name: row.name })
     }
     return m
   }, [giftCatalogRows])
@@ -1121,6 +1173,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   })
   const [flyingEmojis, setFlyingEmojis] = useState<FlyingEmoji[]>([])
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
+  /** Полноэкранные 👋 по записи hello в gameLog (одинаковый seed id на всех клиентах). */
+  const [tableHelloBurst, setTableHelloBurst] = useState<{ seed: string; key: number } | null>(null)
+  const tableHelloLogSeenRef = useRef(new Set<string>())
+  const tableHelloBurstKeyRef = useRef(0)
   const emotionGiftFrameRef = useRef(0)
   const [chatInput, setChatInput] = useState("")
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -1661,6 +1717,26 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       for (const id of toRemove) seen.delete(id)
     }
   }, [gameLog, currentUser, players, launchEmoji, launchSteam, playEmotionSound, giftCatalogLogTypeIds, giftDisplayById])
+
+  useEffect(() => {
+    for (const e of gameLog) {
+      if (e.type !== "hello") continue
+      if (tableHelloLogSeenRef.current.has(e.id)) continue
+      tableHelloLogSeenRef.current.add(e.id)
+      tableHelloBurstKeyRef.current += 1
+      setTableHelloBurst({ seed: e.id, key: tableHelloBurstKeyRef.current })
+    }
+    if (tableHelloLogSeenRef.current.size > 400) {
+      const ids = Array.from(tableHelloLogSeenRef.current)
+      for (const id of ids.slice(0, ids.length - 200)) tableHelloLogSeenRef.current.delete(id)
+    }
+  }, [gameLog])
+
+  useEffect(() => {
+    if (tableHelloBurst == null) return
+    const t = window.setTimeout(() => setTableHelloBurst(null), 2800)
+    return () => window.clearTimeout(t)
+  }, [tableHelloBurst])
 
   /* ---- start the actual spin ---- */
   const startSpin = useCallback(() => {
@@ -2352,6 +2428,25 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     void fetchTableAuthority(tableId)
   }, [chatInput, currentUser, tablePaused, dispatch, fetchTableAuthority, tableId])
 
+  const handleJoinPlayerHello = useCallback(
+    (joinedPlayer: Player) => {
+      if (!currentUser || tablePaused) return
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "hello",
+          fromPlayer: currentUser,
+          toPlayer: joinedPlayer,
+          text: `${currentUser.name} поприветствовал(а) ${joinedPlayer.name}`,
+          timestamp: Date.now(),
+        },
+      })
+      void fetchTableAuthority(tableId)
+    },
+    [currentUser, tablePaused, dispatch, fetchTableAuthority, tableId],
+  )
+
   /* ---- player avatar click ---- */
   const handlePlayerClick = (player: Player) => {
     if (player.id === currentUser?.id) return
@@ -2528,7 +2623,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       ? todayEntries.filter(
           (e) =>
             e.fromPlayer?.id === currentUser.id &&
-            (GIFT_LOG_TYPES.has(e.type) || (e.type === "system" && e.text.includes("дарит подарок"))),
+            (GIFT_LOG_TYPES.has(e.type) ||
+              giftCatalogLogTypeIds.has(String(e.type)) ||
+              (e.type === "system" && e.text.includes("дарит подарок"))),
         ).length
       : 0
 
@@ -2964,6 +3061,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       />
       <VkGroupNewsModal open={vkGroupNewsOpen} onOpenChange={setVkGroupNewsOpen} onNotify={showToast} />
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
+      {tableHelloBurst != null && (
+        <TableHelloScreenBurstLayer seed={tableHelloBurst.seed} burstKey={tableHelloBurst.key} />
+      )}
 
       <TableLoaderOverlay
         visible={tableLoading}
@@ -4780,12 +4880,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 gameLog={gameLog}
                 players={players}
                 bottleCatalogRows={bottleCatalogRows}
+                giftDisplayById={giftDisplayById}
                 chatInput={chatInput}
                 setChatInput={setChatInput}
                 onSend={handleSendChat}
                 logEndRef={logEndRef}
                 currentUserId={currentUser?.id}
                 chatDisabled={tablePaused}
+                onJoinPlayerHello={handleJoinPlayerHello}
                 className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
               />
             </div>
@@ -4839,12 +4941,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 gameLog={gameLog}
                 players={players}
                 bottleCatalogRows={bottleCatalogRows}
+                giftDisplayById={giftDisplayById}
                 chatInput={chatInput}
                 setChatInput={setChatInput}
                 onSend={handleSendChat}
                 logEndRef={logEndRef}
                 currentUserId={currentUser?.id}
                 chatDisabled={tablePaused}
+                onJoinPlayerHello={handleJoinPlayerHello}
                 className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
               />
             </div>
@@ -5625,17 +5729,33 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                       <button
                         type="button"
                         onClick={() => {
+                          if (!currentUser) return
                           if (selectedFrameForGift == null) {
                             showToast("Выберите рамку", "info")
                             return
                           }
-                          const cost = giftableFrameById.get(selectedFrameForGift)?.cost ?? 0
+                          const frameId = selectedFrameForGift
+                          const cost = giftableFrameById.get(frameId)?.cost ?? 0
                           if (cost > 0 && voiceBalance < cost) {
                             showToast("Недостаточно сердец для рамки", "error")
                             return
                           }
                           if (cost > 0) dispatch({ type: "PAY_VOICES", amount: cost })
-                          dispatch({ type: "SET_AVATAR_FRAME", playerId: playerMenuTarget.id, frameId: selectedFrameForGift })
+                          dispatch({ type: "SET_AVATAR_FRAME", playerId: playerMenuTarget.id, frameId })
+                          const frameName =
+                            frameCatalogSource.find((r) => r.id === frameId)?.name?.trim() || frameId
+                          dispatch({
+                            type: "ADD_LOG",
+                            entry: {
+                              id: generateLogId(),
+                              type: "system",
+                              fromPlayer: currentUser,
+                              toPlayer: playerMenuTarget,
+                              frameGift: { frameId, frameName },
+                              text: `${currentUser.name} подарил(а) рамку «${frameName}» игроку ${playerMenuTarget.name}`,
+                              timestamp: Date.now(),
+                            },
+                          })
                           setSelectedFrameForGift(null)
                           setPlayerMenuTab("profile")
                           showToast("Рамка подарена", "success")
@@ -5722,6 +5842,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                         return
                       }
                       dispatch({ type: "GIVE_ROSE", fromPlayerId: currentUser.id, toPlayerId: playerMenuTarget.id })
+                      dispatch({
+                        type: "ADD_LOG",
+                        entry: {
+                          id: generateLogId(),
+                          type: "rose",
+                          fromPlayer: currentUser,
+                          toPlayer: playerMenuTarget,
+                          text: `${currentUser.name} подарил(а) розы игроку ${playerMenuTarget.name}`,
+                          timestamp: Date.now(),
+                        },
+                      })
                       showToast("Розы подарены", "success")
                     }
                     const baseTile =
@@ -6193,12 +6324,51 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Полноэкранные 👋 при синхронной записи hello в gameLog                            */
+/* ------------------------------------------------------------------ */
+function TableHelloScreenBurstLayer({ seed, burstKey }: { seed: string; burstKey: number }) {
+  const items = useMemo(() => {
+    const n = 44
+    return Array.from({ length: n }, (_, i) => ({
+      id: `${burstKey}-${i}`,
+      left: 3 + hashUnit01(seed, i * 3 + 1) * 94,
+      top: 2 + hashUnit01(seed, i * 3 + 2) * 93,
+      delay: Math.floor(hashUnit01(seed, i * 3 + 3) * 480),
+      size: 1.25 + hashUnit01(seed, i * 3 + 4) * 2.1,
+      rot: -28 + hashUnit01(seed, i * 3 + 5) * 56,
+    }))
+  }, [seed, burstKey])
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[175] overflow-hidden" aria-hidden key={burstKey}>
+      {items.map((it) => (
+        <span
+          key={it.id}
+          className="absolute will-change-[opacity,transform]"
+          style={{
+            left: `${it.left}%`,
+            top: `${it.top}%`,
+            fontSize: `${it.size}rem`,
+            transform: `translate(-50%, -50%) rotate(${it.rot}deg)`,
+            animation: "tableHelloEmojiPop 2.35s cubic-bezier(0.22, 0.85, 0.36, 1) forwards",
+            animationDelay: `${it.delay}ms`,
+          }}
+        >
+          👋
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*  Table chat (общий чат за столом; один экземпляр на мобиле или в правой панели) */
 /* ------------------------------------------------------------------ */
 function TableChatPanel({
   gameLog,
   players,
   bottleCatalogRows,
+  giftDisplayById,
   chatInput,
   setChatInput,
   onSend,
@@ -6206,11 +6376,14 @@ function TableChatPanel({
   currentUserId,
   chatDisabled,
   className,
+  onJoinPlayerHello,
 }: {
   gameLog: GameLogEntry[]
   players: Player[]
   /** Один раз с родителя — не вызывать useBottleCatalog в каждом пузырьке (иначе лавина запросов / зависание). */
   bottleCatalogRows: BottleCatalogSkinRow[]
+  /** Каталог подарков (в т.ч. из админки) — для полоски «пара + эмодзи», не только текстом. */
+  giftDisplayById: ReadonlyMap<string, GiftChatDisplayMeta>
   chatInput: string
   setChatInput: (v: SetStateAction<string>) => void
   onSend: () => void
@@ -6218,6 +6391,7 @@ function TableChatPanel({
   currentUserId?: number
   chatDisabled?: boolean
   className?: string
+  onJoinPlayerHello?: (joinedPlayer: Player) => void
 }) {
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const prevFeedLenRef = useRef(0)
@@ -6239,8 +6413,8 @@ function TableChatPanel({
   )
 
   const mergedFeedRows = useMemo(
-    () => mergeConsecutivePairFeedRows(feedDisplayRows, players),
-    [feedDisplayRows, players],
+    () => mergeConsecutivePairFeedRows(feedDisplayRows, players, giftDisplayById),
+    [feedDisplayRows, players, giftDisplayById],
   )
 
   useEffect(() => {
@@ -6304,6 +6478,7 @@ function TableChatPanel({
                 left={row.left}
                 right={row.right}
                 segments={row.segments}
+                giftDisplayById={giftDisplayById}
               />
             ) : (
               <ChatBubble
@@ -6311,8 +6486,11 @@ function TableChatPanel({
                 entry={row.entry}
                 players={players}
                 bottleCatalogRows={bottleCatalogRows}
+                giftDisplayById={giftDisplayById}
                 currentUserId={currentUserId}
                 repeatCount={row.count}
+                chatDisabled={chatDisabled}
+                onJoinPlayerHello={onJoinPlayerHello}
               />
             ),
           )}
@@ -6365,6 +6543,7 @@ const PAIR_LOG_ACCENT_MAP: Record<string, string> = {
   skip: "#cbd5e1",
   invite: "#fcd34d",
   join: "#4ade80",
+  hello: "#22d3ee",
   system: "#7dd3fc",
   hug: "#4ade80",
   selfie: "#7dd3fc",
@@ -6395,16 +6574,21 @@ function PairFeedStripRow({
   left,
   right,
   segments,
+  giftDisplayById,
 }: {
   left: Player
   right: Player
   segments: { entry: GameLogEntry; count: number }[]
+  giftDisplayById: ReadonlyMap<string, GiftChatDisplayMeta>
 }) {
   const labelForA11y = [
     left.name,
     right.name,
     ...segments.map(({ entry, count }) => {
-      const label = logEventActionShortLabel(entry) ?? logEventEmotionEmoji(entry) ?? String(entry.type)
+      const label =
+        logEventActionShortLabel(entry, giftDisplayById) ??
+        logEventEmotionEmoji(entry, giftDisplayById) ??
+        String(entry.type)
       return `${label} ×${count}`
     }),
   ].join(", ")
@@ -6436,9 +6620,10 @@ function PairFeedStripRow({
         >
           <div className="inline-flex min-h-7 w-max min-w-0 flex-nowrap items-center gap-x-1.5 px-1.5">
             {segments.map(({ entry, count }, i) => {
-              const emotionEmoji = logEventEmotionEmoji(entry)
-              const actionShort = logEventActionShortLabel(entry)
-              const centralHint = pairChatCentralObjectHint(entry)
+              const emotionEmoji = logEventEmotionEmoji(entry, giftDisplayById)
+              const actionShort = logEventActionShortLabel(entry, giftDisplayById)
+              const giftImg = giftDisplayById.get(String(entry.type))?.img?.trim()
+              const centralHint = pairChatCentralObjectHint(entry, giftDisplayById)
               const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
               return (
                 <Fragment key={entry.id}>
@@ -6456,12 +6641,25 @@ function PairFeedStripRow({
                           aria-label={centralHint}
                           tabIndex={0}
                         >
-                          {emotionEmoji ? (
+                          {entry.type === "bottle_thanks" ? (
+                            <span className="inline-flex h-7 max-h-7 shrink-0 items-center overflow-visible" aria-hidden>
+                              <ThanksCloudBubble variant="chat" />
+                            </span>
+                          ) : emotionEmoji ? (
                             <span
                               className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
                               aria-hidden
                             >
                               {emotionEmoji}
+                            </span>
+                          ) : giftImg ? (
+                            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-hidden>
+                              <img
+                                src={giftImg}
+                                alt=""
+                                className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
+                                crossOrigin="anonymous"
+                              />
                             </span>
                           ) : (
                             actionShort && (
@@ -6516,15 +6714,21 @@ function ChatBubble({
   entry,
   players,
   bottleCatalogRows,
+  giftDisplayById,
   currentUserId,
   repeatCount = 1,
+  chatDisabled = false,
+  onJoinPlayerHello,
 }: {
   entry: GameLogEntry
   players: Player[]
   bottleCatalogRows: BottleCatalogSkinRow[]
+  giftDisplayById: ReadonlyMap<string, GiftChatDisplayMeta>
   currentUserId?: number
   /** Сколько одинаковых подряд событий свернуто в этот пузырёк (только для не-chat). */
   repeatCount?: number
+  chatDisabled?: boolean
+  onJoinPlayerHello?: (joinedPlayer: Player) => void
 }) {
   const isOwn = entry.fromPlayer?.id === currentUserId
   const isChat = entry.type === "chat"
@@ -6630,15 +6834,19 @@ function ChatBubble({
   }
 
   const pairAvatars = resolvePairAvatarsForLog(entry, players)
-  const actionShort = logEventActionShortLabel(entry)
-  const emotionEmoji = logEventEmotionEmoji(entry)
-  const showPairRow = Boolean(pairAvatars && (emotionEmoji || actionShort))
+  const actionShort = logEventActionShortLabel(entry, giftDisplayById)
+  const emotionEmoji = logEventEmotionEmoji(entry, giftDisplayById)
+  const giftImg = giftDisplayById.get(String(entry.type))?.img?.trim()
+  const allowSystemPairStrip = entry.type !== "system" || Boolean(entry.frameGift)
+  const showPairRow = Boolean(
+    pairAvatars && (emotionEmoji || actionShort || giftImg) && allowSystemPairStrip,
+  )
 
   const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
 
   if (showPairRow && pairAvatars) {
     const { left, right } = pairAvatars
-    const centralHint = pairChatCentralObjectHint(entry)
+    const centralHint = pairChatCentralObjectHint(entry, giftDisplayById)
     const labelForA11y = [left.name, right.name, actionShort ?? emotionEmoji ?? "событие", repeatCount].join(", ")
     return (
       <div className="flex w-full justify-start">
@@ -6659,12 +6867,25 @@ function ChatBubble({
                 aria-label={centralHint}
                 tabIndex={0}
               >
-                {emotionEmoji ? (
+                {entry.type === "bottle_thanks" ? (
+                  <span className="inline-flex h-7 max-h-7 shrink-0 items-center overflow-visible" aria-hidden>
+                    <ThanksCloudBubble variant="chat" />
+                  </span>
+                ) : emotionEmoji ? (
                   <span
                     className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
                     aria-hidden
                   >
                     {emotionEmoji}
+                  </span>
+                ) : giftImg ? (
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-hidden>
+                    <img
+                      src={giftImg}
+                      alt=""
+                      className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
+                      crossOrigin="anonymous"
+                    />
                   </span>
                 ) : (
                   actionShort && (
@@ -6703,9 +6924,17 @@ function ChatBubble({
     )
   }
 
+  const showJoinHello =
+    entry.type === "join" &&
+    entry.fromPlayer &&
+    onJoinPlayerHello &&
+    currentUserId != null &&
+    entry.fromPlayer.id !== currentUserId &&
+    !chatDisabled
+
   return (
-    <div className="flex w-full justify-start">
-      <div className="inline-flex max-w-full items-start gap-1.5 rounded-lg bg-white/[0.05] px-2 py-1 backdrop-blur-sm">
+    <div className={cn("flex w-full justify-start", showJoinHello ? "items-center gap-1" : "")}>
+      <div className="inline-flex min-w-0 max-w-full flex-1 items-start gap-1.5 rounded-lg bg-white/[0.05] px-2 py-1 backdrop-blur-sm">
         {entry.fromPlayer && (
           <div
             className={cn(
@@ -6731,6 +6960,24 @@ function ChatBubble({
           )}
         </p>
       </div>
+      {showJoinHello ? (
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => onJoinPlayerHello(entry.fromPlayer!)}
+              className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-cyan-500/35 bg-slate-900/80 px-1.5 text-[11px] font-extrabold text-cyan-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:bg-slate-800/90 hover:brightness-110 active:scale-[0.98]"
+              aria-label="Поздороваться: привет всем за столом"
+            >
+              <Hand className="h-3.5 w-3.5 shrink-0 text-amber-300" strokeWidth={2.5} aria-hidden />
+              <span className="hidden min-[360px]:inline">Привет</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="border-0 bg-slate-950 text-xs text-slate-100">
+            Поприветствовать за столом (увидят все)
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </div>
   )
 }
