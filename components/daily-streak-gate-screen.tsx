@@ -8,6 +8,8 @@ import { AppLoader } from "@/components/app-loader"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
 import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 import { isUiTourDone, UI_TOUR_ENABLED } from "@/lib/ui-tour-storage"
+import { BetaWelcomeModal } from "@/components/beta-welcome-modal"
+import { readBetaWelcomeAcknowledged, writeBetaWelcomeAcknowledged } from "@/lib/beta-welcome-session"
 
 const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
 
@@ -27,6 +29,10 @@ export function DailyStreakGateScreen() {
   const [showWelcomeGift, setShowWelcomeGift] = useState(false)
   const [dailyDay, setDailyDay] = useState(1)
   const [dailyClaimedToday, setDailyClaimedToday] = useState(false)
+
+  /** Прочитали sessionStorage; пока нет — не уводим в лобби мимо бета-окна. */
+  const [betaSessionChecked, setBetaSessionChecked] = useState(false)
+  const [betaWelcomeDone, setBetaWelcomeDone] = useState(false)
 
   const todayDate = new Date()
   todayDate.setHours(0, 0, 0, 0)
@@ -68,6 +74,11 @@ export function DailyStreakGateScreen() {
       setShowWelcomeGift(true)
     }
   }, [currentUser?.id, currentUser?.authProvider, voiceBalance])
+
+  useEffect(() => {
+    setBetaWelcomeDone(readBetaWelcomeAcknowledged())
+    setBetaSessionChecked(true)
+  }, [])
 
   useEffect(() => {
     if (!currentUser) return
@@ -117,17 +128,18 @@ export function DailyStreakGateScreen() {
   }, [currentUser, dispatch])
 
   useEffect(() => {
-    if (!currentUser || !hydrated) return
+    if (!currentUser || !hydrated || !betaWelcomeDone) return
     if (dailyClaimedToday) {
       goLobby()
     }
-  }, [currentUser, hydrated, dailyClaimedToday, goLobby])
+  }, [currentUser, hydrated, dailyClaimedToday, goLobby, betaWelcomeDone])
 
   useEffect(() => {
+    if (!betaWelcomeDone) return
     if (hydrated && !dailyClaimedToday && !showWelcomeGift && !welcomeComplete) {
       goLobby()
     }
-  }, [hydrated, dailyClaimedToday, showWelcomeGift, welcomeComplete, goLobby])
+  }, [hydrated, dailyClaimedToday, showWelcomeGift, welcomeComplete, goLobby, betaWelcomeDone])
 
   const handleClaimStreakBonus = useCallback(async () => {
     if (dailyClaimedToday || !currentUser) return
@@ -224,6 +236,7 @@ export function DailyStreakGateScreen() {
 
   const showStreakDialog =
     !!currentUser &&
+    betaWelcomeDone &&
     hydrated &&
     !dailyClaimedToday &&
     (showWelcomeGift || welcomeComplete)
@@ -231,6 +244,22 @@ export function DailyStreakGateScreen() {
   if (!currentUser) {
     return (
       <AppLoader title="Вход…" subtitle="Перенаправление" hint="Крути и знакомься" />
+    )
+  }
+
+  if (!betaSessionChecked) {
+    return <AppLoader title="Загрузка…" subtitle="Почти готово" hint="Крути и знакомься" />
+  }
+
+  if (!betaWelcomeDone) {
+    return (
+      <BetaWelcomeModal
+        open
+        onContinue={() => {
+          writeBetaWelcomeAcknowledged()
+          setBetaWelcomeDone(true)
+        }}
+      />
     )
   }
 
