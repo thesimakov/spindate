@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type RefObject,
   type SetStateAction,
+  type SyntheticEvent,
 } from "react"
 import {
   Heart,
@@ -114,6 +115,18 @@ function sortedPairIds(a: Player, b: Player): [number, number] {
   return a.id < b.id ? [a.id, b.id] : [b.id, a.id]
 }
 
+/** Лента чата: не ставим crossOrigin на аватары (ломает загрузку с CDN ВК/ОК без CORS). */
+function tableChatPlayerAvatarOnError(e: SyntheticEvent<HTMLImageElement>, player: Player) {
+  const img = e.currentTarget
+  if (img.dataset.fell) return
+  img.dataset.fell = "1"
+  const n = (player.name || "?").slice(0, 1).toUpperCase()
+  const h = ((player.id * 137) % 360)
+  img.src = `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="40" fill="hsl(${h},55%,45%)"/><text x="40" y="40" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="36" font-weight="700" fill="#fff">${n}</text></svg>`,
+  )}`
+}
+
 /** Детерминированное [0,1) от строки — одинаковые позиции приветов на всех клиентах для одного id лога. */
 function hashUnit01(seed: string, salt: number): number {
   let h = salt | 0
@@ -128,22 +141,34 @@ function hashUnit01(seed: string, salt: number): number {
 function resolvePairAvatarsForLog(entry: GameLogEntry, players: Player[]): { left: Player; right: Player } | null {
   const fp = entry.fromPlayer
   const tp = entry.toPlayer
+  const tp2 = entry.toPlayer2
   const pairIds = entry.pairIds
+
+  const embedForId = (id: number): Player | undefined => {
+    const live = players.find((p) => p.id === id)
+    if (live) return live
+    if (fp?.id === id) return fp
+    if (tp?.id === id) return tp
+    if (tp2?.id === id) return tp2
+    return undefined
+  }
+
   if (pairIds && fp) {
     const [idA, idB] = pairIds
-    const otherId = fp.id === idA ? idB : idA
-    const left = players.find((p) => p.id === fp.id) ?? fp
-    const right = players.find((p) => p.id === otherId)
+    const inPair = fp.id === idA || fp.id === idB
+    const otherId = inPair ? (fp.id === idA ? idB : idA) : idA
+    const left = embedForId(fp.id) ?? fp
+    const right = embedForId(otherId)
     if (right) return { left, right }
   }
   if (pairIds) {
-    const a = players.find((p) => p.id === pairIds[0])
-    const b = players.find((p) => p.id === pairIds[1])
+    const a = embedForId(pairIds[0])
+    const b = embedForId(pairIds[1])
     if (a && b) return { left: a, right: b }
   }
   if (fp && tp) {
-    const left = players.find((p) => p.id === fp.id) ?? fp
-    const right = players.find((p) => p.id === tp.id) ?? tp
+    const left = embedForId(fp.id) ?? fp
+    const right = embedForId(tp.id) ?? tp
     return { left, right }
   }
   return null
@@ -405,8 +430,9 @@ function isPairFeedDisplayRow(
   return Boolean(pairAvatars && (emotionEmoji || actionShort))
 }
 
+/** Одна и та же пара в любом направлении (A→B и B→A) — одна полоска в ленте. */
 function pairStripIdentityKey(leftId: number, rightId: number): string {
-  return `${leftId}:${rightId}`
+  return leftId <= rightId ? `${leftId}:${rightId}` : `${rightId}:${leftId}`
 }
 
 type MergedTableChatFeedRow =
@@ -779,6 +805,9 @@ const MOBILE_EMOTION_STRIP_SCROLL =
   "flex w-full max-w-full items-center justify-center gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain py-1 [-webkit-overflow-scrolling:touch]"
 const MOBILE_EMOTION_STRIP_BTN =
   "flex min-h-[2.75rem] shrink-0 flex-row items-center gap-2 rounded-full px-3 py-1.5 pr-3.5 text-left text-xs font-extrabold leading-tight sm:text-sm transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
+
+/** Подсказка у блока эмоций — только для участника пары, который отвечает взаимностью (не крутивший бутылку). */
+const EMOTION_RECIPROCAL_HINT_SRC = "/assets/emotion-reciprocal-hint.png"
 
 // isTableSyncedAction moved to hooks/use-sync-engine.ts
 
@@ -2143,7 +2172,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         type: actionId as GameLogEntry["type"],
         fromPlayer: currentTurnPlayer,
         toPlayer: tp,
-        ...(pairIdsForLog ? { pairIds: pairIdsForLog } : {}),
+        ...(pairIdsForLog ? { pairIds: pairIdsForLog, toPlayer2: tp2 } : {}),
         text: `${currentTurnPlayer.name}: ${actionDef.label} (${pairText})`,
         timestamp: Date.now(),
       },
@@ -2572,7 +2601,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           id: generateLogId(),
           type: "system",
           fromPlayer: currentUser!,
-          text: `${currentUser!.name} оплатил(а) внеочередное кручение (10 сердец)`,
+          text: `${currentUser!.name} заплатил(а) 10 сердец за внеочередное кручение бутылки`,
           timestamp: Date.now(),
         },
     })
@@ -2601,6 +2630,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     !currentUser.isBot &&
     (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id)
   )
+
+  /** Подсказка у блока эмоций: результат, ты в паре — и «свой» ход эмоциями, и ответный. */
+  const showPairEmotionHint = canRespondInResult
 
   const sidebarActionCombo: PairGenderCombo | null = useMemo(() => {
     if (sidebarGiftMode && currentUser && sidebarTargetPlayer) {
@@ -3494,8 +3526,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         </div>
 
         <div className={!leftSideMenuExpanded ? "max-lg:hidden" : ""}>
+        <div className="flex w-full min-w-0 items-start">
         <div
-          className="flex w-full flex-col gap-2 rounded-xl p-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
+          className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl p-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
           style={{
             background: "rgba(15, 23, 42, 0.92)",
             border: "1px solid rgba(148, 163, 184, 0.45)",
@@ -3549,54 +3582,69 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </button>
           )}
 
-          <div className="flex max-h-[min(52dvh,30rem)] min-h-0 flex-col gap-2 overflow-y-auto pr-0.5">
-            {sidebarAvailableActions.map((action) => {
-              const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-              const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
-              const canAfford = actionCost === 0 || voiceBalance >= actionCost
-              const isDisabled = !isSidebarEmotionActionActive || !canAfford
-              return (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => {
-                    if (sidebarGiftMode && sidebarTargetPlayer) {
-                      handleSidebarGiftEmotion(action.id)
-                      return
-                    }
-                    if (showResult && isMyTurn) {
-                      handlePerformAction(action.id)
-                      return
-                    }
-                    if (canRespondInResult) {
-                      handleResponseEmotion(action.id)
-                    }
-                  }}
-                  disabled={isDisabled}
-                  className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-0 text-left text-[13px] font-extrabold leading-none shadow-md transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
-                  style={{
-                    background: style.bg,
-                    color: style.text,
-                    border: `1px solid ${style.border}`,
-                    boxShadow: `0 1px 0 ${style.shadow}, 0 4px 10px rgba(0,0,0,0.22)`,
-                  }}
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center [&_img]:h-7 [&_img]:w-7 [&_svg]:h-5 [&_svg]:w-5 [&>span]:text-lg">
-                    {renderActionIcon(action)}
-                  </span>
-                  <span className="min-w-0 flex-1 text-left leading-tight [overflow-wrap:anywhere]">
-                    {action.label}
-                  </span>
-                  {shouldShowActionCostBadge(action.id, actionCost) && (
-                    <span className="heart-price heart-price--badge ml-1 flex shrink-0 items-center rounded-full px-1.5 py-0.5 opacity-95">
-                      {actionCost}
-                      <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
+          <div className="flex max-h-[min(52dvh,30rem)] min-h-0 w-full flex-col gap-2 overflow-y-auto pr-0.5">
+              {sidebarAvailableActions.map((action) => {
+                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
+                const canAfford = actionCost === 0 || voiceBalance >= actionCost
+                const isDisabled = !isSidebarEmotionActionActive || !canAfford
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => {
+                      if (sidebarGiftMode && sidebarTargetPlayer) {
+                        handleSidebarGiftEmotion(action.id)
+                        return
+                      }
+                      if (showResult && isMyTurn) {
+                        handlePerformAction(action.id)
+                        return
+                      }
+                      if (canRespondInResult) {
+                        handleResponseEmotion(action.id)
+                      }
+                    }}
+                    disabled={isDisabled}
+                    className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-0 text-left text-[13px] font-extrabold leading-none shadow-md transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+                    style={{
+                      background: style.bg,
+                      color: style.text,
+                      border: `1px solid ${style.border}`,
+                      boxShadow: `0 1px 0 ${style.shadow}, 0 4px 10px rgba(0,0,0,0.22)`,
+                    }}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center [&_img]:h-7 [&_img]:w-7 [&_svg]:h-5 [&_svg]:w-5 [&>span]:text-lg">
+                      {renderActionIcon(action)}
                     </span>
-                  )}
-                </button>
-              )
-            })}
+                    <span className="min-w-0 flex-1 text-left leading-tight [overflow-wrap:anywhere]">
+                      {action.label}
+                    </span>
+                    {shouldShowActionCostBadge(action.id, actionCost) && (
+                      <span className="heart-price heart-price--badge ml-1 flex shrink-0 items-center rounded-full px-1.5 py-0.5 opacity-95">
+                        {actionCost}
+                        <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
           </div>
+        </div>
+        {showPairEmotionHint ? (
+          <div
+            className="relative w-0 shrink-0 self-stretch overflow-visible"
+            aria-hidden
+          >
+            <img
+              src={EMOTION_RECIPROCAL_HINT_SRC}
+              alt=""
+              width={160}
+              height={100}
+              className="pointer-events-none absolute left-0 top-[6.5rem] z-10 ml-1.5 hidden h-12 w-auto max-w-[min(12.5rem,40vw)] select-none object-contain object-left-top md:block lg:top-[7rem] lg:h-16 lg:max-w-[min(15rem,48vw)]"
+            />
+          </div>
+        ) : null}
         </div>
         </div>
 
@@ -4242,7 +4290,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
         <div
           className={cn(
-            "h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden px-0.5",
+            "h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 px-0.5",
+            showPairEmotionHint ? "overflow-visible" : "overflow-hidden",
             isPcLayout ? "hidden" : "flex md:hidden",
           )}
         >
@@ -4301,48 +4350,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 })}
               </div>
             ) : isMyTurn ? (
-              <div className={MOBILE_EMOTION_STRIP_SCROLL}>
-                {availableActions.filter((action) => action.id !== "skip").map((action) => {
-                  const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                  const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                  const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handlePerformAction(action.id)}
-                      disabled={!canAfford}
-                      className={MOBILE_EMOTION_STRIP_BTN}
-                      style={{
-                        background: style.bg,
-                        color: style.text,
-                        border: `1px solid ${style.border}`,
-                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
-                      }}
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
-                        {renderActionIcon(action)}
-                      </span>
-                      <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
-                      {shouldShowActionCostBadge(action.id, actionCost) && (
-                        <span
-                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
-                          style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
-                        >
-                          {actionCost}
-                          <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : (
-              currentUser &&
-              !currentUser.isBot &&
-              resolvedTargetPlayer &&
-              resolvedTargetPlayer2 &&
-              (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
-                <div className={MOBILE_EMOTION_STRIP_SCROLL}>
+              <div className="flex w-full max-w-[min(100%,24rem)] min-w-0 items-start">
+                <div className={cn(MOBILE_EMOTION_STRIP_SCROLL, "min-w-0 flex-1")}>
                   {availableActions.filter((action) => action.id !== "skip").map((action) => {
                     const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
                     const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
@@ -4350,9 +4359,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     return (
                       <button
                         key={action.id}
-                        type="button"
+                        onClick={() => handlePerformAction(action.id)}
                         disabled={!canAfford}
-                        onClick={() => handleResponseEmotion(action.id)}
                         className={MOBILE_EMOTION_STRIP_BTN}
                         style={{
                           background: style.bg,
@@ -4377,6 +4385,73 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                       </button>
                     )
                   })}
+                </div>
+                {showPairEmotionHint ? (
+                  <div className="relative w-0 shrink-0 self-stretch overflow-visible" aria-hidden>
+                    <img
+                      src={EMOTION_RECIPROCAL_HINT_SRC}
+                      alt=""
+                      width={160}
+                      height={100}
+                      className="pointer-events-none absolute left-0 top-0 z-10 ml-1 h-12 w-auto max-w-[min(7.5rem,28vw)] select-none object-contain object-left-top md:hidden sm:h-14 sm:max-w-[min(9rem,32vw)]"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              currentUser &&
+              !currentUser.isBot &&
+              resolvedTargetPlayer &&
+              resolvedTargetPlayer2 &&
+              (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
+                <div className="flex w-full max-w-[min(100%,24rem)] min-w-0 items-start">
+                  <div className={cn(MOBILE_EMOTION_STRIP_SCROLL, "min-w-0 flex-1")}>
+                    {availableActions.filter((action) => action.id !== "skip").map((action) => {
+                      const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                      const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
+                      const canAfford = actionCost === 0 || voiceBalance >= actionCost
+                      return (
+                        <button
+                          key={action.id}
+                          type="button"
+                          disabled={!canAfford}
+                          onClick={() => handleResponseEmotion(action.id)}
+                          className={MOBILE_EMOTION_STRIP_BTN}
+                          style={{
+                            background: style.bg,
+                            color: style.text,
+                            border: `1px solid ${style.border}`,
+                            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
+                          }}
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
+                            {renderActionIcon(action)}
+                          </span>
+                          <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
+                          {shouldShowActionCostBadge(action.id, actionCost) && (
+                            <span
+                              className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
+                              style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
+                            >
+                              {actionCost}
+                              <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {showPairEmotionHint ? (
+                    <div className="relative w-0 shrink-0 self-stretch overflow-visible" aria-hidden>
+                      <img
+                        src={EMOTION_RECIPROCAL_HINT_SRC}
+                        alt=""
+                        width={160}
+                        height={100}
+                        className="pointer-events-none absolute left-0 top-0 z-10 ml-1 h-12 w-auto max-w-[min(7.5rem,28vw)] select-none object-contain object-left-top md:hidden sm:h-14 sm:max-w-[min(9rem,32vw)]"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               )
             )}
@@ -5531,7 +5606,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     }}
                   >
                     <div className="h-6 w-6 rounded-full overflow-hidden" style={{ border: "1.5px solid #475569", background: "#1e293b" }}>
-                      <img src={p.avatar} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" crossOrigin="anonymous" onError={(e) => { const img = e.currentTarget; if (img.dataset.fell) return; img.dataset.fell = "1"; const n = (p.name || "?").slice(0,1).toUpperCase(); const h = ((p.id * 137) % 360); img.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" rx="24" fill="hsl(${h},55%,45%)"/><text x="24" y="24" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-size="22" font-weight="700" fill="#fff">${n}</text></svg>`)}` }} />
+                      <img
+                        src={p.avatar}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => tableChatPlayerAvatarOnError(e, p)}
+                      />
                     </div>
                     <span className="text-[11px] font-semibold" style={{ color: "#f0e0c8" }}>{p.name}</span>
                     <span className="text-[9px] ml-auto" style={{ color: "#94a3b8" }}>
@@ -6651,6 +6733,121 @@ const PAIR_LOG_ACCENT_MAP: Record<string, string> = {
   lipstick: "#f9a8d4",
 }
 
+/**
+ * Два события подряд: эмоция A→B и ответ B→A (текст «отвечает»), один тип действия.
+ * Раскладка: аватар A — эмоция — аватар B — эмоция — аватар A.
+ */
+function tryMutualReciprocalPairStrip(
+  segments: { entry: GameLogEntry; count: number }[],
+): {
+  playerA: Player
+  playerB: Player
+  first: { entry: GameLogEntry; count: number }
+  second: { entry: GameLogEntry; count: number }
+} | null {
+  if (segments.length !== 2) return null
+  const first = segments[0]
+  const second = segments[1]
+  const e1 = first.entry
+  const e2 = second.entry
+  if (!String(e2.text ?? "").includes("отвечает")) return null
+  if (e1.type !== e2.type) return null
+  const p1a = e1.fromPlayer
+  const p1b = e1.toPlayer
+  const p2a = e2.fromPlayer
+  const p2b = e2.toPlayer
+  if (!p1a || !p1b || !p2a || !p2b) return null
+  if (p2a.id !== p1b.id || p2b.id !== p1a.id) return null
+  return { playerA: p1a, playerB: p1b, first, second }
+}
+
+function PairStripEmotionBlock({
+  entry,
+  count,
+  giftDisplayById,
+}: {
+  entry: GameLogEntry
+  count: number
+  giftDisplayById: ReadonlyMap<string, GiftChatDisplayMeta>
+}) {
+  const emotionEmoji = logEventEmotionEmoji(entry, giftDisplayById)
+  const actionShort = logEventActionShortLabel(entry, giftDisplayById)
+  const giftImg = giftDisplayById.get(String(entry.type))?.img?.trim()
+  const centralHint = pairChatCentralObjectHint(entry, giftDisplayById)
+  const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
+  return (
+    <span className="inline-flex shrink-0 items-center gap-0.5">
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <span
+            className="inline-flex max-h-8 min-h-7 min-w-0 max-w-[min(100%,7rem)] cursor-default items-center justify-center rounded-md outline-none ring-0 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/40"
+            aria-label={centralHint}
+            tabIndex={0}
+          >
+            {entry.type === "bottle_thanks" ? (
+              <span className="inline-flex h-7 max-h-7 shrink-0 items-center overflow-visible" aria-hidden>
+                <ThanksCloudBubble variant="chat" />
+              </span>
+            ) : emotionEmoji ? (
+              <span
+                className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
+                aria-hidden
+              >
+                {emotionEmoji}
+              </span>
+            ) : giftImg ? (
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-hidden>
+                <img
+                  src={giftImg}
+                  alt=""
+                  className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
+                />
+              </span>
+            ) : (
+              actionShort && (
+                <span
+                  className="max-w-[5rem] shrink truncate text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
+                  style={{ color: accentColor }}
+                >
+                  {actionShort}
+                </span>
+              )
+            )}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          sideOffset={6}
+          className="border-0 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-100 shadow-xl"
+        >
+          {centralHint}
+        </TooltipContent>
+      </Tooltip>
+      <span className={PAIR_FEED_REPEAT_COUNT_CLASS} aria-label={`Количество: ${count}`}>
+        ×{count}
+      </span>
+    </span>
+  )
+}
+
+function PairFeedStripTinyAvatar({ player }: { player: Player }) {
+  return (
+    <div
+      className={cn(
+        "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
+        TABLE_CHAT_ROOM_AVATAR_RING,
+      )}
+    >
+      <img
+        src={player.avatar}
+        alt=""
+        className="h-full w-full object-cover"
+        onError={(e) => tableChatPlayerAvatarOnError(e, player)}
+      />
+    </div>
+  )
+}
+
 /** Несколько эмоций/подарков подряд между одной и той же парой — одна строка, горизонтальный скролл при переполнении. */
 function PairFeedStripRow({
   left,
@@ -6663,17 +6860,57 @@ function PairFeedStripRow({
   segments: { entry: GameLogEntry; count: number }[]
   giftDisplayById: ReadonlyMap<string, GiftChatDisplayMeta>
 }) {
-  const labelForA11y = [
-    left.name,
-    right.name,
-    ...segments.map(({ entry, count }) => {
-      const label =
-        logEventActionShortLabel(entry, giftDisplayById) ??
-        logEventEmotionEmoji(entry, giftDisplayById) ??
-        String(entry.type)
-      return `${label} ×${count}`
-    }),
-  ].join(", ")
+  const mutual = tryMutualReciprocalPairStrip(segments)
+
+  const labelForA11y = mutual
+    ? [
+        `${mutual.playerA.name} и ${mutual.playerB.name}, взаимно`,
+        ...segments.map(({ entry, count }) => {
+          const label =
+            logEventActionShortLabel(entry, giftDisplayById) ??
+            logEventEmotionEmoji(entry, giftDisplayById) ??
+            String(entry.type)
+          return `${label} ×${count}`
+        }),
+      ].join(", ")
+    : [
+        left.name,
+        right.name,
+        ...segments.map(({ entry, count }) => {
+          const label =
+            logEventActionShortLabel(entry, giftDisplayById) ??
+            logEventEmotionEmoji(entry, giftDisplayById) ??
+            String(entry.type)
+          return `${label} ×${count}`
+        }),
+      ].join(", ")
+
+  if (mutual) {
+    const { playerA, playerB, first, second } = mutual
+    return (
+      <div className="flex w-full min-w-0 justify-start">
+        <div
+          className={cn(
+            "flex w-max min-w-0 max-w-full flex-nowrap items-center gap-0.5 overflow-x-auto overflow-y-hidden py-0.5 pl-0.5 pr-0.5 [-webkit-overflow-scrolling:touch]",
+            "[scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin]",
+            "[&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-500/35 [&::-webkit-scrollbar-track]:bg-transparent",
+            TABLE_CHAT_ROOM_PAIR_STRIP_OUTER,
+          )}
+          aria-label={labelForA11y}
+        >
+          <PairFeedStripTinyAvatar player={playerA} />
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <PairStripEmotionBlock entry={first.entry} count={first.count} giftDisplayById={giftDisplayById} />
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <PairFeedStripTinyAvatar player={playerB} />
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <PairStripEmotionBlock entry={second.entry} count={second.count} giftDisplayById={giftDisplayById} />
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <PairFeedStripTinyAvatar player={playerA} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex w-full min-w-0 justify-start">
@@ -6682,14 +6919,7 @@ function PairFeedStripRow({
         aria-label={labelForA11y}
       >
         <div className="flex shrink-0 items-center gap-0.5 pl-0.5">
-          <div
-            className={cn(
-              "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
-              TABLE_CHAT_ROOM_AVATAR_RING,
-            )}
-          >
-            <img src={left.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
-          </div>
+          <PairFeedStripTinyAvatar player={left} />
           <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
         </div>
 
@@ -6701,88 +6931,23 @@ function PairFeedStripRow({
           )}
         >
           <div className="inline-flex min-h-7 w-max min-w-0 flex-nowrap items-center gap-x-1.5 px-1.5">
-            {segments.map(({ entry, count }, i) => {
-              const emotionEmoji = logEventEmotionEmoji(entry, giftDisplayById)
-              const actionShort = logEventActionShortLabel(entry, giftDisplayById)
-              const giftImg = giftDisplayById.get(String(entry.type))?.img?.trim()
-              const centralHint = pairChatCentralObjectHint(entry, giftDisplayById)
-              const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
-              return (
-                <Fragment key={entry.id}>
-                  {i > 0 ? (
-                    <span
-                      className="inline-block h-3 w-px shrink-0 rounded-full bg-slate-500/35"
-                      aria-hidden
-                    />
-                  ) : null}
-                  <span className="inline-flex shrink-0 items-center gap-0.5">
-                    <Tooltip delayDuration={200}>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="inline-flex max-h-8 min-h-7 min-w-0 max-w-[min(100%,7rem)] cursor-default items-center justify-center rounded-md outline-none ring-0 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/40"
-                          aria-label={centralHint}
-                          tabIndex={0}
-                        >
-                          {entry.type === "bottle_thanks" ? (
-                            <span className="inline-flex h-7 max-h-7 shrink-0 items-center overflow-visible" aria-hidden>
-                              <ThanksCloudBubble variant="chat" />
-                            </span>
-                          ) : emotionEmoji ? (
-                            <span
-                              className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
-                              aria-hidden
-                            >
-                              {emotionEmoji}
-                            </span>
-                          ) : giftImg ? (
-                            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-hidden>
-                              <img
-                                src={giftImg}
-                                alt=""
-                                className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
-                                crossOrigin="anonymous"
-                              />
-                            </span>
-                          ) : (
-                            actionShort && (
-                              <span
-                                className="max-w-[5rem] shrink truncate text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
-                                style={{ color: accentColor }}
-                              >
-                                {actionShort}
-                              </span>
-                            )
-                          )}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        sideOffset={6}
-                        className="border-0 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-100 shadow-xl"
-                      >
-                        {centralHint}
-                      </TooltipContent>
-                    </Tooltip>
-                    <span className={PAIR_FEED_REPEAT_COUNT_CLASS} aria-label={`Количество: ${count}`}>
-                      ×{count}
-                    </span>
-                  </span>
-                </Fragment>
-              )
-            })}
+            {segments.map(({ entry, count }, i) => (
+              <Fragment key={entry.id}>
+                {i > 0 ? (
+                  <span
+                    className="inline-block h-3 w-px shrink-0 rounded-full bg-slate-500/35"
+                    aria-hidden
+                  />
+                ) : null}
+                <PairStripEmotionBlock entry={entry} count={count} giftDisplayById={giftDisplayById} />
+              </Fragment>
+            ))}
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5 pr-0.5">
           <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
-          <div
-            className={cn(
-              "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
-              TABLE_CHAT_ROOM_AVATAR_RING,
-            )}
-          >
-            <img src={right.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
-          </div>
+          <PairFeedStripTinyAvatar player={right} />
         </div>
       </div>
     </div>
@@ -6826,7 +6991,12 @@ function ChatBubble({
               TABLE_CHAT_ROOM_AVATAR_RING,
             )}
           >
-            <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+            <img
+              src={entry.fromPlayer.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(e) => tableChatPlayerAvatarOnError(e, entry.fromPlayer!)}
+            />
           </div>
         )}
         <div className={cn("max-w-[85%] min-w-0", isOwn ? "items-end" : "items-start")}>
@@ -6876,7 +7046,6 @@ function ChatBubble({
             src={vis.src}
             alt=""
             className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)] [transform:rotate(-28deg)]"
-            crossOrigin="anonymous"
           />
         </span>
       )
@@ -6895,7 +7064,7 @@ function ChatBubble({
               src={entry.fromPlayer.avatar}
               alt=""
               className="h-full w-full object-cover"
-              crossOrigin="anonymous"
+              onError={(e) => tableChatPlayerAvatarOnError(e, entry.fromPlayer!)}
             />
           </div>
           <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
@@ -6939,7 +7108,12 @@ function ChatBubble({
               TABLE_CHAT_ROOM_AVATAR_RING,
             )}
           >
-            <img src={left.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+            <img
+              src={left.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(e) => tableChatPlayerAvatarOnError(e, left)}
+            />
           </div>
           <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
           <Tooltip delayDuration={200}>
@@ -6966,7 +7140,6 @@ function ChatBubble({
                       src={giftImg}
                       alt=""
                       className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
-                      crossOrigin="anonymous"
                     />
                   </span>
                 ) : (
@@ -6999,7 +7172,12 @@ function ChatBubble({
               TABLE_CHAT_ROOM_AVATAR_RING,
             )}
           >
-            <img src={right.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+            <img
+              src={right.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(e) => tableChatPlayerAvatarOnError(e, right)}
+            />
           </div>
         </div>
       </div>
@@ -7024,7 +7202,12 @@ function ChatBubble({
               TABLE_CHAT_ROOM_AVATAR_RING,
             )}
           >
-            <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+            <img
+              src={entry.fromPlayer.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(e) => tableChatPlayerAvatarOnError(e, entry.fromPlayer!)}
+            />
           </div>
         )}
         <p

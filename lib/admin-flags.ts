@@ -49,6 +49,13 @@ export function clearAdminFlags(userId: string) {
   db.prepare(`DELETE FROM user_admin_flags WHERE user_id = ?`).run(userId)
 }
 
+/** Снять пометку «удалён администратором» после успешного входа (игрок снова обычный пользователь). */
+export function clearDeletedSanction(userId: string) {
+  const flags = getAdminFlagsForUserId(userId)
+  if (!flags?.deleted) return
+  upsertAdminFlags({ userId, deleted: false })
+}
+
 export function isRestricted(flags: AdminUserFlags | null): { blocked: boolean; banned: boolean; deleted: boolean } {
   const now = Date.now()
   return {

@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 
   const flags = getAdminFlagsForUserId(userRow.id)
   const r = isRestricted(flags)
-  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
+  // «Удалён администратором» — не блокируем: профиль и прогресс сброшены, игрок заходит как с чистого листа.
   if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
   if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
       }
     | undefined
 
-  const displayName = profile?.display_name ?? userRow.username
+  const displayName = (profile?.display_name?.trim() || userRow.username) as string
   const avatarUrl =
     profile?.avatar_url ||
     `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(userRow.username)}`

@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db"
 import { generateSalt, hashPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { parseOkApplicationKey, parseOkLoggedUserId, verifyOkLaunchParams } from "@/lib/ok-launch-params"
-import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { clearDeletedSanction, getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 
 const VALID_GENDERS = ["male", "female"] as const
@@ -43,7 +43,7 @@ function buildUserPayload(
       }
     | undefined
 
-  const displayName = profile?.display_name ?? username
+  const displayName = (profile?.display_name?.trim() || username) as string
   const avatarUrl =
     profile?.avatar_url ||
     `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
@@ -173,21 +173,23 @@ export async function POST(req: Request) {
 
     userRow = { id: userId, username }
   } else if (profileIn != null && typeof profileIn === "object") {
-    const cur = db
-      .prepare(`SELECT display_name, avatar_url FROM player_profiles WHERE user_id = ?`)
-      .get(userRow.id) as { display_name: string; avatar_url: string } | undefined
+    const preFlags = getAdminFlagsForUserId(userRow.id)
+    if (!isRestricted(preFlags).deleted) {
+      const cur = db
+        .prepare(`SELECT display_name, avatar_url FROM player_profiles WHERE user_id = ?`)
+        .get(userRow.id) as { display_name: string; avatar_url: string } | undefined
 
-    const nextName = displayFromOk.length > 0 ? displayFromOk : (cur?.display_name ?? "")
-    const nextAvatar = avatarFromOk.length > 0 ? avatarFromOk : (cur?.avatar_url ?? "")
+      const nextName = displayFromOk.length > 0 ? displayFromOk : (cur?.display_name ?? "")
+      const nextAvatar = avatarFromOk.length > 0 ? avatarFromOk : (cur?.avatar_url ?? "")
 
-    db.prepare(
-      `UPDATE player_profiles SET display_name = ?, avatar_url = ?, updated_at = ? WHERE user_id = ?`,
-    ).run(nextName, nextAvatar || "", now, userRow.id)
+      db.prepare(
+        `UPDATE player_profiles SET display_name = ?, avatar_url = ?, updated_at = ? WHERE user_id = ?`,
+      ).run(nextName, nextAvatar || "", now, userRow.id)
+    }
   }
 
   const flags = getAdminFlagsForUserId(userRow.id)
   const r = isRestricted(flags)
-  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
   if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
   if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
@@ -203,6 +205,8 @@ export async function POST(req: Request) {
     now,
     expiresAt,
   )
+
+  if (flags?.deleted) clearDeletedSanction(userRow.id)
 
   const gameRow = db
     .prepare(

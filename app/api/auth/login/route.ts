@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { verifyPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
-import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { clearDeletedSanction, getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 
 export async function POST(req: Request) {
@@ -25,7 +25,6 @@ export async function POST(req: Request) {
 
   const flags = getAdminFlagsForUserId(user.id)
   const r = isRestricted(flags)
-  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
   if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
   if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
@@ -42,7 +41,7 @@ export async function POST(req: Request) {
     | { display_name: string; avatar_url: string; status: string; gender: string; age: number; purpose: string }
     | undefined
 
-  const displayName = profile?.display_name ?? username
+  const displayName = (profile?.display_name?.trim() || username) as string
   const gender = profile?.gender === "female" ? "female" : "male"
   const avatarUrl =
     profile?.avatar_url || (gender === "female" ? "/assets/avatar-female.svg" : "/assets/avatar-male.svg")
@@ -77,6 +76,8 @@ export async function POST(req: Request) {
     `INSERT INTO sessions (id, user_id, token_hash, created_at, expires_at)
      VALUES (?, ?, ?, ?, ?)`,
   ).run(sessionId, user.id, tokenHash, now, expiresAt)
+
+  if (flags?.deleted) clearDeletedSanction(user.id)
 
   const res = NextResponse.json({
     ok: true,

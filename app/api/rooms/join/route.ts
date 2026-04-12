@@ -31,9 +31,6 @@ export async function POST(req: Request) {
     if (userId) {
       const flags = getAdminFlagsForUserId(userId)
       const r = isRestricted(flags)
-      if (r.deleted) {
-        return NextResponse.json({ ok: false, error: "Удалён администратором" }, { status: 403, headers: NO_CACHE })
-      }
       if (r.blocked) {
         return NextResponse.json({ ok: false, error: "Заблокирован администратором" }, { status: 403, headers: NO_CACHE })
       }

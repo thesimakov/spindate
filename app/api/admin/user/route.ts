@@ -81,22 +81,26 @@ export async function POST(req: Request) {
       upsertAdminFlags({ userId, deleted: true, blockedUntil: null, bannedUntil: null })
 
       db.prepare(
-        `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
-         VALUES (?, 0, '[]', ?)
+        `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, visual_prefs_json, updated_at)
+         VALUES (?, 0, '[]', '{}', ?)
          ON CONFLICT(user_id) DO UPDATE SET
            voice_balance = 0,
            inventory_json = '[]',
+           visual_prefs_json = '{}',
            updated_at = excluded.updated_at`,
       ).run(userId, now)
 
       db.prepare(
         `UPDATE player_profiles
-         SET display_name = 'Удалённый пользователь',
+         SET display_name = '',
              avatar_url = '',
              status = '',
              gender = 'male',
              age = 25,
              purpose = 'communication',
+             city = '',
+             zodiac = '',
+             interests = '',
              updated_at = ?
          WHERE user_id = ?`,
       ).run(now, userId)
@@ -108,11 +112,12 @@ export async function POST(req: Request) {
     // Для VK-only аккаунтов (без users.id) тоже обнуляем состояние.
     if (vkUserId != null && vkUserId > 0) {
       db.prepare(
-        `INSERT INTO vk_user_game_state (vk_user_id, voice_balance, inventory_json, updated_at)
-         VALUES (?, 0, '[]', ?)
+        `INSERT INTO vk_user_game_state (vk_user_id, voice_balance, inventory_json, visual_prefs_json, updated_at)
+         VALUES (?, 0, '[]', '{}', ?)
          ON CONFLICT(vk_user_id) DO UPDATE SET
            voice_balance = 0,
            inventory_json = '[]',
+           visual_prefs_json = '{}',
            updated_at = excluded.updated_at`,
       ).run(vkUserId, now)
     }

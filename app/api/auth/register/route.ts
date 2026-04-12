@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
       const flags = getAdminFlagsForUserId(userId)
       const r = isRestricted(flags)
-      if (r.deleted || r.blocked || r.banned) {
+      if (r.blocked || r.banned) {
         throw new Error("__restricted__")
       }
 

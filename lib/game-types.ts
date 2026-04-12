@@ -95,6 +95,8 @@ export interface GameLogEntry {
     | "bottle_thanks"
   fromPlayer?: Player
   toPlayer?: Player
+  /** Вторая сторона пары (напр. второй из двух при эмоции на пару), если в логе есть pairIds */
+  toPlayer2?: Player
   /** Неупорядоченная пара игроков (minId, maxId) — для сводки поцелуев/кваса/коктейля */
   pairIds?: [number, number]
   /**

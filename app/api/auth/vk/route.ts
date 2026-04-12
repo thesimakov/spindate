@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db"
 import { generateSalt, hashPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { parseVkAppIdFromLaunchSearch, parseVkUserIdFromLaunchSearch, verifyVkLaunchParams } from "@/lib/vk-launch-params"
-import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { clearDeletedSanction, getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 import { parseAgeFromVkBdate, parseZodiacFromVkBdate, vkGenderFromSex } from "@/lib/vk-profile-fields"
 
@@ -49,7 +49,7 @@ function buildUserPayload(
       }
     | undefined
 
-  const displayName = profile?.display_name ?? username
+  const displayName = (profile?.display_name?.trim() || username) as string
   const avatarUrl =
     profile?.avatar_url ||
     `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(username)}`
@@ -197,54 +197,56 @@ export async function POST(req: Request) {
 
     userRow = { id: userId, username }
   } else if (profileIn != null && typeof profileIn === "object") {
-    const cur = db
-      .prepare(
-        `SELECT display_name, avatar_url, gender, age, city, zodiac, interests FROM player_profiles WHERE user_id = ?`,
-      )
-      .get(userRow.id) as
-      | {
-          display_name: string
-          avatar_url: string
-          gender: string
-          age: number
-          city: string
-          zodiac: string
-          interests: string
-        }
-      | undefined
+    const preFlags = getAdminFlagsForUserId(userRow.id)
+    if (!isRestricted(preFlags).deleted) {
+      const cur = db
+        .prepare(
+          `SELECT display_name, avatar_url, gender, age, city, zodiac, interests FROM player_profiles WHERE user_id = ?`,
+        )
+        .get(userRow.id) as
+        | {
+            display_name: string
+            avatar_url: string
+            gender: string
+            age: number
+            city: string
+            zodiac: string
+            interests: string
+          }
+        | undefined
 
-    const curGender: (typeof VALID_GENDERS)[number] =
-      cur?.gender === "female" ? "female" : cur?.gender === "male" ? "male" : "male"
-    const nextGender =
-      genderFromSex && VALID_GENDERS.includes(genderFromSex as (typeof VALID_GENDERS)[number])
-        ? genderFromSex
-        : curGender
+      const curGender: (typeof VALID_GENDERS)[number] =
+        cur?.gender === "female" ? "female" : cur?.gender === "male" ? "male" : "male"
+      const nextGender =
+        genderFromSex && VALID_GENDERS.includes(genderFromSex as (typeof VALID_GENDERS)[number])
+          ? genderFromSex
+          : curGender
 
-    const curAge =
-      typeof cur?.age === "number" && cur.age >= 18 && cur.age <= 120 ? cur.age : 25
-    const nextAge =
-      ageFromBdate != null && ageFromBdate >= 18
-        ? ageFromBdate
-        : ageFromClient != null
-          ? ageFromClient
-          : curAge
+      const curAge =
+        typeof cur?.age === "number" && cur.age >= 18 && cur.age <= 120 ? cur.age : 25
+      const nextAge =
+        ageFromBdate != null && ageFromBdate >= 18
+          ? ageFromBdate
+          : ageFromClient != null
+            ? ageFromClient
+            : curAge
 
-    const nextName = displayFromVk.length > 0 ? displayFromVk : (cur?.display_name ?? "")
-    const nextAvatar = avatarFromVk.length > 0 ? avatarFromVk : (cur?.avatar_url ?? "")
-    const nextCity = cityStr.length > 0 ? cityStr : (cur?.city ?? "")
-    const nextZodiac = zodiacFromBdateStr.length > 0 ? zodiacFromBdateStr : (cur?.zodiac ?? "")
-    const nextInterests = interestsStr.length > 0 ? interestsStr : (cur?.interests ?? "")
+      const nextName = displayFromVk.length > 0 ? displayFromVk : (cur?.display_name ?? "")
+      const nextAvatar = avatarFromVk.length > 0 ? avatarFromVk : (cur?.avatar_url ?? "")
+      const nextCity = cityStr.length > 0 ? cityStr : (cur?.city ?? "")
+      const nextZodiac = zodiacFromBdateStr.length > 0 ? zodiacFromBdateStr : (cur?.zodiac ?? "")
+      const nextInterests = interestsStr.length > 0 ? interestsStr : (cur?.interests ?? "")
 
-    db.prepare(
-      `UPDATE player_profiles SET display_name = ?, avatar_url = ?, gender = ?, age = ?, city = ?, zodiac = ?, interests = ?, updated_at = ?
-       WHERE user_id = ?`,
-    ).run(nextName, nextAvatar || "", nextGender, nextAge, nextCity, nextZodiac, nextInterests, now, userRow.id)
+      db.prepare(
+        `UPDATE player_profiles SET display_name = ?, avatar_url = ?, gender = ?, age = ?, city = ?, zodiac = ?, interests = ?, updated_at = ?
+         WHERE user_id = ?`,
+      ).run(nextName, nextAvatar || "", nextGender, nextAge, nextCity, nextZodiac, nextInterests, now, userRow.id)
+    }
   }
 
-  // restrictions
+  // restrictions (блок/бан — отдельно от «удалён администратором»)
   const flags = getAdminFlagsForUserId(userRow.id)
   const r = isRestricted(flags)
-  if (r.deleted) return NextResponse.json({ ok: false, error: "Аккаунт удалён" }, { status: 403 })
   if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
   if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
 
@@ -257,6 +259,8 @@ export async function POST(req: Request) {
     `INSERT INTO sessions (id, user_id, token_hash, created_at, expires_at)
      VALUES (?, ?, ?, ?, ?)`,
   ).run(sessionId, userRow.id, tokenHash, now, expiresAt)
+
+  if (flags?.deleted) clearDeletedSanction(userRow.id)
 
   const gameRow = db
     .prepare(
