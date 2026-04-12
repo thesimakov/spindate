@@ -91,6 +91,16 @@ export interface GameLogEntry {
     | "bottle_thanks"
   fromPlayer?: Player
   toPlayer?: Player
+  /** Неупорядоченная пара игроков (minId, maxId) — для сводки поцелуев/кваса/коктейля */
+  pairIds?: [number, number]
+  /**
+   * Смена скина бутылочки на столе (покупка или выбор уже купленной).
+   * Рендер в чате: аватар » иконка «было» » иконка «стало».
+   */
+  bottleSkinChange?: {
+    fromSkinId: string
+    toSkinId: string
+  }
   text: string
   timestamp: number
 }
@@ -162,6 +172,8 @@ export type TableStyle =
   | "violet_dream"
   | "cosmic_rockets"
   | "light_day"
+  /** Тёмный космос + оранжевое свечение (отдельный скин по UI-макету) */
+  | "nebula_mockup"
 
 /* ---- Prediction system ---- */
 export interface Prediction {
@@ -344,6 +356,8 @@ export interface GameState {
     extraPerType?: number
     /** Доп. использований по выбранным типам (покупка +50 к типу). */
     extraByType?: Partial<Record<"kiss" | "beer" | "cocktail", number>>
+    /** Сколько раз за dateKey купили докупку лимита (первый раз 5 ❤/тип, далее 15 ❤/тип). */
+    quotaBoostPurchasesCount?: number
   }
   /** Использования лимитированных эмоций за сегодня (не обнуляются при обрезке gameLog). */
   emotionUseTodayByPlayer?: Record<number, EmotionUseTodayBucket>
@@ -420,11 +434,11 @@ export type GameAction =
   | { type: "RESET_POT" }
   // Inventory
   | { type: "ADD_INVENTORY_ITEM"; item: InventoryItem }
-  /** Подарить розу игроку (50 сердец). Повышает рейтинг симпатии. */
+  /** Подарить розу игроку (25 сердец). Повышает рейтинг симпатии. */
   | { type: "GIVE_ROSE"; fromPlayerId: number; toPlayerId: number }
-  /** Обменять розы на голоса: 1 роза = 5 сердец. */
+  /** Обменять розы на голоса: 1 роза = 15 сердец. */
   | { type: "EXCHANGE_ROSES_FOR_VOICES"; amount: number }
-  /** Обменять монеты (сердечки) на розы: 5 сердец = 1 роза. */
+  /** Обменять монеты (сердечки) на розы: 20 сердец = 1 роза. */
   | { type: "EXCHANGE_VOICES_FOR_ROSES"; amount: number }
   /** Обменять один подарок из магазина на сердца: начисление = цена подарка в ❤ − 1. */
   | { type: "EXCHANGE_INVENTORY_GIFT_FOR_VOICES"; giftType: InventoryItem["type"] }
@@ -456,7 +470,6 @@ export type GameAction =
       dateKey: string
       selectedTypes: ("kiss" | "beer" | "cocktail")[]
       extraPerPurchase: number
-      costPerType: number
     }
   | { type: "SET_TABLE_PAUSED"; paused: boolean }
   /** Отметить «ушёл со вкладки» (долгая неактивность / свёрнутая вкладка). Только свой playerId. */

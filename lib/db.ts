@@ -246,6 +246,10 @@ function migrate(database: Database.Database) {
   if (!giftCols.some((c) => c.name === "img")) {
     database.exec(`ALTER TABLE gift_catalog ADD COLUMN img TEXT NOT NULL DEFAULT ''`)
   }
+  const giftColsPay = database.prepare(`PRAGMA table_info(gift_catalog)`).all() as { name: string }[]
+  if (!giftColsPay.some((c) => c.name === "pay_currency")) {
+    database.exec(`ALTER TABLE gift_catalog ADD COLUMN pay_currency TEXT NOT NULL DEFAULT 'hearts'`)
+  }
   const hasPremiumFrames = (database.prepare(`SELECT COUNT(*) as c FROM frame_catalog WHERE section = 'premium'`).get() as { c: number })?.c > 0
   if (hasPremiumFrames) {
     database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)
@@ -306,6 +310,29 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_ticker_player_ads_queue ON ticker_player_ads(status, queue_start_ms, queue_end_ms);
   `)
 
+  // Порог VIP для подарков: 25 ❤ (раньше часто использовали 10)
+  database.exec(`UPDATE gift_catalog SET section = 'paid' WHERE section = 'vip' AND cost < 25`)
+  database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'vip' AND cost < 25`)
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS telegram_stars_pending (
+      id TEXT PRIMARY KEY,
+      app_user_id TEXT,
+      vk_user_id INTEGER NOT NULL DEFAULT 0,
+      hearts INTEGER NOT NULL,
+      stars INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS telegram_stars_payments (
+      charge_id TEXT PRIMARY KEY,
+      app_user_id TEXT,
+      vk_user_id INTEGER NOT NULL DEFAULT 0,
+      hearts INTEGER NOT NULL,
+      stars INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+  `)
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS game_client_errors (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -329,12 +356,23 @@ function migrate(database: Database.Database) {
   })
 
   const insertGift = database.prepare(
-    `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, published, deleted, sort_order, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, pay_currency, published, deleted, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(id) DO NOTHING`,
   )
   DEFAULT_GIFT_CATALOG_ROWS.forEach((row, index) => {
-    insertGift.run(row.id, row.section, row.name, row.emoji, row.img ?? "", row.cost, row.published ? 1 : 0, index, now)
+    insertGift.run(
+      row.id,
+      row.section,
+      row.name,
+      row.emoji,
+      row.img ?? "",
+      row.cost,
+      row.payCurrency,
+      row.published ? 1 : 0,
+      index,
+      now,
+    )
   })
 
   const insertFrame = database.prepare(
@@ -374,6 +412,7 @@ function migrate(database: Database.Database) {
     { id: "violet_dream", name: "Фиолетовый сон", published: 1 },
     { id: "cosmic_rockets", name: "Космос и ракеты", published: 0 },
     { id: "light_day", name: "Светлый день", published: 1 },
+    { id: "nebula_mockup", name: "Небула · макет", published: 1 },
   ] as const
   const insertTableStyle = database.prepare(
     `INSERT INTO table_style_catalog (id, name, published, sort_order, updated_at)

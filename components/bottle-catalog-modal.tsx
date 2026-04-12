@@ -8,14 +8,17 @@ import {
   type Dispatch,
   type PointerEvent,
 } from "react"
-import { Video } from "lucide-react"
+import { Heart, Video } from "lucide-react"
 import { FortuneWheelBottleVisual } from "@/components/fortune-wheel-bottle-visual"
 import { DEFAULT_BOTTLE_CATALOG_ROWS } from "@/lib/bottle-catalog"
 import { generateLogId } from "@/lib/game-context"
 import type { BottleSkin, GameAction, Player } from "@/lib/game-types"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
-import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
+import { isVkMiniApp, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
+
+/** Если реклама недоступна — разблокировка за фиксированную цену ❤ (не `skin.cost` из каталога). */
+const BOTTLE_SKIN_AD_FALLBACK_HEARTS = 5
 
 function formatCooldown(ms: number) {
   const totalSec = Math.ceil(ms / 1000)
@@ -84,6 +87,13 @@ export function BottleCatalogModal({
 
   const ownedSet = useMemo(() => new Set(ownedBottleSkins ?? ["classic"]), [ownedBottleSkins])
 
+  const bottleDisplayNameById = useMemo(() => {
+    const sourceRows = catalogRows.length > 0 ? catalogRows : DEFAULT_BOTTLE_CATALOG_ROWS.filter((r) => r.published)
+    const m = new Map<string, string>()
+    for (const r of sourceRows) m.set(r.id, r.name)
+    return m
+  }, [catalogRows])
+
   const isFreeSkin = (cost: number, section?: "free" | "paid" | "vip") => section === "free" || cost <= 0
   const isVipSkin = (section?: "free" | "paid" | "vip") => section === "vip"
 
@@ -97,9 +107,11 @@ export function BottleCatalogModal({
       const selected = (effectiveBottleSkin ?? bottleSkin) === skin.id
       const cooldownActive = cooldownLeftMs > 0
       const purchaseLocked = cooldownActive && !owned && !freeSkin
-      const notEnough = !owned && !freeSkin && voiceBalance < skin.cost
-      const vipLocked = vipSkin && !owned && !currentUser?.isVip
       const fallbackToHearts = adFallbackToHearts[skin.id] === true
+      /** Не хватает ❤ только в режиме покупки за сердца (после недоступной рекламы — фикс. цена). */
+      const notEnough =
+        !owned && !freeSkin && fallbackToHearts && voiceBalance < BOTTLE_SKIN_AD_FALLBACK_HEARTS
+      const vipLocked = vipSkin && !owned && !currentUser?.isVip
       const disabled = purchaseLocked || notEnough || vipLocked
 
       const status = owned
@@ -113,15 +125,16 @@ export function BottleCatalogModal({
             : purchaseLocked
               ? `Через ${formatCooldown(cooldownLeftMs)}`
               : fallbackToHearts
-                ? `${skin.cost} ❤`
+                ? `${BOTTLE_SKIN_AD_FALLBACK_HEARTS} ❤`
           : ""
 
-      const applyPurchase = (chargeHearts: boolean) => {
+      const applyPurchase = (chargeHearts: boolean, heartAmount = skin.cost) => {
         if (chargeHearts) {
-          dispatch({ type: "PAY_VOICES", amount: skin.cost })
+          dispatch({ type: "PAY_VOICES", amount: heartAmount })
         }
         const cdUntil = Date.now() + 30 * 60 * 1000
         if (currentUser) {
+          const prevSkinId = String(effectiveBottleSkin ?? bottleSkin ?? "classic")
           dispatch({
             type: "SET_BOTTLE_TABLE_PURCHASE",
             skin: skin.id,
@@ -135,6 +148,7 @@ export function BottleCatalogModal({
               id: generateLogId(),
               type: "system",
               fromPlayer: currentUser,
+              bottleSkinChange: { fromSkinId: prevSkinId, toSkinId: skin.id },
               text: `${currentUser.name} купил(а) бутылочку «${skin.name}»`,
               timestamp: Date.now(),
             },
@@ -147,7 +161,24 @@ export function BottleCatalogModal({
 
       const handleClick = async () => {
         if (owned || freeSkin) {
+          const prevId = (effectiveBottleSkin ?? bottleSkin ?? "classic") as BottleSkin
+          if (skin.id === prevId) return
           dispatch({ type: "SET_BOTTLE_SKIN", skin: skin.id })
+          if (currentUser) {
+            const oldName = bottleDisplayNameById.get(prevId) ?? prevId
+            const newName = bottleDisplayNameById.get(skin.id) ?? skin.name
+            dispatch({
+              type: "ADD_LOG",
+              entry: {
+                id: generateLogId(),
+                type: "system",
+                fromPlayer: currentUser,
+                bottleSkinChange: { fromSkinId: prevId, toSkinId: skin.id },
+                text: `${currentUser.name}: бутылочка «${oldName}» → «${newName}»`,
+                timestamp: Date.now(),
+              },
+            })
+          }
           return
         }
         if (vipLocked) {
@@ -159,11 +190,22 @@ export function BottleCatalogModal({
           return
         }
         if (fallbackToHearts) {
-          if (voiceBalance < skin.cost) {
+          if (voiceBalance < BOTTLE_SKIN_AD_FALLBACK_HEARTS) {
             showToast("Недостаточно сердец", "error")
             return
           }
-          applyPurchase(true)
+          applyPurchase(true, BOTTLE_SKIN_AD_FALLBACK_HEARTS)
+          showToast("Бутылочка куплена", "success")
+          return
+        }
+
+        /* Вне мини-приложения VK рекламы нет — сразу покупка за фикс. ❤, без ожидания bridge. */
+        if (!isVkMiniApp()) {
+          if (voiceBalance < BOTTLE_SKIN_AD_FALLBACK_HEARTS) {
+            showToast("Недостаточно сердец", "error")
+            return
+          }
+          applyPurchase(true, BOTTLE_SKIN_AD_FALLBACK_HEARTS)
           showToast("Бутылочка куплена", "success")
           return
         }
@@ -171,14 +213,11 @@ export function BottleCatalogModal({
         if (adBusySkinId) return
         setAdBusySkinId(skin.id)
         try {
-          const runtime = await isVkRuntimeEnvironment()
           let shown = false
-          if (runtime) {
-            try {
-              shown = await showVkNativeAd("reward")
-            } catch {
-              shown = false
-            }
+          try {
+            shown = await showVkNativeAd("reward")
+          } catch {
+            shown = false
           }
           if (shown) {
             applyPurchase(false)
@@ -186,7 +225,7 @@ export function BottleCatalogModal({
             return
           }
           setAdFallbackToHearts((prev) => ({ ...prev, [skin.id]: true }))
-          showToast("Реклама недоступна. Можно купить за сердца.", "info")
+          showToast(`Реклама недоступна. Купить за ${BOTTLE_SKIN_AD_FALLBACK_HEARTS} ❤`, "info")
         } finally {
           setAdBusySkinId(null)
         }
@@ -218,6 +257,7 @@ export function BottleCatalogModal({
     currentUser,
     adBusySkinId,
     adFallbackToHearts,
+    bottleDisplayNameById,
   ])
 
   const free = entries.filter((e) => isFreeSkin(e.skin.cost, e.skin.section))
@@ -262,7 +302,7 @@ export function BottleCatalogModal({
                   : e.fallbackToHearts && e.notEnough
                   ? "Недостаточно ❤"
                   : e.fallbackToHearts
-                    ? "Купить за ❤"
+                    ? `Купить за ${BOTTLE_SKIN_AD_FALLBACK_HEARTS} ❤`
                     : "Смотреть"
 
           return (
@@ -314,7 +354,7 @@ export function BottleCatalogModal({
                         border: "1px solid rgba(251, 191, 36, 0.35)",
                       }}
                     >
-                      Реклама недоступна: можно купить за ❤
+                      Реклама недоступна: {BOTTLE_SKIN_AD_FALLBACK_HEARTS} ❤
                     </span>
                   </div>
                 )}
@@ -336,7 +376,7 @@ export function BottleCatalogModal({
                     ? "border border-emerald-500/35 bg-emerald-950/40 text-emerald-200"
                     : e.disabled
                       ? "border border-slate-600/50 bg-slate-900/80 text-slate-500"
-                      : "border border-amber-500/40 text-amber-950 shadow-[0_6px_16px_rgba(251,191,36,0.22)] hover:brightness-110")
+                      : "border border-amber-500/40 text-amber-950 shadow-[0_6px_16px_rgba(251,191,36,0.22)] hover:shadow-[0_8px_20px_rgba(251,191,36,0.28)]")
                 }
                 style={
                   e.selected || e.disabled
@@ -344,11 +384,18 @@ export function BottleCatalogModal({
                     : { background: "linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%)" }
                 }
               >
-                {!e.selected && !e.fallbackToHearts && !e.vipLocked && !e.purchaseLocked && adBusySkinId !== e.skin.id ? (
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    <Video className="h-3.5 w-3.5" />
-                    {ctaLabel}
-                  </span>
+                {!e.selected && !e.vipLocked && !e.purchaseLocked && adBusySkinId !== e.skin.id ? (
+                  e.fallbackToHearts ? (
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <Heart className="h-3.5 w-3.5" />
+                      {ctaLabel}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <Video className="h-3.5 w-3.5" />
+                      {ctaLabel}
+                    </span>
+                  )
                 ) : (
                   ctaLabel
                 )}
@@ -401,7 +448,7 @@ export function BottleCatalogModal({
           </div>
           <button
             type="button"
-            className="shrink-0 rounded-xl px-3 py-2 text-[12px] font-bold transition hover:brightness-110 active:scale-[0.99]"
+            className="shrink-0 rounded-xl px-3 py-2 text-[12px] font-bold transition hover:bg-slate-800/30 active:scale-[0.99]"
             style={{ border: "1px solid rgba(148,163,184,0.35)", color: "#f0e0c8", background: "rgba(15,23,42,0.12)" }}
             onClick={onClose}
           >

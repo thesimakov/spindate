@@ -124,7 +124,6 @@ export function SpaceRocketsLayer() {
       if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current)
       ro.disconnect()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const style = useMemo(

@@ -3,21 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { generateLogId } from "@/lib/game-context"
 import type { GameAction, Player } from "@/lib/game-types"
-import { FORTUNE_WHEEL_SEGMENTS, fortuneWheelTicketsStorageKey, resolveFortuneWheelSpin } from "@/lib/fortune-wheel"
-
-const FREE_CHANCE_INTERVAL_MS = 5 * 60 * 60 * 1000
-
-function freeChanceKey(playerId: number): string {
-  return `spindate_fortune_wheel_free_chance_v1_${playerId}`
-}
-
-function formatCountdown(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const s = total % 60
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-}
+import {
+  FORTUNE_WHEEL_SEGMENTS,
+  FORTUNE_WHEEL_SPIN_COST_HEARTS,
+  fortuneWheelAdSpinStorageKey,
+  getLocalDateKey,
+  resolveFortuneWheelSpin,
+} from "@/lib/fortune-wheel"
+import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 
 type UseFortuneWheelParams = {
   currentUser: Player | null
@@ -27,56 +20,30 @@ type UseFortuneWheelParams = {
 }
 
 export function useFortuneWheel({ currentUser, dispatch, voiceBalance, showToast }: UseFortuneWheelParams) {
-  const [wheelTickets, setWheelTickets] = useState(3)
   const [wheelRotationDeg, setWheelRotationDeg] = useState(0)
   const [wheelSpinning, setWheelSpinning] = useState(false)
   const [wheelLastRewardText, setWheelLastRewardText] = useState<string | null>(null)
-  const [nextFreeChanceTs, setNextFreeChanceTs] = useState<number>(Date.now())
-  const [nowTs, setNowTs] = useState<number>(Date.now())
+  const [adSpinUsedToday, setAdSpinUsedToday] = useState(false)
+  const [nowTick, setNowTick] = useState(0)
   const wheelSpinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const t = setInterval(() => setNowTs(Date.now()), 1000)
+    const t = setInterval(() => setNowTick((x) => x + 1), 60_000)
     return () => clearInterval(t)
   }, [])
 
   useEffect(() => {
     if (!currentUser) {
-      setWheelTickets(3)
-      setNextFreeChanceTs(Date.now())
+      setAdSpinUsedToday(false)
       return
     }
     try {
-      const rawTickets = localStorage.getItem(fortuneWheelTicketsStorageKey(currentUser.id))
-      const parsedTickets = rawTickets ? Number.parseInt(rawTickets, 10) : 3
-      setWheelTickets(Number.isFinite(parsedTickets) ? Math.max(0, parsedTickets) : 3)
-
-      const rawFreeTs = localStorage.getItem(freeChanceKey(currentUser.id))
-      const parsedFreeTs = rawFreeTs ? Number.parseInt(rawFreeTs, 10) : Date.now()
-      setNextFreeChanceTs(Number.isFinite(parsedFreeTs) ? parsedFreeTs : Date.now())
+      const k = fortuneWheelAdSpinStorageKey(currentUser.id, getLocalDateKey())
+      setAdSpinUsedToday(localStorage.getItem(k) === "1")
     } catch {
-      setWheelTickets(3)
-      setNextFreeChanceTs(Date.now())
+      setAdSpinUsedToday(false)
     }
-  }, [currentUser?.id])
-
-  useEffect(() => {
-    if (!currentUser) return
-    try {
-      localStorage.setItem(fortuneWheelTicketsStorageKey(currentUser.id), String(Math.max(0, wheelTickets)))
-    } catch {
-      // ignore
-    }
-  }, [currentUser?.id, wheelTickets])
-
-  useEffect(() => {
-    if (!currentUser) return
-    try {
-      localStorage.setItem(freeChanceKey(currentUser.id), String(nextFreeChanceTs))
-    } catch {
-      // ignore
-    }
-  }, [currentUser?.id, nextFreeChanceTs])
+  }, [currentUser?.id, nowTick])
 
   useEffect(() => {
     return () => {
@@ -105,102 +72,101 @@ export function useFortuneWheel({ currentUser, dispatch, voiceBalance, showToast
         return
       }
 
-      if (segment.kind === "roses") {
-        const base = Date.now()
-        for (let i = 0; i < segment.amount; i++) {
-          dispatch({
-            type: "ADD_INVENTORY_ITEM",
-            item: {
-              type: "rose",
-              fromPlayerId: 0,
-              fromPlayerName: "Колесо фортуны",
-              timestamp: base + i,
-            },
-          })
-        }
-        setWheelLastRewardText(`+${segment.amount} 🌹`)
+      const base = Date.now()
+      for (let i = 0; i < segment.amount; i++) {
         dispatch({
-          type: "ADD_LOG",
-          entry: {
-            id: generateLogId(),
-            type: "system",
-            fromPlayer: currentUser,
-            text: `${currentUser.name} выиграл(а) в Колесе фортуны: +${segment.amount} роз`,
-            timestamp: Date.now(),
+          type: "ADD_INVENTORY_ITEM",
+          item: {
+            type: "rose",
+            fromPlayerId: 0,
+            fromPlayerName: "Колесо фортуны",
+            timestamp: base + i,
           },
         })
-        showToast(`Выигрыш: +${segment.amount} роз`, "success")
-        return
       }
-
-      setWheelTickets((v) => v + segment.amount)
-      setWheelLastRewardText(`+${segment.amount} 🎡`)
-      showToast(`Выигрыш: +${segment.amount} бил.${segment.amount > 1 ? "ета" : "ет"}`, "success")
+      setWheelLastRewardText(`+${segment.amount} 🌹`)
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "system",
+          fromPlayer: currentUser,
+          text: `${currentUser.name} выиграл(а) в Колесе фортуны: +${segment.amount} роз`,
+          timestamp: Date.now(),
+        },
+      })
+      showToast(`Выигрыш: +${segment.amount} роз`, "success")
     },
     [currentUser, dispatch, showToast],
   )
 
-  const spinFortuneWheel = useCallback(
-    (consumeTicket: boolean) => {
-      if (!currentUser) return
-      if (wheelSpinning) return
-      if (consumeTicket && wheelTickets <= 0) {
-        showToast("Нет билетов для прокрутки", "info")
-        return
-      }
-      if (!consumeTicket && Date.now() < nextFreeChanceTs) return
+  const startSpinAnimation = useCallback(() => {
+    if (!currentUser) return
+    setWheelSpinning(true)
+    setWheelLastRewardText(null)
 
-      if (consumeTicket) setWheelTickets((v) => Math.max(0, v - 1))
-      else setNextFreeChanceTs(Date.now() + FREE_CHANCE_INTERVAL_MS)
-
-      setWheelSpinning(true)
-      setWheelLastRewardText(null)
-
-      const { idx, nextRotation } = resolveFortuneWheelSpin(wheelRotationDeg, FORTUNE_WHEEL_SEGMENTS.length)
-      setWheelRotationDeg(nextRotation)
-
+    setWheelRotationDeg((prevDeg) => {
+      const { idx, nextRotation } = resolveFortuneWheelSpin(prevDeg, FORTUNE_WHEEL_SEGMENTS.length)
       if (wheelSpinTimeoutRef.current) clearTimeout(wheelSpinTimeoutRef.current)
       wheelSpinTimeoutRef.current = setTimeout(() => {
         grantFortuneWheelReward(FORTUNE_WHEEL_SEGMENTS[idx])
         setWheelSpinning(false)
       }, 4800)
-    },
-    [currentUser, wheelSpinning, wheelTickets, nextFreeChanceTs, wheelRotationDeg, grantFortuneWheelReward, showToast],
-  )
+      return nextRotation
+    })
+  }, [currentUser, grantFortuneWheelReward])
 
-  const handleSpinFortuneWheel = useCallback(() => spinFortuneWheel(true), [spinFortuneWheel])
-  const handleSpinFreeChance = useCallback(() => spinFortuneWheel(false), [spinFortuneWheel])
+  const handleSpinWithHearts = useCallback(() => {
+    if (!currentUser) return
+    if (wheelSpinning) return
+    if (voiceBalance < FORTUNE_WHEEL_SPIN_COST_HEARTS) {
+      showToast("Недостаточно сердец", "error")
+      return
+    }
+    dispatch({ type: "PAY_VOICES", amount: FORTUNE_WHEEL_SPIN_COST_HEARTS })
+    startSpinAnimation()
+  }, [currentUser, dispatch, voiceBalance, wheelSpinning, showToast, startSpinAnimation])
 
-  const handleBuyWheelTickets = useCallback(
-    (count: number, cost: number) => {
-      if (!currentUser) return
-      if (voiceBalance < cost) {
-        showToast("Недостаточно сердец", "error")
-        return
-      }
-      dispatch({ type: "PAY_VOICES", amount: cost })
-      setWheelTickets((v) => v + count)
-      showToast(`Куплено билетов: +${count}`, "success")
-    },
-    [currentUser, dispatch, showToast, voiceBalance],
-  )
+  const handleSpinWithAd = useCallback(async () => {
+    if (!currentUser) return
+    if (wheelSpinning) return
+    if (adSpinUsedToday) {
+      showToast("Сегодня бесплатный спин по рекламе уже использован", "info")
+      return
+    }
+    if (!(await isVkRuntimeEnvironment())) {
+      showToast("Реклама для бесплатного спина доступна в приложении ВКонтакте", "info")
+      return
+    }
+    let shown = false
+    try {
+      shown = await showVkNativeAd("reward")
+    } catch {
+      return
+    }
+    if (!shown) return
+    try {
+      localStorage.setItem(fortuneWheelAdSpinStorageKey(currentUser.id, getLocalDateKey()), "1")
+    } catch {
+      // ignore
+    }
+    setAdSpinUsedToday(true)
+    startSpinAnimation()
+  }, [adSpinUsedToday, currentUser, showToast, startSpinAnimation, wheelSpinning])
 
-  const freeChanceReady = nowTs >= nextFreeChanceTs
-  const freeChanceTimeLeftMs = Math.max(0, nextFreeChanceTs - nowTs)
-  const freeChanceCountdown = useMemo(
-    () => (freeChanceReady ? "готово" : formatCountdown(freeChanceTimeLeftMs)),
-    [freeChanceReady, freeChanceTimeLeftMs],
+  const canAffordSpin = useMemo(
+    () => voiceBalance >= FORTUNE_WHEEL_SPIN_COST_HEARTS,
+    [voiceBalance],
   )
 
   return {
-    wheelTickets,
     wheelRotationDeg,
     wheelSpinning,
     wheelLastRewardText,
-    freeChanceReady,
-    freeChanceCountdown,
-    handleSpinFortuneWheel,
-    handleSpinFreeChance,
-    handleBuyWheelTickets,
+    adSpinUsedToday,
+    canAffordSpin,
+    spinCostHearts: FORTUNE_WHEEL_SPIN_COST_HEARTS,
+    handleSpinWithHearts,
+    handleSpinWithAd,
   }
 }

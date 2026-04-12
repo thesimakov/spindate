@@ -11,24 +11,49 @@ type BankHeartBalanceTooltipProps = {
   onOpenShop: () => void
   className?: string
   tabularClassName?: string
+  /** Активный бонус за столом (+1 ❤ / 60 с, лимит/сутки). */
+  activeBonus?: {
+    earnedToday: number
+    dailyCap: number
+    /** Условия для начисления выполняются (есть второй игрок, не пауза и т.д.). */
+    isAccruing: boolean
+    /** Пояснение, когда начисление сейчас не идёт. */
+    idleHint?: string
+  }
 }
 
-/** Число банка с подсказкой таймера и кнопкой «Ускорить» → магазин */
+/** Число банка с подсказкой активного бонуса и кнопкой «Ускорить» → магазин */
 export function BankHeartBalanceTooltip({
   voiceBalance,
   msUntilNext,
   onOpenShop,
   className,
   tabularClassName,
+  activeBonus,
 }: BankHeartBalanceTooltipProps) {
   const t = formatBankPassiveCountdown(msUntilNext)
   const compact = formatVoiceBalanceCompact(voiceBalance)
+
+  const bonusTitle = activeBonus
+    ? !activeBonus.isAccruing && activeBonus.idleHint
+      ? `Активный бонус: ${activeBonus.idleHint}`
+      : !activeBonus.isAccruing
+        ? "Активный бонус: сейчас не копится"
+        : activeBonus.earnedToday >= activeBonus.dailyCap
+          ? `Активный бонус: лимит ${activeBonus.dailyCap} ❤/сутки исчерпан`
+          : `Активный бонус: +1 ❤ через ${t} · ${activeBonus.earnedToday}/${activeBonus.dailyCap} за сегодня`
+    : ""
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           className={cn("cursor-help tabular-nums", className)}
-          title={`Баланс: ${voiceBalance.toLocaleString("ru-RU")} ❤ · следующие 3 сердечка через ${t}`}
+          title={
+            activeBonus
+              ? `Баланс: ${voiceBalance.toLocaleString("ru-RU")} ❤ · ${bonusTitle}`
+              : `Баланс: ${voiceBalance.toLocaleString("ru-RU")} ❤`
+          }
         >
           <span className={tabularClassName}>{compact}</span>
         </span>
@@ -36,15 +61,36 @@ export function BankHeartBalanceTooltip({
       <TooltipContent
         side="top"
         sideOffset={6}
-        className="max-w-[18rem] border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 shadow-xl"
+        className="max-w-[20rem] border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100 shadow-xl"
       >
         <p className="text-[11px] font-semibold tabular-nums text-white">
           Точный баланс: {voiceBalance.toLocaleString("ru-RU")} ❤
         </p>
-        <p className="mt-1.5 text-xs font-medium leading-snug">
-          Следующие 3 сердечка через{" "}
-          <span className="font-black tabular-nums text-cyan-300">{t}</span>
-        </p>
+        {activeBonus && (
+          <div className="mt-1.5 space-y-1.5 text-xs font-medium leading-snug">
+            <p className="font-bold text-cyan-200/95">Активный бонус</p>
+            {!activeBonus.isAccruing && activeBonus.idleHint ? (
+              <p className="text-slate-300">{activeBonus.idleHint}</p>
+            ) : !activeBonus.isAccruing ? (
+              <p className="text-slate-400">
+                За столом с бутылочкой: до {activeBonus.dailyCap} ❤ в сутки активным игрокам (+1 ❤ / 60 с).
+              </p>
+            ) : activeBonus.earnedToday >= activeBonus.dailyCap ? (
+              <p className="text-slate-300">
+                Сегодня уже получено максимум ({activeBonus.dailyCap} ❤) за игру за столом. Лимит обновится после полуночи.
+              </p>
+            ) : (
+              <p className="text-slate-200">
+                Сегодня:{" "}
+                <span className="font-black tabular-nums text-cyan-300">
+                  {activeBonus.earnedToday}/{activeBonus.dailyCap}
+                </span>{" "}
+                · следующее +1 через{" "}
+                <span className="font-black tabular-nums text-cyan-300">{t}</span>
+              </p>
+            )}
+          </div>
+        )}
         <button
           type="button"
           onClick={(e) => {

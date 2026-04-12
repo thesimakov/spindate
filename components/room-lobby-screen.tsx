@@ -43,7 +43,7 @@ import {
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { useTableStyleCatalog } from "@/lib/use-table-style-catalog"
 import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
-import { buyHearts200, isVkRuntimeEnvironment, showVkWallPostConfirm } from "@/lib/vk-bridge"
+import { buyHeartsPack, isVkRuntimeEnvironment, showVkWallPostConfirm } from "@/lib/vk-bridge"
 import { formatUserTableSharePostText } from "@/lib/achievement-posts-format"
 import { SHARE_USER_TABLE_POST_KEY } from "@/lib/achievement-posts-catalog"
 import { useInlineToast } from "@/hooks/use-inline-toast"
@@ -65,8 +65,8 @@ type LobbyRow = {
 }
 
 const DEFAULT_CREATE_COST = 100
-const BUY_HEARTS_AMOUNT = 200
-const BUY_HEARTS_VOTES = 9
+const BUY_HEARTS_AMOUNT = 400
+const BUY_HEARTS_VOTES = 25
 const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"
 const VISITED_TTL_MS = 24 * 60 * 60 * 1000
 type LobbyTab = "default" | "created"
@@ -104,6 +104,8 @@ const TABLE_STYLE_PREVIEW: Record<RoomTableStyle, string> = {
     "radial-gradient(circle at 30% 20%, rgba(56,189,248,0.35), transparent 55%), radial-gradient(circle at 80% 70%, rgba(147,51,234,0.25), transparent 55%), linear-gradient(135deg, rgba(2,6,23,0.95), rgba(15,23,42,0.92))",
   light_day:
     "linear-gradient(135deg, rgba(236,253,245,0.95), rgba(224,242,254,0.92) 45%, rgba(250,245,255,0.9))",
+  nebula_mockup:
+    "radial-gradient(ellipse 90% 70% at 10% 15%, rgba(37,99,235,0.26), transparent 52%), radial-gradient(ellipse 70% 55% at 75% 35%, rgba(124,58,237,0.2), transparent 54%), radial-gradient(ellipse 45% 35% at 50% 95%, rgba(245,158,11,0.16), transparent 55%), linear-gradient(168deg, rgba(15,23,42,0.72), rgba(30,27,75,0.58) 48%, rgba(9,9,26,0.78))",
 }
 
 /** VK: query нужен, если нет cookie-сессии (мини-приложение). */
@@ -536,7 +538,7 @@ export function RoomLobbyScreen() {
     if (!user) return
     setBuyLoading(true)
     try {
-      const ok = await buyHearts200()
+      const ok = await buyHeartsPack(400)
       if (ok) {
         const baseline = voiceBalance
         const deadline = Date.now() + 25_000

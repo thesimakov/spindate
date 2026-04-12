@@ -21,6 +21,8 @@ import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 import { trimRoomChatMessages } from "@/lib/room-chat-retention"
+import { mergeGameLogsForSync } from "@/lib/table-authority-merge"
+import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
 export { AVATAR_FRAME_IDS }
@@ -98,6 +100,7 @@ const initialState: GameState = {
     dateKey: "",
     extraPerType: 0,
     extraByType: {},
+    quotaBoostPurchasesCount: 0,
   },
   emotionUseTodayByPlayer: {},
   tablePaused: false,
@@ -153,15 +156,31 @@ function parseAdmirersFromStorage(raw: string): Player[] {
 function persistAdmirersList(userId: number, list: Player[]) {
   if (typeof window === "undefined") return
   const data = JSON.stringify(list)
-  try { window.localStorage.setItem(ADMIRERS_LS_KEY(userId), data) } catch {}
-  try { window.sessionStorage.setItem(ADMIRERS_LS_KEY(userId), data) } catch {}
+  try {
+    window.localStorage.setItem(ADMIRERS_LS_KEY(userId), data)
+  } catch {
+    void 0
+  }
+  try {
+    window.sessionStorage.setItem(ADMIRERS_LS_KEY(userId), data)
+  } catch {
+    void 0
+  }
 }
 
 function persistFavoritesList(userId: number, list: Player[]) {
   if (typeof window === "undefined") return
   const data = JSON.stringify(list)
-  try { window.localStorage.setItem(FAVORITES_LS_KEY(userId), data) } catch {}
-  try { window.sessionStorage.setItem(FAVORITES_LS_KEY(userId), data) } catch {}
+  try {
+    window.localStorage.setItem(FAVORITES_LS_KEY(userId), data)
+  } catch {
+    void 0
+  }
+  try {
+    window.sessionStorage.setItem(FAVORITES_LS_KEY(userId), data)
+  } catch {
+    void 0
+  }
 }
 
 function dateKeyFromTimestamp(ts: number): string {
@@ -422,7 +441,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         players: [],
         tableId: (() => {
           if (typeof window !== "undefined") {
-            try { window.sessionStorage.removeItem("spindate_tableId") } catch {}
+            try {
+              window.sessionStorage.removeItem("spindate_tableId")
+            } catch {
+              void 0
+            }
           }
           return Math.floor(Math.random() * 9999) + 1
         })(),
@@ -590,6 +613,9 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         let targetPlayer2: Player | null = null
         let seedLog: GameState["gameLog"] = state.gameLog.slice(-20)
 
+        const uJoin = state.currentUser
+        const joinText = tableJoinAnnouncementText(uJoin?.name?.trim() || "Игрок", uJoin?.gender)
+
         if (spinner && target1 && target2 && nextPlayers.length >= 3) {
           const targetIdx = nextPlayers.findIndex((p) => p.id === target1.id)
           const segmentDeg = 360 / nextPlayers.length
@@ -612,7 +638,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
               id: generateLogId(),
               type: "system",
               fromPlayer: state.currentUser ?? undefined,
-              text: `Вы присоединились к столу #${action.tableId}. Игра уже идёт`,
+              text: joinText,
               timestamp: now,
             },
             {
@@ -631,7 +657,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
               id: generateLogId(),
               type: "system",
               fromPlayer: state.currentUser ?? undefined,
-              text: `Вы присоединились к столу #${action.tableId}. Игра уже идёт`,
+              text: joinText,
               timestamp: now,
             },
           ]
@@ -653,7 +679,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         }
 
         if (typeof window !== "undefined") {
-          try { window.sessionStorage.setItem("spindate_tableId", String(action.tableId)) } catch {}
+          try {
+            window.sessionStorage.setItem("spindate_tableId", String(action.tableId))
+          } catch {
+            void 0
+          }
         }
         return {
         ...state,
@@ -912,6 +942,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       const sameDay = Boolean(currentBoost?.dateKey) && currentBoost?.dateKey === action.dateKey
       const nextExtra = (sameDay ? currentBoost?.extraPerType ?? 0 : 0) + action.extraPerType
       const mergedExtraByType = sameDay ? { ...(currentBoost?.extraByType ?? {}) } : {}
+      const qCount = sameDay ? (currentBoost?.quotaBoostPurchasesCount ?? 0) : 0
       return {
         ...state,
         voiceBalance: state.voiceBalance - action.cost,
@@ -919,18 +950,26 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           dateKey: action.dateKey,
           extraPerType: nextExtra,
           extraByType: mergedExtraByType,
+          quotaBoostPurchasesCount: qCount,
         },
       }
     }
     case "BUY_EMOTION_QUOTA_SELECTION": {
-      const { dateKey, selectedTypes, extraPerPurchase, costPerType } = action
-      if (!selectedTypes.length || extraPerPurchase <= 0 || costPerType <= 0) return state
+      const { dateKey, selectedTypes, extraPerPurchase } = action
+      if (!selectedTypes.length || extraPerPurchase <= 0) return state
+      const cur = state.emotionDailyBoost ?? {
+        dateKey: "",
+        extraPerType: 0,
+        extraByType: {},
+        quotaBoostPurchasesCount: 0,
+      }
+      const sameDay = Boolean(cur.dateKey) && cur.dateKey === dateKey
+      const prevPurchases = sameDay ? (cur.quotaBoostPurchasesCount ?? 0) : 0
+      const costPerType = prevPurchases === 0 ? 5 : 15
       const totalCost = selectedTypes.length * costPerType
       if (state.voiceBalance < totalCost) return state
-      const cur = state.emotionDailyBoost ?? { dateKey: "", extraPerType: 0, extraByType: {} }
       // Только совпадение даты (без «truthy» extraByType) — иначе после первой покупки
       // { kiss: 50 } терялся при повторном мерже из-за `sameDay && cur?.extraByType`.
-      const sameDay = Boolean(cur.dateKey) && cur.dateKey === dateKey
       const extraByType: Partial<Record<"kiss" | "beer" | "cocktail", number>> = sameDay
         ? { ...(cur.extraByType ?? {}) }
         : {}
@@ -946,6 +985,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           dateKey,
           extraPerType: legacy,
           extraByType,
+          quotaBoostPurchasesCount: prevPurchases + 1,
         },
       }
     }
@@ -1012,10 +1052,10 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "ADD_INVENTORY_ITEM":
       return { ...state, inventory: [...state.inventory, action.item] }
     case "GIVE_ROSE": {
-      if (state.voiceBalance < 50) return state
+      if (state.voiceBalance < 25) return state
       return {
         ...state,
-        voiceBalance: state.voiceBalance - 50,
+        voiceBalance: state.voiceBalance - 25,
         rosesGiven: [
           ...(state.rosesGiven ?? []),
           {
@@ -1035,11 +1075,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         inventory: [...rest, ...rosesLeft],
-        voiceBalance: state.voiceBalance + toRemove * 5,
+        voiceBalance: state.voiceBalance + toRemove * 15,
       }
     }
     case "EXCHANGE_VOICES_FOR_ROSES": {
-      const costPerRose = 5
+      const costPerRose = 20
       const cost = action.amount * costPerRose
       if (state.voiceBalance < cost || action.amount <= 0) return state
       const newRoses = Array.from({ length: action.amount }, (_, i) => ({
@@ -1092,7 +1132,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         ugadaikaRoundsWon: nextTotal,
         ugadaikaRoundsByPlayer: byPlayer,
-        voiceBalance: state.voiceBalance + 10,
+        voiceBalance: state.voiceBalance + 20,
       }
       if (nextTotal % 10 === 0) {
         const newRose: InventoryItem = {
@@ -1304,7 +1344,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         extraTurnPlayerId: p.extraTurnPlayerId,
         playerInUgadaika: p.playerInUgadaika ?? null,
         spinSkips: { ...p.spinSkips },
-        gameLog: [...p.gameLog],
+        gameLog: mergeGameLogsForSync(state.gameLog, p.gameLog),
         emotionUseTodayByPlayer,
         generalChatMessages: trimRoomChatMessages(p.generalChatMessages),
         avatarFrames: mergedFrames,

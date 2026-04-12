@@ -2,6 +2,7 @@ import type { TableAuthorityPayload, Player } from "@/lib/game-types"
 import { GAME_TABLE_LOG_MAX_ENTRIES } from "@/lib/game-types"
 import { generateLogId } from "@/lib/ids"
 import { getPairGenderCombo } from "@/lib/pair-utils"
+import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
 /**
  * Начальное состояние стола (аналог SET_TABLE в gameReducer), без currentUser-зависимых текстов.
  */
@@ -48,12 +49,13 @@ export function buildInitialAuthoritySnapshot(
     else resultAction = "cocktail"
 
     const pairText = `${target1.name} & ${target2.name}`
+    const joinPlayer = nextPlayers[0]
     gameLog = [
       {
         id: generateLogId(),
         type: "system",
-        fromPlayer: spinner,
-        text: `Вы присоединились к столу #${tableId}. Игра уже идёт`,
+        fromPlayer: joinPlayer,
+        text: tableJoinAnnouncementText(joinPlayer.name, joinPlayer.gender),
         timestamp: now,
       },
       {
@@ -66,14 +68,19 @@ export function buildInitialAuthoritySnapshot(
       },
     ]
   } else {
-    gameLog = [
-      {
-        id: generateLogId(),
-        type: "system",
-        text: `Вы присоединились к столу #${tableId}. Игра уже идёт`,
-        timestamp: now,
-      },
-    ]
+    const joinPlayer = nextPlayers[0]
+    gameLog =
+      joinPlayer != null
+        ? [
+            {
+              id: generateLogId(),
+              type: "system",
+              fromPlayer: joinPlayer,
+              text: tableJoinAnnouncementText(joinPlayer.name, joinPlayer.gender),
+              timestamp: now,
+            },
+          ]
+        : []
   }
 
   const spinSkips: Record<number, number> = {}

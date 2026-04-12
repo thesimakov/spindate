@@ -1,6 +1,6 @@
-/** Ежедневная серия: дни 1–6 — «сердца» (голоса), день 7 — розы, день 8 — супер-рамка (начисление — отдельно). */
+/** Ежедневная серия: дни 1–5 — сердца (100–220), день 6 — 10 роз, день 7 — супер-рамка. */
 
-export const DAILY_STREAK_DAY_COUNT = 8
+export const DAILY_STREAK_DAY_COUNT = 7
 
 export type DailyStreakReward =
   | { kind: "hearts"; amount: number }
@@ -9,13 +9,12 @@ export type DailyStreakReward =
   | { kind: "frame"; id: "super" }
 
 export const DAILY_STREAK_REWARDS: readonly DailyStreakReward[] = [
+  { kind: "hearts", amount: 100 },
+  { kind: "hearts", amount: 120 },
   { kind: "hearts", amount: 150 },
-  { kind: "hearts", amount: 200 },
-  { kind: "hearts", amount: 250 },
-  { kind: "hearts", amount: 300 },
-  { kind: "hearts", amount: 450 },
-  { kind: "hearts", amount: 500 },
-  { kind: "roses", amount: 30 },
+  { kind: "hearts", amount: 180 },
+  { kind: "hearts", amount: 220 },
+  { kind: "roses", amount: 10 },
   { kind: "frame", id: "super" },
 ]
 

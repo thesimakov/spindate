@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Fragment,
   useState,
   useEffect,
   useCallback,
@@ -35,7 +36,6 @@ import {
   Headphones,
   Bell,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +57,7 @@ import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
 import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
 import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
 import { SpaceRocketsLayer } from "@/components/space-rockets-layer"
+import { NebulaMockupSkinLayer } from "@/components/nebula-mockup-skin-layer"
 import { BankHeartBalanceTooltip } from "@/components/bank-heart-balance-tooltip"
 import { useBankPassive } from "@/hooks/use-bank-passive"
 import { InlineToast } from "@/components/ui/inline-toast"
@@ -86,7 +87,7 @@ import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
-import { DEFAULT_BOTTLE_CATALOG_ROWS, toBottleImageUrl } from "@/lib/bottle-catalog"
+import { DEFAULT_BOTTLE_CATALOG_ROWS, type BottleCatalogSkinRow } from "@/lib/bottle-catalog"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
@@ -107,13 +108,252 @@ function circlePositions(count: number, radiusX: number, radiusY: number) {
   })
 }
 
+function sortedPairIds(a: Player, b: Player): [number, number] {
+  return a.id < b.id ? [a.id, b.id] : [b.id, a.id]
+}
+
+/** Левый = инициатор (from), правый — второй участник пары. */
+function resolvePairAvatarsForLog(entry: GameLogEntry, players: Player[]): { left: Player; right: Player } | null {
+  const fp = entry.fromPlayer
+  const tp = entry.toPlayer
+  const pairIds = entry.pairIds
+  if (pairIds && fp) {
+    const [idA, idB] = pairIds
+    const otherId = fp.id === idA ? idB : idA
+    const left = players.find((p) => p.id === fp.id) ?? fp
+    const right = players.find((p) => p.id === otherId)
+    if (right) return { left, right }
+  }
+  if (pairIds) {
+    const a = players.find((p) => p.id === pairIds[0])
+    const b = players.find((p) => p.id === pairIds[1])
+    if (a && b) return { left: a, right: b }
+  }
+  if (fp && tp) {
+    const left = players.find((p) => p.id === fp.id) ?? fp
+    const right = players.find((p) => p.id === tp.id) ?? tp
+    return { left, right }
+  }
+  return null
+}
+
+/** Подписи в ленте чата: про «подарок», не инфинитивы с кнопки. */
+const CHAT_PAIR_ACTION_PHRASE: Partial<Record<GameLogEntry["type"], string>> = {
+  kiss: "Подарил(а) поцелуй",
+  flowers: "Подарил(а) цветы",
+  cocktail: "Подарил(а) коктейль",
+  diamond: "Подарил(а) бриллианты",
+  beer: "Подарил(а) по квасику",
+  banya: "Подарил(а) баньку",
+  tools: "Подарил(а) инструменты",
+  lipstick: "Подарил(а) помаду",
+  skip: "Пропустил(а) ход",
+}
+
+/** Эмодзи для строки чата «аватар — аватар — эмоция — число». */
+function logEventEmotionEmoji(entry: GameLogEntry): string | null {
+  const giftRow = DEFAULT_GIFT_CATALOG_ROWS.find((r) => r.id === entry.type && r.published)
+  if (giftRow?.emoji) return giftRow.emoji
+  const map: Partial<Record<GameLogEntry["type"], string>> = {
+    kiss: "💋",
+    flowers: "💐",
+    diamond: "💎",
+    cocktail: "🍹",
+    beer: "🍺",
+    banya: "🧹",
+    tools: "🛠️",
+    lipstick: "💄",
+    skip: "⏭️",
+    hug: "🤗",
+    selfie: "📸",
+    song: "🎵",
+    rose: "🌹",
+    laugh: "😄",
+    chat: "💬",
+    invite: "💌",
+    care: "💝",
+    bottle_thanks: "⭐",
+    prediction: "🎯",
+    join: "🚪",
+    gift_voice: "🎙️",
+    system: "ℹ️",
+  }
+  return map[entry.type] ?? null
+}
+
+/** Подсказка на центральный объект в строке «аватар » эмодзи ×N аватар». */
+function pairChatCentralObjectHint(entry: GameLogEntry): "Подарил подарок" | "Подарил эмоцию" {
+  const gift = DEFAULT_GIFT_CATALOG_ROWS.find((r) => r.id === entry.type && r.published)
+  if (gift) return "Подарил подарок"
+  return "Подарил эмоцию"
+}
+
+function logEventActionShortLabel(entry: GameLogEntry): string | null {
+  const phrase = CHAT_PAIR_ACTION_PHRASE[entry.type]
+  if (phrase) return phrase
+  const pa = PAIR_ACTIONS.find((x) => x.id === entry.type)
+  if (pa) return pa.label
+  const giftRow = DEFAULT_GIFT_CATALOG_ROWS.find((r) => r.id === entry.type && r.published)
+  if (giftRow) return giftRow.name
+  const extra: Partial<Record<GameLogEntry["type"], string>> = {
+    care: "Поклонник",
+    invite: "Приглашение",
+    bottle_thanks: "Спасибо",
+    prediction: "Прогноз",
+    rose: "Роза",
+    join: "Зашёл за стол",
+    gift_voice: "Голос",
+    hug: "Объятия",
+    selfie: "Селфи",
+    song: "Песня",
+    laugh: "Смех",
+  }
+  const t = extra[entry.type]
+  if (t) return t
+  return null
+}
+
+/** Подряд идущие одинаковые события (не чат) от одного автора с тем же текстом — одна строка с множителем. */
+/** Единый вид компактных строк событий (пара, бутылочки) в чате комнаты — без рамки, плотнее. */
+const TABLE_CHAT_ROOM_EVENT_CHIP =
+  "inline-flex min-w-0 max-w-[min(100%,20rem)] flex-nowrap items-center gap-0 rounded-full border border-white/[0.06] bg-white/[0.05] px-0.5 py-0 pl-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm"
+
+/** Оболочка полоски «несколько эмоций подряд»: края с аватарами фиксированы, скроллится только центр. */
+const TABLE_CHAT_ROOM_PAIR_STRIP_OUTER =
+  "rounded-full border border-white/[0.08] bg-gradient-to-b from-white/[0.09] to-white/[0.04] py-1 pl-1 pr-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_1px_2px_rgba(0,0,0,0.12)] backdrop-blur-md"
+
+/** Множитель ×N в ленте пар — мягче, чем яркий emerald. */
+const PAIR_FEED_REPEAT_COUNT_CLASS =
+  "shrink-0 text-[0.68rem] font-medium tabular-nums tracking-tight text-slate-400/95 sm:text-[0.7rem]"
+
+/** Без кольца/тяжёлой тени — только лёгкая глубина у кругов. */
+const TABLE_CHAT_ROOM_AVATAR_RING = "shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+
+/** Не показывать в «Чат комнаты» (шум: пропуск хода, ежедневные бонусы и т.п.). */
+function hideTableLogEntryFromRoomChatText(text: string): boolean {
+  const t = text
+  if (t.includes("пропускает ход")) return true
+  if (t.includes("ежедневный бонус")) return true
+  if (t.includes("ежедневный подарок в магазине")) return true
+  return false
+}
+
+function bottleSkinChangeSig(e: GameLogEntry): string {
+  const b = e.bottleSkinChange
+  if (!b) return ""
+  return `${b.fromSkinId}\t${b.toSkinId}`
+}
+
+/** Миниатюра бутылочки в ленте чата (каталог API + дефолт; колесо фортуны — эмодзи, если нет картинки). */
+function resolveBottleSkinChatVisual(
+  rows: { id: string; img: string }[],
+  skinId: string,
+): { kind: "img"; src: string } | { kind: "emoji"; emoji: string } {
+  const id = skinId || "classic"
+  if (id === "fortune_wheel") {
+    const url =
+      rows.find((r) => r.id === id)?.img?.trim() ??
+      DEFAULT_BOTTLE_CATALOG_ROWS.find((r) => r.id === id)?.img?.trim()
+    if (url) return { kind: "img", src: url }
+    return { kind: "emoji", emoji: "🎡" }
+  }
+  const fromRows = rows.find((r) => r.id === id)?.img?.trim()
+  if (fromRows) return { kind: "img", src: fromRows }
+  const def = DEFAULT_BOTTLE_CATALOG_ROWS.find((r) => r.id === id)
+  if (def?.img?.trim()) return { kind: "img", src: def.img }
+  const classic = DEFAULT_BOTTLE_CATALOG_ROWS.find((r) => r.id === "classic")!
+  return { kind: "img", src: classic.img }
+}
+
+function bottleSkinDisplayName(rows: { id: string; name: string }[], skinId: string): string {
+  return (
+    rows.find((r) => r.id === skinId)?.name ??
+    DEFAULT_BOTTLE_CATALOG_ROWS.find((r) => r.id === skinId)?.name ??
+    skinId
+  )
+}
+
+function aggregateConsecutiveTableLogRows(sorted: GameLogEntry[]): { entry: GameLogEntry; count: number }[] {
+  const out: { entry: GameLogEntry; count: number }[] = []
+  for (const e of sorted) {
+    const prev = out[out.length - 1]
+    const sameFrom = e.fromPlayer?.id === prev?.entry.fromPlayer?.id
+    const mergeable =
+      e.type !== "chat" &&
+      prev != null &&
+      e.type === prev.entry.type &&
+      sameFrom &&
+      e.text === prev.entry.text &&
+      bottleSkinChangeSig(e) === bottleSkinChangeSig(prev.entry)
+    if (mergeable) {
+      prev.count += 1
+    } else {
+      out.push({ entry: e, count: 1 })
+    }
+  }
+  return out
+}
+
+/** Строка ленты чата с парой (эмодзи/подарок), не чат и не смена бутылочки. */
+function isPairFeedDisplayRow(entry: GameLogEntry, players: Player[]): boolean {
+  if (entry.type === "chat") return false
+  if (entry.type === "system" && entry.bottleSkinChange) return false
+  const pairAvatars = resolvePairAvatarsForLog(entry, players)
+  const emotionEmoji = logEventEmotionEmoji(entry)
+  const actionShort = logEventActionShortLabel(entry)
+  return Boolean(pairAvatars && (emotionEmoji || actionShort))
+}
+
+function pairStripIdentityKey(leftId: number, rightId: number): string {
+  return `${leftId}:${rightId}`
+}
+
+type MergedTableChatFeedRow =
+  | {
+      kind: "pairStrip"
+      left: Player
+      right: Player
+      segments: { entry: GameLogEntry; count: number }[]
+    }
+  | { kind: "item"; entry: GameLogEntry; count: number }
+
+/** Подряд идущие события одной и той же пары (инициатор слева) — одна строка с несколькими эмоциями. */
+function mergeConsecutivePairFeedRows(
+  rows: { entry: GameLogEntry; count: number }[],
+  players: Player[],
+): MergedTableChatFeedRow[] {
+  const out: MergedTableChatFeedRow[] = []
+  for (const row of rows) {
+    const { entry, count } = row
+    if (!isPairFeedDisplayRow(entry, players)) {
+      out.push({ kind: "item", entry, count })
+      continue
+    }
+    const pairAvatars = resolvePairAvatarsForLog(entry, players)
+    if (!pairAvatars) {
+      out.push({ kind: "item", entry, count })
+      continue
+    }
+    const { left, right } = pairAvatars
+    const key = pairStripIdentityKey(left.id, right.id)
+    const last = out[out.length - 1]
+    if (last?.kind === "pairStrip" && pairStripIdentityKey(last.left.id, last.right.id) === key) {
+      last.segments.push({ entry, count })
+    } else {
+      out.push({ kind: "pairStrip", left, right, segments: [{ entry, count }] })
+    }
+  }
+  return out
+}
+
 /** Ширина/высота стола (как в CSS aspect-ratio). Для окружности в пикселях при не-квадратном столе: radiusY = radiusX * TABLE_ASPECT_WH. */
 const TABLE_ASPECT_WH = 60 / 50
 
 const DAILY_EMOTION_LIMIT = 50
-/** Покупка доп. лимита по выбранным типам: +50 использований за 10 ❤ на тип. */
+/** Покупка доп. лимита по выбранным типам: +50 использований; первый набор за сутки — 5 ❤/тип, далее — 15 ❤/тип. */
 const EMOTION_QUOTA_PURCHASE_AMOUNT = 50
-const EMOTION_QUOTA_COST_PER_TYPE_HEARTS = 10
+const EMOTION_QUOTA_FIRST_COST_PER_TYPE = 5
+const EMOTION_QUOTA_NEXT_COST_PER_TYPE = 15
 const EMOTION_GIFT_IMAGE_FRAMES = 16
 
 function nextEmotionGiftFrameNum(current: number): number {
@@ -130,6 +370,22 @@ function getTodayDateKey(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
+}
+
+/** Цена за тип при следующей покупке квоты сегодня (первый раз в сутки дешевле). */
+function getNextQuotaCostPerTypeHearts(
+  boost:
+    | {
+        dateKey: string
+        quotaBoostPurchasesCount?: number
+      }
+    | undefined,
+): number {
+  const todayKey = getTodayDateKey()
+  if (!boost || boost.dateKey !== todayKey) return EMOTION_QUOTA_FIRST_COST_PER_TYPE
+  return (boost.quotaBoostPurchasesCount ?? 0) === 0
+    ? EMOTION_QUOTA_FIRST_COST_PER_TYPE
+    : EMOTION_QUOTA_NEXT_COST_PER_TYPE
 }
 
 function getDailyEmotionLimitForActionId(
@@ -419,18 +675,37 @@ const MOBILE_EMOTION_STRIP_BTN =
 
 const GAME_ROOM_DUST_SEED = 0x51ab1e
 const TABLE_STYLE_BACKGROUNDS: Record<
-  "classic_night" | "sunset_lounge" | "ocean_breeze" | "violet_dream" | "cosmic_rockets" | "light_day",
+  | "classic_night"
+  | "sunset_lounge"
+  | "ocean_breeze"
+  | "violet_dream"
+  | "cosmic_rockets"
+  | "light_day"
+  | "nebula_mockup",
   string
 > = {
-  classic_night: "linear-gradient(180deg, rgba(3,8,18,0.72) 0%, rgba(15,23,42,0.52) 40%, rgba(2,6,23,0.72) 100%)",
-  sunset_lounge: "linear-gradient(180deg, rgba(120,53,15,0.52) 0%, rgba(190,24,93,0.40) 40%, rgba(30,41,59,0.70) 100%)",
-  ocean_breeze: "linear-gradient(180deg, rgba(8,145,178,0.45) 0%, rgba(29,78,216,0.35) 45%, rgba(15,23,42,0.72) 100%)",
-  violet_dream: "linear-gradient(180deg, rgba(91,33,182,0.50) 0%, rgba(147,51,234,0.36) 44%, rgba(15,23,42,0.72) 100%)",
+  classic_night: "linear-gradient(180deg, rgba(3,8,18,0.58) 0%, rgba(15,23,42,0.42) 40%, rgba(2,6,23,0.58) 100%)",
+  sunset_lounge: "linear-gradient(180deg, rgba(120,53,15,0.42) 0%, rgba(190,24,93,0.32) 40%, rgba(30,41,59,0.56) 100%)",
+  ocean_breeze: "linear-gradient(180deg, rgba(8,145,178,0.36) 0%, rgba(29,78,216,0.28) 45%, rgba(15,23,42,0.58) 100%)",
+  violet_dream: "linear-gradient(180deg, rgba(91,33,182,0.40) 0%, rgba(147,51,234,0.28) 44%, rgba(15,23,42,0.58) 100%)",
   cosmic_rockets:
-    "linear-gradient(180deg, rgba(2,6,23,0.78) 0%, rgba(15,23,42,0.42) 45%, rgba(2,6,23,0.78) 100%)",
+    "linear-gradient(180deg, rgba(2,6,23,0.62) 0%, rgba(15,23,42,0.34) 45%, rgba(2,6,23,0.62) 100%)",
   light_day:
-    "linear-gradient(180deg, rgba(236,253,245,0.72) 0%, rgba(224,242,254,0.45) 45%, rgba(248,250,252,0.74) 100%)",
+    "linear-gradient(180deg, rgba(236,253,245,0.58) 0%, rgba(224,242,254,0.36) 45%, rgba(248,250,252,0.60) 100%)",
+  nebula_mockup:
+    "linear-gradient(168deg, rgba(15, 23, 42, 0.70) 0%, rgba(30, 27, 75, 0.54) 32%, rgba(49, 46, 129, 0.40) 52%, rgba(15, 23, 42, 0.64) 78%, rgba(9, 9, 26, 0.74) 100%)",
 }
+
+/** Центральный «стол» (скруглённый блок с аватарами): базовый тёмный градиент. */
+const GAME_TABLE_SURFACE_BG =
+  "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)"
+/** nebula_mockup: слабее заливка, чтобы сквозь стол читалась туманность фона. */
+const GAME_TABLE_SURFACE_BG_NEBULA =
+  "radial-gradient(circle at 50% 42%, rgba(79,70,229,0.2) 0%, rgba(30,27,75,0.34) 48%, rgba(15,23,42,0.38) 100%)"
+const GAME_TABLE_INNER_VIGNETTE_BG =
+  "radial-gradient(circle at center, rgba(15,23,42,0.82) 0%, rgba(15,23,42,0.96) 68%, rgba(2,6,23,1) 100%)"
+const GAME_TABLE_INNER_VIGNETTE_BG_NEBULA =
+  "radial-gradient(circle at center, rgba(15,23,42,0.42) 0%, rgba(15,23,42,0.52) 62%, rgba(9,9,26,0.58) 100%)"
 
 type GameRoomProps = {
   /** Число диалогов с непрочитанным (поклонники + избранные), для бейджа «Чат». */
@@ -465,7 +740,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     currentUser,
     tableId,
     roomCreatorPlayerId,
-    tablesCount,
+    tablesCount: _tablesCount,
     gameLog,
     predictions,
     bets,
@@ -553,9 +828,23 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     () => giftCatalogSource.filter((row) => row.section === "free" && row.published && !row.deleted),
     [giftCatalogSource],
   )
-  const giftCatalogPremium = useMemo(
-    () => giftCatalogSource.filter((row) => row.section !== "free" && row.published && !row.deleted),
+  const giftCatalogHearts = useMemo(
+    () =>
+      giftCatalogSource.filter(
+        (row) => row.section !== "free" && row.published && !row.deleted && row.payCurrency !== "roses",
+      ),
     [giftCatalogSource],
+  )
+  const giftCatalogPremiumRoses = useMemo(
+    () =>
+      giftCatalogSource.filter(
+        (row) => row.section !== "free" && row.published && !row.deleted && row.payCurrency === "roses",
+      ),
+    [giftCatalogSource],
+  )
+  const roseInventoryCount = useMemo(
+    () => inventory.filter((i) => i.type === "rose").length,
+    [inventory],
   )
   const giftDisplayById = useMemo(() => {
     const m = new Map<string, { emoji: string; img: string }>()
@@ -693,15 +982,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [])
 
   const {
-    wheelTickets,
     wheelRotationDeg,
     wheelSpinning,
     wheelLastRewardText,
-    freeChanceReady,
-    freeChanceCountdown,
-    handleSpinFortuneWheel,
-    handleSpinFreeChance,
-    handleBuyWheelTickets,
+    adSpinUsedToday,
+    canAffordSpin,
+    spinCostHearts,
+    handleSpinWithHearts,
+    handleSpinWithAd,
   } = useFortuneWheel({
     currentUser,
     dispatch,
@@ -1068,10 +1356,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     tableLoading,
   })
 
-  /* ---- auto-scroll log ---- */
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [gameLog])
+  /* ---- auto-scroll чата: в TableChatPanel (только у низа списка) ---- */
 
   /* ---- Start prediction phase when it's a new turn and nobody is spinning ---- */
   useEffect(() => {
@@ -1554,6 +1839,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         }
 
         const pairText = `${spinner.name} & ${target.name}`
+        const pairIdsForLog = sortedPairIds(spinner, target)
         dispatch({
           type: "ADD_LOG",
           entry: {
@@ -1561,6 +1847,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             type: defaultAction as GameLogEntry["type"],
             fromPlayer: spinner,
             toPlayer: target,
+            pairIds: pairIdsForLog,
             text: `Выпала пара: ${pairText}`,
             timestamp: Date.now(),
           },
@@ -1620,7 +1907,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       showToast("Выберите хотя бы один тип эмоций", "info")
       return
     }
-    const totalCost = types.length * EMOTION_QUOTA_COST_PER_TYPE_HEARTS
+    const costPer = getNextQuotaCostPerTypeHearts(emotionDailyBoost)
+    const totalCost = types.length * costPer
     if (voiceBalance < totalCost) {
       showToast("Недостаточно сердец", "error")
       return
@@ -1630,7 +1918,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       dateKey: getTodayDateKey(),
       selectedTypes: [...types],
       extraPerPurchase: EMOTION_QUOTA_PURCHASE_AMOUNT,
-      costPerType: EMOTION_QUOTA_COST_PER_TYPE_HEARTS,
     })
     const labelMap: Record<string, string> = { kiss: "поцелуи", beer: "по квасику", cocktail: "сладкое" }
     dispatch({
@@ -1645,7 +1932,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     })
     showToast("Лимит эмоций увеличен до конца суток", "success")
     setEmotionPurchaseOpen(false)
-  }, [currentUser, dispatch, emotionPurchasePick, showToast, voiceBalance])
+  }, [currentUser, dispatch, emotionDailyBoost, emotionPurchasePick, showToast, voiceBalance])
 
   /* ---- perform gender-based action ---- */
   const handlePerformAction = (actionId: string) => {
@@ -1717,6 +2004,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
 
     const pairText = `${tp.name} & ${tp2.name}`
+    const pairIdsForLog = actionId === "skip" ? undefined : sortedPairIds(tp, tp2)
     dispatch({
       type: "ADD_LOG",
       entry: {
@@ -1724,6 +2012,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         type: actionId as GameLogEntry["type"],
         fromPlayer: currentTurnPlayer,
         toPlayer: tp,
+        ...(pairIdsForLog ? { pairIds: pairIdsForLog } : {}),
         text: `${currentTurnPlayer.name}: ${actionDef.label} (${pairText})`,
         timestamp: Date.now(),
       },
@@ -1808,6 +2097,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
     const label = actionDef?.label ?? actionId
 
+    const pairIdsForResponse = sortedPairIds(resolvedTargetPlayer, resolvedTargetPlayer2)
+
     dispatch({
       type: "ADD_LOG",
       entry: {
@@ -1815,6 +2106,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         type: actionId as GameLogEntry["type"],
         fromPlayer: from,
         toPlayer: to,
+        pairIds: pairIdsForResponse,
         text: `${from.name} отвечает: ${label} ${to.name}`,
         timestamp: Date.now(),
       },
@@ -1879,6 +2171,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       dispatch({ type: "ADD_DRUNK_TIME", playerId: currentUser.id, ms: 60_000 })
     }
 
+    const pairIdsSidebar = sortedPairIds(currentUser, sidebarTargetPlayer)
+
     dispatch({
       type: "ADD_LOG",
       entry: {
@@ -1886,6 +2180,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         type: actionId as GameLogEntry["type"],
         fromPlayer: currentUser,
         toPlayer: sidebarTargetPlayer,
+        pairIds: pairIdsSidebar,
         text: `${currentUser.name} дарит: ${actionDef.label} ${sidebarTargetPlayer.name}`,
         timestamp: Date.now(),
       },
@@ -2038,12 +2333,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     },
     [currentUser, voiceBalance, dispatch, showToast],
   )
-
-  const handleInvite = useCallback(() => {
-    const tp = resolvedTargetPlayer
-    if (!tp) return
-    invitePlayerToChat(tp)
-  }, [resolvedTargetPlayer, invitePlayerToChat])
 
   /* ---- send chat message ---- */
   const handleSendChat = useCallback(() => {
@@ -2572,7 +2861,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     showToast("Выберите другой стол", "info")
   }
 
-  /* Пассивное пополнение банка: +3 ❤ / мин */
+  /* Активный бонус банка: +1 ❤ / 60 с за столом с бутылочкой, если ≥2 живых игроков; лимит/сутки — см. TABLE_ACTIVE_BONUS_DAILY_CAP */
   const [bankPassiveBurstKey, setBankPassiveBurstKey] = useState(0)
   const [bankPassiveBurstOrigin, setBankPassiveBurstOrigin] = useState<{ x: number; y: number } | null>(null)
   const bankPlusButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -2584,12 +2873,33 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
     setBankPassiveBurstKey((k) => k + 1)
   }, [])
-  const bankPassiveEnabled = Boolean(currentUser) && !tablePaused && !isClientTabAway
-  const { msUntilNext: msUntilNextBank } = useBankPassive(
-    currentUser?.id,
-    dispatch,
-    triggerBankPassiveBurst,
-    bankPassiveEnabled,
+  const bankPassiveEnabled =
+    Boolean(currentUser && !currentUser.isBot) &&
+    !tablePaused &&
+    !isClientTabAway &&
+    !tableLoading &&
+    seatConfirmed &&
+    liveHumanCount >= 2
+
+  const bankBonusIdleHint = useMemo(() => {
+    if (!currentUser || currentUser.isBot) return "Войдите за стол как живой игрок."
+    if (tablePaused) return "Пауза — активный бонус не копится."
+    if (isClientTabAway) return "Вкладка в фоне — бонус на паузе."
+    if (tableLoading || !seatConfirmed) return "Подождите подключения к столу."
+    return undefined
+  }, [currentUser, tablePaused, isClientTabAway, tableLoading, seatConfirmed])
+
+  const { msUntilNext: msUntilNextBank, earnedToday: bankActiveBonusEarned, dailyCap: bankActiveBonusCap } =
+    useBankPassive(currentUser?.id, dispatch, triggerBankPassiveBurst, bankPassiveEnabled)
+
+  const bankActiveBonusTooltip = useMemo(
+    () => ({
+      earnedToday: bankActiveBonusEarned,
+      dailyCap: bankActiveBonusCap,
+      isAccruing: bankPassiveEnabled,
+      idleHint: bankBonusIdleHint,
+    }),
+    [bankActiveBonusEarned, bankActiveBonusCap, bankPassiveEnabled, bankBonusIdleHint],
   )
   const handlePauseGame = useCallback(() => {
     if (!currentUser) return
@@ -2618,9 +2928,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /* ================================================================ */
   const tableStyleOverlay = TABLE_STYLE_BACKGROUNDS[tableStyle ?? "classic_night"]
   return (
-    <div className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated">
+    <div
+      className="cinematic-desktop relative flex h-app w-full min-h-0 flex-row items-stretch overflow-hidden game-bg-animated"
+      data-table-style={tableStyle ?? "classic_night"}
+    >
       <div className="pointer-events-none absolute inset-0 z-0" style={{ background: tableStyleOverlay }} />
       {tableStyle === "cosmic_rockets" && <SpaceRocketsLayer />}
+      {tableStyle === "nebula_mockup" && <NebulaMockupSkinLayer />}
       {toast && <InlineToast toast={toast} />}
       {currentUser && (
         <TickerAnnouncementModal
@@ -2733,7 +3047,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           </div>
         </div>
       )}
-      {/* Покупка доп. лимита эмоций (+50 к типу за 10 ❤) */}
+      {/* Покупка доп. лимита эмоций (+50 к типу; 5 или 15 ❤ за тип) */}
       {emotionPurchaseOpen && currentUser && (
         <div className="fixed inset-0 z-[47] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
           <div
@@ -2750,8 +3064,11 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               Купить доп. эмоции
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              +{EMOTION_QUOTA_PURCHASE_AMOUNT} использований к каждому выбранному типу до конца суток. Цена —{" "}
-              <span className="heart-price heart-price--compact text-rose-200">{EMOTION_QUOTA_COST_PER_TYPE_HEARTS} ❤</span> за тип.
+              +{EMOTION_QUOTA_PURCHASE_AMOUNT} использований к каждому выбранному типу до конца суток. Следующая покупка сегодня:{" "}
+              <span className="heart-price heart-price--compact text-rose-200">
+                {getNextQuotaCostPerTypeHearts(emotionDailyBoost)} ❤
+              </span>{" "}
+              за тип (первый набор за день — {EMOTION_QUOTA_FIRST_COST_PER_TYPE} ❤/тип, далее — {EMOTION_QUOTA_NEXT_COST_PER_TYPE} ❤/тип).
             </p>
             <div className="mt-4 space-y-2">
               {(
@@ -2792,7 +3109,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   (emotionPurchasePick.kiss ? 1 : 0) +
                   (emotionPurchasePick.beer ? 1 : 0) +
                   (emotionPurchasePick.cocktail ? 1 : 0)
-                ) * EMOTION_QUOTA_COST_PER_TYPE_HEARTS}{" "}
+                ) * getNextQuotaCostPerTypeHearts(emotionDailyBoost)}{" "}
                 ❤
               </span>
             </p>
@@ -2812,7 +3129,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     ((emotionPurchasePick.kiss ? 1 : 0) +
                       (emotionPurchasePick.beer ? 1 : 0) +
                       (emotionPurchasePick.cocktail ? 1 : 0)) *
-                      EMOTION_QUOTA_COST_PER_TYPE_HEARTS ||
+                      getNextQuotaCostPerTypeHearts(emotionDailyBoost) ||
                   !(emotionPurchasePick.kiss || emotionPurchasePick.beer || emotionPurchasePick.cocktail)
                 }
                 className="order-1 h-11 rounded-xl px-4 text-sm font-bold text-slate-950 transition hover:brightness-110 disabled:opacity-40 sm:order-2"
@@ -3034,7 +3351,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               type="button"
               onClick={openEmotionPurchaseModal}
               className="flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl px-2 text-center text-xs font-extrabold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 sm:text-[13px]"
-              disabled={voiceBalance < EMOTION_QUOTA_COST_PER_TYPE_HEARTS}
+              disabled={voiceBalance < EMOTION_QUOTA_FIRST_COST_PER_TYPE}
               style={{
                 background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
                 color: "#0f172a",
@@ -3042,7 +3359,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 boxShadow: "0 1px 0 rgba(30, 64, 175, 0.9), 0 2px 8px rgba(34, 211, 238, 0.28)",
               }}
             >
-              {`Купить +${EMOTION_QUOTA_PURCHASE_AMOUNT} (от ${EMOTION_QUOTA_COST_PER_TYPE_HEARTS} ❤)`}
+              {`Купить +${EMOTION_QUOTA_PURCHASE_AMOUNT} (от ${getNextQuotaCostPerTypeHearts(emotionDailyBoost)} ❤/тип)`}
             </button>
           )}
 
@@ -3412,6 +3729,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               <BankHeartBalanceTooltip
                 voiceBalance={voiceBalance}
                 msUntilNext={msUntilNextBank}
+                activeBonus={bankActiveBonusTooltip}
                 onOpenShop={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
                 className="inline-flex shrink-0 items-baseline"
                 tabularClassName="text-[15px] font-black tabular-nums leading-none text-white sm:text-base"
@@ -3614,14 +3932,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           open={gameSidePanel === "fortune-wheel"}
           wheelSpinning={wheelSpinning}
           wheelRotationDeg={wheelRotationDeg}
-          wheelTickets={wheelTickets}
           wheelLastRewardText={wheelLastRewardText}
-          freeChanceReady={freeChanceReady}
-          freeChanceCountdown={freeChanceCountdown}
+          voiceBalance={voiceBalance}
+          spinCostHearts={spinCostHearts}
+          canAffordSpin={canAffordSpin}
+          adSpinUsedToday={adSpinUsedToday}
           onClose={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: null })}
-          onSpin={handleSpinFortuneWheel}
-          onSpinFree={handleSpinFreeChance}
-          onBuyTickets={handleBuyWheelTickets}
+          onSpinHearts={handleSpinWithHearts}
+          onSpinAd={handleSpinWithAd}
         />
       )}
       {showBottleCatalog && (
@@ -3749,7 +4067,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 type="button"
                 onClick={openEmotionPurchaseModal}
                 className="flex h-6 w-full max-w-[min(100%,20rem)] shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[9px] font-bold leading-none transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
-                disabled={voiceBalance < EMOTION_QUOTA_COST_PER_TYPE_HEARTS}
+                disabled={voiceBalance < EMOTION_QUOTA_FIRST_COST_PER_TYPE}
                 style={{
                   background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
                   color: "#0f172a",
@@ -3901,19 +4219,29 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   maxWidth: "100%",
                 }),
             background:
-              "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)",
-            boxShadow: isMobile
-              ? "0 10px 36px rgba(0,0,0,0.52), 0 0 40px rgba(56,189,248,0.12)"
-              : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1)",
+              tableStyle === "nebula_mockup" ? GAME_TABLE_SURFACE_BG_NEBULA : GAME_TABLE_SURFACE_BG,
+            boxShadow:
+              tableStyle === "nebula_mockup"
+                ? isMobile
+                  ? "0 10px 32px rgba(0,0,0,0.4), 0 0 44px rgba(99,102,241,0.14)"
+                  : "0 22px 48px rgba(0,0,0,0.58), 0 0 52px rgba(99,102,241,0.12)"
+                : isMobile
+                  ? "0 10px 36px rgba(0,0,0,0.52), 0 0 40px rgba(56,189,248,0.12)"
+                  : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1)",
           }}
         >
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
             className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobile ? "inset-2" : "inset-3"}`}
             style={{
-              boxShadow: "inset 0 0 56px rgba(0,0,0,0.78)",
+              boxShadow:
+                tableStyle === "nebula_mockup"
+                  ? "inset 0 0 52px rgba(0,0,0,0.4)"
+                  : "inset 0 0 56px rgba(0,0,0,0.78)",
               background:
-                "radial-gradient(circle at center, rgba(15,23,42,0.82) 0%, rgba(15,23,42,0.96) 68%, rgba(2,6,23,1) 100%)",
+                tableStyle === "nebula_mockup"
+                  ? GAME_TABLE_INNER_VIGNETTE_BG_NEBULA
+                  : GAME_TABLE_INNER_VIGNETTE_BG,
             }}
           />
           {/* Центральный софт-спот под бутылкой */}
@@ -4442,14 +4770,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           <div
             className="mx-auto mt-[56px] mb-1 flex min-h-0 w-full max-w-[min(95vw,720px)] shrink-0 flex-col overflow-hidden rounded-xl"
             style={{
-              height: "min(46vh, 420px)",
-              maxHeight: "min(46vh, 420px)",
-              minHeight: "156px",
+              height: "min(52vh, 480px)",
+              maxHeight: "min(52vh, 480px)",
+              minHeight: "190px",
             }}
           >
             <div className="flex min-h-0 min-w-0 flex-1 basis-0 flex-col overflow-hidden">
               <TableChatPanel
                 gameLog={gameLog}
+                players={players}
+                bottleCatalogRows={bottleCatalogRows}
                 chatInput={chatInput}
                 setChatInput={setChatInput}
                 onSend={handleSendChat}
@@ -4507,6 +4837,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             <div className="mt-[56px] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <TableChatPanel
                 gameLog={gameLog}
+                players={players}
+                bottleCatalogRows={bottleCatalogRows}
                 chatInput={chatInput}
                 setChatInput={setChatInput}
                 onSend={handleSendChat}
@@ -4696,6 +5028,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     <BankHeartBalanceTooltip
                       voiceBalance={voiceBalance}
                       msUntilNext={msUntilNextBank}
+                      activeBonus={bankActiveBonusTooltip}
                       onOpenShop={() => {
                         dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
                         setShowMobileMoreMenu(false)
@@ -5636,7 +5969,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       {giftCatalogDrawerPlayer && currentUser && (
         <GameSidePanelShell
           title={`Подарки для ${giftCatalogDrawerPlayer.name}`}
-          subtitle="до 10 ❤ за подарок"
+          subtitle="оплата сердечками или розами — по каталогу"
           onClose={() => setGiftCatalogDrawerPlayer(null)}
           variant="material"
           overlayClassName="bg-black/65"
@@ -5671,10 +6004,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                           accent: "sky" as const,
                         },
                         {
-                          key: "premium",
+                          key: "hearts",
                           title: "Доступно / VIP",
-                          gifts: giftCatalogPremium,
+                          gifts: giftCatalogHearts,
                           accent: "amber" as const,
+                        },
+                        {
+                          key: "premium_roses",
+                          title: "Премиум подарки",
+                          gifts: giftCatalogPremiumRoses,
+                          emptyHint: "Скоро добавим подарки за розы",
+                          accent: "rose" as const,
                         },
                       ] as const
                     ).map((section) => (
@@ -5684,7 +6024,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                             className={`h-9 w-1 shrink-0 rounded-full shadow-lg ${
                               section.accent === "sky"
                                 ? "bg-gradient-to-b from-sky-400 to-cyan-500 shadow-sky-500/25"
-                                : "bg-gradient-to-b from-amber-300 to-amber-600 shadow-amber-500/30"
+                                : section.accent === "rose"
+                                  ? "bg-gradient-to-b from-rose-400 to-fuchsia-600 shadow-rose-500/30"
+                                  : "bg-gradient-to-b from-amber-300 to-amber-600 shadow-amber-500/30"
                             }`}
                             aria-hidden
                           />
@@ -5692,7 +6034,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                             className={`text-[11px] font-bold uppercase tracking-[0.22em] sm:text-xs ${
                               section.accent === "sky"
                                 ? "text-sky-300/95"
-                                : "text-amber-300/95"
+                                : section.accent === "rose"
+                                  ? "text-rose-200/95"
+                                  : "text-amber-300/95"
                             }`}
                           >
                             {section.title}
@@ -5701,7 +6045,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                             className={`h-px min-w-[1.5rem] flex-1 bg-gradient-to-r opacity-60 ${
                               section.accent === "sky"
                                 ? "from-sky-500/40 to-transparent"
-                                : "from-amber-500/40 to-transparent"
+                                : section.accent === "rose"
+                                  ? "from-rose-500/45 to-transparent"
+                                  : "from-amber-500/40 to-transparent"
                             }`}
                             aria-hidden
                           />
@@ -5730,11 +6076,22 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                 (item) => item.toPlayerId === toId && item.type === gift.id,
                               )
                               const needPay = gift.cost > 0
-                              const disabled =
-                                alreadyGifted || (needPay && voiceBalance < gift.cost)
+                              const paysWithRoses = gift.payCurrency === "roses"
+                              const canAfford = needPay
+                                ? paysWithRoses
+                                  ? roseInventoryCount >= gift.cost
+                                  : voiceBalance >= gift.cost
+                                : true
+                              const disabled = alreadyGifted || (needPay && !canAfford)
                               const handleGiftClick = () => {
                                 if (disabled) return
-                                if (needPay) dispatch({ type: "PAY_VOICES", amount: gift.cost })
+                                if (needPay) {
+                                  if (paysWithRoses) {
+                                    dispatch({ type: "REMOVE_INVENTORY_ROSES", amount: gift.cost })
+                                  } else {
+                                    dispatch({ type: "PAY_VOICES", amount: gift.cost })
+                                  }
+                                }
                                 dispatch({
                                   type: "ADD_INVENTORY_ITEM",
                                   item: {
@@ -5757,7 +6114,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                   } as GameLogEntry,
                                 })
                               }
-                              const isPremiumSection = section.key === "premium"
+                              const isHeartPaidSection = section.key === "hearts"
+                              const isRosePremiumSection = section.key === "premium_roses"
                               return (
                                 <button
                                   key={`${section.key}-${gift.id}`}
@@ -5770,9 +6128,11 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                 >
                                   <div
                                     className={`relative flex h-[2.65rem] w-[2.65rem] shrink-0 items-center justify-center rounded-2xl ring-1 ring-white/10 transition-transform duration-200 group-hover:scale-[1.06] sm:h-12 sm:w-12 ${
-                                      isPremiumSection && !disabled
+                                      isHeartPaidSection && !disabled
                                         ? "bg-gradient-to-br from-amber-500/20 via-slate-700/40 to-slate-900/80 group-hover:ring-amber-400/25"
-                                        : "bg-gradient-to-br from-slate-600/45 to-slate-900/75 group-hover:ring-sky-400/20"
+                                        : isRosePremiumSection && !disabled
+                                          ? "bg-gradient-to-br from-rose-500/25 via-fuchsia-900/30 to-slate-900/80 group-hover:ring-rose-400/30"
+                                          : "bg-gradient-to-br from-slate-600/45 to-slate-900/75 group-hover:ring-sky-400/20"
                                     } ${disabled ? "opacity-50 grayscale-[0.35]" : ""}`}
                                   >
                                     <span className="flex select-none items-center justify-center text-[1.35rem] leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] sm:text-2xl">
@@ -5798,6 +6158,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                   ) : gift.cost === 0 ? (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-sky-400/35 bg-gradient-to-b from-sky-500/25 to-sky-600/10 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-sky-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] sm:text-[10px]">
                                       0 ❤
+                                    </span>
+                                  ) : paysWithRoses ? (
+                                    <span className="inline-flex min-w-[2.75rem] items-center justify-center gap-0.5 rounded-full border border-fuchsia-500/35 bg-gradient-to-b from-fuchsia-500/20 to-slate-900/60 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-fuchsia-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:text-[10px]">
+                                      <span className="text-[10px] leading-none sm:text-[11px]" aria-hidden>
+                                        🌹
+                                      </span>
+                                      {gift.cost}
                                     </span>
                                   ) : (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center gap-0.5 rounded-full border border-rose-500/30 bg-gradient-to-b from-rose-500/20 to-slate-900/60 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:text-[10px]">
@@ -5830,6 +6197,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 /* ------------------------------------------------------------------ */
 function TableChatPanel({
   gameLog,
+  players,
+  bottleCatalogRows,
   chatInput,
   setChatInput,
   onSend,
@@ -5839,6 +6208,9 @@ function TableChatPanel({
   className,
 }: {
   gameLog: GameLogEntry[]
+  players: Player[]
+  /** Один раз с родителя — не вызывать useBottleCatalog в каждом пузырьке (иначе лавина запросов / зависание). */
+  bottleCatalogRows: BottleCatalogSkinRow[]
   chatInput: string
   setChatInput: (v: SetStateAction<string>) => void
   onSend: () => void
@@ -5847,35 +6219,111 @@ function TableChatPanel({
   chatDisabled?: boolean
   className?: string
 }) {
-  const chatEntries = gameLog.filter((entry) => entry.type === "chat")
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+  const prevFeedLenRef = useRef(0)
+
+  const feedEntries = useMemo(
+    () =>
+      [...gameLog]
+        .filter((e) => {
+          const text = String(e.text ?? "")
+          return !text.startsWith("Выпала пара:") && !hideTableLogEntryFromRoomChatText(text)
+        })
+        .sort((a, b) => a.timestamp - b.timestamp),
+    [gameLog],
+  )
+
+  const feedDisplayRows = useMemo(
+    () => aggregateConsecutiveTableLogRows(feedEntries),
+    [feedEntries],
+  )
+
+  const mergedFeedRows = useMemo(
+    () => mergeConsecutivePairFeedRows(feedDisplayRows, players),
+    [feedDisplayRows, players],
+  )
+
+  useEffect(() => {
+    const container = chatScrollRef.current
+    const end = logEndRef.current
+    if (!container || !end) return
+
+    if (mergedFeedRows.length === 0) {
+      prevFeedLenRef.current = 0
+      return
+    }
+
+    const firstContent = prevFeedLenRef.current === 0
+    prevFeedLenRef.current = mergedFeedRows.length
+
+    const thresholdPx = 120
+    const nearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <= thresholdPx
+
+    if (firstContent || nearBottom) {
+      end.scrollIntoView({ behavior: firstContent ? "auto" : "smooth" })
+    }
+  }, [gameLog, mergedFeedRows.length, logEndRef])
+
   return (
-    <div className={cn("flex min-h-0 flex-col overflow-hidden rounded-xl", className)}
-      style={{ background: "rgba(2,6,23,0.45)" }}
+    <div
+      className={cn(
+        "flex min-h-0 flex-col overflow-hidden rounded-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_28px_rgba(0,0,0,0.32)] backdrop-blur-md",
+        className,
+      )}
+      style={{
+        background: "linear-gradient(165deg, rgba(15,23,42,0.78) 0%, rgba(2,6,23,0.92) 55%, rgba(2,6,23,0.96) 100%)",
+      }}
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 px-3 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <MessageCircle className="h-4 w-4 shrink-0 text-cyan-400/70 md:h-[1.125rem] md:w-[1.125rem]" />
-        <span className="text-sm font-bold tracking-tight text-slate-200 md:text-base">Чат комнаты</span>
-        <span className="ml-auto text-[10px] tabular-nums text-slate-600">{chatEntries.length}</span>
+      <div className="flex shrink-0 items-center gap-2 bg-slate-950/15 px-2.5 py-1.5 backdrop-blur-sm">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10">
+          <MessageCircle className="h-3.5 w-3.5 text-cyan-300/90 md:h-[0.95rem] md:w-[0.95rem]" />
+        </div>
+        <span className="text-[13px] font-semibold tracking-tight text-slate-100 md:text-sm">Чат комнаты</span>
+        <span className="ml-auto rounded-md bg-slate-900/80 px-1.5 py-px text-[0.62rem] font-semibold tabular-nums text-slate-500">
+          {mergedFeedRows.length}
+        </span>
       </div>
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 py-1">
-        {chatEntries.length === 0 && (
-          <p className="py-8 text-center text-[11px] text-slate-600">Игра начинается...</p>
+      <div
+        ref={chatScrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1.5 pl-1.5 pr-2.5 [scrollbar-color:rgba(71,85,105,0.55)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-600/45 [&::-webkit-scrollbar-track]:bg-transparent"
+      >
+        {mergedFeedRows.length === 0 && (
+          <p className="py-8 text-center text-[13px] leading-relaxed text-slate-500">
+            Событий за столом пока нет
+          </p>
         )}
-        <div className="flex flex-col gap-2 px-0.5 py-0.5">
-          {chatEntries.map((entry) => (
-            <ChatBubble key={entry.id} entry={entry} currentUserId={currentUserId} />
-          ))}
+        <div className="flex flex-col gap-1 py-0.5">
+          {mergedFeedRows.map((row) =>
+            row.kind === "pairStrip" ? (
+              <PairFeedStripRow
+                key={row.segments.map((s) => s.entry.id).join("-")}
+                left={row.left}
+                right={row.right}
+                segments={row.segments}
+              />
+            ) : (
+              <ChatBubble
+                key={row.entry.id}
+                entry={row.entry}
+                players={players}
+                bottleCatalogRows={bottleCatalogRows}
+                currentUserId={currentUserId}
+                repeatCount={row.count}
+              />
+            ),
+          )}
           <div ref={logEndRef} />
         </div>
       </div>
 
       {/* Input */}
-      <div className="shrink-0 px-2 pb-2 pt-1" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <div className="shrink-0 bg-slate-950/20 px-2.5 pb-2 pt-1 backdrop-blur-sm">
         <div
-          className="flex min-h-[2.25rem] items-center gap-2 rounded-xl border border-cyan-500/35 bg-slate-900/90 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_1px_0_rgba(0,0,0,0.2)] transition-[border-color,box-shadow] focus-within:border-cyan-400/60 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(34,211,238,0.2)]"
+          className="flex min-h-[2.125rem] items-center gap-1.5 rounded-lg bg-slate-900/75 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-shadow focus-within:shadow-[inset_0_0_0_1px_rgba(34,211,238,0.35),inset_0_1px_0_rgba(255,255,255,0.07)]"
           role="group"
           aria-label="Поле ввода сообщения"
         >
@@ -5892,14 +6340,14 @@ function TableChatPanel({
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onSend() }}
             disabled={chatDisabled}
-            className="min-w-0 flex-1 bg-transparent py-1.5 text-[12px] leading-snug text-slate-100 placeholder:text-slate-500 placeholder:italic focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm leading-snug text-slate-100 placeholder:text-slate-500/90 placeholder:italic focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
             aria-label="Введите сообщение для чата комнаты"
           />
           <button
             type="button"
             onClick={onSend}
             disabled={chatDisabled}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-600 text-white shadow-[0_2px_8px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-500 hover:brightness-105 disabled:opacity-30"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-cyan-500 to-cyan-600 text-white shadow-[0_2px_10px_rgba(6,182,212,0.4)] transition-all hover:from-cyan-400 hover:to-cyan-500 hover:brightness-105 active:scale-[0.97] disabled:opacity-30"
             aria-label="Отправить сообщение в чат"
           >
             <Send className="h-3.5 w-3.5" />
@@ -5910,36 +6358,201 @@ function TableChatPanel({
   )
 }
 
+/** Цвет текста/ярлыка для событий пары в ленте чата. */
+const PAIR_LOG_ACCENT_MAP: Record<string, string> = {
+  kiss: "#fb7185",
+  beer: "#fbbf24",
+  skip: "#cbd5e1",
+  invite: "#fcd34d",
+  join: "#4ade80",
+  system: "#7dd3fc",
+  hug: "#4ade80",
+  selfie: "#7dd3fc",
+  flowers: "#fb7185",
+  song: "#c084fc",
+  rose: "#fb7185",
+  prediction: "#fcd34d",
+  bottle_thanks: "#fde047",
+  cocktail: "#f472b6",
+  diamond: "#c4b5fd",
+  care: "#f9a8d4",
+  laugh: "#fcd34d",
+  gift_voice: "#67e8f9",
+  toy_bear: "#d8b4fe",
+  toy_car: "#cbd5e1",
+  toy_ball: "#fdba74",
+  souvenir_magnet: "#7dd3fc",
+  souvenir_keychain: "#a5f3fc",
+  plush_heart: "#fda4af",
+  chocolate_box: "#d6b088",
+  banya: "#bae6fd",
+  tools: "#cbd5e1",
+  lipstick: "#f9a8d4",
+}
+
+/** Несколько эмоций/подарков подряд между одной и той же парой — одна строка, горизонтальный скролл при переполнении. */
+function PairFeedStripRow({
+  left,
+  right,
+  segments,
+}: {
+  left: Player
+  right: Player
+  segments: { entry: GameLogEntry; count: number }[]
+}) {
+  const labelForA11y = [
+    left.name,
+    right.name,
+    ...segments.map(({ entry, count }) => {
+      const label = logEventActionShortLabel(entry) ?? logEventEmotionEmoji(entry) ?? String(entry.type)
+      return `${label} ×${count}`
+    }),
+  ].join(", ")
+
+  return (
+    <div className="flex w-full min-w-0 justify-start">
+      <div
+        className={cn("flex w-max min-w-0 max-w-full items-stretch", TABLE_CHAT_ROOM_PAIR_STRIP_OUTER)}
+        aria-label={labelForA11y}
+      >
+        <div className="flex shrink-0 items-center gap-0.5 pl-0.5">
+          <div
+            className={cn(
+              "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
+            <img src={left.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+          </div>
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+        </div>
+
+        <div
+          className={cn(
+            "min-w-0 max-w-[min(100%,18rem)] shrink self-center overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch]",
+            "[scrollbar-color:rgba(71,85,105,0.5)_transparent] [scrollbar-width:thin]",
+            "[&::-webkit-scrollbar]:h-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-500/35 [&::-webkit-scrollbar-track]:bg-transparent",
+          )}
+        >
+          <div className="inline-flex min-h-7 w-max min-w-0 flex-nowrap items-center gap-x-1.5 px-1.5">
+            {segments.map(({ entry, count }, i) => {
+              const emotionEmoji = logEventEmotionEmoji(entry)
+              const actionShort = logEventActionShortLabel(entry)
+              const centralHint = pairChatCentralObjectHint(entry)
+              const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
+              return (
+                <Fragment key={entry.id}>
+                  {i > 0 ? (
+                    <span
+                      className="inline-block h-3 w-px shrink-0 rounded-full bg-slate-500/35"
+                      aria-hidden
+                    />
+                  ) : null}
+                  <span className="inline-flex shrink-0 items-center gap-0.5">
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex max-h-8 min-h-7 min-w-0 max-w-[min(100%,7rem)] cursor-default items-center justify-center rounded-md outline-none ring-0 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/40"
+                          aria-label={centralHint}
+                          tabIndex={0}
+                        >
+                          {emotionEmoji ? (
+                            <span
+                              className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
+                              aria-hidden
+                            >
+                              {emotionEmoji}
+                            </span>
+                          ) : (
+                            actionShort && (
+                              <span
+                                className="max-w-[5rem] shrink truncate text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
+                                style={{ color: accentColor }}
+                              >
+                                {actionShort}
+                              </span>
+                            )
+                          )}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        sideOffset={6}
+                        className="border-0 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-100 shadow-xl"
+                      >
+                        {centralHint}
+                      </TooltipContent>
+                    </Tooltip>
+                    <span className={PAIR_FEED_REPEAT_COUNT_CLASS} aria-label={`Количество: ${count}`}>
+                      ×{count}
+                    </span>
+                  </span>
+                </Fragment>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5 pr-0.5">
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <div
+            className={cn(
+              "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
+            <img src={right.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /*  Chat bubble component                                              */
 /* ------------------------------------------------------------------ */
-function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUserId?: number }) {
+function ChatBubble({
+  entry,
+  players,
+  bottleCatalogRows,
+  currentUserId,
+  repeatCount = 1,
+}: {
+  entry: GameLogEntry
+  players: Player[]
+  bottleCatalogRows: BottleCatalogSkinRow[]
+  currentUserId?: number
+  /** Сколько одинаковых подряд событий свернуто в этот пузырёк (только для не-chat). */
+  repeatCount?: number
+}) {
   const isOwn = entry.fromPlayer?.id === currentUserId
   const isChat = entry.type === "chat"
+  const showRepeat = repeatCount > 1 && !isChat
 
   if (isChat) {
     return (
-      <div className={cn("flex items-end gap-1.5", isOwn ? "flex-row-reverse" : "flex-row")}>
+      <div className={cn("flex w-full items-end gap-2.5", isOwn ? "flex-row-reverse" : "flex-row")}>
         {entry.fromPlayer && !isOwn && (
-          <div className="mb-0.5 h-6 w-6 shrink-0 overflow-hidden rounded-full">
+          <div
+            className={cn(
+              "mb-0.5 h-11 w-11 shrink-0 overflow-hidden rounded-full",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
             <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
           </div>
         )}
-        <div className={cn("max-w-[80%] min-w-0", isOwn ? "items-end" : "items-start")}>
-          {entry.fromPlayer && !isOwn && (
-            <p className="mb-0.5 px-2 text-[10px] font-medium text-slate-500">
-              {entry.fromPlayer.name}
-            </p>
-          )}
+        <div className={cn("max-w-[85%] min-w-0", isOwn ? "items-end" : "items-start")}>
           <div
             className={cn(
-              "rounded-2xl px-3 py-1.5 shadow-sm",
+              "rounded-2xl px-3 py-2 shadow-[0_3px_14px_rgba(0,0,0,0.28)]",
               isOwn
-                ? "rounded-br-md bg-emerald-700/80 text-emerald-50"
-                : "rounded-bl-md bg-slate-700/70 text-slate-100",
+                ? "rounded-br-md bg-gradient-to-br from-emerald-600/95 to-emerald-800/90 text-emerald-50"
+                : "rounded-bl-md bg-gradient-to-br from-slate-600/90 to-slate-800/90 text-slate-50",
             )}
           >
-            <p className="text-[12px] leading-relaxed" style={{ wordBreak: "break-word" }}>
+            <p className="text-sm leading-relaxed [text-wrap:pretty]" style={{ wordBreak: "break-word" }}>
               {entry.text}
             </p>
           </div>
@@ -5948,27 +6561,174 @@ function ChatBubble({ entry, currentUserId }: { entry: GameLogEntry; currentUser
     )
   }
 
-  const colorMap: Record<string, string> = {
-    kiss: "#e74c3c", beer: "#5d4037", skip: "#94a3b8", invite: "#e8c06a",
-    join: "#2ecc71", system: "#38bdf8", hug: "#2ecc71", selfie: "#38bdf8",
-    flowers: "#e74c3c", song: "#9b59b6", rose: "#e74c3c", prediction: "#e8c06a",
-    bottle_thanks: "#facc15",
+  const bottleChange = entry.bottleSkinChange
+  if (entry.type === "system" && bottleChange && entry.fromPlayer) {
+    const fromVis = resolveBottleSkinChatVisual(bottleCatalogRows, bottleChange.fromSkinId)
+    const toVis = resolveBottleSkinChatVisual(bottleCatalogRows, bottleChange.toSkinId)
+    const fromName = bottleSkinDisplayName(bottleCatalogRows, bottleChange.fromSkinId)
+    const toName = bottleSkinDisplayName(bottleCatalogRows, bottleChange.toSkinId)
+    const labelForA11y = `${entry.fromPlayer.name}: ${fromName} — ${toName}`
+
+    const renderBottleMini = (
+      vis: ReturnType<typeof resolveBottleSkinChatVisual>,
+      title: string,
+    ) => {
+      if (vis.kind === "emoji") {
+        return (
+          <span
+            className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
+            title={title}
+            aria-hidden
+          >
+            {vis.emoji}
+          </span>
+        )
+      }
+      return (
+        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center" title={title}>
+          <img
+            src={vis.src}
+            alt=""
+            className="h-6 w-6 object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)] [transform:rotate(-28deg)]"
+            crossOrigin="anonymous"
+          />
+        </span>
+      )
+    }
+
+    return (
+      <div className="flex w-full justify-start">
+        <div className={TABLE_CHAT_ROOM_EVENT_CHIP} aria-label={labelForA11y}>
+          <div
+            className={cn(
+              "h-7 w-7 shrink-0 overflow-hidden rounded-full",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
+            <img
+              src={entry.fromPlayer.avatar}
+              alt=""
+              className="h-full w-full object-cover"
+              crossOrigin="anonymous"
+            />
+          </div>
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          {renderBottleMini(fromVis, fromName)}
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          {renderBottleMini(toVis, toName)}
+          {showRepeat && (
+            <span
+              className="shrink-0 rounded-md bg-emerald-500/12 px-1 py-px text-[0.62rem] font-bold tabular-nums text-emerald-200/90"
+              aria-label={`Повторено ${repeatCount} раз`}
+            >
+              ×{repeatCount}
+            </span>
+          )}
+        </div>
+      </div>
+    )
   }
-  const accentColor = colorMap[entry.type] ?? "#94a3b8"
+
+  const pairAvatars = resolvePairAvatarsForLog(entry, players)
+  const actionShort = logEventActionShortLabel(entry)
+  const emotionEmoji = logEventEmotionEmoji(entry)
+  const showPairRow = Boolean(pairAvatars && (emotionEmoji || actionShort))
+
+  const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
+
+  if (showPairRow && pairAvatars) {
+    const { left, right } = pairAvatars
+    const centralHint = pairChatCentralObjectHint(entry)
+    const labelForA11y = [left.name, right.name, actionShort ?? emotionEmoji ?? "событие", repeatCount].join(", ")
+    return (
+      <div className="flex w-full justify-start">
+        <div className={TABLE_CHAT_ROOM_EVENT_CHIP} aria-label={labelForA11y}>
+          <div
+            className={cn(
+              "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
+            <img src={left.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+          </div>
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <span
+                className="inline-flex max-h-8 min-h-7 min-w-0 max-w-[min(100%,7rem)] cursor-default items-center justify-center rounded outline-none focus-visible:outline-none"
+                aria-label={centralHint}
+                tabIndex={0}
+              >
+                {emotionEmoji ? (
+                  <span
+                    className="flex h-7 w-7 shrink-0 select-none items-center justify-center text-[1.2rem] leading-none"
+                    aria-hidden
+                  >
+                    {emotionEmoji}
+                  </span>
+                ) : (
+                  actionShort && (
+                    <span
+                      className="max-w-[5rem] shrink truncate text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
+                      style={{ color: accentColor }}
+                    >
+                      {actionShort}
+                    </span>
+                  )
+                )}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent
+              side="top"
+              sideOffset={6}
+              className="border-0 bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-slate-100 shadow-xl"
+            >
+              {centralHint}
+            </TooltipContent>
+          </Tooltip>
+          <span className={PAIR_FEED_REPEAT_COUNT_CLASS} aria-label={`Количество: ${repeatCount}`}>
+            ×{repeatCount}
+          </span>
+          <ChevronRight className="h-3 w-3 shrink-0 text-slate-500/50" strokeWidth={2.25} aria-hidden />
+          <div
+            className={cn(
+              "h-7 w-7 shrink-0 overflow-hidden rounded-full ring-1 ring-white/10",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
+            <img src={right.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex justify-center px-1">
-      <div
-        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
-        style={{ background: "rgba(255,255,255,0.05)" }}
-      >
+    <div className="flex w-full justify-start">
+      <div className="inline-flex max-w-full items-start gap-1.5 rounded-lg bg-white/[0.05] px-2 py-1 backdrop-blur-sm">
         {entry.fromPlayer && (
-          <div className="h-3.5 w-3.5 shrink-0 overflow-hidden rounded-full">
+          <div
+            className={cn(
+              "h-8 w-8 shrink-0 overflow-hidden rounded-full",
+              TABLE_CHAT_ROOM_AVATAR_RING,
+            )}
+          >
             <img src={entry.fromPlayer.avatar} alt="" className="h-full w-full object-cover" crossOrigin="anonymous" />
           </div>
         )}
-        <p className="text-[10px] leading-tight" style={{ color: accentColor }}>
-          {entry.text}
+        <p
+          className="min-w-0 flex flex-1 flex-wrap items-baseline gap-x-1.5 text-xs leading-snug sm:text-[13px] sm:leading-snug"
+          style={{ color: accentColor }}
+        >
+          <span className="[text-wrap:pretty] [overflow-wrap:anywhere]">{entry.text}</span>
+          {showRepeat && (
+            <span
+              className="shrink-0 rounded-md bg-white/10 px-1 py-px text-[0.62rem] font-bold tabular-nums text-white/90"
+              aria-label={`Повторено ${repeatCount} раз`}
+            >
+              ×{repeatCount}
+            </span>
+          )}
         </p>
       </div>
     </div>

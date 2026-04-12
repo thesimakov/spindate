@@ -424,13 +424,13 @@ function getVkAppId(): number | undefined {
 
 /** Идентификаторы товаров для VK Pay (должны совпадать с app/api/vk/payments). */
 export const VK_ITEM_IDS = {
-  hearts_5: "hearts_5",
-  hearts_50: "hearts_50",
+  hearts_12: "hearts_12",
+  hearts_60: "hearts_60",
   hearts_150: "hearts_150",
-  hearts_200: "hearts_200",
-  hearts_500: "hearts_500",
+  hearts_400: "hearts_400",
   hearts_1000: "hearts_1000",
-  hearts_5000: "hearts_5000",
+  hearts_2500: "hearts_2500",
+  hearts_7500: "hearts_7500",
   vip_7d: "vip_7d",
   vip_30d: "vip_30d",
 } as const
@@ -555,24 +555,23 @@ export async function showPaymentWall(
   }
 }
 
-/** Покупка 200 сердец (9 голосов). */
-export async function buyHearts200(): Promise<boolean> {
-  return showPaymentWall(payVotesForPack(200), VK_ITEM_IDS.hearts_200)
-}
-
-/** Покупка пака сердец (500). Для уведомлений VK вызывает get_item/order_status_change на сервер. */
-export async function buyHearts500(): Promise<boolean> {
-  return showPaymentWall(payVotesForPack(500), VK_ITEM_IDS.hearts_500)
-}
-
-/** Покупка пака сердец (1000). */
-export async function buyHearts1000(): Promise<boolean> {
-  return showPaymentWall(payVotesForPack(1000), VK_ITEM_IDS.hearts_1000)
+/** Покупка пака сердец по размеру (см. VK_ITEM_IDS hearts_*). */
+export async function buyHeartsPack(hearts: 12 | 60 | 150 | 400 | 1000 | 2500 | 7500): Promise<boolean> {
+  const itemByHearts: Record<typeof hearts, string> = {
+    12: VK_ITEM_IDS.hearts_12,
+    60: VK_ITEM_IDS.hearts_60,
+    150: VK_ITEM_IDS.hearts_150,
+    400: VK_ITEM_IDS.hearts_400,
+    1000: VK_ITEM_IDS.hearts_1000,
+    2500: VK_ITEM_IDS.hearts_2500,
+    7500: VK_ITEM_IDS.hearts_7500,
+  }
+  return showPaymentWall(payVotesForPack(hearts), itemByHearts[hearts])
 }
 
 /** Покупка VIP (оплата через VK, курс: 1 голос = 1 сердце). */
 export async function buyVip(): Promise<boolean> {
-  return showPaymentWall(70, VK_ITEM_IDS.vip_30d)
+  return showPaymentWall(50, VK_ITEM_IDS.vip_30d)
 }
 
 /**
@@ -1298,9 +1297,7 @@ export async function showVkWallPostConfirm(
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
-  buyHearts200,
-  buyHearts500,
-  buyHearts1000,
+  buyHeartsPack,
   buyVip,
   inviteFriends,
   getFriends,

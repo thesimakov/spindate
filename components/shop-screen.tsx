@@ -1,18 +1,17 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
-import { ArrowRightLeft, ChevronLeft, ChevronRight, Coins, Flower2, Gift, Heart } from "lucide-react"
+import { ArrowRightLeft, ChevronLeft, ChevronRight, Coins, Flower2, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { generateLogId, useGame } from "@/lib/game-context"
 import { useInlineToast } from "@/hooks/use-inline-toast"
-import { listVotesForPack, payVotesForPack } from "@/lib/heart-shop-pricing"
+import { listVotesForPack, payVotesForPack, VK_HEART_PACK_AMOUNTS } from "@/lib/heart-shop-pricing"
+import { TELEGRAM_STARS_PACKS, type TelegramStarsPackId } from "@/lib/telegram-stars-pricing"
 import { apiFetch } from "@/lib/api-fetch"
-import { vkBridge } from "@/lib/vk-bridge"
+import { isVkRuntimeEnvironment, showVkNativeAd, vkBridge } from "@/lib/vk-bridge"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
-import { heartsFromGiftSellback } from "@/lib/gift-catalog"
-import { useGiftCatalog } from "@/lib/use-gift-catalog"
 import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 
 type ShopScreenProps = {
@@ -35,35 +34,19 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const { currentUser, voiceBalance, players, inventory, tableId } = state
   const { toast, showToast } = useInlineToast(1700)
   const rosesCount = inventory.filter((i) => i.type === "rose").length
-  const { rows: giftCatalogRows } = useGiftCatalog()
   const [exchangeTab, setExchangeTab] = useState<
     "voices-to-roses" | "roses-to-voices"
   >("voices-to-roses")
+  const [isTelegramMiniApp, setIsTelegramMiniApp] = useState(false)
+  useEffect(() => {
+    const w = typeof window !== "undefined" ? (window as Window & { Telegram?: { WebApp?: unknown } }) : null
+    setIsTelegramMiniApp(Boolean(w?.Telegram?.WebApp))
+  }, [])
 
-  const giftCounts = useMemo(() => {
-    const m = new Map<InventoryItem["type"], number>()
-    for (const item of inventory) {
-      if (item.type === "rose") continue
-      m.set(item.type, (m.get(item.type) ?? 0) + 1)
-    }
-    return m
-  }, [inventory])
-
-  const exchangeableGiftRows = useMemo(() => {
-    return [...giftCatalogRows]
-      .filter((row) => row.published && !row.deleted && row.cost >= 2)
-      .sort((a, b) => b.cost - a.cost)
-  }, [giftCatalogRows])
-  const heartOffers = (
-    [
-      { hearts: 5, itemId: vkBridge.VK_ITEM_IDS.hearts_5 },
-      { hearts: 50, itemId: vkBridge.VK_ITEM_IDS.hearts_50 },
-      { hearts: 150, itemId: vkBridge.VK_ITEM_IDS.hearts_150 },
-      { hearts: 500, itemId: vkBridge.VK_ITEM_IDS.hearts_500 },
-      { hearts: 1000, itemId: vkBridge.VK_ITEM_IDS.hearts_1000 },
-      { hearts: 5000, itemId: vkBridge.VK_ITEM_IDS.hearts_5000 },
-    ] as const
-  ).map((o) => {
+  const heartOffers = VK_HEART_PACK_AMOUNTS.map((hearts) => {
+    const itemKey = `hearts_${hearts}` as keyof typeof vkBridge.VK_ITEM_IDS
+    const itemId = vkBridge.VK_ITEM_IDS[itemKey]
+    const o = { hearts, itemId }
     const listVotes = listVotesForPack(o.hearts)
     const votes = payVotesForPack(o.hearts)
     return { ...o, votes, listVotes }
@@ -199,7 +182,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
   const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
   /** Отдельно от окна ежедневной серии (`botl_daily_bonus_v1` в DailyStreakGateScreen). */
   const SHOP_DAILY_HEARTS_KEY = "spindate_shop_daily_hearts_v1"
-  const SHOP_DAILY_HEARTS_AMOUNT = 200
+  const SHOP_DAILY_HEARTS_AMOUNT = 50
 
   const dailyBonusTodayKey = useMemo(() => {
     const d = new Date()
@@ -325,6 +308,44 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       // ignore
     }
   }, [currentUser, dispatch])
+
+  const handleTelegramStarsPack = useCallback(
+    async (packId: TelegramStarsPackId) => {
+      if (!currentUser) return
+      const w = window as Window & {
+        Telegram?: {
+          WebApp?: { openInvoice: (url: string, cb?: (status: string) => void) => void }
+        }
+      }
+      const tw = w.Telegram?.WebApp
+      if (!tw?.openInvoice) {
+        showToast("Оплата Stars доступна в Telegram Mini App", "info")
+        return
+      }
+      try {
+        const res = await apiFetch("/api/telegram/stars/invoice", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ packId }),
+        })
+        const data = (await res.json()) as { ok?: boolean; invoiceUrl?: string; error?: string }
+        if (!data.ok || !data.invoiceUrl) {
+          showToast(data.error ?? "Не удалось создать счёт", "error")
+          return
+        }
+        tw.openInvoice(data.invoiceUrl, (status: string) => {
+          if (status === "paid") {
+            showToast("Баланс пополнен", "success")
+            void syncVoiceFromServer()
+          }
+        })
+      } catch {
+        showToast("Ошибка сети", "error")
+      }
+    },
+    [currentUser, showToast, syncVoiceFromServer],
+  )
 
   /**
    * Ждём серверное подтверждение оплаты VK (callback order_status_change может прийти не мгновенно).
@@ -564,8 +585,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
         {heartOffers.map((offer) => {
           const hasDiscount = offer.listVotes > offer.votes
-          const doubledIcon = offer.hearts === 5 || offer.hearts === 50 || offer.hearts === 150 || offer.hearts === 500
-          const normalIcon = offer.hearts === 1000 || offer.hearts === 5000
+          const doubledIcon =
+            offer.hearts === 12 || offer.hearts === 60 || offer.hearts === 150 || offer.hearts === 400
+          const normalIcon = offer.hearts === 1000 || offer.hearts === 2500 || offer.hearts === 7500
           const benefitPct = hasDiscount
             ? Math.round((offer.listVotes / offer.votes - 1) * 100)
             : 0
@@ -639,6 +661,40 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         })}
       </div>
 
+      {isTelegramMiniApp && (
+        <>
+          <div className="px-1 pt-2">
+            <p className={`${tOverline} ${secLabel}`}>Пополнение</p>
+            <h2 className={`${tH2} ${secTitle}`}>Telegram Stars</h2>
+            <p className={`${tBodySm} ${secMuted}`}>1 ⭐ ≈ 10 ❤</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
+            {TELEGRAM_STARS_PACKS.map((pack) => (
+              <div
+                key={pack.id}
+                className="relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-[#fffdf8] shadow-[0_8px_18px_rgba(15,23,42,0.18),0_1px_0_rgba(255,255,255,0.85)_inset]"
+              >
+                <div className="flex flex-1 flex-col items-center px-2.5 pb-1.5 pt-4 sm:px-3.5 sm:pt-5">
+                  <span className="text-2xl font-black tabular-nums text-[#3b2a09] sm:text-3xl">
+                    {pack.hearts.toLocaleString("ru-RU")} ❤
+                  </span>
+                  <span className="mt-1 text-center text-xs font-semibold text-slate-600">{pack.description}</span>
+                </div>
+                <div className="mt-auto flex justify-center px-2.5 pb-3.5 pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleTelegramStarsPack(pack.id)}
+                    className="w-full rounded-2xl border border-sky-500/45 bg-gradient-to-b from-sky-400 to-blue-600 px-2 py-2.5 text-center text-[13px] font-black tracking-tight text-white shadow-[0_6px_12px_rgba(2,132,199,0.32)] transition hover:brightness-105"
+                  >
+                    <span className="tabular-nums">{pack.stars}</span> ⭐
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* VIP тарифы */}
       <div className="px-1">
         <div className="flex items-center justify-between gap-3">
@@ -694,10 +750,24 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             <button
               type="button"
               disabled={vipTrialUsed || vipLevel !== 0 || !!isVip}
-              onClick={() => handleActivateVip({ days: 3, cost: 0, isTrial: true })}
+              onClick={() => {
+                void (async () => {
+                  if (!currentUser || vipTrialUsed || vipLevel !== 0 || isVip) return
+                  if (!(await isVkRuntimeEnvironment())) {
+                    showToast("Пробный VIP за рекламу доступен в приложении ВКонтакте", "info")
+                    return
+                  }
+                  try {
+                    await showVkNativeAd("reward")
+                  } catch {
+                    // ignore
+                  }
+                  await handleActivateVip({ days: 3, cost: 0, isTrial: true })
+                })()
+              }}
               className={`mt-2 w-full rounded-full border border-green-700/35 bg-gradient-to-b from-lime-400 to-green-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(22,163,74,0.35),inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
             >
-              {vipTrialUsed ? "Проба использована" : vipLevel !== 0 || isVip ? "Недоступно" : "Попробовать!"}
+              {vipTrialUsed ? "Проба использована" : vipLevel !== 0 || isVip ? "Недоступно" : "Смотреть рекламу"}
             </button>
           </div>
           </div>
@@ -712,13 +782,13 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           <div className="px-4 pb-3 pt-2">
             <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
-              {Math.round(20 / 7)} голоса в неделю
+              {Math.round(15 / 7)} голоса в неделю
             </div>
-              <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">20 голосов</p>
+              <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">15 голосов</p>
             <button
               type="button"
               disabled={vipLevel === 2 || vipLevel === 3}
-              onClick={() => handleActivateVip({ days: 7, cost: 20, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
+              onClick={() => handleActivateVip({ days: 7, cost: 15, itemId: vkBridge.VK_ITEM_IDS.vip_7d })}
                 className={`mt-2 w-full rounded-full border border-rose-600/45 bg-gradient-to-b from-rose-400 to-pink-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.42)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
             >
               {vipLevel === 2 || vipLevel === 3 ? "Недоступно" : "Купить"}
@@ -739,13 +809,13 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           <div className="px-4 pb-3 pt-2">
             <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
-              {Math.round(70 / 4)} голосов в неделю
+              {Math.round(50 / 4)} голосов в неделю
             </div>
-              <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">70 голосов</p>
+              <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">50 голосов</p>
             <button
               type="button"
               disabled={vipLevel === 3}
-              onClick={() => handleActivateVip({ days: 30, cost: 70, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
+              onClick={() => handleActivateVip({ days: 30, cost: 50, itemId: vkBridge.VK_ITEM_IDS.vip_30d })}
                 className={`mt-2 w-full rounded-full border border-rose-600/45 bg-gradient-to-b from-rose-400 to-pink-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(225,29,72,0.35),inset_0_1px_0_rgba(255,255,255,0.42)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}
             >
               {vipLevel === 3 ? "Недоступно" : "Купить"}
@@ -769,7 +839,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
             <span className="text-sm font-extrabold text-slate-700">Курс</span>
             {(
               <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 px-2 py-2 text-xs font-bold text-slate-700">
-                <span className="tabular-nums">5</span>
+                <span className="tabular-nums">20</span>
                 <Heart className="h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
                 <span>=</span>
                 <span>1</span>
@@ -836,9 +906,9 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                 {(
                   [
-                    { roses: 1, cost: 5 },
-                    { roses: 5, cost: 25 },
-                    { roses: 10, cost: 50 },
+                    { roses: 1, cost: 20 },
+                    { roses: 5, cost: 100 },
+                    { roses: 10, cost: 200 },
                   ] as const
                 ).map(({ roses, cost }) => (
                   <Button
@@ -880,7 +950,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 >
                   1 роза
                   <span className="heart-price heart-price--compact text-sm">
-                    +5
+                    +15
                     <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 </Button>
@@ -893,7 +963,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 >
                   5 роз
                   <span className="heart-price heart-price--compact text-sm">
-                    +25
+                    +75
                     <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 </Button>
@@ -906,7 +976,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                 >
                   Все розы
                   <span className="heart-price heart-price--compact text-sm">
-                    +{rosesCount * 5}
+                    +{rosesCount * 15}
                     <Heart className="heart-price__icon h-4 w-4 text-rose-500" strokeWidth={2} fill="currentColor" aria-hidden />
                   </span>
                 </Button>

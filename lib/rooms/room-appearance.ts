@@ -12,6 +12,7 @@ export const ROOM_TABLE_STYLE_OPTIONS: Array<{ id: RoomTableStyle; name: string 
   { id: "violet_dream", name: "Фиолетовый сон" },
   { id: "cosmic_rockets", name: "Космос и ракеты" },
   { id: "light_day", name: "Светлый день" },
+  { id: "nebula_mockup", name: "Небула · макет" },
 ]
 
 const ROOM_BOTTLE_SKINS: BottleSkin[] = [

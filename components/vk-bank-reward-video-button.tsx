@@ -18,7 +18,7 @@ import { vkAdRewardPostUrl } from "@/lib/persist-user-game-state"
 import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
-const VK_REWARD_HEARTS = 5
+const VK_REWARD_HEARTS = 25
 /** Временно `false`: сразу открывается ролик спонсора ВК без белого диалога с таймером. Вернуть `true`, чтобы снова показать предэкран. */
 const REWARD_GATE_ENABLED = false
 /** Длительность предэкрана при REWARD_GATE_ENABLED. */

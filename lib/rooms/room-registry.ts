@@ -197,10 +197,10 @@ export async function addUserRoom(name: string, createdByUserId: number): Promis
 }
 
 const CHEAP_TIER_LIMIT = 20
-const CHEAP_COST = 100
-const EXPENSIVE_COST = 300
+const CHEAP_COST = 50
+const EXPENSIVE_COST = 150
 
-/** Цена создания следующего пользовательского стола (первые 20 — 100❤, далее — 300❤). */
+/** Цена создания следующего пользовательского стола (первые 20 — 50❤, далее — 150❤). */
 export async function getCreateRoomCost(): Promise<number> {
   const state = await loadRoomRegistry()
   const userRoomCount = state.rooms.filter((r) => r.isUserRoom).length

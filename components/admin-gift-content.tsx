@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { apiFetch } from "@/lib/api-fetch"
-import { toGiftImageUrl, type GiftCatalogSection } from "@/lib/gift-catalog"
+import { toGiftImageUrl, type GiftCatalogSection, type GiftPayCurrency } from "@/lib/gift-catalog"
 
 type AdminGiftContentProps = {
   token: string
@@ -15,6 +15,8 @@ type RowDraft = {
   emoji: string
   img: string
   cost: number
+  /** Оплата в игре: сердечки или розы из инвентаря (блок «Премиум подарки»). */
+  payCurrency: GiftPayCurrency
   published: boolean
   deleted: boolean
 }
@@ -33,16 +35,24 @@ function parseRows(rows: unknown): RowDraft[] {
       emoji?: string
       img?: string
       cost?: number
+      payCurrency?: string
+      pay_currency?: string
       published?: boolean
       deleted?: boolean
     }
     if (typeof rec.id !== "string" || !rec.id.trim()) continue
+    const payCurrency: GiftPayCurrency =
+      rec.payCurrency === "roses" || rec.pay_currency === "roses" ? "roses" : "hearts"
     const section: GiftCatalogSection =
       rec.section === "free" || rec.section === "vip"
         ? rec.section
-        : Number(rec.cost) >= 10
-          ? "vip"
-          : "paid"
+        : payCurrency === "roses"
+          ? Number(rec.cost) >= 25
+            ? "vip"
+            : "paid"
+          : Number(rec.cost) >= 10
+            ? "vip"
+            : "paid"
     parsed.push({
       id: rec.id,
       section,
@@ -50,6 +60,7 @@ function parseRows(rows: unknown): RowDraft[] {
       emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "🎁",
       img: typeof rec.img === "string" ? rec.img.trim() : "",
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
+      payCurrency,
       published: rec.published !== false,
       deleted: rec.deleted === true,
     })
@@ -88,6 +99,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     emoji: "🎁",
     img: "",
     cost: 1,
+    payCurrency: "hearts",
     published: true,
     deleted: false,
   })
@@ -225,6 +237,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       id,
       section: nextSection,
       cost: Math.max(0, Math.floor(Number(nextCost) || 0)),
+      payCurrency: addDraft.payCurrency,
       published: true,
       deleted: false,
     })
@@ -235,6 +248,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       emoji: "🎁",
       img: "",
       cost: addTier === "free" ? 0 : prev.cost,
+      payCurrency: prev.payCurrency,
     }))
   }, [addDraft, addTier, postUpdate, rows])
 
@@ -310,7 +324,18 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
               />
             </label>
             <label className="text-[11px] text-slate-400">
-              Стоимость
+              Оплата
+              <select
+                value={addDraft.payCurrency}
+                onChange={(e) => setAddDraft((p) => ({ ...p, payCurrency: e.target.value as GiftPayCurrency }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              >
+                <option value="hearts">Сердечки ❤</option>
+                <option value="roses">Розы 🌹 (премиум-блок)</option>
+              </select>
+            </label>
+            <label className="text-[11px] text-slate-400">
+              Стоимость ({addDraft.payCurrency === "roses" ? "роз" : "❤"})
               <input
                 type="number"
                 min={0}
@@ -428,7 +453,18 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                   </div>
                 </label>
                 <label className="block text-[11px] text-slate-400">
-                  Стоимость, ❤
+                  Оплата
+                  <select
+                    value={row.payCurrency}
+                    onChange={(e) => updateRow(row.id, { payCurrency: e.target.value as GiftPayCurrency })}
+                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                  >
+                    <option value="hearts">Сердечки ❤</option>
+                    <option value="roses">Розы 🌹 (премиум-блок)</option>
+                  </select>
+                </label>
+                <label className="block text-[11px] text-slate-400">
+                  Стоимость ({row.payCurrency === "roses" ? "роз" : "❤"})
                   <input
                     type="number"
                     min={0}
@@ -451,6 +487,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                       emoji: row.emoji,
                       img: row.img,
                       cost: row.cost,
+                      payCurrency: row.payCurrency,
                     })
                   }
                   className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-medium text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50"

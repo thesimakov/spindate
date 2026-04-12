@@ -7,28 +7,28 @@ type FortuneWheelSidePanelProps = {
   open: boolean
   wheelSpinning: boolean
   wheelRotationDeg: number
-  wheelTickets: number
   wheelLastRewardText: string | null
-  freeChanceReady: boolean
-  freeChanceCountdown: string
+  voiceBalance: number
+  spinCostHearts: number
+  canAffordSpin: boolean
+  adSpinUsedToday: boolean
   onClose: () => void
-  onSpin: () => void
-  onSpinFree: () => void
-  onBuyTickets: (count: number, cost: number) => void
+  onSpinHearts: () => void
+  onSpinAd: () => void
 }
 
 export function FortuneWheelSidePanel({
   open,
   wheelSpinning,
   wheelRotationDeg,
-  wheelTickets,
   wheelLastRewardText,
-  freeChanceReady,
-  freeChanceCountdown,
+  voiceBalance,
+  spinCostHearts,
+  canAffordSpin,
+  adSpinUsedToday,
   onClose,
-  onSpin,
-  onSpinFree,
-  onBuyTickets,
+  onSpinHearts,
+  onSpinAd,
 }: FortuneWheelSidePanelProps) {
   if (!open) return null
   const segmentAngle = 360 / FORTUNE_WHEEL_SEGMENTS.length
@@ -116,9 +116,6 @@ export function FortuneWheelSidePanel({
                             className="absolute left-1/2 top-1/2 z-[2]"
                             style={{ transform: `translate(-50%,-50%) rotate(${a}deg)` }}
                           >
-                            {/*
-                              Колонка вдоль биссектрисы: сверху — плашка xN, ниже — иконка, у центра — лампочка.
-                            */}
                             <div
                               className="flex w-[2.75rem] flex-col items-center justify-between gap-0.5 text-center sm:w-[3rem]"
                               style={{
@@ -178,9 +175,9 @@ export function FortuneWheelSidePanel({
                   }}
                 />
               </div>
-              <div className="mt-3 flex items-center justify-center gap-2">
-                <span className="rounded-full bg-rose-500 px-3 py-1 text-sm font-black text-white shadow-[0_4px_10px_rgba(190,24,93,0.4)]">
-                  {wheelTickets} 🎡
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <span className="rounded-full bg-slate-800/90 px-3 py-1 text-xs font-bold text-slate-200 ring-1 ring-slate-600/60">
+                  Баланс: <span className="tabular-nums text-cyan-300">{voiceBalance}</span> ❤
                 </span>
                 {wheelLastRewardText && (
                   <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300 ring-1 ring-emerald-400/35">
@@ -190,33 +187,27 @@ export function FortuneWheelSidePanel({
               </div>
               <button
                 type="button"
-                disabled={wheelSpinning || wheelTickets <= 0}
-                onClick={onSpin}
+                disabled={wheelSpinning || !canAffordSpin}
+                onClick={onSpinHearts}
                 className="mt-3 w-full rounded-2xl border-2 border-rose-300/60 bg-gradient-to-b from-rose-500 to-pink-600 py-3 text-lg font-black text-white shadow-[0_6px_0_#9f1239,0_12px_24px_rgba(190,24,93,0.45),inset_0_2px_0_rgba(255,255,255,0.3)] transition hover:brightness-110 active:translate-y-px active:shadow-[0_3px_0_#9f1239] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {wheelSpinning ? "Крутим..." : "Крутить колесо"}
+                {wheelSpinning ? "Крутим..." : `Крутить за ${spinCostHearts} ❤`}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => onBuyTickets(1, 5)} className="rounded-xl border border-cyan-300/45 bg-gradient-to-b from-cyan-500/30 to-sky-600/25 px-3 py-2 text-sm font-bold text-cyan-100 transition hover:brightness-110">
-                Купить 1 🎡 за 5 ❤
-              </button>
-              <button type="button" onClick={() => onBuyTickets(5, 25)} className="rounded-xl border border-cyan-300/45 bg-gradient-to-b from-cyan-500/30 to-sky-600/25 px-3 py-2 text-sm font-bold text-cyan-100 transition hover:brightness-110">
-                Купить 5 🎡 за 25 ❤
-              </button>
-            </div>
-            <div className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 py-3">
-              <p className="text-sm font-black text-emerald-200">Бесплатные шансы</p>
-              <p className="mt-1 text-xs font-semibold text-emerald-100/90">
-                {freeChanceReady ? "Бесплатный прокрут доступен" : `Появятся через: ${freeChanceCountdown}`}
+            <div className="rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-3 py-3">
+              <p className="text-sm font-black text-cyan-100">Бесплатный спин</p>
+              <p className="mt-1 text-xs font-semibold text-cyan-50/90">
+                {adSpinUsedToday
+                  ? "Сегодня вы уже крутили по рекламе — завтра снова."
+                  : "Один раз в сутки можно крутить после короткого видео (в приложении ВКонтакте)."}
               </p>
               <button
                 type="button"
-                disabled={!freeChanceReady || wheelSpinning}
-                onClick={onSpinFree}
-                className="mt-2 w-full rounded-xl border border-emerald-300/55 bg-gradient-to-b from-emerald-400 to-green-600 px-3 py-2 text-sm font-black text-white shadow-[0_4px_10px_rgba(22,163,74,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:from-slate-500 disabled:to-slate-600 disabled:text-slate-200 disabled:shadow-none"
+                disabled={wheelSpinning || adSpinUsedToday}
+                onClick={() => void onSpinAd()}
+                className="mt-2 w-full rounded-xl border border-cyan-300/55 bg-gradient-to-b from-cyan-500 to-sky-700 px-3 py-2 text-sm font-black text-white shadow-[0_4px_10px_rgba(14,165,233,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:from-slate-500 disabled:to-slate-600 disabled:text-slate-200 disabled:shadow-none"
               >
-                Крутить
+                {adSpinUsedToday ? "Реклама на сегодня использована" : wheelSpinning ? "Крутим…" : "Смотреть рекламу и крутить"}
               </button>
             </div>
           </div>

@@ -1,12 +1,27 @@
-/** Включить боковую панель «Колесо фортуны» и пункт в меню. Выключено — включим позже. */
-export const FORTUNE_WHEEL_ENABLED = false
+/** Включить боковую панель «Колесо фортуны» и пункт в меню. */
+export const FORTUNE_WHEEL_ENABLED = true
+
+/** Стоимость одного спина за сердца (реклама — не чаще 1× в сутки, отдельно). */
+export const FORTUNE_WHEEL_SPIN_COST_HEARTS = 25
 
 export type FortuneWheelReward =
   | { kind: "hearts"; amount: number; label: string; icon: string }
   | { kind: "roses"; amount: number; label: string; icon: string }
-  | { kind: "tickets"; amount: number; label: string; icon: string }
 
-/** Правила мини-игры: список секторов и их награды. */
+/** Локальный календарный день (как в ежедневных бонусах игры). */
+export function getLocalDateKey(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/** Ключ localStorage: бесплатный спин по рекламе уже использован за сутки. */
+export function fortuneWheelAdSpinStorageKey(playerId: number, dateKey: string): string {
+  return `fortune_wheel_ad_spin_v2_${playerId}_${dateKey}`
+}
+
+/** Правила мини-игры: список секторов и их награды (без «билетов» — спин за ❤ или рекламу). */
 export const FORTUNE_WHEEL_SEGMENTS: readonly FortuneWheelReward[] = [
   { kind: "hearts", amount: 1, label: "x1", icon: "❤️" },
   { kind: "hearts", amount: 5, label: "x5", icon: "❤️" },
@@ -16,14 +31,7 @@ export const FORTUNE_WHEEL_SEGMENTS: readonly FortuneWheelReward[] = [
   { kind: "hearts", amount: 1000, label: "x1000", icon: "🪙" },
   { kind: "roses", amount: 1, label: "x1", icon: "🌹" },
   { kind: "roses", amount: 3, label: "x3", icon: "🌹" },
-  { kind: "tickets", amount: 1, label: "x1", icon: "🎡" },
-  { kind: "tickets", amount: 2, label: "x2", icon: "🎡" },
 ] as const
-
-/** Хранилище билетов по игроку. */
-export function fortuneWheelTicketsStorageKey(playerId: number): string {
-  return `spindate_fortune_wheel_tickets_v1_${playerId}`
-}
 
 /** Вычисляет угол остановки и индекс сектора по правилам рулетки. */
 export function resolveFortuneWheelSpin(currentRotationDeg: number, segmentCount: number) {

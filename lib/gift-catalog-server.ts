@@ -8,6 +8,7 @@ type GiftCatalogDbRow = {
   emoji: string
   img: string
   cost: number
+  pay_currency: string
   published: number
   deleted: number
 }
@@ -24,28 +25,37 @@ export function listGiftCatalogRows(options?: {
   const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""
   const rows = db
     .prepare(
-      `SELECT id, section, name, emoji, img, cost, published, deleted
+      `SELECT id, section, name, emoji, img, cost, pay_currency, published, deleted
        FROM gift_catalog
        ${whereSql}
        ORDER BY sort_order ASC, updated_at ASC`,
     )
     .all() as GiftCatalogDbRow[]
 
-  return rows.map((row) => ({
-    id: row.id as GiftCatalogRow["id"],
-    section:
+  return rows.map((row) => {
+    const payCurrency = row.pay_currency === "roses" ? "roses" : "hearts"
+    const section: GiftCatalogRow["section"] =
       row.section === "free" || row.section === "vip"
         ? row.section
-        : (row.cost | 0) >= 10
-          ? "vip"
-          : "paid",
-    name: row.name,
-    emoji: row.emoji || "🎁",
-    img: options?.resolveImage === false ? (row.img ?? "") : toGiftImageUrl(row.img ?? ""),
-    cost: Math.max(0, row.cost | 0),
-    published: row.published === 1,
-    deleted: row.deleted === 1,
-  }))
+        : payCurrency === "roses"
+          ? (row.cost | 0) >= 25
+            ? "vip"
+            : "paid"
+          : (row.cost | 0) >= 10
+            ? "vip"
+            : "paid"
+    return {
+      id: row.id as GiftCatalogRow["id"],
+      section,
+      name: row.name,
+      emoji: row.emoji || "🎁",
+      img: options?.resolveImage === false ? (row.img ?? "") : toGiftImageUrl(row.img ?? ""),
+      cost: Math.max(0, row.cost | 0),
+      payCurrency,
+      published: row.published === 1,
+      deleted: row.deleted === 1,
+    }
+  })
 }
 
 export function updateGiftCatalogEntry(input: {
@@ -55,6 +65,7 @@ export function updateGiftCatalogEntry(input: {
   emoji?: string
   img?: string
   cost?: number
+  payCurrency?: "hearts" | "roses"
   published?: boolean
   deleted?: boolean
 }) {
@@ -63,15 +74,25 @@ export function updateGiftCatalogEntry(input: {
   const db = getDb()
   const now = Date.now()
   const existing = db
-    .prepare(`SELECT id, section, name, emoji, img, cost, published, deleted FROM gift_catalog WHERE id = ? LIMIT 1`)
+    .prepare(
+      `SELECT id, section, name, emoji, img, cost, pay_currency, published, deleted FROM gift_catalog WHERE id = ? LIMIT 1`,
+    )
     .get(safeId) as GiftCatalogDbRow | undefined
+  const nextPayCurrency =
+    input.payCurrency === "roses" || input.payCurrency === "hearts"
+      ? input.payCurrency
+      : existing
+        ? existing.pay_currency === "roses"
+          ? "roses"
+          : "hearts"
+        : "hearts"
   if (!existing) {
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM gift_catalog`).get() as {
       next: number
     }
     db.prepare(
-      `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, published, deleted, sort_order, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, pay_currency, published, deleted, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       safeId,
       input.section ?? "paid",
@@ -79,6 +100,7 @@ export function updateGiftCatalogEntry(input: {
       input.emoji?.trim() || "🎁",
       typeof input.img === "string" ? input.img.trim() : "",
       Math.max(0, Math.floor(Number(input.cost) || 0)),
+      nextPayCurrency,
       input.published === false ? 0 : 1,
       input.deleted === true ? 1 : 0,
       sortOrder.next,
@@ -95,12 +117,13 @@ export function updateGiftCatalogEntry(input: {
   const nextCost = Number.isFinite(Number(input.cost)) ? Math.max(0, Math.floor(Number(input.cost))) : existing.cost
   const nextPublished = typeof input.published === "boolean" ? (input.published ? 1 : 0) : existing.published
   const nextDeleted = typeof input.deleted === "boolean" ? (input.deleted ? 1 : 0) : existing.deleted
+  const nextPayDb = nextPayCurrency === "roses" ? "roses" : "hearts"
 
   db.prepare(
     `UPDATE gift_catalog
-     SET section = ?, name = ?, emoji = ?, img = ?, cost = ?, published = ?, deleted = ?, updated_at = ?
+     SET section = ?, name = ?, emoji = ?, img = ?, cost = ?, pay_currency = ?, published = ?, deleted = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(nextSection, nextName, nextEmoji, nextImg, nextCost, nextPublished, nextDeleted, now, safeId)
+  ).run(nextSection, nextName, nextEmoji, nextImg, nextCost, nextPayDb, nextPublished, nextDeleted, now, safeId)
 }
 
 export function deleteGiftCatalogEntry(id: string): { removedImagePath: string | null } {

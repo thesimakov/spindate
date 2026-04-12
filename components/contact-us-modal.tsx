@@ -25,7 +25,7 @@ type ContactUsModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onNotify?: (message: string, type?: InlineToastType) => void
-  /** Доп. поля в JSON при «Отправить диагностику». */
+  /** Доп. поля в JSON при «Сообщить об ошибке». */
   diagnosticsExtra?: Record<string, unknown>
 }
 
@@ -72,7 +72,7 @@ export function ContactUsModal({ open, onOpenChange, onNotify, diagnosticsExtra 
     }
     const ok = await reportGameClientError({
       source: "manual_diagnostics",
-      message: "Отправить диагностику (ручной отчёт)",
+      message: "Сообщить об ошибке (ручной отчёт)",
       payload,
     })
     if (ok) {
@@ -164,7 +164,7 @@ export function ContactUsModal({ open, onOpenChange, onNotify, diagnosticsExtra 
                 "bg-gradient-to-br from-red-100 to-rose-50 text-red-600",
                 <AlertTriangle className="h-5 w-5" strokeWidth={2.25} aria-hidden />,
               )}
-              label="Отправить диагностику"
+              label="Сообщить об ошибке"
               onClick={() => void handleDiagnostics()}
             />
           </nav>

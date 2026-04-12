@@ -7,7 +7,7 @@ import { DAILY_STREAK_DAY_COUNT, DAILY_STREAK_REWARDS, type DailyStreakReward } 
 export interface DailyStreakBonusDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Текущий день серии 1–8. */
+  /** Текущий день серии 1–7. */
   streakDay: number
   onClaim: () => void | Promise<void>
 }
@@ -88,7 +88,7 @@ export function DailyStreakBonusDialog({ open, onOpenChange, streakDay, onClaim 
             <div className="relative flex flex-col items-center text-center">
               <div className="mb-2 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-violet-200/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-sm sm:text-[11px]">
                 <Sparkles className="h-3.5 w-3.5 text-cyan-300" strokeWidth={2.5} aria-hidden />
-                Серия 8 дней
+                Серия 7 дней
               </div>
               <h2 className="text-xl font-black tracking-tight text-zinc-50 sm:text-[1.35rem]">
                 Ежедневный бонус
@@ -97,7 +97,7 @@ export function DailyStreakBonusDialog({ open, onOpenChange, streakDay, onClaim 
                 День {streak} — забери награду и не прерывай серию!
               </p>
               <p className="mt-1.5 max-w-[22rem] text-[11px] font-medium leading-snug text-zinc-400 sm:text-xs">
-                Заходи каждый день: награды растут, в конце — розы и супер-рамка.
+                Заходи каждый день: награды растут, в финале — розы и супер-рамка.
               </p>
 
               <div
@@ -126,7 +126,7 @@ export function DailyStreakBonusDialog({ open, onOpenChange, streakDay, onClaim 
           </div>
 
           <div className="border-t border-white/[0.06] bg-gradient-to-b from-[#16101f] via-[#12101a] to-[#0c0a12] px-3 pb-5 pt-4 sm:px-4">
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
               {DAILY_STREAK_REWARDS.slice(0, 6).map((spec, i) => {
                 const d = i + 1
                 const isActive = d === streak
@@ -135,24 +135,13 @@ export function DailyStreakBonusDialog({ open, onOpenChange, streakDay, onClaim 
               })}
             </div>
 
-            {/* День 7 шире, день 8 — слот под супер-рамку */}
-            <div className="mt-2.5 flex w-full items-stretch gap-2 sm:gap-2.5">
-              <div className="min-w-0 flex-[1.5]">
-                <DayCapsule
-                  day={7}
-                  spec={DAILY_STREAK_REWARDS[6]}
-                  active={7 === streak}
-                  past={7 < streak}
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <DayCapsule
-                  day={8}
-                  spec={DAILY_STREAK_REWARDS[7]}
-                  active={8 === streak}
-                  past={8 < streak}
-                />
-              </div>
+            <div className="mt-2.5 w-full">
+              <DayCapsule
+                day={7}
+                spec={DAILY_STREAK_REWARDS[6]}
+                active={7 === streak}
+                past={7 < streak}
+              />
             </div>
 
             <button
@@ -187,7 +176,7 @@ function DayCapsule({
   return (
     <div
       className={
-        "relative flex min-h-[3.35rem] w-full min-w-0 items-center gap-2 rounded-2xl px-2.5 py-2 sm:min-h-[3.5rem] sm:rounded-3xl sm:px-3 sm:py-2.5 " +
+        "relative flex min-h-[4.25rem] w-full min-w-0 items-stretch gap-2 rounded-2xl px-2.5 py-2 sm:min-h-[4.5rem] sm:rounded-3xl sm:px-3 sm:py-2.5 " +
         (active
           ? "border-2 border-violet-400/90 bg-[#1c1826] pt-3.5 shadow-[0_0_24px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]"
           : past
@@ -202,7 +191,7 @@ function DayCapsule({
       )}
       <div
         className={
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 sm:h-9 sm:w-9 " +
+          "flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-full border-2 sm:h-9 sm:w-9 " +
           (active
             ? "border-violet-400/75 bg-[#252030] shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)]"
             : past
@@ -220,48 +209,45 @@ function DayCapsule({
           <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.85)]" aria-hidden />
         )}
       </div>
-      <div className="min-w-0 flex-1 text-left">
+      <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-1.5 text-left">
         <span
           className={
-            "block text-[12px] font-black leading-tight sm:text-sm " +
+            "whitespace-nowrap text-[12px] font-black leading-none sm:text-sm " +
             (active ? "text-zinc-50" : past ? "text-emerald-200/95" : "text-zinc-400")
           }
         >
-          день {day}
+          день&nbsp;{day}
         </span>
-        {locked && (
-          <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-zinc-500">скоро</span>
-        )}
+        <span
+          className={
+            "inline-flex w-fit items-center gap-0.5 rounded-full px-2 py-1 shadow-md sm:px-2.5 " +
+            (locked
+              ? "bg-gradient-to-b from-[#5c6b7a] to-[#3d4a5c] ring-1 ring-white/10"
+              : "bg-gradient-to-b from-violet-500 via-fuchsia-500 to-purple-800 ring-1 ring-violet-300/40")
+          }
+        >
+          {spec.kind === "hearts" ? (
+            <Heart
+              className="h-3.5 w-3.5 shrink-0 fill-white text-white sm:h-4 sm:w-4"
+              strokeWidth={0}
+              aria-hidden
+            />
+          ) : spec.kind === "roses" ? (
+            <Flower2 className="h-3.5 w-3.5 shrink-0 text-white sm:h-4 sm:w-4" strokeWidth={2.25} aria-hidden />
+          ) : (
+            <Crown
+              className={
+                "h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 " + (locked ? "text-zinc-100" : "text-amber-100")
+              }
+              strokeWidth={2.25}
+              aria-hidden
+            />
+          )}
+          <span className="text-[11px] font-black tabular-nums text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)] sm:text-xs">
+            {spec.kind === "frame" ? "×1" : spec.amount}
+          </span>
+        </span>
       </div>
-      <span
-        className={
-          "inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 shadow-md sm:px-2.5 " +
-          (locked
-            ? "bg-gradient-to-b from-[#5c6b7a] to-[#3d4a5c] ring-1 ring-white/10"
-            : "bg-gradient-to-b from-violet-500 via-fuchsia-500 to-purple-800 ring-1 ring-violet-300/40")
-        }
-      >
-        {spec.kind === "hearts" ? (
-          <Heart
-            className="h-3.5 w-3.5 shrink-0 fill-white text-white sm:h-4 sm:w-4"
-            strokeWidth={0}
-            aria-hidden
-          />
-        ) : spec.kind === "roses" ? (
-          <Flower2 className="h-3.5 w-3.5 shrink-0 text-white sm:h-4 sm:w-4" strokeWidth={2.25} aria-hidden />
-        ) : (
-          <Crown
-            className={
-              "h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4 " + (locked ? "text-zinc-100" : "text-amber-100")
-            }
-            strokeWidth={2.25}
-            aria-hidden
-          />
-        )}
-        <span className="text-[11px] font-black tabular-nums text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)] sm:text-xs">
-          {spec.kind === "frame" ? "×1" : spec.amount}
-        </span>
-      </span>
     </div>
   )
 }

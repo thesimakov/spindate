@@ -1,4 +1,5 @@
-import type { Player, TableAuthorityPayload } from "@/lib/game-types"
+import type { Player, TableAuthorityPayload, GameLogEntry } from "@/lib/game-types"
+import { GAME_TABLE_LOG_MAX_ENTRIES } from "@/lib/game-types"
 
 /** Логика как SET_PLAYERS в gameReducer — сохраняем порядок во время спина/результата */
 export function mergeLivePlayersIntoAuthority(
@@ -50,4 +51,24 @@ export function mergeLivePlayersIntoAuthority(
     targetPlayer: nextTarget,
     targetPlayer2: nextTarget2,
   }
+}
+
+/**
+ * Объединяет локальный лог с снимком authority: сохраняет записи, ещё не попавшие на сервер,
+ * и не теряет серверные. При совпадении id побеждает remote.
+ */
+export function mergeGameLogsForSync(local: GameLogEntry[], remote: GameLogEntry[]): GameLogEntry[] {
+  const byId = new Map<string, GameLogEntry>()
+  for (const e of local) {
+    byId.set(e.id, e)
+  }
+  for (const e of remote) {
+    byId.set(e.id, e)
+  }
+  const merged = [...byId.values()]
+  merged.sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
+    return a.id.localeCompare(b.id)
+  })
+  return merged.slice(-GAME_TABLE_LOG_MAX_ENTRIES)
 }

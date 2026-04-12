@@ -716,6 +716,24 @@
   animation: cosmic-rocket-glow 2.8s ease-in-out infinite;
 }
 
+/* Скин nebula_mockup: лёгкий дрейф туманности */
+@keyframes nebula-mockup-drift {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: 0.96;
+    transform: scale(1.015) translate3d(0.3%, -0.4%, 0);
+  }
+}
+
+.animate-nebula-mockup-drift {
+  animation: nebula-mockup-drift 22s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 /* Arrow swap animation between two players */
 @keyframes pairArrowPulse {
   0% {
@@ -1737,6 +1755,18 @@
     radial-gradient(circle at 100% 100%, rgba(244, 63, 94, 0.22), transparent 55%),
     radial-gradient(circle at 50% 120%, rgba(15, 23, 42, 0.9), transparent 70%),
     linear-gradient(180deg, #020617 0%, #020617 40%, #020617 100%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* Скин nebula_mockup: убрать розово-голубые углы дефолтной тёмной темы — не спорят с фиолет-слоем */
+.dark .game-bg-animated[data-table-style="nebula_mockup"] {
+  background-color: #0a0a1a;
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.1), transparent 52%),
+    radial-gradient(circle at 100% 5%, rgba(124, 58, 237, 0.08), transparent 50%),
+    radial-gradient(circle at 50% 100%, rgba(15, 23, 42, 0.52), transparent 68%),
+    linear-gradient(165deg, rgba(15, 23, 42, 0.88) 0%, rgba(30, 27, 75, 0.82) 45%, rgba(15, 23, 42, 0.88) 100%);
   background-size: 100% 100%;
   background-repeat: no-repeat;
 }

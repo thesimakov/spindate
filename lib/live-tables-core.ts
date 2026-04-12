@@ -140,7 +140,7 @@ export function joinOrSyncLiveTableOnState(
 
   const userId = args.player.id
   const existing = state.playersById.get(userId)
-  const previousTableId = existing?.tableId ?? null
+  const _previousTableId = existing?.tableId ?? null
 
   if (existing) {
     removeFromTable(state, userId, existing.tableId)

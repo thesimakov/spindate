@@ -16,6 +16,7 @@ const STYLE_NAMES: Record<RoomTableStyle, string> = {
   violet_dream: "Фиолетовый сон",
   cosmic_rockets: "Космос и ракеты",
   light_day: "Светлый день",
+  nebula_mockup: "Небула · макет",
 }
 
 function fallbackRows(now = Date.now()): TableStyleCatalogRow[] {

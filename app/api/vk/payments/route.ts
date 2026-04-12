@@ -26,15 +26,15 @@ const JSON_VK = { "Content-Type": "application/json; encoding=utf-8" } as const
 
 /** Идентификаторы товаров (голоса ВКонтакте). Должны совпадать с `item` в VKWebAppOpenPayForm. */
 const VK_PAYMENT_ITEMS = {
-  hearts_5: { title: "5 сердец", price: payVotesForPack(5) },
-  hearts_50: { title: "50 сердец", price: payVotesForPack(50) },
+  hearts_12: { title: "12 сердец", price: payVotesForPack(12) },
+  hearts_60: { title: "60 сердец", price: payVotesForPack(60) },
   hearts_150: { title: "150 сердец", price: payVotesForPack(150) },
-  hearts_200: { title: "200 сердец", price: payVotesForPack(200) },
-  hearts_500: { title: "500 сердец", price: payVotesForPack(500) },
+  hearts_400: { title: "400 сердец", price: payVotesForPack(400) },
   hearts_1000: { title: "1000 сердец", price: payVotesForPack(1000) },
-  hearts_5000: { title: "5000 сердец", price: payVotesForPack(5000) },
-  vip_7d: { title: "VIP 7 дней", price: 20 },
-  vip_30d: { title: "VIP 30 дней", price: 70 },
+  hearts_2500: { title: "2500 сердец", price: payVotesForPack(2500) },
+  hearts_7500: { title: "7500 сердец", price: payVotesForPack(7500) },
+  vip_7d: { title: "VIP 7 дней", price: 15 },
+  vip_30d: { title: "VIP 30 дней", price: 50 },
 } as const
 
 type ItemId = keyof typeof VK_PAYMENT_ITEMS
