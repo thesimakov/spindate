@@ -2,14 +2,32 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
 import { vkGroupsIsMember } from "@/lib/vk-groups-server"
+import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 
 const COMMUNITY_GROUP_ID = 236519647
 const BONUS_HEARTS = 30
+
+function parseInventoryJson(raw: string | undefined): unknown[] {
+  if (!raw) return []
+  try {
+    const j = JSON.parse(raw) as unknown
+    return Array.isArray(j) ? j : []
+  } catch {
+    return []
+  }
+}
 
 export async function POST(req: Request) {
   const auth = getGameUserIdFromRequest(req)
   if (!auth) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
+  }
+
+  if (auth.okUserId != null) {
+    return NextResponse.json(
+      { ok: false, error: "Бонус доступен только аккаунтам ВКонтакте" },
+      { status: 400 },
+    )
   }
 
   let vkUserId: number | null = auth.vkUserId
@@ -54,6 +72,36 @@ export async function POST(req: Request) {
 
   const now = Date.now()
 
+  const userPayload = (userId: string) => {
+    const r = db
+      .prepare(
+        `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM user_game_state WHERE user_id = ?`,
+      )
+      .get(userId) as
+      | { voice_balance: number; inventory_json: string; visual_prefs_json: string }
+      | undefined
+    return {
+      voiceBalance: r?.voice_balance ?? 0,
+      inventory: parseInventoryJson(r?.inventory_json),
+      visualPrefs: parseVisualPrefsJson(r?.visual_prefs_json) ?? {},
+    }
+  }
+
+  const vkPayload = (vkId: number) => {
+    const r = db
+      .prepare(
+        `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM vk_user_game_state WHERE vk_user_id = ?`,
+      )
+      .get(vkId) as
+      | { voice_balance: number; inventory_json: string; visual_prefs_json: string }
+      | undefined
+    return {
+      voiceBalance: r?.voice_balance ?? 0,
+      inventory: parseInventoryJson(r?.inventory_json),
+      visualPrefs: parseVisualPrefsJson(r?.visual_prefs_json) ?? {},
+    }
+  }
+
   if (auth.userId) {
     const row = db
       .prepare(
@@ -65,8 +113,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         alreadyClaimed: true,
-        voiceBalance: row.voice_balance ?? 0,
         isMember: true,
+        ...userPayload(auth.userId),
       })
     }
 
@@ -77,9 +125,9 @@ export async function POST(req: Request) {
       ).run(auth.userId, BONUS_HEARTS, now)
       return NextResponse.json({
         ok: true,
-        voiceBalance: BONUS_HEARTS,
         isMember: true,
         granted: true,
+        ...userPayload(auth.userId),
       })
     }
 
@@ -90,7 +138,7 @@ export async function POST(req: Request) {
        WHERE user_id = ?`,
     ).run(balance, now, auth.userId)
 
-    return NextResponse.json({ ok: true, voiceBalance: balance, isMember: true, granted: true })
+    return NextResponse.json({ ok: true, isMember: true, granted: true, ...userPayload(auth.userId) })
   }
 
   const rowVk = db
@@ -101,8 +149,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       alreadyClaimed: true,
-      voiceBalance: rowVk.voice_balance ?? 0,
       isMember: true,
+      ...vkPayload(vkUserId),
     })
   }
 
@@ -113,9 +161,9 @@ export async function POST(req: Request) {
     ).run(vkUserId, BONUS_HEARTS, now)
     return NextResponse.json({
       ok: true,
-      voiceBalance: BONUS_HEARTS,
       isMember: true,
       granted: true,
+      ...vkPayload(vkUserId),
     })
   }
 
@@ -126,5 +174,5 @@ export async function POST(req: Request) {
      WHERE vk_user_id = ?`,
   ).run(balanceVk, now, vkUserId)
 
-  return NextResponse.json({ ok: true, voiceBalance: balanceVk, isMember: true, granted: true })
+  return NextResponse.json({ ok: true, isMember: true, granted: true, ...vkPayload(vkUserId) })
 }

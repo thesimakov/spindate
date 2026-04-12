@@ -5,6 +5,7 @@ import { Heart, Loader2, Sparkles } from "lucide-react"
 import { useGame } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import type { InventoryItem } from "@/lib/game-types"
+import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import {
   initVkResilient,
   isVkMiniApp,
@@ -78,12 +79,11 @@ export function MobileAppBlockedScreen() {
       return "none"
     }
 
-    if (typeof data.voiceBalance === "number") {
-      dispatch({
-        type: "RESTORE_GAME_STATE",
-        voiceBalance: data.voiceBalance,
-        inventory: (state.inventory ?? []) as InventoryItem[],
-      })
+    if (typeof data.voiceBalance === "number" && user) {
+      const inv = Array.isArray(data.inventory)
+        ? (data.inventory as InventoryItem[])
+        : ((state.inventory ?? []) as InventoryItem[])
+      dispatch(buildRestoreGameStateAction(data.voiceBalance, inv, user.id, data.visualPrefs))
     }
 
     awaitingClaimRef.current = false

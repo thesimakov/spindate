@@ -14,7 +14,8 @@ import { DEFAULT_BOTTLE_CATALOG_ROWS } from "@/lib/bottle-catalog"
 import { generateLogId } from "@/lib/game-context"
 import type { BottleSkin, GameAction, Player } from "@/lib/game-types"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
-import { isVkMiniApp, showVkNativeAd } from "@/lib/vk-bridge"
+import { showVkNativeAd } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
 import { cn } from "@/lib/utils"
 
 /** Если реклама недоступна — разблокировка за фиксированную цену ❤ (не `skin.cost` из каталога). */
@@ -55,6 +56,7 @@ export function BottleCatalogModal({
   dispatch,
   showToast,
 }: BottleCatalogModalProps) {
+  const { host: runtimeHost } = useSocialRuntime()
   const [tick, setTick] = useState(0)
   const [adBusySkinId, setAdBusySkinId] = useState<string | null>(null)
   const [adFallbackToHearts, setAdFallbackToHearts] = useState<Record<string, boolean>>({})
@@ -199,8 +201,8 @@ export function BottleCatalogModal({
           return
         }
 
-        /* Вне мини-приложения VK рекламы нет — сразу покупка за фикс. ❤, без ожидания bridge. */
-        if (!isVkMiniApp()) {
+        /* Вне среды VK рекламы нет — сразу покупка за фикс. ❤ (в т.ч. ОК до интеграции OK Ads). */
+        if (runtimeHost !== "vk") {
           if (voiceBalance < BOTTLE_SKIN_AD_FALLBACK_HEARTS) {
             showToast("Недостаточно сердец", "error")
             return

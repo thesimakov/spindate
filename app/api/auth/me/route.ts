@@ -25,8 +25,13 @@ export async function GET(req: Request) {
   }
 
   const userRow = db
-    .prepare(`SELECT id, username, vk_user_id FROM users WHERE id = ?`)
-    .get(session.user_id) as { id: string; username: string; vk_user_id: number | null } | undefined
+    .prepare(`SELECT id, username, vk_user_id, ok_user_id FROM users WHERE id = ?`)
+    .get(session.user_id) as {
+      id: string
+      username: string
+      vk_user_id: number | null
+      ok_user_id: number | null
+    } | undefined
 
   if (!userRow) {
     return NextResponse.json({ ok: false, error: "Пользователь не найден" }, { status: 401 })
@@ -65,8 +70,12 @@ export async function GET(req: Request) {
   const purpose = profile?.purpose ?? "communication"
   const status = profile?.status ?? ""
 
+  const authProvider =
+    userRow.vk_user_id != null ? "vk" : userRow.ok_user_id != null ? "ok" : "login"
+
   return NextResponse.json({
     ok: true,
+    authProvider,
     user: {
       id: userRow.id,
       username: userRow.username,
@@ -77,6 +86,7 @@ export async function GET(req: Request) {
       purpose,
       status,
       ...(userRow.vk_user_id != null ? { vkUserId: userRow.vk_user_id } : {}),
+      ...(userRow.ok_user_id != null ? { okUserId: userRow.ok_user_id } : {}),
       ...(profile?.city ? { city: profile.city } : {}),
       ...(profile?.zodiac ? { zodiac: profile.zodiac } : {}),
       ...(profile?.interests ? { interests: profile.interests } : {}),

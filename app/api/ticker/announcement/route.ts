@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getDb } from "@/lib/db"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
 import { notifyVkTickerModerationQueued } from "@/lib/admin-vk-notify"
 import {
@@ -34,9 +35,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Некорректный тариф" }, { status: 400 })
   }
 
+  const db = getDb()
+  let resolvedUserId: string | null = auth.userId
+  let resolvedVk: number | null = auth.vkUserId
+  if (!resolvedUserId && auth.okUserId != null) {
+    const row = db.prepare(`SELECT id FROM users WHERE ok_user_id = ?`).get(auth.okUserId) as
+      | { id: string }
+      | undefined
+    resolvedUserId = row?.id ?? null
+  }
+
   const result = createTickerPlayerAdOrder({
-    userId: auth.userId,
-    vkUserId: auth.vkUserId,
+    userId: resolvedUserId,
+    vkUserId: resolvedVk,
     authorDisplayName,
     body: text,
     linkUrl: linkNorm.url,

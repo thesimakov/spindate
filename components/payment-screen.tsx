@@ -4,9 +4,11 @@ import { useState } from "react"
 import { Coins, Shield, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame } from "@/lib/game-context"
-import { vkBridge } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
+import { showEmbeddedPaymentWall } from "@/lib/social-payments"
 
 export function PaymentScreen() {
+  const { host: runtimeHost } = useSocialRuntime()
   const { dispatch } = useGame()
   const [loading, setLoading] = useState(false)
   const [connected, setConnected] = useState(false)
@@ -15,7 +17,7 @@ export function PaymentScreen() {
     setLoading(true)
     try {
       // Simulate VK payment wall connection
-      const success = await vkBridge.showPaymentWall(0)
+      const success = await showEmbeddedPaymentWall(runtimeHost, 0)
       if (success) {
         setConnected(true)
         setTimeout(() => {

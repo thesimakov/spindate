@@ -3,18 +3,21 @@
 import { useEffect } from "react"
 import { useGame } from "@/lib/game-context"
 import { hideVkBannerAd, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
 
 /**
  * Горизонтальный overlay-баннер VK (compact, top): при маунте и при возврате вкладки.
  * Не вызываем HideBannerAd при модалках — баннер остаётся статичным.
  */
 export function useVkMiniAppPersistentHorizontalBanner() {
+  const { host, ready } = useSocialRuntime()
   const { state } = useGame()
   const currentUser = state.currentUser
   const vipActive =
     !!currentUser?.isVip && (currentUser.vipUntilTs == null || currentUser.vipUntilTs > Date.now())
 
   useEffect(() => {
+    if (!ready || host !== "vk") return
     if (vipActive) {
       void hideVkBannerAd().catch(() => {})
       return
@@ -67,7 +70,7 @@ export function useVkMiniAppPersistentHorizontalBanner() {
       if (t2 !== null) window.clearTimeout(t2)
       if (heartbeat !== null) window.clearInterval(heartbeat)
     }
-  }, [vipActive, currentUser?.id])
+  }, [ready, host, vipActive, currentUser?.id])
 }
 
 /** @deprecated Используйте {@link useVkMiniAppPersistentHorizontalBanner}; имя сохранено для GameRoom. */

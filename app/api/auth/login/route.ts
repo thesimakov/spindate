@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db"
 import { verifyPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
@@ -50,8 +51,10 @@ export async function POST(req: Request) {
   const status = profile?.status ?? ""
 
   const gameStateRow = db
-    .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
-    .get(user.id) as { voice_balance: number; inventory_json: string } | undefined
+    .prepare(
+      `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM user_game_state WHERE user_id = ?`,
+    )
+    .get(user.id) as { voice_balance: number; inventory_json: string; visual_prefs_json: string } | undefined
   const voiceBalance = gameStateRow?.voice_balance ?? 0
   let inventory: unknown[] = []
   if (gameStateRow?.inventory_json) {
@@ -61,6 +64,7 @@ export async function POST(req: Request) {
       inventory = []
     }
   }
+  const visualPrefs = parseVisualPrefsJson(gameStateRow?.visual_prefs_json) ?? {}
 
   const now = Date.now()
   const token = newSessionToken()
@@ -88,6 +92,7 @@ export async function POST(req: Request) {
     },
     voiceBalance,
     inventory,
+    visualPrefs,
     sessionToken: token,
   })
   setSessionCookie(res, token, expiresAt)

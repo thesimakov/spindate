@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { BottleSkin, InventoryItem, Player } from "@/lib/game-types"
+import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
@@ -306,11 +307,14 @@ export function RoomLobbyScreen() {
         const data = await res.json().catch(() => null)
         if (cancelled) return
         if (res.ok && data?.ok && typeof data.voiceBalance === "number") {
-          dispatch({
-            type: "RESTORE_GAME_STATE",
-            voiceBalance: data.voiceBalance,
-            inventory: (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[],
-          })
+          dispatch(
+            buildRestoreGameStateAction(
+              data.voiceBalance,
+              (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[],
+              user.id,
+              data.visualPrefs,
+            ),
+          )
         }
       } catch {
         // ignore
@@ -520,11 +524,14 @@ export function RoomLobbyScreen() {
       let balance = voiceBalance
       if (syncRes.ok && syncData?.ok && typeof syncData.voiceBalance === "number") {
         balance = syncData.voiceBalance
-        dispatch({
-          type: "RESTORE_GAME_STATE",
-          voiceBalance: balance,
-          inventory: (Array.isArray(syncData.inventory) ? syncData.inventory : []) as InventoryItem[],
-        })
+        dispatch(
+          buildRestoreGameStateAction(
+            balance,
+            (Array.isArray(syncData.inventory) ? syncData.inventory : []) as InventoryItem[],
+            user.id,
+            syncData.visualPrefs,
+          ),
+        )
       }
       const bottlePremium = getBottleCatalogCostFromRows(availableCatalogRows, createBottleSkin)
       const totalCharge = createCost + bottlePremium
@@ -560,11 +567,14 @@ export function RoomLobbyScreen() {
         return
       }
       if (typeof data.voiceBalance === "number") {
-        dispatch({
-          type: "RESTORE_GAME_STATE",
-          voiceBalance: data.voiceBalance,
-          inventory: state.inventory ?? [],
-        })
+        dispatch(
+          buildRestoreGameStateAction(
+            data.voiceBalance,
+            (state.inventory ?? []) as InventoryItem[],
+            user.id,
+            data.visualPrefs,
+          ),
+        )
       } else {
         dispatch({ type: "PAY_VOICES", amount: totalCharge })
       }
@@ -596,11 +606,14 @@ export function RoomLobbyScreen() {
           const syncRes = await apiFetch(userStateApiUrl(user), { credentials: "include" })
           const syncData = await syncRes.json().catch(() => null)
           if (syncRes.ok && syncData?.ok && typeof syncData.voiceBalance === "number") {
-            dispatch({
-              type: "RESTORE_GAME_STATE",
-              voiceBalance: syncData.voiceBalance,
-              inventory: (Array.isArray(syncData.inventory) ? syncData.inventory : []) as InventoryItem[],
-            })
+            dispatch(
+              buildRestoreGameStateAction(
+                syncData.voiceBalance,
+                (Array.isArray(syncData.inventory) ? syncData.inventory : []) as InventoryItem[],
+                user.id,
+                syncData.visualPrefs,
+              ),
+            )
             if (syncData.voiceBalance >= baseline + BUY_HEARTS_AMOUNT) break
           }
           await new Promise((resolve) => setTimeout(resolve, 1500))

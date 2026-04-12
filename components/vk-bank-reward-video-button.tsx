@@ -14,6 +14,7 @@ import { useGame } from "@/lib/game-context"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
 import { apiFetch } from "@/lib/api-fetch"
 import type { InventoryItem } from "@/lib/game-types"
+import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import { vkAdRewardPostUrl } from "@/lib/persist-user-game-state"
 import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
@@ -101,15 +102,15 @@ export function VkBankRewardVideoButton({
         ok?: boolean
         voiceBalance?: number
         inventory?: unknown[]
+        visualPrefs?: unknown
         error?: string
         granted?: number
       } | null
-      if (res.ok && data?.ok === true && typeof data.voiceBalance === "number") {
-        dispatch({
-          type: "RESTORE_GAME_STATE",
-          voiceBalance: data.voiceBalance,
-          inventory: Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
-        })
+      if (res.ok && data?.ok === true && typeof data.voiceBalance === "number" && currentUser) {
+        const inv = Array.isArray(data.inventory)
+          ? (data.inventory as InventoryItem[])
+          : (state.inventory ?? [])
+        dispatch(buildRestoreGameStateAction(data.voiceBalance, inv, currentUser.id, data.visualPrefs))
         const g = typeof data.granted === "number" ? data.granted : VK_REWARD_HEARTS
         if (shownOk) {
           onNotify?.(`+${g} сердец за просмотр`, "success")
@@ -127,7 +128,7 @@ export function VkBankRewardVideoButton({
     } finally {
       setBusy(false)
     }
-  }, [busy, currentUser, dispatch, onNotify])
+  }, [busy, currentUser, dispatch, onNotify, state.inventory])
 
   const openGate = useCallback(async () => {
     if (busy) return

@@ -17,9 +17,11 @@ export interface Player {
   authUserId?: string
   /** vk_user_id для входа через VK (дублирует id, но полезно для админки) */
   vkUserId?: number
+  /** ok_user_id для входа через Одноклассники */
+  okUserId?: number
   /** VIP активен до этого времени (ms). Если не задано, то как бессрочный флаг. */
   vipUntilTs?: number
-  authProvider?: "vk" | "login"
+  authProvider?: "vk" | "ok" | "login"
   /** Город (если указан в профиле) */
   city?: string
   /** Интересы (если указаны в профиле) */
@@ -181,6 +183,14 @@ export type TableStyle =
   | "light_day"
   /** Тёмный космос + оранжевое свечение (отдельный скин по UI-макету) */
   | "nebula_mockup"
+
+/** Визуальные настройки, хранятся в user_game_state.visual_prefs_json и синхронизируются между сессиями. */
+export type UserVisualPrefs = {
+  tableStyle?: TableStyle
+  ownedBottleSkins?: BottleSkin[]
+  avatarFrameId?: string | null
+  soundsEnabled?: boolean
+}
 
 /* ---- Prediction system ---- */
 export interface Prediction {
@@ -412,7 +422,14 @@ export type GameAction =
   | { type: "SEND_INTERGAME_CHAT"; message: GeneralChatMessage }
   | { type: "PAY_VOICES"; amount: number }
   | { type: "ADD_VOICES"; amount: number }
-  | { type: "RESTORE_GAME_STATE"; voiceBalance: number; inventory: InventoryItem[] }
+  | {
+      type: "RESTORE_GAME_STATE"
+      voiceBalance: number
+      inventory: InventoryItem[]
+      visualPrefs?: UserVisualPrefs
+      /** Чтобы применить avatarFrameId до SET_USER */
+      playerIdForVisuals?: number
+    }
   | { type: "ADD_BONUS"; amount: number }
   | { type: "RESET_ROUND" }
   | { type: "ADD_LOG"; entry: GameLogEntry }

@@ -9,9 +9,13 @@ import { useInlineToast } from "@/hooks/use-inline-toast"
 import { listVotesForPack, payVotesForPack, VK_HEART_PACK_AMOUNTS } from "@/lib/heart-shop-pricing"
 import { TELEGRAM_STARS_PACKS, type TelegramStarsPackId } from "@/lib/telegram-stars-pricing"
 import { apiFetch } from "@/lib/api-fetch"
-import { isVkRuntimeEnvironment, showVkNativeAd, vkBridge } from "@/lib/vk-bridge"
+import { vkBridge } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
+import { showEmbeddedPaymentWall } from "@/lib/social-payments"
+import { showEmbeddedRewardVideoAd } from "@/lib/social-ads"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
+import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 
 type ShopScreenProps = {
@@ -30,6 +34,7 @@ function vkVotesWordRu(n: number): string {
 }
 
 export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) {
+  const { host: runtimeHost } = useSocialRuntime()
   const { state, dispatch } = useGame()
   const { currentUser, voiceBalance, players, inventory, tableId } = state
   const { toast, showToast } = useInlineToast(1700)
@@ -296,13 +301,21 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
         : "/api/user/state"
     try {
       const res = await apiFetch(endpoint, { credentials: "include" })
-      const data = (await res.json()) as { ok?: boolean; voiceBalance?: number; inventory?: unknown[] }
-      if (data.ok && typeof data.voiceBalance === "number") {
-        dispatch({
-          type: "RESTORE_GAME_STATE",
-          voiceBalance: data.voiceBalance,
-          inventory: Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
-        })
+      const data = (await res.json()) as {
+        ok?: boolean
+        voiceBalance?: number
+        inventory?: unknown[]
+        visualPrefs?: unknown
+      }
+      if (data.ok && typeof data.voiceBalance === "number" && currentUser) {
+        dispatch(
+          buildRestoreGameStateAction(
+            data.voiceBalance,
+            Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
+            currentUser.id,
+            data.visualPrefs,
+          ),
+        )
       }
     } catch {
       // ignore
@@ -362,13 +375,21 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       while (Date.now() < deadline) {
         try {
           const res = await apiFetch(endpoint, { credentials: "include" })
-          const data = (await res.json()) as { ok?: boolean; voiceBalance?: number; inventory?: unknown[] }
-          if (data.ok && typeof data.voiceBalance === "number") {
-            dispatch({
-              type: "RESTORE_GAME_STATE",
-              voiceBalance: data.voiceBalance,
-              inventory: Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
-            })
+          const data = (await res.json()) as {
+            ok?: boolean
+            voiceBalance?: number
+            inventory?: unknown[]
+            visualPrefs?: unknown
+          }
+          if (data.ok && typeof data.voiceBalance === "number" && currentUser) {
+            dispatch(
+              buildRestoreGameStateAction(
+                data.voiceBalance,
+                Array.isArray(data.inventory) ? (data.inventory as InventoryItem[]) : [],
+                currentUser.id,
+                data.visualPrefs,
+              ),
+            )
             if (data.voiceBalance >= baselineBalance + expectedDelta) return true
           }
         } catch {
@@ -415,7 +436,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
 
     if (cost > 0) {
       const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
-      const ok = await vkBridge.showPaymentWall(cost, itemId, {
+      const ok = await showEmbeddedPaymentWall(runtimeHost, cost, itemId, {
         userId: String(currentUser.id),
         description: `VIP ${days} дн.`,
       })
@@ -456,7 +477,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     if (!currentUser) return
     const baseline = voiceBalance
     const stopKeepAlive = await runLiveKeepAlive(currentUser, 12_000)
-    const ok = await vkBridge.showPaymentWall(votes, itemId, {
+    const ok = await showEmbeddedPaymentWall(runtimeHost, votes, itemId, {
       userId: String(currentUser.id),
       description: `Пакет ${amount} сердец`,
     })
@@ -753,12 +774,17 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
               onClick={() => {
                 void (async () => {
                   if (!currentUser || vipTrialUsed || vipLevel !== 0 || isVip) return
-                  if (!(await isVkRuntimeEnvironment())) {
-                    showToast("Пробный VIP за рекламу доступен в приложении ВКонтакте", "info")
+                  if (runtimeHost !== "vk") {
+                    showToast(
+                      runtimeHost === "ok"
+                        ? "Пробный VIP за рекламу в Одноклассниках будет доступен после подключения рекламы ОК"
+                        : "Пробный VIP за рекламу доступен в приложении ВКонтакте",
+                      "info",
+                    )
                     return
                   }
                   try {
-                    await showVkNativeAd("reward")
+                    await showEmbeddedRewardVideoAd(runtimeHost)
                   } catch {
                     // ignore
                   }

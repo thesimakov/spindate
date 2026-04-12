@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
+import { parseVisualPrefsJson, type UserVisualPrefs } from "@/lib/user-visual-prefs"
 
 function getUserIdFromSession(req: Request): string | null {
   const token = getSessionTokenFromRequest(req)
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
   const utcDay = utcDayKey(now)
 
   type TxResult =
-    | { ok: true; voiceBalance: number; inventory: unknown[] }
+    | { ok: true; voiceBalance: number; inventory: unknown[]; visualPrefs: UserVisualPrefs }
     | { ok: false; code: "cooldown"; retryAfterMs: number }
     | { ok: false; code: "daily_cap" }
 
@@ -117,11 +118,19 @@ export async function POST(req: Request) {
 
     const gameRow = userId
       ? (db
-          .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
-          .get(userId) as { voice_balance: number; inventory_json: string } | undefined)
+          .prepare(
+            `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM user_game_state WHERE user_id = ?`,
+          )
+          .get(userId) as
+          | { voice_balance: number; inventory_json: string; visual_prefs_json: string }
+          | undefined)
       : (db
-          .prepare(`SELECT voice_balance, inventory_json FROM vk_user_game_state WHERE vk_user_id = ?`)
-          .get(vkUserId) as { voice_balance: number; inventory_json: string } | undefined)
+          .prepare(
+            `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM vk_user_game_state WHERE vk_user_id = ?`,
+          )
+          .get(vkUserId) as
+          | { voice_balance: number; inventory_json: string; visual_prefs_json: string }
+          | undefined)
 
     const voiceBalance = gameRow?.voice_balance ?? 0
     let inventory: unknown[] = []
@@ -132,7 +141,8 @@ export async function POST(req: Request) {
         inventory = []
       }
     }
-    return { ok: true, voiceBalance, inventory }
+    const visualPrefs = parseVisualPrefsJson(gameRow?.visual_prefs_json) ?? {}
+    return { ok: true, voiceBalance, inventory, visualPrefs }
   })
 
   const out = work()
@@ -159,6 +169,7 @@ export async function POST(req: Request) {
     ok: true,
     voiceBalance: out.voiceBalance,
     inventory: out.inventory,
+    visualPrefs: out.visualPrefs,
     granted: amount,
   })
 }

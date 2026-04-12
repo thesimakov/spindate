@@ -22,13 +22,27 @@ export function getVkUserIdFromRequest(req: Request): number | null {
   return n
 }
 
-/** Как в user/state: сессия имеет приоритет; иначе VK query. */
-export function getGameUserIdFromRequest(
-  req: Request,
-): { userId: string; vkUserId: null } | { userId: null; vkUserId: number } | null {
+export function getOkUserIdFromRequest(req: Request): number | null {
+  const url = new URL(req.url)
+  const raw = url.searchParams.get("ok_user_id")
+  if (!raw) return null
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return null
+  return n
+}
+
+/** Как в user/state: сессия имеет приоритет; иначе query vk_user_id или ok_user_id. */
+export type GameUserIdAuth =
+  | { userId: string; vkUserId: null; okUserId: null }
+  | { userId: null; vkUserId: number; okUserId: null }
+  | { userId: null; vkUserId: null; okUserId: number }
+
+export function getGameUserIdFromRequest(req: Request): GameUserIdAuth | null {
   const userId = getUserIdFromSession(req)
-  if (userId) return { userId, vkUserId: null }
+  if (userId) return { userId, vkUserId: null, okUserId: null }
   const vkUserId = getVkUserIdFromRequest(req)
-  if (vkUserId) return { userId: null, vkUserId }
+  if (vkUserId) return { userId: null, vkUserId, okUserId: null }
+  const okUserId = getOkUserIdFromRequest(req)
+  if (okUserId) return { userId: null, vkUserId: null, okUserId }
   return null
 }

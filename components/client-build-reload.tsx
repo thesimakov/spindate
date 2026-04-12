@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { apiFetch } from "@/lib/api-fetch"
 import { isVkMiniApp, refreshVkPersistentHorizontalBanner } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
 
 /** Вшивается в бандл при `next build` (см. `next.config.mjs`). */
 const CLIENT_BUILD = (process.env.NEXT_PUBLIC_BUILD_ID ?? "").trim()
@@ -16,12 +17,13 @@ const RELOAD_GUARD_WINDOW_MS = 2 * 60_000
  * Так все игроки подтягивают новый JS/CSS после деплоя без ручного «выйти и зайти».
  */
 export function ClientBuildReload() {
+  const { host } = useSocialRuntime()
   useEffect(() => {
     if (typeof window === "undefined") return
     if (process.env.NODE_ENV === "development") return
     // В VK Mini App авто-reload при новом build часто срывает состояние bridge/баннера.
     // Для VK-пользователей обновление происходит на следующем ручном открытии приложения.
-    if (isVkMiniApp()) return
+    if (isVkMiniApp() || host === "ok") return
     if (!CLIENT_BUILD || CLIENT_BUILD === "unknown") return
     // GitHub Pages собирается отдельно от VPS, build-id почти всегда отличается.
     // Иначе получится бесконечный reload при сравнении с /api/client-build на боевом сервере.
@@ -98,7 +100,7 @@ export function ClientBuildReload() {
       window.clearTimeout(t0)
       document.removeEventListener("visibilitychange", onVisible)
     }
-  }, [])
+  }, [host])
 
   return null
 }

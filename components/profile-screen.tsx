@@ -29,6 +29,7 @@ import { resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
 import { apiFetch } from "@/lib/api-fetch"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
@@ -110,6 +111,7 @@ type ProfileScreenProps = {
 }
 
 export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps = {}) {
+  const { host: runtimeHost } = useSocialRuntime()
   const { state, dispatch } = useGame()
   const { rows: frameCatalogRows } = useFrameCatalog()
   const { rows: giftCatalogRows } = useGiftCatalog()
@@ -551,7 +553,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const isPanel = variant === "panel"
 
   const handleInviteFriends = async () => {
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "error")
       return
     }
@@ -574,7 +576,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const handleSelectFriends = async () => {
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "error")
       return
     }
@@ -585,7 +587,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const handleRecommend = async () => {
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "error")
       return
     }
@@ -602,7 +604,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const handleVkAddToFavorites = async () => {
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "info")
       return
     }
@@ -619,7 +621,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const handleVkAddToHomeScreen = async () => {
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "info")
       return
     }
@@ -646,7 +648,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
   /** user_result должен соответствовать типу таблицы в кабинете VK (здесь: число кручений бутылочки). */
   const handleVkLeaderBoard = async () => {
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "info")
       return
     }
@@ -664,7 +666,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
   const handleVkOpenWallNews = async () => {
     if (!vkOpenWallNews) return
-    if (!vkBridge.isVkMiniApp()) {
+    if (runtimeHost !== "vk") {
       showToast("Доступно только в VK", "info")
       return
     }
@@ -1019,7 +1021,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             >
               Рассказать про игру
             </Button>
-            {vkBridge.isVkMiniApp() ? (
+            {runtimeHost === "vk" ? (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
@@ -1104,7 +1106,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 </>
               )}
             </button>
-            {currentUser.authProvider === "vk" && vkBridge.isVkMiniApp() && (
+            {currentUser.authProvider === "vk" && runtimeHost === "vk" && (
               <>
                 <button
                   type="button"

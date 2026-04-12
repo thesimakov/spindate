@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, subscribeVkViewportResize } from "@/lib/vk-bridge"
+import { useSocialRuntime } from "@/lib/social-runtime"
 import { getLayoutConstraintDebug, useGameLayoutMode } from "@/lib/use-media-query"
 import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
@@ -32,6 +33,7 @@ import { reportGameClientError } from "@/lib/report-game-client-error"
 const AUTO_ERROR_THROTTLE_MS = 25_000
 
 export function GameApp() {
+  const { host, ready } = useSocialRuntime()
   /** Один раз на всё приложение в VK: лобби/регистрация/магазин не монтируют GameRoom — баннер только так показывается «везде». */
   useVkMiniAppPersistentHorizontalBanner()
 
@@ -139,6 +141,7 @@ export function GameApp() {
     (state.players?.length ?? 0) > 0
 
   useEffect(() => {
+    if (!ready || host !== "vk") return
     let cancelled = false
     ;(async () => {
       await initVkResilient()
@@ -149,7 +152,7 @@ export function GameApp() {
       cancelled = true
       unsub()
     }
-  }, [])
+  }, [ready, host])
 
   /** В консоли DevTools: `window.spindateLayoutDebug()` — что сдерживает ширину / «планшет». */
   useEffect(() => {

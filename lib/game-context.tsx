@@ -19,6 +19,8 @@ import { generateBots as generateBotsImpl, AVATAR_FRAME_IDS, randomAvatarFrame a
 import { generateLogId as generateLogIdImpl, generateMessageId as generateMessageIdImpl } from "@/lib/ids"
 import { getPairGenderCombo as getPairGenderComboImpl } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
+import { userStatePutUrl } from "@/lib/persist-user-game-state"
+import { buildVisualPrefsPayload } from "@/lib/user-visual-prefs"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 import { trimRoomChatMessages } from "@/lib/room-chat-retention"
 import { mergeGameLogsForSync } from "@/lib/table-authority-merge"
@@ -118,6 +120,7 @@ const BOTTLE_COOLDOWN_LS_KEY = (userId: number) => `spindate_bottle_cooldown_v1_
 const PROFILE_SHOW_VK_LS_KEY = (userId: number) => `spindate_profile_show_vk_v1_${userId}`
 /** "1" — включены приглашения в личный чат */
 const PROFILE_CHAT_INVITE_LS_KEY = (userId: number) => `spindate_profile_chat_invite_v1_${userId}`
+const SOUNDS_ENABLED_KEY = "spindate_sounds_enabled"
 
 function parseAdmirersFromStorage(raw: string): Player[] {
   try {
@@ -419,11 +422,13 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         admirers,
         favorites,
         avatarFrames: nextFrames,
-        bottleSkin: "classic",
-        ownedBottleSkins: ["classic"],
+        bottleSkin: state.bottleSkin ?? "classic",
+        ownedBottleSkins:
+          state.ownedBottleSkins && state.ownedBottleSkins.length > 0 ? state.ownedBottleSkins : ["classic"],
         bottleCooldownUntil: undefined,
         bottleDonorId: undefined,
         bottleDonorName: undefined,
+        tableStyle: state.tableStyle ?? "classic_night",
         courtshipProfileAllowed: {
           ...(state.courtshipProfileAllowed ?? {}),
           [uid]: mergedUser.showVkAfterCare !== false,
@@ -826,13 +831,51 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       return { ...state, voiceBalance: Math.max(0, state.voiceBalance - action.amount) }
     case "ADD_VOICES":
       return { ...state, voiceBalance: state.voiceBalance + action.amount }
-    case "RESTORE_GAME_STATE":
+    case "RESTORE_GAME_STATE": {
+      const vp = action.visualPrefs
+      let nextSounds = state.soundsEnabled
+      if (vp?.soundsEnabled !== undefined) {
+        nextSounds = vp.soundsEnabled
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(SOUNDS_ENABLED_KEY, vp.soundsEnabled ? "1" : "0")
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      let nextAvatarFrames = { ...(state.avatarFrames ?? {}) }
+      const pid = action.playerIdForVisuals
+      if (pid != null && vp?.avatarFrameId !== undefined) {
+        if (vp.avatarFrameId === null || vp.avatarFrameId === "none") {
+          const { [pid]: _, ...rest } = nextAvatarFrames
+          nextAvatarFrames = rest
+          try {
+            if (typeof window !== "undefined") window.localStorage.removeItem(AVATAR_FRAME_LS_KEY(pid))
+          } catch {
+            /* ignore */
+          }
+        } else {
+          nextAvatarFrames = { ...nextAvatarFrames, [pid]: vp.avatarFrameId }
+          try {
+            if (typeof window !== "undefined")
+              window.localStorage.setItem(AVATAR_FRAME_LS_KEY(pid), vp.avatarFrameId)
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       return {
         ...state,
         voiceBalance: Math.max(0, action.voiceBalance),
         inventory: Array.isArray(action.inventory) ? [...action.inventory] : [],
+        ...(vp?.tableStyle ? { tableStyle: vp.tableStyle } : {}),
+        ...(vp?.ownedBottleSkins !== undefined ? { ownedBottleSkins: [...vp.ownedBottleSkins] } : {}),
+        ...(vp?.soundsEnabled !== undefined ? { soundsEnabled: nextSounds } : {}),
+        avatarFrames: nextAvatarFrames,
         gameSidePanel: null,
       }
+    }
     case "ADD_BONUS":
       return { ...state, bonusBalance: state.bonusBalance + action.amount }
     case "RESET_ROUND":
@@ -1361,10 +1404,12 @@ const GameContext = createContext<{
   dispatch: React.Dispatch<GameAction>
 } | null>(null)
 
-const SOUNDS_ENABLED_KEY = "spindate_sounds_enabled"
-
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
+  const currentUid = state.currentUser?.id
+  const currentFrameSig = currentUid != null ? state.avatarFrames?.[currentUid] : undefined
+  const ownedSkinsSig = state.ownedBottleSkins?.join(",") ?? ""
+
   useEffect(() => {
     try {
       if (typeof window !== "undefined" && window.localStorage.getItem(SOUNDS_ENABLED_KEY) === "0") {
@@ -1375,17 +1420,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Сохранение сердец и роз на сервере для пользователей по логину и VK
+  // Экономика + визуальные настройки: сразу на сервер (debounce 400ms), чтобы смена ВК/ОК/логина подтягивала тот же вид.
   useEffect(() => {
     if (!state.currentUser || typeof window === "undefined") return
-    const isLogin = state.currentUser.authProvider === "login"
-    const isVk = state.currentUser.authProvider === "vk"
-    if (!isLogin && !isVk) return
+    const endpoint = userStatePutUrl(state.currentUser)
+    if (!endpoint) return
 
-    const endpoint = isVk
-      ? `/api/user/state?vk_user_id=${encodeURIComponent(String(state.currentUser.id))}`
-      : "/api/user/state"
     const t = setTimeout(() => {
+      const visualPrefs = buildVisualPrefsPayload(state)
       apiFetch(endpoint, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1393,11 +1435,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           voiceBalance: state.voiceBalance,
           inventory: state.inventory,
+          visualPrefs,
         }),
       }).catch(() => {})
-    }, 1500)
+    }, 400)
     return () => clearTimeout(t)
-  }, [state.currentUser, state.voiceBalance, state.inventory])
+  }, [
+    state.currentUser,
+    state.voiceBalance,
+    state.inventory,
+    state.tableStyle,
+    ownedSkinsSig,
+    state.soundsEnabled,
+    currentFrameSig,
+  ])
 
   return (
     <GameContext.Provider value={{ state, dispatch }}>

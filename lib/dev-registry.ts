@@ -14,7 +14,7 @@ export interface DevUserEntry {
   vkName?: string
   age: number
   city?: string
-  authProvider?: "vk" | "login"
+  authProvider?: "vk" | "ok" | "login"
   /** Логин (только для authProvider === "login") */
   login?: string
   /** Пароль на клиенте не хранится — только подпись для разработчиков */
@@ -46,7 +46,7 @@ function setRegistry(registry: Record<number, DevUserEntry>) {
 
 /** Добавить/обновить пользователя в реестре (вызывать при регистрации/входе) */
 export function addToDevRegistry(
-  user: { id: number; name: string; age: number; city?: string; authProvider?: "vk" | "login" },
+  user: { id: number; name: string; age: number; city?: string; authProvider?: "vk" | "ok" | "login" },
   login?: string,
 ): void {
   const platform =

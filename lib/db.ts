@@ -56,6 +56,7 @@ function migrate(database: Database.Database) {
       user_id TEXT PRIMARY KEY,
       voice_balance INTEGER NOT NULL DEFAULT 0,
       inventory_json TEXT NOT NULL DEFAULT '[]',
+      visual_prefs_json TEXT NOT NULL DEFAULT '{}',
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -64,7 +65,17 @@ function migrate(database: Database.Database) {
       vk_user_id INTEGER PRIMARY KEY,
       voice_balance INTEGER NOT NULL DEFAULT 0,
       inventory_json TEXT NOT NULL DEFAULT '[]',
+      visual_prefs_json TEXT NOT NULL DEFAULT '{}',
       updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS ok_user_game_state (
+      ok_user_id INTEGER PRIMARY KEY,
+      voice_balance INTEGER NOT NULL DEFAULT 0,
+      inventory_json TEXT NOT NULL DEFAULT '[]',
+      visual_prefs_json TEXT NOT NULL DEFAULT '{}',
+      updated_at INTEGER NOT NULL,
+      ok_group_bonus_claimed INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS vk_payment_orders (
@@ -82,6 +93,7 @@ function migrate(database: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_ok_user_game_state_updated_at ON ok_user_game_state(updated_at);
 
     CREATE TABLE IF NOT EXISTS user_admin_flags (
       user_id TEXT PRIMARY KEY,
@@ -226,6 +238,13 @@ function migrate(database: Database.Database) {
   }
   // Индекс создаём только после гарантии колонки vk_user_id (для старых БД иначе падал migrate).
   database.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_vk_user_id_unique ON users(vk_user_id)`)
+  const userColsAfterVk = database.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
+  if (!userColsAfterVk.some((c) => c.name === "ok_user_id")) {
+    database.exec(`ALTER TABLE users ADD COLUMN ok_user_id INTEGER`)
+  }
+  database.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_ok_user_id_unique ON users(ok_user_id) WHERE ok_user_id IS NOT NULL`,
+  )
   const profileCols = database.prepare(`PRAGMA table_info(player_profiles)`).all() as { name: string }[]
   if (!profileCols.some((c) => c.name === "status")) {
     database.exec(`ALTER TABLE player_profiles ADD COLUMN status TEXT NOT NULL DEFAULT ''`)
@@ -268,6 +287,9 @@ function migrate(database: Database.Database) {
   }
 
   const gameStateCols = database.prepare(`PRAGMA table_info(user_game_state)`).all() as { name: string }[]
+  if (!gameStateCols.some((c) => c.name === "visual_prefs_json")) {
+    database.exec(`ALTER TABLE user_game_state ADD COLUMN visual_prefs_json TEXT NOT NULL DEFAULT '{}'`)
+  }
   if (!gameStateCols.some((c) => c.name === "vip_until")) {
     database.exec(`ALTER TABLE user_game_state ADD COLUMN vip_until INTEGER NOT NULL DEFAULT 0`)
   }
@@ -276,8 +298,19 @@ function migrate(database: Database.Database) {
   }
 
   const vkGameStateCols = database.prepare(`PRAGMA table_info(vk_user_game_state)`).all() as { name: string }[]
+  if (!vkGameStateCols.some((c) => c.name === "visual_prefs_json")) {
+    database.exec(`ALTER TABLE vk_user_game_state ADD COLUMN visual_prefs_json TEXT NOT NULL DEFAULT '{}'`)
+  }
   if (!vkGameStateCols.some((c) => c.name === "vk_group_bonus_claimed")) {
     database.exec(`ALTER TABLE vk_user_game_state ADD COLUMN vk_group_bonus_claimed INTEGER NOT NULL DEFAULT 0`)
+  }
+
+  const okGameStateCols = database.prepare(`PRAGMA table_info(ok_user_game_state)`).all() as { name: string }[]
+  if (okGameStateCols.length > 0 && !okGameStateCols.some((c) => c.name === "visual_prefs_json")) {
+    database.exec(`ALTER TABLE ok_user_game_state ADD COLUMN visual_prefs_json TEXT NOT NULL DEFAULT '{}'`)
+  }
+  if (okGameStateCols.length > 0 && !okGameStateCols.some((c) => c.name === "ok_group_bonus_claimed")) {
+    database.exec(`ALTER TABLE ok_user_game_state ADD COLUMN ok_group_bonus_claimed INTEGER NOT NULL DEFAULT 0`)
   }
 
   // Старые инсталляции: vk_payment_orders могла быть создана без vk_user_id — IF NOT EXISTS таблицу не пересоздаёт.

@@ -22,14 +22,24 @@ export async function POST(req: Request) {
   const db = getDb()
   const now = Date.now()
 
-  if (auth.userId) {
+  let appUserId: string | null = auth.userId
+  if (!appUserId && auth.okUserId != null) {
+    const row = db.prepare(`SELECT id FROM users WHERE ok_user_id = ?`).get(auth.okUserId) as
+      | { id: string }
+      | undefined
+    appUserId = row?.id ?? null
+  }
+
+  if (appUserId) {
     db.prepare(
       `INSERT INTO telegram_stars_pending (id, app_user_id, vk_user_id, hearts, stars, created_at) VALUES (?, ?, 0, ?, ?, ?)`,
-    ).run(id, auth.userId, pack.hearts, pack.stars, now)
-  } else {
+    ).run(id, appUserId, pack.hearts, pack.stars, now)
+  } else if (auth.vkUserId != null) {
     db.prepare(
       `INSERT INTO telegram_stars_pending (id, app_user_id, vk_user_id, hearts, stars, created_at) VALUES (?, NULL, ?, ?, ?, ?)`,
     ).run(id, auth.vkUserId, pack.hearts, pack.stars, now)
+  } else {
+    return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
 
   try {

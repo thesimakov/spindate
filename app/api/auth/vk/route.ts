@@ -4,6 +4,7 @@ import { generateSalt, hashPassword } from "@/lib/auth/password"
 import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/auth/session"
 import { parseVkAppIdFromLaunchSearch, parseVkUserIdFromLaunchSearch, verifyVkLaunchParams } from "@/lib/vk-launch-params"
 import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 import { parseAgeFromVkBdate, parseZodiacFromVkBdate, vkGenderFromSex } from "@/lib/vk-profile-fields"
 
 const VALID_GENDERS = ["male", "female"] as const
@@ -176,16 +177,19 @@ export async function POST(req: Request) {
     ).run(userId, displayName, avatarUrl, gender, ageNum, purpose, cityStr, zodiacFromBdateStr, interestsStr, now, now)
 
     const vkState = db
-      .prepare(`SELECT voice_balance, inventory_json FROM vk_user_game_state WHERE vk_user_id = ?`)
-      .get(vkUserId) as { voice_balance: number; inventory_json: string } | undefined
+      .prepare(
+        `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM vk_user_game_state WHERE vk_user_id = ?`,
+      )
+      .get(vkUserId) as { voice_balance: number; inventory_json: string; visual_prefs_json: string } | undefined
 
     const voiceBalance = vkState?.voice_balance ?? 150
     const inventoryJson = vkState?.inventory_json ?? "[]"
+    const visualPrefsJson = vkState?.visual_prefs_json ?? "{}"
 
     db.prepare(
-      `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at)
-       VALUES (?, ?, ?, ?)`,
-    ).run(userId, voiceBalance, inventoryJson, now)
+      `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, visual_prefs_json, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(userId, voiceBalance, inventoryJson, visualPrefsJson, now)
 
     if (vkState) {
       db.prepare(`DELETE FROM vk_user_game_state WHERE vk_user_id = ?`).run(vkUserId)
@@ -255,8 +259,10 @@ export async function POST(req: Request) {
   ).run(sessionId, userRow.id, tokenHash, now, expiresAt)
 
   const gameRow = db
-    .prepare(`SELECT voice_balance, inventory_json FROM user_game_state WHERE user_id = ?`)
-    .get(userRow.id) as { voice_balance: number; inventory_json: string } | undefined
+    .prepare(
+      `SELECT voice_balance, inventory_json, COALESCE(visual_prefs_json, '{}') AS visual_prefs_json FROM user_game_state WHERE user_id = ?`,
+    )
+    .get(userRow.id) as { voice_balance: number; inventory_json: string; visual_prefs_json: string } | undefined
 
   const voiceBalance = gameRow?.voice_balance ?? 0
   let inventory: unknown[] = []
@@ -267,6 +273,7 @@ export async function POST(req: Request) {
       inventory = []
     }
   }
+  const visualPrefs = parseVisualPrefsJson(gameRow?.visual_prefs_json) ?? {}
 
   const userPayload = buildUserPayload(db, userRow.id, userRow.username, vkUserId)
 
@@ -276,6 +283,7 @@ export async function POST(req: Request) {
       user: userPayload,
       voiceBalance,
       inventory,
+      visualPrefs,
       sessionToken: token,
     },
     token,

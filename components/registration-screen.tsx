@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useLayoutEffect, type CSSProperties } from "react"
+import { useState, useMemo, useEffect, useLayoutEffect, useCallback, type CSSProperties } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useGame } from "@/lib/game-context"
@@ -14,13 +14,21 @@ import {
 } from "@/lib/vk-bridge"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import type { Gender, Purpose, InventoryItem } from "@/lib/game-types"
+import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import { AppLoader } from "@/components/app-loader"
 import { Spinner } from "@/components/ui/spinner"
 import { apiFetch, setClientSessionToken } from "@/lib/api-fetch"
 import { parseAgeFromVkBdate, parseZodiacFromVkBdate } from "@/lib/vk-profile-fields"
+import { detectRuntimeHost, useSocialRuntime } from "@/lib/social-runtime"
+import {
+  collectOkLaunchParamsFromLocation,
+  initOkSdkResilient,
+  mergeOkLaunchParamsFromFapi,
+} from "@/lib/ok-client"
 
 export function RegistrationScreen() {
   const { dispatch } = useGame()
+  const { host: runtimeHost } = useSocialRuntime()
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Узкая карточка по центру на всех размерах экрана */
   const entryCardMax = "w-full max-w-sm sm:max-w-md"
@@ -40,7 +48,7 @@ export function RegistrationScreen() {
 
   /** Преобразует строковый id пользователя (UUID) в число для Player.id.
    *  Гарантирует отсутствие конфликта с ID ботов (1000-1999). */
-  const userIdToNumber = (id: string): number => {
+  const userIdToNumber = useCallback((id: string): number => {
     let h = 0
     for (let i = 0; i < id.length; i++) {
       h = (h << 5) - h + id.charCodeAt(i)
@@ -48,26 +56,30 @@ export function RegistrationScreen() {
     }
     const n = Math.abs(h) || 1
     return n < 10000 ? n + 10000 : n
-  }
+  }, [])
 
-  const buildTableAndEnter = async (user: {
-    id: number
-    name: string
-    avatar: string
-    gender: Gender
-    age: number
-    purpose: Purpose
-    status?: string
-    authProvider?: "vk" | "login"
-    authUserId?: string
-    vkUserId?: number
-    city?: string
-    zodiac?: string
-    interests?: string
-  }) => {
-    dispatch({ type: "SET_USER", user })
-    dispatch({ type: "SET_SCREEN", screen: "daily-streak" })
-  }
+  const buildTableAndEnter = useCallback(
+    async (user: {
+      id: number
+      name: string
+      avatar: string
+      gender: Gender
+      age: number
+      purpose: Purpose
+      status?: string
+      authProvider?: "vk" | "ok" | "login"
+      authUserId?: string
+      vkUserId?: number
+      okUserId?: number
+      city?: string
+      zodiac?: string
+      interests?: string
+    }) => {
+      dispatch({ type: "SET_USER", user })
+      dispatch({ type: "SET_SCREEN", screen: "daily-streak" })
+    },
+    [dispatch],
+  )
 
   /** Вход по данным bridge без подписанных launch params (как при нажатии «Войти через VK» в офлайне). */
   const enterVkWithoutSignedServerAuth = async (vkUser: VkUserInfo, ageNum: number) => {
@@ -100,7 +112,7 @@ export function RegistrationScreen() {
       if (res.ok && data?.ok) {
         const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
         const inventory = Array.isArray(data.inventory) ? data.inventory : []
-        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+        dispatch(buildRestoreGameStateAction(voiceBalance, inventory as InventoryItem[], vkUser.id, data.visualPrefs))
       }
     } catch {
       // если сервер недоступен, продолжаем без восстановления прогресса
@@ -109,10 +121,81 @@ export function RegistrationScreen() {
     await buildTableAndEnter(user)
   }
 
+  const tryEnterFromSession = useCallback(async (): Promise<boolean> => {
+    const meRes = await apiFetch("/api/auth/me", { credentials: "include" })
+    if (!meRes.ok) return false
+    const meData = (await meRes.json().catch(() => null)) as {
+      authProvider?: string
+      user?: {
+        id: string
+        username?: string
+        displayName?: string
+        avatarUrl?: string
+        status?: string
+        gender?: string
+        age?: number
+        purpose?: string
+        vkUserId?: number
+        okUserId?: number
+        city?: string
+        zodiac?: string
+        interests?: string
+      }
+    } | null
+    const u = meData?.user
+    if (!u) return false
+
+    const apRaw = meData.authProvider
+    const ap: "vk" | "ok" | "login" =
+      apRaw === "ok" || typeof u.okUserId === "number"
+        ? "ok"
+        : apRaw === "vk" || typeof u.vkUserId === "number"
+          ? "vk"
+          : "login"
+
+    const uid =
+      ap === "vk" && typeof u.vkUserId === "number"
+        ? u.vkUserId
+        : ap === "ok" && typeof u.okUserId === "number"
+          ? u.okUserId
+          : userIdToNumber(u.id)
+
+    const user = {
+      id: uid,
+      name: u.displayName ?? u.username ?? "Игрок",
+      avatar:
+        u.avatarUrl ??
+        `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(u.username ?? "u")}`,
+      gender: (u.gender === "female" ? "female" : "male") as Gender,
+      age: typeof u.age === "number" ? u.age : 25,
+      purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
+        ? u.purpose
+        : defaultPurpose) as Purpose,
+      status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
+      authProvider: ap,
+      authUserId: ap === "login" ? u.id : undefined,
+      vkUserId: ap === "vk" ? u.vkUserId : undefined,
+      okUserId: ap === "ok" ? u.okUserId : undefined,
+      city: u.city,
+      zodiac: u.zodiac,
+      ...(u.interests ? { interests: u.interests } : {}),
+    }
+    const stRes = await apiFetch("/api/user/state", { credentials: "include" })
+    const stData = await stRes.json().catch(() => null)
+    if (stRes.ok && stData?.ok) {
+      const voiceBalance = typeof stData.voiceBalance === "number" ? stData.voiceBalance : 0
+      const inventory = (Array.isArray(stData.inventory) ? stData.inventory : []) as InventoryItem[]
+      dispatch(buildRestoreGameStateAction(voiceBalance, inventory, uid, stData.visualPrefs))
+    }
+    addToDevRegistry(user)
+    await buildTableAndEnter(user)
+    return true
+  }, [dispatch, userIdToNumber, buildTableAndEnter])
+
   useLayoutEffect(() => {
     if (typeof window === "undefined") return
     try {
-      if (isVkMiniApp() || window.self !== window.top) setVkGate(true)
+      if (isVkMiniApp() || window.self !== window.top || detectRuntimeHost() === "ok") setVkGate(true)
     } catch {
       setVkGate(true)
     }
@@ -120,63 +203,11 @@ export function RegistrationScreen() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    if (detectRuntimeHost() === "ok") return
 
     let cancelled = false
     setLoading(true)
     setError("")
-
-    const tryEnterFromSession = async (): Promise<boolean> => {
-      const meRes = await apiFetch("/api/auth/me", { credentials: "include" })
-      if (!meRes.ok) return false
-      const meData = (await meRes.json().catch(() => null)) as {
-        user?: {
-          id: string
-          username?: string
-          displayName?: string
-          avatarUrl?: string
-          status?: string
-          gender?: string
-          age?: number
-          purpose?: string
-          vkUserId?: number
-          city?: string
-          zodiac?: string
-          interests?: string
-        }
-      } | null
-      const u = meData?.user
-      if (!u) return false
-      const uid = typeof u.vkUserId === "number" ? u.vkUserId : userIdToNumber(u.id)
-      const user = {
-        id: uid,
-        name: u.displayName ?? u.username ?? "Игрок",
-        avatar:
-          u.avatarUrl ??
-          `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(u.username ?? "u")}`,
-        gender: (u.gender === "female" ? "female" : "male") as Gender,
-        age: typeof u.age === "number" ? u.age : 25,
-        purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
-          ? u.purpose
-          : defaultPurpose) as Purpose,
-        status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
-        authProvider: (typeof u.vkUserId === "number" ? "vk" : "login") as "vk" | "login",
-        authUserId: typeof u.vkUserId === "number" ? undefined : u.id,
-        vkUserId: typeof u.vkUserId === "number" ? u.vkUserId : undefined,
-        city: u.city,
-        zodiac: u.zodiac,
-        ...(u.interests ? { interests: u.interests } : {}),
-      }
-      const stRes = await apiFetch("/api/user/state", { credentials: "include" })
-      const stData = await stRes.json().catch(() => null)
-      if (stRes.ok && stData?.ok) {
-        const voiceBalance = typeof stData.voiceBalance === "number" ? stData.voiceBalance : 0
-        const inventory = (Array.isArray(stData.inventory) ? stData.inventory : []) as InventoryItem[]
-        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
-      }
-      addToDevRegistry(user)
-      await buildTableAndEnter(user)
-      return true
-    }
 
     ;(async () => {
       try {
@@ -186,7 +217,7 @@ export function RegistrationScreen() {
         } catch {
           inIframe = true
         }
-        const quickVkHint = isVkMiniApp() || inIframe
+        const quickVkHint = isVkMiniApp() || (inIframe && detectRuntimeHost() !== "ok")
         if (!quickVkHint) {
           if (!cancelled) setLoading(false)
           return
@@ -250,6 +281,7 @@ export function RegistrationScreen() {
           }
           voiceBalance?: number
           inventory?: unknown[]
+          visualPrefs?: unknown
         } | null
         if (cancelled) return
         if (!res.ok) {
@@ -279,7 +311,7 @@ export function RegistrationScreen() {
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
           const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
-          dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+          dispatch(buildRestoreGameStateAction(voiceBalance, inventory, uid, data.visualPrefs))
           addToDevRegistry(user)
           await buildTableAndEnter(user)
         } else {
@@ -298,7 +330,116 @@ export function RegistrationScreen() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [tryEnterFromSession])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (detectRuntimeHost() !== "ok") return
+
+    let cancelled = false
+    setVkGate(true)
+    setLoading(true)
+    setError("")
+
+    ;(async () => {
+      try {
+        if (await tryEnterFromSession()) return
+        if (cancelled) return
+
+        await initOkSdkResilient()
+        if (cancelled) return
+
+        let params = collectOkLaunchParamsFromLocation()
+        params = await mergeOkLaunchParamsFromFapi(params)
+        if (!params.sig && !params.signature) {
+          if (!cancelled) {
+            setError("Параметры запуска ОК не найдены (sig). Откройте игру из приложения Одноклассников.")
+            setVkGate(false)
+            setLoading(false)
+          }
+          return
+        }
+
+        const res = await apiFetch("/api/auth/ok", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            launchParams: params,
+            profile: {},
+            purpose: defaultPurpose,
+          }),
+        })
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean
+          error?: string
+          sessionToken?: string
+          user?: {
+            id: string
+            username?: string
+            displayName?: string
+            avatarUrl?: string
+            status?: string
+            gender?: string
+            age?: number
+            purpose?: string
+            okUserId?: number
+            city?: string
+            zodiac?: string
+            interests?: string
+          }
+          voiceBalance?: number
+          inventory?: unknown[]
+          visualPrefs?: unknown
+        } | null
+        if (cancelled) return
+        if (!res.ok || !data?.ok || !data.user) {
+          if (!cancelled) {
+            setVkGate(false)
+            setError(data?.error ?? "Не удалось войти через Одноклассники")
+          }
+          return
+        }
+        if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
+        const u = data.user
+        const uid = typeof u.okUserId === "number" ? u.okUserId : userIdToNumber(u.id)
+        const user = {
+          id: uid,
+          name: u.displayName ?? u.username ?? "Игрок",
+          avatar:
+            u.avatarUrl ??
+            `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(u.username ?? "u")}`,
+          gender: (u.gender === "female" ? "female" : "male") as Gender,
+          age: typeof u.age === "number" ? u.age : 25,
+          purpose: (u.purpose && ["relationships", "communication", "love"].includes(u.purpose)
+            ? u.purpose
+            : defaultPurpose) as Purpose,
+          status: typeof u.status === "string" ? u.status.slice(0, 15) : "",
+          authProvider: "ok" as const,
+          okUserId: typeof u.okUserId === "number" ? u.okUserId : uid,
+          city: u.city,
+          zodiac: u.zodiac,
+          ...(u.interests ? { interests: u.interests } : {}),
+        }
+        const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
+        const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
+        dispatch(buildRestoreGameStateAction(voiceBalance, inventory, uid, data.visualPrefs))
+        addToDevRegistry(user)
+        await buildTableAndEnter(user)
+      } catch {
+        if (!cancelled) {
+          setVkGate(false)
+          setError("Ошибка входа в Одноклассниках. Попробуйте обновить страницу.")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [tryEnterFromSession, dispatch, userIdToNumber, buildTableAndEnter])
 
   const ensureAgeValid = () => {
     const ageNum = parseInt(age)
@@ -373,6 +514,7 @@ export function RegistrationScreen() {
           }
           voiceBalance?: number
           inventory?: unknown[]
+          visualPrefs?: unknown
         } | null
         if (res.ok && data?.user) {
           if (typeof data.sessionToken === "string") setClientSessionToken(data.sessionToken)
@@ -395,7 +537,7 @@ export function RegistrationScreen() {
           }
           const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
           const inventory = (Array.isArray(data.inventory) ? data.inventory : []) as InventoryItem[]
-          dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+          dispatch(buildRestoreGameStateAction(voiceBalance, inventory, uid, data.visualPrefs))
           addToDevRegistry(user)
           await buildTableAndEnter(user)
           return
@@ -451,7 +593,14 @@ export function RegistrationScreen() {
         }
         const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
         const inventory = Array.isArray(data.inventory) ? data.inventory : []
-        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+        dispatch(
+          buildRestoreGameStateAction(
+            voiceBalance,
+            inventory as InventoryItem[],
+            userIdToNumber(u.id),
+            data.visualPrefs,
+          ),
+        )
         addToDevRegistry(user, login.trim())
         await buildTableAndEnter(user)
         setShowLoginModal(false)
@@ -517,7 +666,14 @@ export function RegistrationScreen() {
         }
         const voiceBalance = typeof data.voiceBalance === "number" ? data.voiceBalance : 0
         const inventory = Array.isArray(data.inventory) ? data.inventory : []
-        dispatch({ type: "RESTORE_GAME_STATE", voiceBalance, inventory })
+        dispatch(
+          buildRestoreGameStateAction(
+            voiceBalance,
+            inventory as InventoryItem[],
+            userIdToNumber(u.id),
+            data.visualPrefs,
+          ),
+        )
         addToDevRegistry(user, login.trim())
         await buildTableAndEnter(user)
         setShowLoginModal(false)
@@ -583,13 +739,13 @@ export function RegistrationScreen() {
     return list
   }, [])
 
-  if (isVkMiniApp() && vkGate) {
+  if (vkGate && (runtimeHost === "vk" || runtimeHost === "ok")) {
     return (
       <div className="relative flex min-h-app min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden entry-bg-animated">
         <AppLoader
           className="!min-h-0 min-h-0 flex-1 bg-slate-900/98"
           title="Вход…"
-          subtitle="Подключаем профиль ВКонтакте"
+          subtitle={runtimeHost === "ok" ? "Подключаем профиль в Одноклассниках" : "Подключаем профиль ВКонтакте"}
           hint="Крути и знакомься"
           showDailyQuote
         />
@@ -645,7 +801,11 @@ export function RegistrationScreen() {
         </div>
 
         <div className="flex flex-col gap-3">
+          {runtimeHost === "ok" && error ? (
+            <p className="text-center text-sm text-destructive">{error}</p>
+          ) : null}
           <div className="flex w-full flex-col items-stretch gap-3">
+            {runtimeHost !== "ok" ? (
             <Button
               onClick={handleContinueVk}
               disabled={loading}
@@ -668,7 +828,9 @@ export function RegistrationScreen() {
               )}
               <span>{loading ? "Вход…" : "Войти через VK"}</span>
             </Button>
+            ) : null}
 
+            {runtimeHost !== "ok" ? (
             <Button
               onClick={() => { setError(""); setLoginModalMode("login"); setShowLoginModal(true) }}
               disabled={loading}
@@ -677,8 +839,10 @@ export function RegistrationScreen() {
             >
               {"Войти по логину"}
             </Button>
+            ) : null}
           </div>
 
+          {runtimeHost !== "ok" ? (
           <p className="mt-1 text-center text-xs leading-relaxed text-slate-400">
             Нажимая кнопку, вы соглашаетесь с{" "}
             <a
@@ -691,6 +855,7 @@ export function RegistrationScreen() {
             </a>
             . В игре используется только виртуальная валюта (сердечки), не обмениваемая на реальные деньги и не являющаяся азартной игрой.
           </p>
+          ) : null}
         </div>
       </div>
       </div>
