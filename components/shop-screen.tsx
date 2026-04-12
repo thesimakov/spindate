@@ -740,7 +740,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           <div className="relative overflow-hidden rounded-3xl border border-lime-300/70 bg-[#f4f4f5] shadow-[0_6px_14px_rgba(148,163,184,0.22)]">
           <div className="px-4 pt-4 text-center">
-            <p className={`${tCardTitle} text-rose-500`}>VIP 7 дней</p>
+            <p className={`${tCardTitle} text-rose-500`}>VIP 1 день</p>
           </div>
           <div className="px-4 pb-3 pt-2">
             <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
@@ -762,7 +762,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
                   } catch {
                     // ignore
                   }
-                  await handleActivateVip({ days: 3, cost: 0, isTrial: true })
+                  await handleActivateVip({ days: 1, cost: 0, isTrial: true })
                 })()
               }}
               className={`mt-2 w-full rounded-full border border-green-700/35 bg-gradient-to-b from-lime-400 to-green-600 py-2.5 ${tCta} text-white shadow-[0_4px_10px_rgba(22,163,74,0.35),inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:brightness-105 disabled:from-slate-400 disabled:to-slate-500 disabled:text-slate-100 disabled:shadow-none`}

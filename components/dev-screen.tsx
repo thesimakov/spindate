@@ -14,6 +14,7 @@ import { AdminAchievementPostsContent } from "@/components/admin-achievement-pos
 import { AdminRankingsEventsContent } from "@/components/admin-rankings-events-content"
 import { AdminTablesContent } from "@/components/admin-tables-content"
 import { AdminGameErrorsContent } from "@/components/admin-game-errors-content"
+import { AdminLobbyAnnouncementContent } from "@/components/admin-lobby-announcement-content"
 
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
@@ -55,6 +56,7 @@ export function DevScreen() {
     | "tableStyles"
     | "achievementPosts"
     | "rankingsEvents"
+    | "lobbyAnnouncement"
     | "emotions"
     | "vip"
     | "hearts"
@@ -476,6 +478,7 @@ export function DevScreen() {
                     { id: "tableStyles", label: "Стили стола" },
                     { id: "achievementPosts", label: "Посты достижений" },
                     { id: "rankingsEvents", label: "Рейтинги и ивенты" },
+                    { id: "lobbyAnnouncement", label: "Новинка" },
                     { id: "emotions", label: "Эмоции" },
                     { id: "vip", label: "VIP" },
                     { id: "hearts", label: "Сердечки" },
@@ -504,6 +507,7 @@ export function DevScreen() {
               {contentPage === "tableStyles" && <AdminTableStyleContent token={getAdminToken()} />}
               {contentPage === "achievementPosts" && <AdminAchievementPostsContent token={getAdminToken()} />}
               {contentPage === "rankingsEvents" && <AdminRankingsEventsContent token={getAdminToken()} />}
+              {contentPage === "lobbyAnnouncement" && <AdminLobbyAnnouncementContent token={getAdminToken()} />}
               {contentPage === "emotions" && (
                 <AdminContentPagePlaceholder
                   title="Контент: эмоции"

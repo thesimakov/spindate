@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { Heart, Loader2, Sparkles, ShoppingCart } from "lucide-react"
+import { ClipboardPlus, Heart, LayoutGrid, Loader2, ShoppingCart, Sparkles } from "lucide-react"
 import { useGame, generateBots } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { composeTablePlayers } from "@/lib/table-composition"
@@ -48,6 +48,11 @@ import { formatUserTableSharePostText } from "@/lib/achievement-posts-format"
 import { SHARE_USER_TABLE_POST_KEY } from "@/lib/achievement-posts-catalog"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { InlineToast } from "@/components/ui/inline-toast"
+import { LobbySpotlightModal } from "@/components/lobby-spotlight-modal"
+import {
+  readLobbyAnnouncementAcknowledged,
+  writeLobbyAnnouncementAcknowledged,
+} from "@/lib/lobby-announcement-session"
 
 /** Временно: чекбокс «Рассказать на стене» и окно VK после создания стола отключены. */
 const LOBBY_SHARE_TO_WALL_ENABLED = false
@@ -194,6 +199,15 @@ export function RoomLobbyScreen() {
   const [visitedRooms, setVisitedRooms] = useState<Record<string, number>>({})
   const [activeTab, setActiveTab] = useState<LobbyTab>("default")
 
+  const [lobbyAnnounceData, setLobbyAnnounceData] = useState<{
+    title: string
+    body: string
+    buttonLabel: string
+    imageUrl: string | null
+    updatedAt: number
+  } | null>(null)
+  const [showLobbyAnnounce, setShowLobbyAnnounce] = useState(false)
+
   const lobbyTableStyleOptions = useMemo(() => {
     const published = new Set(tableStyleRows.filter((r) => r.published).map((r) => r.id))
     const nameById = new Map(tableStyleRows.map((r) => [r.id, r.name]))
@@ -313,6 +327,41 @@ export function RoomLobbyScreen() {
       return
     }
     setVisitedRooms(readVisitedRooms(user))
+  }, [user?.id, user?.authProvider, user?.vkUserId])
+
+  useEffect(() => {
+    if (!user) {
+      setLobbyAnnounceData(null)
+      setShowLobbyAnnounce(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiFetch("/api/content/lobby-announcement", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const data = await res.json().catch(() => null)
+        if (cancelled || !data?.ok || !data?.announcement) return
+        const a = data.announcement as {
+          title: string
+          body: string
+          buttonLabel: string
+          imageUrl: string | null
+          updatedAt: number
+        }
+        if (readLobbyAnnouncementAcknowledged(a.updatedAt)) return
+        setLobbyAnnounceData(a)
+        setShowLobbyAnnounce(true)
+      } catch {
+        // ignore
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [user?.id, user?.authProvider, user?.vkUserId])
 
   const enterGameAfterJoin = async (
@@ -573,6 +622,20 @@ export function RoomLobbyScreen() {
 
   return (
     <div className="relative flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden">
+      {showLobbyAnnounce && lobbyAnnounceData ? (
+        <LobbySpotlightModal
+          open
+          title={lobbyAnnounceData.title}
+          body={lobbyAnnounceData.body}
+          buttonLabel={lobbyAnnounceData.buttonLabel}
+          imageUrl={lobbyAnnounceData.imageUrl}
+          titleId="lobby-announcement-title"
+          onContinue={() => {
+            writeLobbyAnnouncementAcknowledged(lobbyAnnounceData.updatedAt)
+            setShowLobbyAnnounce(false)
+          }}
+        />
+      ) : null}
       {toast ? <InlineToast toast={toast} /> : null}
       <div className="lobby-bg-animated fixed inset-0 -z-0" aria-hidden />
       <div
@@ -622,20 +685,25 @@ export function RoomLobbyScreen() {
             </div>
           ) : null}
 
-          <div className="shrink-0 border-b border-white/[0.07] px-3 pb-2.5 pt-2.5 sm:px-4">
+          <div className="shrink-0 border-b border-white/[0.07] px-3 pb-3 pt-2.5 sm:px-4">
+            <p className="mb-2 text-center text-[11px] font-extrabold uppercase tracking-[0.12em] text-cyan-200/95 sm:text-xs">
+              Нажмите вкладку — куда зайти
+            </p>
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as LobbyTab)} className="w-full">
-              <TabsList className="grid h-11 w-full grid-cols-2 rounded-2xl border border-white/10 bg-slate-900/70 p-1">
+              <TabsList className="mx-auto flex h-auto min-h-0 w-full max-w-lg min-w-0 flex-nowrap items-stretch justify-center gap-3 rounded-none border-0 !bg-transparent p-0 text-inherit shadow-none ring-0 outline-none sm:gap-4">
                 <TabsTrigger
                   value="default"
-                  className="rounded-xl border border-transparent text-xs font-bold text-white data-[state=inactive]:border-white/15 data-[state=inactive]:bg-white/5 data-[state=inactive]:text-white data-[state=inactive]:opacity-100 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-white data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_0_0_1px_rgba(255,255,255,0.18)]"
+                  className="flex min-h-[3rem] min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-xl border-2 px-2 py-2.5 text-[13px] font-extrabold leading-tight !text-white transition-colors duration-150 data-[state=inactive]:border-cyan-200/45 data-[state=inactive]:bg-gradient-to-b data-[state=inactive]:from-slate-600/85 data-[state=inactive]:to-slate-800/95 data-[state=inactive]:!text-white data-[state=inactive]:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.35)] data-[state=inactive]:ring-1 data-[state=inactive]:ring-white/20 data-[state=active]:border-amber-100/85 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/40 data-[state=active]:to-emerald-500/35 data-[state=active]:!text-white data-[state=active]:shadow-[0_0_0_1px_rgba(34,211,238,0.55),0_10px_26px_rgba(34,211,238,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] sm:text-sm sm:leading-snug"
                 >
-                  {`Игровые столы (${defaultRoomsCount})`}
+                  <LayoutGrid className="h-5 w-5 shrink-0 text-white drop-shadow-sm sm:h-[1.35rem] sm:w-[1.35rem]" aria-hidden />
+                  <span className="text-center">{`Игровые столы (${defaultRoomsCount})`}</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="created"
-                  className="rounded-xl border border-transparent text-xs font-bold text-white data-[state=inactive]:border-white/15 data-[state=inactive]:bg-white/5 data-[state=inactive]:text-white data-[state=inactive]:opacity-100 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-400/25 data-[state=active]:to-emerald-400/20 data-[state=active]:text-white data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_0_0_1px_rgba(255,255,255,0.18)]"
+                  className="flex min-h-[3rem] min-w-0 flex-1 basis-0 items-center justify-center gap-2 rounded-xl border-2 px-2 py-2.5 text-[13px] font-extrabold leading-tight !text-white transition-colors duration-150 data-[state=inactive]:border-cyan-200/45 data-[state=inactive]:bg-gradient-to-b data-[state=inactive]:from-slate-600/85 data-[state=inactive]:to-slate-800/95 data-[state=inactive]:!text-white data-[state=inactive]:shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.35)] data-[state=inactive]:ring-1 data-[state=inactive]:ring-white/20 data-[state=active]:border-amber-100/85 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/40 data-[state=active]:to-emerald-500/35 data-[state=active]:!text-white data-[state=active]:shadow-[0_0_0_1px_rgba(34,211,238,0.55),0_10px_26px_rgba(34,211,238,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] sm:text-sm sm:leading-snug"
                 >
-                  {`Созданный стол (${createdRoomsCount})`}
+                  <ClipboardPlus className="h-5 w-5 shrink-0 text-white drop-shadow-sm sm:h-[1.35rem] sm:w-[1.35rem]" aria-hidden />
+                  <span className="text-center">{`Созданный стол (${createdRoomsCount})`}</span>
                 </TabsTrigger>
               </TabsList>
             </Tabs>

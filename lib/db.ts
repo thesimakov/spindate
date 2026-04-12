@@ -145,6 +145,17 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS lobby_announcement (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      button_label TEXT NOT NULL DEFAULT '',
+      image_url TEXT NOT NULL DEFAULT '',
+      published INTEGER NOT NULL DEFAULT 0,
+      deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS table_style_catalog (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -401,6 +412,14 @@ function migrate(database: Database.Database) {
     .prepare(
       `INSERT INTO status_line (id, text, published, deleted, updated_at)
        VALUES (1, '', 0, 0, ?)
+       ON CONFLICT(id) DO NOTHING`,
+    )
+    .run(now)
+
+  database
+    .prepare(
+      `INSERT INTO lobby_announcement (id, title, body, button_label, image_url, published, deleted, updated_at)
+       VALUES (1, '', '', '', '', 0, 0, ?)
        ON CONFLICT(id) DO NOTHING`,
     )
     .run(now)
