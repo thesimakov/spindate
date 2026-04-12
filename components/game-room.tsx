@@ -270,6 +270,63 @@ function hideTableLogEntryFromRoomChatText(text: string): boolean {
   return false
 }
 
+function sameTableLogPairIds(a?: [number, number], b?: [number, number]): boolean {
+  if (!a || !b || a.length < 2 || b.length < 2) return false
+  return a[0] === b[0] && a[1] === b[1]
+}
+
+/** Нормализованный ключ пары для дедупа «Выпала пара» vs эмоция (pairIds или from/to). */
+function pairKeyFromLogEntryForChat(entry: GameLogEntry): string | null {
+  if (entry.pairIds && entry.pairIds.length >= 2) {
+    const [x, y] = entry.pairIds
+    return x < y ? `${x}:${y}` : `${y}:${x}`
+  }
+  const fp = entry.fromPlayer
+  const tp = entry.toPlayer
+  if (fp && tp) {
+    return fp.id < tp.id ? `${fp.id}:${tp.id}` : `${tp.id}:${fp.id}`
+  }
+  return null
+}
+
+function sameAuthorAndPairForVipalaChatDedupe(a: GameLogEntry, b: GameLogEntry): boolean {
+  if (a.fromPlayer?.id !== b.fromPlayer?.id) return false
+  const ka = pairKeyFromLogEntryForChat(a)
+  const kb = pairKeyFromLogEntryForChat(b)
+  if (ka && kb) return ka === kb
+  return sameTableLogPairIds(a.pairIds, b.pairIds)
+}
+
+/** Стабильный порядок: при одном timestamp «Выпала пара» идёт перед строками эмоций (иначе id ломал соседнюю дедуп-проверку). */
+function compareTableChatFeedOrder(a: GameLogEntry, b: GameLogEntry): number {
+  if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp
+  const av = String(a.text ?? "").startsWith("Выпала пара:") ? 0 : 1
+  const bv = String(b.text ?? "").startsWith("Выпала пара:") ? 0 : 1
+  if (av !== bv) return av - bv
+  return a.id.localeCompare(b.id)
+}
+
+const VIPALA_CHAT_DEDUPE_WINDOW_MS = 90_000
+
+/**
+ * «Выпала пара» скрываем только если для той же пары и автора есть отдельная строка с эмоцией
+ * (не обязательно сразу следующая — между ними может быть чужой чат и т.д.).
+ * pairIds на клиенте/после синка иногда отличается — сравниваем ещё по from/to.
+ */
+function isRedundantVipalaParaChatRow(sorted: GameLogEntry[], index: number): boolean {
+  const e = sorted[index]
+  const t = String(e.text ?? "")
+  if (!t.startsWith("Выпала пара:")) return false
+  const t0 = e.timestamp
+  for (let j = index + 1; j < sorted.length; j++) {
+    const n = sorted[j]
+    if (n.timestamp - t0 > VIPALA_CHAT_DEDUPE_WINDOW_MS) break
+    if (String(n.text ?? "").startsWith("Выпала пара:")) continue
+    if (sameAuthorAndPairForVipalaChatDedupe(e, n)) return true
+  }
+  return false
+}
+
 function bottleSkinChangeSig(e: GameLogEntry): string {
   const b = e.bottleSkinChange
   if (!b) return ""
@@ -6394,16 +6451,12 @@ function TableChatPanel({
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const prevFeedLenRef = useRef(0)
 
-  const feedEntries = useMemo(
-    () =>
-      [...gameLog]
-        .filter((e) => {
-          const text = String(e.text ?? "")
-          return !text.startsWith("Выпала пара:") && !hideTableLogEntryFromRoomChatText(text)
-        })
-        .sort((a, b) => a.timestamp - b.timestamp),
-    [gameLog],
-  )
+  const feedEntries = useMemo(() => {
+    const sorted = [...gameLog]
+      .filter((e) => !hideTableLogEntryFromRoomChatText(String(e.text ?? "")))
+      .sort(compareTableChatFeedOrder)
+    return sorted.filter((_, i) => !isRedundantVipalaParaChatRow(sorted, i))
+  }, [gameLog])
 
   const feedDisplayRows = useMemo(
     () => aggregateConsecutiveTableLogRows(feedEntries),
