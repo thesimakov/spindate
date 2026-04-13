@@ -1559,7 +1559,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (tableLoading) return
     if (countdown === null || countdown <= 0) return
     const timer = setTimeout(() => {
-      const shouldTick = currentTurnPlayerBotRef.current ? isRoundDriverRef.current : isMyTurnRef.current
+      const shouldTick = currentTurnPlayerBotRef.current
+        ? isRoundDriverRef.current
+        : (isMyTurnRef.current || isRoundDriverRef.current)
       if (!shouldTick) return
       dispatch({ type: "TICK_COUNTDOWN" })
       if (countdown <= 1) startSpinRef.current()

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { memo, useState, useEffect, useRef } from "react"
 import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 import { FortuneWheelStatic, FortuneWheelArrow } from "@/components/fortune-wheel-bottle-visual"
 
@@ -37,7 +37,7 @@ interface BottleProps {
 
 type BottleSkinWithImage = Exclude<NonNullable<BottleProps["skin"]>, "fortune_wheel">
 
-export function Bottle({
+export const Bottle = memo(function Bottle({
   angle,
   isSpinning,
   skin = "classic",
@@ -152,40 +152,38 @@ export function Bottle({
         style={{
           transform: `rotate(${renderAngle}deg)`,
           transition: spinTransition,
+          willChange: "transform",
           filter: bottleShadow,
           opacity: 1,
         }}
       >
-            {/* Реальная бутылочка из файла (адаптивный размер, без прозрачности) */}
-            <div
-              className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
-              style={{
-                display: imgError ? "none" : undefined,
-                opacity: 1,
-                background: "transparent",
-              }}
-            >
-              <img
-                key={skin}
-                src={imgSrc}
-                alt="Бутылочка"
-                className="h-full w-full object-contain"
-                style={{ opacity: 1 }}
-                draggable={false}
-                loading="eager"
-                onLoad={(e) => {
-                  const img = e.currentTarget
-                  if (img.naturalWidth === 0 || img.naturalHeight === 0) setImgError(true)
-                  else setImgError(false)
+            {!imgError ? (
+              <div
+                className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
+                style={{
+                  opacity: 1,
+                  background: "transparent",
                 }}
-                onError={() => setImgError(true)}
-              />
-            </div>
-
-            {/* SVG показываем при ошибке загрузки картинки или как фолбек */}
-            <svg
+              >
+                <img
+                  key={skin}
+                  src={imgSrc}
+                  alt="Бутылочка"
+                  className="h-full w-full object-contain"
+                  style={{ opacity: 1 }}
+                  draggable={false}
+                  loading="eager"
+                  onLoad={(e) => {
+                    const img = e.currentTarget
+                    if (img.naturalWidth === 0 || img.naturalHeight === 0) setImgError(true)
+                    else setImgError(false)
+                  }}
+                  onError={() => setImgError(true)}
+                />
+              </div>
+            ) : (
+              <svg
               className="h-20 w-20 sm:h-[120px] sm:w-[120px] md:h-[150px] md:w-[150px]"
-              style={{ display: imgError ? "block" : "none" }}
               viewBox="0 0 120 120"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -323,7 +321,8 @@ export function Bottle({
               <stop offset="1" stopColor="#93c5fd" />
             </linearGradient>
           </defs>
-        </svg>
+              </svg>
+            )}
       </div>
       )}
 
@@ -339,4 +338,4 @@ export function Bottle({
       )}
     </div>
   )
-}
+})
