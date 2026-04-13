@@ -53,9 +53,11 @@ const nextConfig = {
     return [{ source: "/favicon.ico", destination: "/favicon.svg" }]
   },
   async headers() {
+    /** ВК и ОК встраивают приложение в iframe; без доменов ОК страница не загружается в https://ok.ru/app/... */
     const csp = {
       key: "Content-Security-Policy",
-      value: "frame-ancestors 'self' https://vk.com https://vk.ru https://*.vk.com https://*.vk.ru",
+      value:
+        "frame-ancestors 'self' https://vk.com https://vk.ru https://*.vk.com https://*.vk.ru https://ok.ru https://*.ok.ru https://odnoklassniki.ru https://*.odnoklassniki.ru",
     }
     return [
       /**
