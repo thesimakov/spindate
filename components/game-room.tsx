@@ -200,7 +200,7 @@ function logEventEmotionEmoji(entry: GameLogEntry, giftById?: ReadonlyMap<string
     kiss: "💋",
     flowers: "💐",
     diamond: "💎",
-    cocktail: "🍹",
+    cocktail: "🍬",
     beer: "🍺",
     banya: "🧹",
     tools: "🛠️",

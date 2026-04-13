@@ -5,7 +5,7 @@ import { PAIR_ACTIONS, type InventoryItem } from "@/lib/game-types"
 /** Эмодзи для подарков-эмоций за столом (PAIR_ACTIONS), если нет картинки в каталоге */
 const PAIR_GIFT_EMOJI: Partial<Record<string, string>> = {
   kiss: "💋",
-  cocktail: "🍹",
+  cocktail: "🍬",
   flowers: "🌸",
   diamond: "💎",
   beer: "🍺",
