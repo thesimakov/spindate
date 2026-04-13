@@ -158,7 +158,8 @@ export function listAchievementPostTemplates(opts?: { onlyPublished?: boolean })
       group: item.group,
       imageUrl: fromDb?.image_url ?? "",
       postTextTemplate,
-      vkEnabled: fromDb?.vk_enabled === 1,
+      /** Без строки в БД: сторис/посты VK для достижений включены; системный share_user_table — выкл., пока не включат в админке. */
+      vkEnabled: fromDb ? fromDb.vk_enabled === 1 : item.group !== "system",
       published: fromDb?.published === 1,
       updatedAt: fromDb?.updated_at ?? 0,
       targetCount: parseTargetCount(fromDb),

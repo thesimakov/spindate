@@ -1294,6 +1294,55 @@ export async function showVkWallPostConfirm(
   }
 }
 
+/** Фон по умолчанию, если в шаблоне достижения нет картинки (VK требует URL для background_type=image). */
+const VK_STORY_DEFAULT_BG_PATH = "/assets/green.png"
+
+export type VkAchievementStoryPayload = {
+  /** Картинка фона истории (https или путь с /); иначе {@link VK_STORY_DEFAULT_BG_PATH} */
+  backgroundImageUrl?: string
+  /** Ссылка на мини-приложение для кликабельного стикера */
+  appUrl: string
+  /** Короткий текст на стикере (имя + достижение) */
+  stickerText: string
+}
+
+/**
+ * Редактор историй VK: фон + стикер-ссылка на приложение.
+ * @see https://dev.vk.com/bridge/VKWebAppShowStoryBox
+ */
+export async function showVkAchievementStoryBox(payload: VkAchievementStoryPayload): Promise<{ ok: boolean }> {
+  const sticker = payload.stickerText.trim().slice(0, 280)
+  const appRaw = payload.appUrl.trim()
+  if (!sticker || !appRaw) return { ok: false }
+
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
+
+  const appAbs = resolvePublicUrlForVkAttachment(appRaw) ?? appRaw
+  const bgAbs =
+    resolvePublicUrlForVkAttachment(payload.backgroundImageUrl) ??
+    resolvePublicUrlForVkAttachment(VK_STORY_DEFAULT_BG_PATH)
+
+  if (!bgAbs) return { ok: false }
+
+  try {
+    const raw = await b.send("VKWebAppShowStoryBox" as never, {
+      background_type: "image",
+      url: bgAbs,
+      attachment: {
+        text: sticker,
+        type: "url",
+        url: appAbs,
+      },
+    } as never)
+    if (wallPostBoxResponseFailed(raw)) return { ok: false }
+    return { ok: true }
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowStoryBox", e)
+    return { ok: false }
+  }
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -1333,6 +1382,7 @@ export const vkBridge = {
   getVkAddToHomeScreenInfo,
   addVkAppToHomeScreen,
   openVkWallPost,
+  showVkAchievementStoryBox,
   showVkLeaderBoardBox,
   translateVkTexts,
   VK_COMMUNITY_GROUP_ID,
