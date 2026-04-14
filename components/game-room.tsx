@@ -796,9 +796,6 @@ const CASUAL_MODE = true
 /** Длительность таймера «Поцелуются?» (голосование Да/Нет). */
 const PAIR_KISS_VOTE_DURATION_MS = 10_000
 
-/** После того как оба игрока нажали Да/Нет — пауза перед FINALIZE (не длиннее оставшегося до дедлайна). */
-const PAIR_KISS_FINALIZE_AFTER_BOTH_MS = 1200
-
 /** После завершения таймера / фиксации исхода держим карточку ещё 3 секунды. */
 const PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS = 3000
 const PAIR_KISS_EXIT_ANIM_DURATION_MS = 780
@@ -2505,9 +2502,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (!pairKissPhase || pairKissPhase.resolved) return
     if (!currentUser || !players.some((p) => p.id === currentUser.id)) return
     const ph = pairKissPhase
-    const msToDeadline = Math.max(0, ph.deadlineMs - Date.now())
-    const bothAnswered = ph.choiceA !== null && ph.choiceB !== null
-    const ms = bothAnswered ? Math.min(msToDeadline, PAIR_KISS_FINALIZE_AFTER_BOTH_MS) : msToDeadline
+    /** Всегда до deadlineMs: раньше min(..., 1.2 с) после двух ответов обрывал отсчёт 10→0 и сразу ставил resolved. */
+    const ms = Math.max(0, ph.deadlineMs - Date.now())
     const t = window.setTimeout(() => {
       dispatch({ type: "FINALIZE_PAIR_KISS" })
     }, ms)
