@@ -373,6 +373,115 @@
   }
 }
 
+/* Кнопка «Музыка»: ноты вылетают от центра иконки (слой внутри span вокруг SVG) */
+.music-lure-layer--icon {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  z-index: 2;
+}
+
+.music-lure-note {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: rgba(254, 243, 199, 0.96);
+  filter: drop-shadow(0 0 7px rgba(250, 204, 21, 0.55)) drop-shadow(0 2px 5px rgba(2, 6, 23, 0.55));
+  will-change: transform, opacity;
+}
+
+.music-lure-note--1 {
+  animation: music-lure-1 2.75s cubic-bezier(0.33, 0, 0.2, 1) infinite;
+}
+
+.music-lure-note--2 {
+  animation: music-lure-2 3.05s cubic-bezier(0.33, 0, 0.2, 1) 0.45s infinite;
+}
+
+.music-lure-note--3 {
+  animation: music-lure-3 2.9s cubic-bezier(0.33, 0, 0.2, 1) 0.92s infinite;
+}
+
+@keyframes music-lure-1 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(-1px, 1px) scale(0.35) rotate(-22deg);
+  }
+  11% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(46px, -56px) scale(1.05) rotate(14deg);
+  }
+}
+
+@keyframes music-lure-2 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(2px, 3px) scale(0.32) rotate(12deg);
+  }
+  13% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(34px, -72px) scale(0.98) rotate(-10deg);
+  }
+}
+
+@keyframes music-lure-3 {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(0, 0) scale(0.38) rotate(-8deg);
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(58px, -40px) scale(1.1) rotate(22deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-lure-note--1,
+  .music-lure-note--2,
+  .music-lure-note--3 {
+    animation: music-lure-soft-pulse 3.5s ease-in-out infinite;
+  }
+
+  .music-lure-note--2 {
+    animation-delay: 0.4s;
+  }
+
+  .music-lure-note--3 {
+    animation-delay: 0.8s;
+  }
+}
+
+@keyframes music-lure-soft-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translate(-50%, -50%) translate(10px, -14px) scale(0.85) rotate(-6deg);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) translate(14px, -20px) scale(0.95) rotate(4deg);
+  }
+}
+
 .thanks-cloud-bubble__inner {
   animation: thanksCloudInner 2.35s cubic-bezier(0.33, 1, 0.68, 1) forwards;
   will-change: transform;
@@ -635,6 +744,255 @@
 
 .bottle-idle-float {
   animation: bottleIdleFloat 3.2s ease-in-out infinite;
+}
+
+/* Модалка «Поцеловать?» — пульсация половинок сердца */
+@keyframes pairKissHeartPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+.pair-kiss-heart-pulse {
+  animation: pairKissHeartPulse 0.9s ease-in-out infinite;
+}
+
+.pair-kiss-heart-pulse-3s {
+  animation: pairKissHeartPulseStrong 0.5s cubic-bezier(0.22, 0.82, 0.28, 1) 6;
+}
+
+@keyframes pairKissHeartPulseStrong {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 34, 60, 0));
+  }
+  35% {
+    transform: scale(1.16) rotate(-1deg);
+    filter: drop-shadow(0 0 10px rgba(255, 34, 60, 0.55));
+  }
+  60% {
+    transform: scale(0.94) rotate(1deg);
+    filter: drop-shadow(0 0 4px rgba(255, 34, 60, 0.35));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 34, 60, 0));
+  }
+}
+
+.pair-kiss-wave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 70, 100, 0.72);
+  transform: translate(-50%, -50%) rotate(-45deg) scale(0.45);
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgba(255, 70, 100, 0.45));
+  animation: pairKissWave 1s ease-out 3;
+}
+
+.pair-kiss-wave::before,
+.pair-kiss-wave::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: rgba(255, 70, 100, 0.72);
+}
+
+.pair-kiss-wave::before {
+  left: 0;
+  top: -10px;
+}
+
+.pair-kiss-wave::after {
+  left: 10px;
+  top: 0;
+}
+
+.pair-kiss-wave-a {
+  animation-delay: 0s;
+}
+
+.pair-kiss-wave-b {
+  animation-delay: 0.3s;
+}
+
+@keyframes pairKissWave {
+  0% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(0.45);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(2.6);
+  }
+}
+
+.pair-kiss-firework-heart {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  font-size: 14px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0.35);
+  opacity: 0;
+  text-shadow: 0 0 8px rgba(255, 80, 120, 0.45);
+  animation: pairKissHeartFirework 1.2s ease-out 2;
+}
+
+.pair-kiss-firework-heart-1 { --fx-x: -6px;  --fx-y: -52px; animation-delay: 0.02s; }
+.pair-kiss-firework-heart-2 { --fx-x: 42px;  --fx-y: -38px; animation-delay: 0.08s; }
+.pair-kiss-firework-heart-3 { --fx-x: 58px;  --fx-y: 4px;   animation-delay: 0.12s; }
+.pair-kiss-firework-heart-4 { --fx-x: 34px;  --fx-y: 42px;  animation-delay: 0.18s; }
+.pair-kiss-firework-heart-5 { --fx-x: -28px; --fx-y: 44px;  animation-delay: 0.24s; }
+.pair-kiss-firework-heart-6 { --fx-x: -56px; --fx-y: 12px;  animation-delay: 0.3s; }
+.pair-kiss-firework-heart-7 { --fx-x: -44px; --fx-y: -32px; animation-delay: 0.36s; }
+.pair-kiss-firework-heart-8 { --fx-x: 8px;   --fx-y: -58px; animation-delay: 0.42s; }
+
+@keyframes pairKissHeartFirework {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  14% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--fx-x)), calc(-50% + var(--fx-y))) scale(1.2);
+  }
+}
+
+@keyframes pairKissCardEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.965);
+    filter: blur(2px) brightness(0.9);
+  }
+  38% {
+    opacity: 0.9;
+    transform: translateY(4px) scale(0.985);
+    filter: blur(0.8px) brightness(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0) brightness(1);
+  }
+}
+
+@keyframes pairKissCardExit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+    filter: blur(0) brightness(1);
+  }
+  35% {
+    opacity: 0.92;
+    transform: translateY(4px) scale(0.985) rotate(0.5deg);
+    filter: blur(0.5px) brightness(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.88) rotate(-1deg);
+    filter: blur(4px) brightness(0.7);
+  }
+}
+
+.pair-kiss-card-enter {
+  animation: pairKissCardEnter 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  transform-origin: 50% 55%;
+}
+
+.pair-kiss-card-exit {
+  animation: pairKissCardExit 0.78s cubic-bezier(0.4, 0, 0.2, 1) var(--pair-kiss-exit-delay, 3s) both;
+  transform-origin: 50% 55%;
+}
+
+.pair-kiss-exit-particles {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.pair-kiss-exit-particle {
+  --pk-x: 0px;
+  --pk-y: -44px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.95) 0%, rgba(125, 211, 252, 0.35) 55%, transparent 100%);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+  animation: pairKissExitParticle 0.75s ease-out var(--pair-kiss-exit-delay, 3s) forwards;
+}
+
+.pair-kiss-exit-particle-1 { --pk-x: -18px; --pk-y: -52px; }
+.pair-kiss-exit-particle-2 { --pk-x: 20px;  --pk-y: -48px; }
+.pair-kiss-exit-particle-3 { --pk-x: 48px;  --pk-y: -14px; }
+.pair-kiss-exit-particle-4 { --pk-x: 40px;  --pk-y: 28px; }
+.pair-kiss-exit-particle-5 { --pk-x: -36px; --pk-y: 34px; }
+.pair-kiss-exit-particle-6 { --pk-x: -50px; --pk-y: 4px; }
+.pair-kiss-exit-particle-7 { --pk-x: 4px;   --pk-y: 50px; }
+.pair-kiss-exit-particle-8 { --pk-x: -2px;  --pk-y: -58px; }
+
+@keyframes pairKissExitParticle {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--pk-x)), calc(-50% + var(--pk-y))) scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pair-kiss-card-enter {
+    animation: pairKissCardEnterReduced 0.35s ease-out both;
+  }
+
+  .pair-kiss-card-exit {
+    animation: pairKissCardExitReduced 0.35s ease-in var(--pair-kiss-exit-delay, 3s) both;
+  }
+
+  .pair-kiss-exit-particle {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+@keyframes pairKissCardEnterReduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pairKissCardExitReduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 /* Космос (cosmic_rockets): мерцание звёзд и медленный дрейф звёздного поля */
@@ -2935,7 +3293,7 @@
   will-change: transform, opacity;
 }
 
-/* Пассивное пополнение банка: вылет сердечек +1 */
+/* Пассивное пополнение банка: вылет сердечек (+3 за тик) */
 @keyframes bankPassiveHeartFly {
   0% {
     transform: translate3d(0, 0, 0) scale(0.55) rotate(0deg);
@@ -3268,9 +3626,28 @@
   will-change: transform;
 }
 
+/* Иконка бутылочки в боковом меню: плавное покачивание (ось у «дна» эмодзи) */
+@keyframes game-room-bottle-sway {
+  0%,
+  100% {
+    transform: rotate(-11deg);
+  }
+  50% {
+    transform: rotate(11deg);
+  }
+}
+
+.animate-game-room-bottle-icon {
+  display: inline-flex;
+  animation: game-room-bottle-sway 1.85s ease-in-out infinite;
+  transform-origin: 50% 88%;
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-game-room-bell,
-  .animate-game-room-bell-icon {
+  .animate-game-room-bell-icon,
+  .animate-game-room-bottle-icon {
     animation: none !important;
   }
 }

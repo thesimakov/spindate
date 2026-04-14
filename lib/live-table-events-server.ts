@@ -60,6 +60,9 @@ function isActionAllowed(action: GameAction): boolean {
     case "TICK_COUNTDOWN":
     case "START_SPIN":
     case "STOP_SPIN":
+    case "BEGIN_PAIR_KISS_PHASE":
+    case "SET_PAIR_KISS_CHOICE":
+    case "FINALIZE_PAIR_KISS":
     case "NEXT_TURN":
     case "REQUEST_EXTRA_TURN":
     case "ADD_LOG":
@@ -79,6 +82,9 @@ function isActionAllowed(action: GameAction): boolean {
 }
 
 function senderMatchesActionSync(senderId: number, action: GameAction): boolean {
+  if (action.type === "SET_PAIR_KISS_CHOICE") {
+    return senderId === action.playerId
+  }
   if (action.type === "SET_CLIENT_TAB_AWAY") {
     return senderId === action.playerId
   }
@@ -107,6 +113,39 @@ async function senderMatchesAddLogBotFromSnapshot(
   return !!fromInTable?.isBot
 }
 
+/** Выбор за бота в фазе pair-kiss может отправлять только round driver. */
+async function senderMatchesPairKissChoiceFromSnapshot(
+  tableId: number,
+  senderId: number,
+  action: Extract<GameAction, { type: "SET_PAIR_KISS_CHOICE" }>,
+): Promise<boolean> {
+  if (senderId === action.playerId) return true
+  const snap = await getTableAuthoritySnapshot(tableId)
+  if (!snap) return false
+  const roundDriverId = getRoundDriverPlayerId(snap.players)
+  if (roundDriverId == null || senderId !== roundDriverId) return false
+  const targetPlayer = snap.players.find((p) => p.id === action.playerId)
+  return !!targetPlayer?.isBot
+}
+
+/** FINALIZE_PAIR_KISS: round-driver или любой игрок после дедлайна/двух ответов. */
+async function senderCanFinalizePairKissFromSnapshot(
+  tableId: number,
+  senderId: number,
+): Promise<boolean> {
+  const snap = await getTableAuthoritySnapshot(tableId)
+  if (!snap) return false
+  const roundDriverId = getRoundDriverPlayerId(snap.players)
+  if (roundDriverId != null && senderId === roundDriverId) return true
+  const phase = snap.pairKissPhase
+  if (!phase || phase.resolved) return false
+  const senderInTable = snap.players.some((p) => p.id === senderId)
+  if (!senderInTable) return false
+  const timedOut = Date.now() >= phase.deadlineMs
+  const bothAnswered = phase.choiceA !== null && phase.choiceB !== null
+  return timedOut || bothAnswered
+}
+
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
   const now = Date.now()
   const tableId = Math.floor(args.tableId)
@@ -115,6 +154,18 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   if (!isActionAllowed(args.action)) return { ok: false as const }
   if (args.action.type === "ADD_LOG" && args.action.entry?.fromPlayer?.isBot) {
     if (!(await senderMatchesAddLogBotFromSnapshot(tableId, args.senderId, args.action))) {
+      return { ok: false as const }
+    }
+  } else if (args.action.type === "SET_PAIR_KISS_CHOICE") {
+    if (!(await senderMatchesPairKissChoiceFromSnapshot(tableId, args.senderId, args.action))) {
+      return { ok: false as const }
+    }
+  } else if (args.action.type === "BEGIN_PAIR_KISS_PHASE") {
+    const snap = await getTableAuthoritySnapshot(tableId)
+    const rd = snap ? getRoundDriverPlayerId(snap.players) : null
+    if (rd == null || rd !== args.senderId) return { ok: false as const }
+  } else if (args.action.type === "FINALIZE_PAIR_KISS") {
+    if (!(await senderCanFinalizePairKissFromSnapshot(tableId, args.senderId))) {
       return { ok: false as const }
     }
   } else if (!senderMatchesActionSync(args.senderId, args.action)) {

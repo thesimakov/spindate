@@ -11,7 +11,7 @@ type BankHeartBalanceTooltipProps = {
   onOpenShop: () => void
   className?: string
   tabularClassName?: string
-  /** Активный бонус за столом (+1 ❤ / 60 с, лимит/сутки). */
+  /** Активный бонус за столом (+3 ❤ / 30 мин, лимит/сутки). */
   activeBonus?: {
     earnedToday: number
     dailyCap: number
@@ -41,7 +41,7 @@ export function BankHeartBalanceTooltip({
         ? "Активный бонус: сейчас не копится"
         : activeBonus.earnedToday >= activeBonus.dailyCap
           ? `Активный бонус: лимит ${activeBonus.dailyCap} ❤/сутки исчерпан`
-          : `Активный бонус: +1 ❤ через ${t} · ${activeBonus.earnedToday}/${activeBonus.dailyCap} за сегодня`
+          : `Активный бонус: +3 ❤ через ${t} · ${activeBonus.earnedToday}/${activeBonus.dailyCap} за сегодня`
     : ""
 
   return (
@@ -73,7 +73,7 @@ export function BankHeartBalanceTooltip({
               <p className="text-slate-300">{activeBonus.idleHint}</p>
             ) : !activeBonus.isAccruing ? (
               <p className="text-slate-400">
-                За столом с бутылочкой: до {activeBonus.dailyCap} ❤ в сутки активным игрокам (+1 ❤ / 60 с).
+                За столом с бутылочкой: до {activeBonus.dailyCap} ❤ в сутки активным игрокам (+3 ❤ / 30 мин).
               </p>
             ) : activeBonus.earnedToday >= activeBonus.dailyCap ? (
               <p className="text-slate-300">
@@ -85,7 +85,7 @@ export function BankHeartBalanceTooltip({
                 <span className="font-black tabular-nums text-cyan-300">
                   {activeBonus.earnedToday}/{activeBonus.dailyCap}
                 </span>{" "}
-                · следующее +1 через{" "}
+                · следующее +3 через{" "}
                 <span className="font-black tabular-nums text-cyan-300">{t}</span>
               </p>
             )}

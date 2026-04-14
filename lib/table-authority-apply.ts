@@ -51,10 +51,68 @@ export function applyTableAuthorityAction(
         predictionPhase: false,
         spinSkips: nextSpinSkips,
         currentTurnDidSpin: true,
+        pairKissPhase: null,
       }
     }
     case "STOP_SPIN":
       return { ...snapshot, isSpinning: false, spinStartedAtMs: null, showResult: true, resultAction: action.action }
+    case "BEGIN_PAIR_KISS_PHASE": {
+      const tp = snapshot.targetPlayer
+      const tp2 = snapshot.targetPlayer2
+      if (!snapshot.showResult || !tp || !tp2) return null
+      if (action.idB !== tp.id || action.idA !== tp2.id) return null
+      return {
+        ...snapshot,
+        pairKissPhase: {
+          roundKey: action.roundKey,
+          deadlineMs: action.deadlineMs,
+          idA: action.idA,
+          idB: action.idB,
+          choiceA: null,
+          choiceB: null,
+          resolved: false,
+          outcome: null,
+        },
+      }
+    }
+    case "SET_PAIR_KISS_CHOICE": {
+      const ph = snapshot.pairKissPhase
+      if (!ph || ph.resolved) return null
+      if (action.playerId !== ph.idA && action.playerId !== ph.idB) return null
+      if (action.playerId === ph.idA && ph.choiceA !== null) return null
+      if (action.playerId === ph.idB && ph.choiceB !== null) return null
+      const choiceA = action.playerId === ph.idA ? action.yes : ph.choiceA
+      const choiceB = action.playerId === ph.idB ? action.yes : ph.choiceB
+      return {
+        ...snapshot,
+        pairKissPhase: {
+          ...ph,
+          choiceA,
+          choiceB,
+        },
+      }
+    }
+    case "FINALIZE_PAIR_KISS": {
+      const ph = snapshot.pairKissPhase
+      if (!ph || ph.resolved) return null
+      const ca = ph.choiceA ?? false
+      const cb = ph.choiceB ?? false
+      let outcome: "both_yes" | "only_a" | "only_b" | "both_no"
+      if (ca && cb) outcome = "both_yes"
+      else if (ca && !cb) outcome = "only_a"
+      else if (!ca && cb) outcome = "only_b"
+      else outcome = "both_no"
+      return {
+        ...snapshot,
+        pairKissPhase: {
+          ...ph,
+          choiceA: ca,
+          choiceB: cb,
+          resolved: true,
+          outcome,
+        },
+      }
+    }
     case "NEXT_TURN": {
       if (snapshot.players.length === 0) {
         return {
@@ -66,6 +124,7 @@ export function applyTableAuthorityAction(
           resultAction: null,
           predictionPhase: false,
           extraTurnPlayerId: undefined,
+          pairKissPhase: null,
         }
       }
 
@@ -107,6 +166,7 @@ export function applyTableAuthorityAction(
         predictionPhase: false,
         roundNumber: snapshot.roundNumber + 1,
         extraTurnPlayerId: undefined,
+        pairKissPhase: null,
       }
     }
     case "SET_AVATAR_FRAME": {
@@ -155,6 +215,7 @@ export function applyTableAuthorityAction(
         resultAction: null,
         isSpinning: false,
         spinStartedAtMs: null,
+        pairKissPhase: null,
       }
     case "SET_BOTTLE_COOLDOWN_UNTIL":
       return { ...snapshot, bottleCooldownUntil: action.ts }

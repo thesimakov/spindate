@@ -71,7 +71,7 @@ type LobbyRow = {
 }
 
 /** До ответа /api/rooms/lobby — совпадает с `getCreateRoomCost()` (lib/rooms/room-registry). */
-const DEFAULT_CREATE_COST = 50
+const DEFAULT_CREATE_COST = 10
 const BUY_HEARTS_AMOUNT = 400
 const BUY_HEARTS_VOTES = 25
 const LOBBY_VISITED_KEY_PREFIX = "spindate_lobby_visited_v1_"

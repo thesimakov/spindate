@@ -6,8 +6,8 @@ import type { GameAction } from "@/lib/game-types"
 /** За столом с бутылочкой: не больше столько ❤ в сутки от активного бонуса. */
 export const TABLE_ACTIVE_BONUS_DAILY_CAP = 200
 
-const INTERVAL_MS = 60_000
-const AMOUNT_PER_TICK = 1
+const INTERVAL_MS = 1_800_000
+const AMOUNT_PER_TICK = 3
 const STORAGE_PREFIX = "spindate_table_active_bonus_v1_"
 
 function localDateKey(d = new Date()): string {
@@ -44,7 +44,7 @@ function saveState(userId: number, s: Stored) {
 }
 
 /**
- * Активный бонус банка: +1 ❤ каждые 60 с за столом с бутылочкой, если в комнате ≥2 живых игроков,
+ * Активный бонус банка: +3 ❤ каждые 30 минут за столом с бутылочкой, если в комнате ≥2 живых игроков,
  * суточный потолок {@link TABLE_ACTIVE_BONUS_DAILY_CAP}. Условия «есть второй игрок» и т.д. — в `enabled` снаружи.
  */
 export function useBankPassive(
@@ -127,11 +127,17 @@ export function useBankPassive(
       }
 
       lastMsRef.current = now
-      const nextEarned = st.earnedToday + 1
+      const grant = Math.max(0, Math.min(AMOUNT_PER_TICK, TABLE_ACTIVE_BONUS_DAILY_CAP - st.earnedToday))
+      if (grant <= 0) {
+        setTick((t) => t + 1)
+        return
+      }
+
+      const nextEarned = st.earnedToday + grant
       const next: Stored = { dateKey: dk, earnedToday: nextEarned, lastTickMs: now }
       saveState(userId, next)
       setEarnedToday(nextEarned)
-      dispatch({ type: "PAY_VOICES", amount: -AMOUNT_PER_TICK })
+      dispatch({ type: "PAY_VOICES", amount: -grant })
       onGrantRef.current()
       setTick((t) => t + 1)
     }, 1000)

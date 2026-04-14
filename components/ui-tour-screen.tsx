@@ -54,7 +54,7 @@ const STEPS: TourStep[] = [
   {
     title: "Меню у аватарки",
     body:
-      "Нажмите на чужую аватарку за столом — откроется меню: «Подарить эмоцию» и «Подарить подарок». Кнопка «Профиль» открывает карточку игрока: можно начать ухаживать, перейти в профиль ВК (если человек разрешил в настройках) и подарить розы.",
+      "Нажмите на чужую аватарку: эмоции для вашей пары сразу подбираются по полу (м/м, м/ж, ж/ж). В меню — «Подарить подарок» и «Профиль»: карточка игрока, ухаживание, ВК при разрешении, розы.",
   },
   {
     title: "Объявления — табло",
@@ -446,14 +446,6 @@ export function UiTourScreen() {
                 <X className="h-3.5 w-3.5" strokeWidth={2.5} />
               </div>
               <div className="flex flex-col gap-1.5 pt-0.5">
-                <div className="flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border border-slate-500/30 bg-slate-950/70 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-500/10 text-cyan-200">
-                    <Sparkles className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-                  </span>
-                  <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight text-white sm:text-xs">
-                    Подарить эмоцию
-                  </span>
-                </div>
                 <div className="flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border border-slate-500/30 bg-slate-950/70 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-400/25 bg-rose-500/10 text-rose-200">
                     <Gift className="h-4 w-4" strokeWidth={2.25} aria-hidden />

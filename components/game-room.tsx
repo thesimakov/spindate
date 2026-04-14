@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
+import { filterOppositeGenderOthers } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
 import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
@@ -191,6 +192,9 @@ const CHAT_PAIR_ACTION_PHRASE: Partial<Record<GameLogEntry["type"], string>> = {
 
 /** Эмодзи для строки чата «аватар — аватар — эмоция — число». */
 function logEventEmotionEmoji(entry: GameLogEntry, giftById?: ReadonlyMap<string, GiftChatDisplayMeta>): string | null {
+  const isStrongKissStatus =
+    entry.type === "kiss" && typeof entry.text === "string" && entry.text.toLowerCase().includes("крепкий поцелуй")
+  if (isStrongKissStatus) return null
   if (entry.frameGift) return "\uD83D\uDDBC\uFE0F"
   const dyn = giftById?.get(String(entry.type))
   if (dyn?.emoji?.trim()) return dyn.emoji.trim()
@@ -242,6 +246,9 @@ function pairChatCentralObjectHint(
 }
 
 function logEventActionShortLabel(entry: GameLogEntry, giftById?: ReadonlyMap<string, GiftChatDisplayMeta>): string | null {
+  const isStrongKissStatus =
+    entry.type === "kiss" && typeof entry.text === "string" && entry.text.toLowerCase().includes("крепкий поцелуй")
+  if (isStrongKissStatus) return "Крепкий поцелуй"
   if (entry.frameGift?.frameName?.trim()) {
     return `Подарил(а) рамку «${entry.frameGift.frameName.trim()}»`
   }
@@ -727,7 +734,11 @@ function getActionsForPair(combo: PairGenderCombo): PairAction[] {
 function renderActionIcon(action: PairAction): React.ReactNode {
   switch (action.icon) {
     case "kiss":
-      return <span className="text-base">{"💋"}</span>
+      return (
+        <span className="inline-block text-base brightness-0 invert" aria-hidden>
+          {"💋"}
+        </span>
+      )
     case "flowers":
       return <Flower2 className="h-4 w-4" />
     case "diamond":
@@ -781,6 +792,19 @@ function renderActionIcon(action: PairAction): React.ReactNode {
 // В казуальном режиме оставляем только простое кручение бутылочки,
 // а прогнозы и ставки скрываем, чтобы не перегружать игрока.
 const CASUAL_MODE = true
+
+/** Длительность таймера «Поцелуются?» (голосование Да/Нет). */
+const PAIR_KISS_VOTE_DURATION_MS = 10_000
+
+/** После того как оба игрока нажали Да/Нет — пауза перед FINALIZE (не длиннее оставшегося до дедлайна). */
+const PAIR_KISS_FINALIZE_AFTER_BOTH_MS = 1200
+
+/** После завершения таймера / фиксации исхода держим карточку ещё 3 секунды. */
+const PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS = 3000
+const PAIR_KISS_EXIT_ANIM_DURATION_MS = 780
+/** Следующий ход после исчезновения карточки (задержка + длительность выхода + запас). */
+const PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS =
+  PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS + PAIR_KISS_EXIT_ANIM_DURATION_MS + 400
 
 const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow: string; text: string }> = {
   kiss:      { bg: "linear-gradient(180deg, #e74c3c 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
@@ -891,7 +915,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     courtshipProfileAllowed,
     allowChatInvite,
     favorites,
-    bottleDonorName,
     drunkUntil,
     bottleDonorId,
     dailyQuests,
@@ -908,7 +931,77 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     clientTabAway,
     gameSidePanel,
     admirers,
+    pairKissPhase,
   } = state
+  const [pairKissClock, setPairKissClock] = useState(() => Date.now())
+  /** Фиксация отображаемых секунд / полоски: после ответа обоих и после FINALIZE (без скачка к 0). */
+  const pairKissBothLockedSecRef = useRef<number | null>(null)
+  const pairKissDisplayedSecRef = useRef(1)
+  const pairKissDisplayedProgressRef = useRef(0)
+  const pairKissModalPlayers = useMemo(() => {
+    if (!pairKissPhase) return null
+    const pa = players.find((p) => p.id === pairKissPhase.idA)
+    const pb = players.find((p) => p.id === pairKissPhase.idB)
+    if (!pa || !pb) return null
+    return { pa, pb }
+  }, [pairKissPhase, players])
+  /** Центральная модалка «Поцелуются?» реально на экране (есть оба игрока в списке). */
+  const pairKissCenterUi = pairKissPhase != null && pairKissModalPlayers != null
+  /** Только окно голосования без resolved: бутылку прячем. После resolved бутылку снова показываем под анимацией ухода — иначе центр пустой до NEXT_TURN. */
+  const pairKissVotePanelActive =
+    pairKissPhase != null && pairKissModalPlayers != null && !pairKissPhase.resolved
+  const tablePlayerIdsKey = useMemo(
+    () =>
+      players.length === 0 ? "" : [...players].map((p) => p.id).sort((a, b) => a - b).join(","),
+    [players],
+  )
+  const pairKissMsLeft = pairKissPhase
+    ? Math.max(0, pairKissPhase.deadlineMs - pairKissClock)
+    : 0
+  const pairKissSecondsLeft = pairKissPhase ? Math.max(0, pairKissMsLeft / 1000) : 0
+  const liveSec = pairKissPhase ? Math.max(1, Math.ceil(pairKissSecondsLeft)) : 1
+  const liveProgress = pairKissPhase ? Math.min(1, pairKissMsLeft / PAIR_KISS_VOTE_DURATION_MS) : 0
+  const pairKissMyPlayerId =
+    currentUser && pairKissPhase && (currentUser.id === pairKissPhase.idA || currentUser.id === pairKissPhase.idB)
+      ? currentUser.id
+      : null
+  const pairKissMyChoice =
+    pairKissPhase && pairKissMyPlayerId != null
+      ? pairKissMyPlayerId === pairKissPhase.idA
+        ? pairKissPhase.choiceA
+        : pairKissPhase.choiceB
+      : null
+  const pairKissCanPick = !!(pairKissPhase && pairKissMyPlayerId != null && !pairKissPhase.resolved && pairKissMyChoice === null)
+  const pairKissBothAnswered =
+    !!(pairKissPhase && pairKissPhase.choiceA !== null && pairKissPhase.choiceB !== null)
+  const pairKissBothYes = !!(pairKissPhase?.choiceA === true && pairKissPhase?.choiceB === true)
+
+  if (pairKissPhase && !pairKissPhase.resolved) {
+    if (pairKissBothAnswered) {
+      if (pairKissBothLockedSecRef.current === null) {
+        pairKissBothLockedSecRef.current = liveSec
+        pairKissDisplayedProgressRef.current = liveProgress
+      }
+      pairKissDisplayedSecRef.current = pairKissBothLockedSecRef.current
+    } else {
+      pairKissBothLockedSecRef.current = null
+      pairKissDisplayedSecRef.current = liveSec
+      pairKissDisplayedProgressRef.current = liveProgress
+    }
+  } else if (!pairKissPhase) {
+    pairKissBothLockedSecRef.current = null
+  }
+
+  const pairKissDisplaySeconds = pairKissPhase ? pairKissDisplayedSecRef.current : 1
+  /** Ширина полоски = доля оставшегося времени (1 → старт, 0 → конец). При resolved не подставлять 1 — иначе кажется откат к началу. */
+  const pairKissBarProgress = pairKissPhase
+    ? pairKissPhase.resolved
+      ? Math.min(1, Math.max(0, pairKissDisplayedProgressRef.current))
+      : pairKissBothAnswered && pairKissBothLockedSecRef.current !== null
+        ? pairKissDisplayedProgressRef.current
+        : liveProgress
+    : 0
+
   const currentRoomName = roomNameForDisplay("", tableId)
   const frameCatalogSource = useMemo(
     () => (frameCatalogRows.length > 0 ? frameCatalogRows : DEFAULT_FRAME_CATALOG_ROWS),
@@ -1487,6 +1580,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     currentUser,
     isSpinning,
     showResult,
+    pairKissCenterUi,
     countdown,
     predictionPhase,
     dispatch,
@@ -1747,6 +1841,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       }
 
       if (!EMOTION_TYPES.has(entry.type)) continue
+      if (entry.type === "kiss" && String(entry.text ?? "").toLowerCase().includes("крепкий поцелуй")) continue
       if (entry.fromPlayer?.id === currentUser.id) continue
       if (!entry.fromPlayer || !entry.toPlayer) continue
 
@@ -1830,9 +1925,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const spinner = currentTurnPlayer
     if (!spinner) return
 
-    // Пара ВСЕГДА включает крутящего игрока + одного случайного.
-    const others = players.filter((p) => p.id !== spinner.id)
-    if (others.length === 0) return
+    // Крутящий + один случайный из оставшихся только противоположного пола.
+    const others = filterOppositeGenderOthers(players, spinner)
+    if (others.length === 0) {
+      showToast("Нет игроков противоположного пола за столом", "error")
+      return
+    }
 
     const idx = Math.floor(Math.random() * others.length)
     const target = others[idx]
@@ -1971,57 +2069,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         }
       }
 
-      // Determine the default action based on gender combo (spinner + target)
-      const combo = getPairGenderCombo(spinner, target)
-      let defaultAction: GameLogEntry["type"] | "skip" = "skip"
-      if (combo === "MF") defaultAction = "kiss"
-      else if (combo === "MM") defaultAction = "beer"
-      else if (combo === "FF") defaultAction = "cocktail"
-
-      const spinnerIsBot = !!spinner.isBot
-
-      if (spinnerIsBot) {
-        // Для ботов всё происходит автоматически
-        dispatch({ type: "STOP_SPIN", action: defaultAction })
-
-        const spinnerIdx = players.findIndex((p) => p.id === spinner.id)
-        const emojiMap: Record<string, string> = {
-          kiss: "\uD83D\uDC8B",
-          skip: "",
-        }
-        if (defaultAction === "cocktail") {
-          launchEmotionGiftImage(spinnerIdx, targetIdx)
-          playEmotionSound(defaultAction)
-        } else if (defaultAction === "beer") {
-          launchEmoji(spinnerIdx, targetIdx, undefined, assetUrl("kvas-big.svg"))
-          playEmotionSound(defaultAction)
-        } else if (emojiMap[defaultAction]) {
-          launchEmoji(spinnerIdx, targetIdx, emojiMap[defaultAction])
-          playEmotionSound(defaultAction)
-        }
-
-        const pairText = `${spinner.name} & ${target.name}`
-        const pairIdsForLog = sortedPairIds(spinner, target)
-        dispatch({
-          type: "ADD_LOG",
-          entry: {
-            id: generateLogId(),
-            type: defaultAction as GameLogEntry["type"],
-            fromPlayer: spinner,
-            toPlayer: target,
-            pairIds: pairIdsForLog,
-            text: `Выпала пара: ${pairText}`,
-            timestamp: Date.now(),
-          },
-        })
-      } else {
-        // Для живых игроков: только останавливаем спин и показываем результат,
-        // эмоция/действие будут выбраны вручную через handlePerformAction.
-        dispatch({ type: "STOP_SPIN", action: "skip" })
-      }
+      dispatch({ type: "STOP_SPIN", action: "skip" })
+      const rk = `${tableId}:${roundNumber}:${currentTurnIndex}:${spinner.id}:${target.id}`
+      dispatch({
+        type: "BEGIN_PAIR_KISS_PHASE",
+        roundKey: rk,
+        deadlineMs: Date.now() + PAIR_KISS_VOTE_DURATION_MS,
+        idA: spinner.id,
+        idB: target.id,
+      })
     }, 6000)
      
-  }, [players, currentTurnPlayer, dispatch, launchEmoji, launchEmotionGiftImage, playEmotionSound, predictions, bets, pot, currentUser, bottleAngle, tableId, roundNumber, currentTurnIndex, isSpinning])
+  }, [players, currentTurnPlayer, dispatch, predictions, bets, pot, currentUser, bottleAngle, tableId, roundNumber, currentTurnIndex, isSpinning, showToast])
 
   useEffect(() => {
     if (isSpinning) return
@@ -2032,16 +2091,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
   }, [isSpinning, roundNumber, currentTurnIndex])
 
-  // Watchdog: if spin is stuck > 12s, force stop and advance turn
+  // Watchdog: если крутилка зависла >12 с — один координатор (мин. id за столом) сбрасывает спин и ход
   useEffect(() => {
     if (!isSpinning) return
+    if (!currentUser || players.length === 0) return
+    const humanIds = players.filter((p) => !p.isBot).map((p) => p.id)
+    if (humanIds.length === 0) return
+    const coordinatorId = Math.min(...humanIds)
+    if (currentUser.id !== coordinatorId) return
     const watchdog = setTimeout(() => {
-      if (!isRoundDriverRef.current) return
       dispatch({ type: "STOP_SPIN", action: "skip" })
       dispatch({ type: "NEXT_TURN" })
     }, 12_000)
     return () => clearTimeout(watchdog)
-  }, [isSpinning, dispatch])
+  }, [isSpinning, dispatch, currentUser?.id, tablePlayerIdsKey])
 
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
@@ -2080,17 +2143,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       dateKey: getTodayDateKey(),
       selectedTypes: [...types],
       extraPerPurchase: EMOTION_QUOTA_PURCHASE_AMOUNT,
-    })
-    const labelMap: Record<string, string> = { kiss: "поцелуи", beer: "по квасику", cocktail: "сладкое" }
-    dispatch({
-      type: "ADD_LOG",
-      entry: {
-        id: generateLogId(),
-        type: "system",
-        fromPlayer: currentUser,
-        text: `${currentUser.name} купил(а) +${EMOTION_QUOTA_PURCHASE_AMOUNT} к: ${types.map((t) => labelMap[t]).join(", ")}`,
-        timestamp: Date.now(),
-      },
     })
     showToast("Лимит эмоций увеличен до конца суток", "success")
     setEmotionPurchaseOpen(false)
@@ -2355,6 +2407,174 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     dispatch({ type: "NEXT_TURN" })
   }
 
+  const pairKissAdvanceRef = useRef<string | null>(null)
+  const pairKissStatusLogRef = useRef<string | null>(null)
+  const pairKissBotPickScheduledRef = useRef<Set<string>>(new Set())
+  const pairKissSoundStateRef = useRef<{
+    roundKey: string
+    choiceA: boolean | null
+    choiceB: boolean | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (!pairKissPhase || pairKissPhase.resolved) return
+    const id = window.setInterval(() => setPairKissClock(Date.now()), 100)
+    return () => clearInterval(id)
+  }, [pairKissPhase?.roundKey, pairKissPhase?.resolved])
+
+  useEffect(() => {
+    if (!pairKissPhase) {
+      pairKissBothLockedSecRef.current = null
+      return
+    }
+    pairKissBothLockedSecRef.current = null
+  }, [pairKissPhase?.roundKey])
+  useEffect(() => {
+    if (!pairKissPhase) {
+      pairKissBotPickScheduledRef.current.clear()
+      pairKissSoundStateRef.current = null
+      return
+    }
+    for (const key of pairKissBotPickScheduledRef.current) {
+      if (!key.startsWith(`${pairKissPhase.roundKey}:`)) {
+        pairKissBotPickScheduledRef.current.delete(key)
+      }
+    }
+  }, [pairKissPhase?.roundKey])
+
+  useEffect(() => {
+    if (!pairKissPhase) return
+    const prev = pairKissSoundStateRef.current
+    if (!prev || prev.roundKey !== pairKissPhase.roundKey) {
+      // На старте новой фазы просто запоминаем снэпшот, чтобы не проигрывать звук ретроспективно.
+      pairKissSoundStateRef.current = {
+        roundKey: pairKissPhase.roundKey,
+        choiceA: pairKissPhase.choiceA,
+        choiceB: pairKissPhase.choiceB,
+      }
+      return
+    }
+
+    const playCount =
+      (prev.choiceA !== true && pairKissPhase.choiceA === true ? 1 : 0) +
+      (prev.choiceB !== true && pairKissPhase.choiceB === true ? 1 : 0)
+
+    if (playCount > 0) {
+      playEmotionSound("kiss")
+      if (playCount > 1) {
+        window.setTimeout(() => playEmotionSound("kiss"), 130)
+      }
+    }
+
+    pairKissSoundStateRef.current = {
+      roundKey: pairKissPhase.roundKey,
+      choiceA: pairKissPhase.choiceA,
+      choiceB: pairKissPhase.choiceB,
+    }
+  }, [pairKissPhase, playEmotionSound])
+
+  const onPairKissPick = useCallback(
+    (playerId: number, yes: boolean) => {
+      dispatch({ type: "SET_PAIR_KISS_CHOICE", playerId, yes })
+    },
+    [dispatch],
+  )
+
+  useEffect(() => {
+    if (!isRoundDriver || !pairKissPhase || pairKissPhase.resolved) return
+    const a = players.find((p) => p.id === pairKissPhase.idA)
+    const b = players.find((p) => p.id === pairKissPhase.idB)
+    const now = Date.now()
+    const latestPickAt = pairKissPhase.deadlineMs - 450
+
+    if (a?.isBot && pairKissPhase.choiceA == null) {
+      const keyA = `${pairKissPhase.roundKey}:A`
+      if (!pairKissBotPickScheduledRef.current.has(keyA)) {
+        pairKissBotPickScheduledRef.current.add(keyA)
+        const desiredDelay = 1200 + Math.floor(Math.random() * 1800)
+        const dueAt = Math.min(latestPickAt, now + desiredDelay)
+        const delay = Math.max(120, dueAt - now)
+        window.setTimeout(() => {
+          dispatch({ type: "SET_PAIR_KISS_CHOICE", playerId: pairKissPhase.idA, yes: Math.random() >= 0.5 })
+        }, delay)
+      }
+    }
+    if (b?.isBot && pairKissPhase.choiceB == null) {
+      const keyB = `${pairKissPhase.roundKey}:B`
+      if (!pairKissBotPickScheduledRef.current.has(keyB)) {
+        pairKissBotPickScheduledRef.current.add(keyB)
+        const desiredDelay = 1200 + Math.floor(Math.random() * 1800)
+        const dueAt = Math.min(latestPickAt, now + desiredDelay)
+        const delay = Math.max(120, dueAt - now)
+        window.setTimeout(() => {
+          dispatch({ type: "SET_PAIR_KISS_CHOICE", playerId: pairKissPhase.idB, yes: Math.random() >= 0.5 })
+        }, delay)
+      }
+    }
+  }, [isRoundDriver, pairKissPhase, players, dispatch])
+
+  useEffect(() => {
+    /* Любой игрок за столом может финализировать по правилам сервера; только round driver — если драйвер в AFK, иначе фаза висит и бутылка/ход не возвращаются. */
+    if (!pairKissPhase || pairKissPhase.resolved) return
+    if (!currentUser || !players.some((p) => p.id === currentUser.id)) return
+    const ph = pairKissPhase
+    const msToDeadline = Math.max(0, ph.deadlineMs - Date.now())
+    const bothAnswered = ph.choiceA !== null && ph.choiceB !== null
+    const ms = bothAnswered ? Math.min(msToDeadline, PAIR_KISS_FINALIZE_AFTER_BOTH_MS) : msToDeadline
+    const t = window.setTimeout(() => {
+      dispatch({ type: "FINALIZE_PAIR_KISS" })
+    }, ms)
+    return () => clearTimeout(t)
+  }, [
+    currentUser?.id,
+    tablePlayerIdsKey,
+    pairKissPhase?.roundKey,
+    pairKissPhase?.deadlineMs,
+    pairKissPhase?.resolved,
+    pairKissPhase?.choiceA,
+    pairKissPhase?.choiceB,
+    dispatch,
+  ])
+
+  useEffect(() => {
+    if (!pairKissPhase?.resolved) return
+    if (!currentUser) return
+    const humanIds = players.filter((p) => !p.isBot).map((p) => p.id)
+    const coordinatorId = humanIds.length > 0 ? Math.min(...humanIds) : null
+    if (coordinatorId == null || currentUser.id !== coordinatorId) return
+    const key = pairKissPhase.roundKey
+    if (pairKissAdvanceRef.current === key) return
+    pairKissAdvanceRef.current = key
+    const t = window.setTimeout(() => {
+      dispatch({ type: "NEXT_TURN" })
+    }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
+    return () => clearTimeout(t)
+  }, [currentUser?.id, tablePlayerIdsKey, pairKissPhase?.resolved, pairKissPhase?.roundKey, dispatch])
+
+  useEffect(() => {
+    if (!pairKissPhase?.resolved || pairKissPhase.outcome !== "both_yes") return
+    if (!currentUser || currentUser.id !== pairKissPhase.idA) return
+    const key = pairKissPhase.roundKey
+    if (pairKissStatusLogRef.current === key) return
+    const a = players.find((p) => p.id === pairKissPhase.idA)
+    const b = players.find((p) => p.id === pairKissPhase.idB)
+    if (!a || !b) return
+    pairKissStatusLogRef.current = key
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: "kiss",
+        fromPlayer: a,
+        toPlayer: b,
+        toPlayer2: b,
+        pairIds: sortedPairIds(a, b),
+        text: `${a.name} — крепкий поцелуй — ${b.name}`,
+        timestamp: Date.now(),
+      },
+    })
+  }, [currentUser?.id, players, pairKissPhase, dispatch])
+
   const thankDonorFromPlayer = useCallback(
     (fromPlayerId: number) => {
       if (!bottleDonorId) return
@@ -2362,32 +2582,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       const fromIdx = players.findIndex((p) => p.id === fromPlayerId)
       if (donorIdx === -1 || fromIdx === -1 || bottleDonorId === fromPlayerId) return
 
-      const fromPlayer = players.find((p) => p.id === fromPlayerId)
-      const donor = players.find((p) => p.id === bottleDonorId)
-      if (!fromPlayer || !donor) return
-
       for (let i = 0; i < 3; i++) {
         setTimeout(() => launchEmoji(fromIdx, donorIdx, undefined, undefined, true), i * 120)
       }
-      dispatch({
-        type: "ADD_LOG",
-        entry: {
-          id: generateLogId(),
-          type: "bottle_thanks",
-          fromPlayer,
-          toPlayer: donor,
-          text: `${fromPlayer.name} благодарит ${donor.name} за бутылочку`,
-          timestamp: Date.now(),
-        },
-      })
     },
-    [bottleDonorId, players, launchEmoji, dispatch],
+    [bottleDonorId, players, launchEmoji],
   )
-
-  const handleThankDonor = useCallback(() => {
-    if (!currentUser) return
-    thankDonorFromPlayer(currentUser.id)
-  }, [currentUser, thankDonorFromPlayer])
 
   /* ---- боты рандомно нажимают «Спасибо» донору бутылочки ---- */
   useEffect(() => {
@@ -2411,6 +2611,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /* ---- bot auto-actions on result (random, 1–3 actions) ---- */
   useEffect(() => {
     if (!showResult || !currentTurnPlayer || !currentTurnPlayer.isBot) return
+    if (pairKissPhase) return
     if (!isRoundDriver) return
     if (!targetPlayer || !targetPlayer2) return
     if (botActionRoundRef.current === roundNumber) return
@@ -2434,7 +2635,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         handlePerformAction(a.id)
       }, 500 + index * 700)
     })
-  }, [showResult, currentTurnPlayer, targetPlayer, targetPlayer2, roundNumber, isRoundDriver])
+  }, [showResult, currentTurnPlayer, targetPlayer, targetPlayer2, roundNumber, isRoundDriver, pairKissPhase])
 
   /* ---- bet submit ---- */
   const handleSubmitBet = () => {
@@ -2582,11 +2783,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       return
     }
 
-    // Обычный клик по аватарке на столе:
-    // открываем мини-меню под выбранной аватаркой.
+    // Обычный клик по аватарке: мини-меню + сразу режим «подарить эмоцию» по паре текущий игрок ↔ цель (MM/MF/FF).
     const nextTarget = sidebarTargetPlayer?.id === player.id ? null : player
     setSidebarTargetPlayer(nextTarget)
-    setSidebarGiftMode(false)
+    setSidebarGiftMode(nextTarget !== null)
     setGiftCatalogDrawerPlayer(null)
   }
 
@@ -2626,6 +2826,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   const canRespondInResult = !!(
     showResult &&
+    !pairKissPhase &&
     resolvedTargetPlayer &&
     resolvedTargetPlayer2 &&
     currentUser &&
@@ -2640,13 +2841,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (sidebarGiftMode && currentUser && sidebarTargetPlayer) {
       return getPairGenderCombo(currentUser, sidebarTargetPlayer)
     }
-    // В обычном режиме не раскрываем будущую пару во время вращения:
-    // обновляем набор эмоций только когда результат уже показан.
-    if (showResult) {
+    // Во время модалки «Поцеловать?» набор по паре бутылки не показываем; подарок по аватарке — выше.
+    if (showResult && !pairKissPhase) {
       return currentPairCombo
     }
     return null
-  }, [sidebarGiftMode, currentUser, sidebarTargetPlayer, currentPairCombo, showResult])
+  }, [sidebarGiftMode, currentUser, sidebarTargetPlayer, currentPairCombo, showResult, pairKissPhase])
 
   useEffect(() => {
     if (sidebarActionCombo) {
@@ -2663,19 +2863,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   const isSidebarEmotionActionActive =
     (!!currentUser && !currentUser.isBot && sidebarGiftMode && !!sidebarTargetPlayer) ||
-    (showResult && isMyTurn) ||
+    (showResult && isMyTurn && !pairKissPhase) ||
     canRespondInResult
 
   const sidebarEmotionTitle = sidebarGiftMode ? "Подарить эмоцию" : "Эмоции"
   const sidebarEmotionSubtitle =
     sidebarGiftMode && sidebarTargetPlayer
       ? `Выбрано: ${sidebarTargetPlayer.name}`
-      : "Выбери аватар и нажми «Подарить эмоцию»"
+      : "Нажми на аватар игрока за столом"
   const shouldShowSidebarEmotionSubtitle =
     sidebarGiftMode && !!sidebarTargetPlayer
 
   const showMobileEmotionStrip =
     isMobile &&
+    !pairKissPhase &&
     Boolean(
       (sidebarGiftMode && sidebarTargetPlayer) ||
         (showResult &&
@@ -3078,7 +3279,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     showToast("Выберите другой стол", "info")
   }
 
-  /* Активный бонус банка: +1 ❤ / 60 с за столом с бутылочкой, если ≥2 живых игроков; лимит/сутки — см. TABLE_ACTIVE_BONUS_DAILY_CAP */
+  /* Активный бонус банка: +3 ❤ / 30 мин за столом с бутылочкой, если ≥2 живых игроков; лимит/сутки — см. TABLE_ACTIVE_BONUS_DAILY_CAP */
   const [bankPassiveBurstKey, setBankPassiveBurstKey] = useState(0)
   const [bankPassiveBurstOrigin, setBankPassiveBurstOrigin] = useState<{ x: number; y: number } | null>(null)
   const bankPlusButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -3365,7 +3566,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         </div>
       )}
 
-      {/* Top-left controls: музыка и звуки эмоций; на мобильной — в ряд, без общей оболочки */}
+      {/* Top-left controls: на ПК управление вынесено в боковую панель иконок */}
       <div
         className={`fixed z-40 flex max-w-[calc(100vw-1rem)] gap-1.5 overflow-x-auto ${
           isMobile
@@ -3373,13 +3574,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             : "left-1 top-1 flex-col items-start"
         }`}
       >
-        <div
-          className={
-            isMobile
-              ? "max-md:hidden flex flex-row items-center gap-1.5 shrink-0"
-              : "contents"
-          }
-        >
+        {!isPcLayout && (
+          <div
+            className={
+              isMobile
+                ? "max-md:hidden flex flex-row items-center gap-1.5 shrink-0"
+                : "contents"
+            }
+          >
         <div
           className="flex shrink-0 items-center gap-2 rounded-xl border border-transparent py-0.5 pl-0.5 pr-1"
           onMouseEnter={() => {
@@ -3442,7 +3644,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           <span className="hidden sm:inline">{soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}</span>
           <span className="sm:hidden">{soundsEnabled === false ? "Звук выкл" : "Звук вкл"}</span>
         </button>
-        </div>
+          </div>
+        )}
         {isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
           <div
             className="flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold shadow-sm min-h-[32px]"
@@ -3495,16 +3698,19 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       <div
         className={cn(
           isPcLayout
-            ? "flex min-h-0 min-w-0 flex-[4] basis-0 flex-row overflow-hidden"
+            ? "relative flex min-h-0 min-w-0 flex-[4] basis-0 flex-row overflow-hidden"
             : "contents",
         )}
       >
       {/* ---- LEFT БОКОВОЕ МЕНЮ (скрыто на мобильных); фикс. ширина, не сжимается при резине центра ---- */}
       <div
         className={cn(
-          "relative z-20 shrink-0 flex-none flex-col gap-2 overflow-y-auto max-h-app p-2 pt-20 lg:pt-24 transition-[width] duration-200 ease-out",
+          "relative flex flex-col gap-2 transition-[width] duration-200 ease-out",
+          isPcLayout
+            ? "absolute left-0 top-1/2 z-[80] max-h-[calc(100%-1rem)] -translate-y-1/2 overflow-x-visible overflow-y-auto p-2 py-2 pb-14"
+            : "relative z-20 max-h-app overflow-y-auto p-2 pt-20 lg:pt-24",
           isPcLayout ? "flex" : "hidden md:flex",
-          leftSideMenuExpanded ? "w-[min(92vw,250px)]" : "w-14 lg:w-[min(92vw,250px)]",
+          leftSideMenuExpanded ? "w-[min(82vw,200px)]" : "w-14 lg:w-[min(82vw,200px)]",
         )}
       >
         <div className="mb-1 flex shrink-0 items-center justify-center lg:hidden">
@@ -3527,128 +3733,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           </button>
         </div>
 
-        <div className={!leftSideMenuExpanded ? "max-lg:hidden" : ""}>
-        <div className="flex w-full min-w-0 items-start">
-        <div
-          className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl p-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.35)]"
-          style={{
-            background: "rgba(15, 23, 42, 0.92)",
-            border: "1px solid rgba(148, 163, 184, 0.45)",
-          }}
-        >
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 shrink-0" style={{ color: "#e8c06a" }} />
-              <span className="text-sm font-extrabold leading-tight tracking-tight" style={{ color: "#e8c06a" }}>
-                {sidebarEmotionTitle}
-              </span>
-            </div>
-            {shouldShowSidebarEmotionSubtitle && (
-              <p className="text-xs font-semibold leading-snug sm:text-sm" style={{ color: "#cbd5e1" }}>
-                {sidebarEmotionSubtitle}
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {limitedEmotionCounters.map((row) => (
-              <div key={row.id} className="rounded-lg px-1.5 py-2 text-center ring-1 ring-slate-600/50" style={{ background: "rgba(30, 41, 59, 0.85)" }}>
-                <div className="flex min-h-[2.25rem] items-center justify-center">
-                  {row.id === "beer" ? (
-                    <img src={assetUrl("kvas-big.svg")} alt="" className="h-8 w-8 object-contain" draggable={false} />
-                  ) : (
-                    <p className="text-lg leading-none" style={{ color: "#e2e8f0" }}>{row.emoji}</p>
-                  )}
-                </div>
-                <p className="mt-1 text-sm font-black tabular-nums" style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}>
-                  {row.used}/{row.limit}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {isEmotionLimitReached && (
-            <button
-              type="button"
-              onClick={openEmotionPurchaseModal}
-              className="flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl px-2 text-center text-xs font-extrabold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40 sm:text-[13px]"
-              disabled={voiceBalance < EMOTION_QUOTA_FIRST_COST_PER_TYPE}
-              style={{
-                background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
-                color: "#0f172a",
-                border: "1px solid rgba(103, 232, 249, 0.9)",
-                boxShadow: "0 1px 0 rgba(30, 64, 175, 0.9), 0 2px 8px rgba(34, 211, 238, 0.28)",
-              }}
-            >
-              {`Купить +${EMOTION_QUOTA_PURCHASE_AMOUNT} (от ${getNextQuotaCostPerTypeHearts(emotionDailyBoost)} ❤/тип)`}
-            </button>
-          )}
-
-          <div className="flex max-h-[min(52dvh,30rem)] min-h-0 w-full flex-col gap-2 overflow-y-auto pr-0.5">
-              {sidebarAvailableActions.map((action) => {
-                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
-                const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                const isDisabled = !isSidebarEmotionActionActive || !canAfford
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    onClick={() => {
-                      if (sidebarGiftMode && sidebarTargetPlayer) {
-                        handleSidebarGiftEmotion(action.id)
-                        return
-                      }
-                      if (showResult && isMyTurn) {
-                        handlePerformAction(action.id)
-                        return
-                      }
-                      if (canRespondInResult) {
-                        handleResponseEmotion(action.id)
-                      }
-                    }}
-                    disabled={isDisabled}
-                    className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-0 text-left text-[13px] font-extrabold leading-none shadow-md transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
-                    style={{
-                      background: style.bg,
-                      color: style.text,
-                      border: `1px solid ${style.border}`,
-                      boxShadow: `0 1px 0 ${style.shadow}, 0 4px 10px rgba(0,0,0,0.22)`,
-                    }}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center [&_img]:h-7 [&_img]:w-7 [&_svg]:h-5 [&_svg]:w-5 [&>span]:text-lg">
-                      {renderActionIcon(action)}
-                    </span>
-                    <span className="min-w-0 flex-1 text-left leading-tight [overflow-wrap:anywhere]">
-                      {action.label}
-                    </span>
-                    {shouldShowActionCostBadge(action.id, actionCost) && (
-                      <span className="heart-price heart-price--badge ml-1 flex shrink-0 items-center rounded-full px-1.5 py-0.5 opacity-95">
-                        {actionCost}
-                        <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-          </div>
-        </div>
-        {showPairEmotionHint ? (
-          <div
-            className="relative w-0 shrink-0 self-stretch overflow-visible"
-            aria-hidden
-          >
-            <img
-              src={EMOTION_RECIPROCAL_HINT_SRC}
-              alt=""
-              width={160}
-              height={100}
-              className="pointer-events-none absolute left-0 top-[6.5rem] z-10 ml-1.5 hidden h-12 w-auto max-w-[min(12.5rem,40vw)] select-none object-contain object-left-top md:block lg:top-[7rem] lg:h-16 lg:max-w-[min(15rem,48vw)]"
-            />
-          </div>
-        ) : null}
-        </div>
-        </div>
+        
 
         {/* ---- PREDICTION SECTION ---- */}
         <div className={!leftSideMenuExpanded ? "max-lg:hidden" : ""}>
@@ -3892,16 +3977,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         </div>
 
         {/* ---- BALANCES + КНОПКИ ---- */}
-        <div className="mt-auto flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-2", isPcLayout ? "min-h-0 flex-1 items-start justify-center" : "mt-auto")}>
           {/** Единый стиль для аккуратных кнопок бокового меню */}
           {(() => {
             const sideBtnClass =
-              "flex items-center gap-2 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
-              (!leftSideMenuExpanded
-                ? " max-lg:min-h-[44px] max-lg:w-11 max-lg:min-w-[44px] max-lg:justify-center max-lg:rounded-full max-lg:px-2 max-lg:gap-0"
-                : "")
+              isPcLayout
+                ? "group relative flex h-14 w-14 items-center justify-center rounded-full border transition-all hover:-translate-y-[1px] hover:brightness-110 [&_svg]:h-5 [&_svg]:w-5"
+                : "flex items-center gap-2 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
+                  (!leftSideMenuExpanded
+                    ? " max-lg:min-h-[44px] max-lg:w-11 max-lg:min-w-[44px] max-lg:justify-center max-lg:rounded-full max-lg:px-2 max-lg:gap-0"
+                    : "")
             const sideBtnTextClass =
-              "text-[13px] font-semibold leading-none" + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
+              isPcLayout
+                ? "pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-[120] -translate-y-1/2 rounded-full border border-cyan-300/35 bg-slate-950/95 px-3 py-1.5 text-[12px] font-semibold leading-none whitespace-nowrap text-slate-100 opacity-0 shadow-[0_8px_18px_rgba(2,6,23,0.45)] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0 translate-x-[-6px]"
+                : "text-[13px] font-semibold leading-none" + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
             const darkSideBtnStyle: CSSProperties = {
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -3909,14 +3998,22 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             }
             const sideBtnPairWrap =
               "flex w-full gap-1.5 " +
-              (leftSideMenuExpanded ? "flex-row" : "flex-row max-lg:flex-col max-lg:items-stretch")
+              (isPcLayout ? "flex-col items-start" : leftSideMenuExpanded ? "flex-row" : "flex-row max-lg:flex-col max-lg:items-stretch")
             const sideBtnCompactClass =
-              "relative flex items-center gap-1.5 rounded-[999px] px-2.5 py-1.5 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[36px] " +
-              (leftSideMenuExpanded
-                ? "flex-1 min-w-0 justify-center"
-                : " flex-1 min-w-0 justify-center max-lg:h-9 max-lg:w-full max-lg:min-h-9 max-lg:flex-none max-lg:justify-center max-lg:rounded-full max-lg:px-0 max-lg:gap-0")
+              isPcLayout
+                ? "group relative flex h-14 w-14 items-center justify-center rounded-full border transition-all hover:-translate-y-[1px] hover:brightness-110 [&_svg]:h-5 [&_svg]:w-5"
+                : "relative flex items-center gap-1.5 rounded-[999px] px-2.5 py-1.5 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[36px] " +
+                  (leftSideMenuExpanded
+                    ? "flex-1 min-w-0 justify-center"
+                    : " flex-1 min-w-0 justify-center max-lg:h-9 max-lg:w-full max-lg:min-h-9 max-lg:flex-none max-lg:justify-center max-lg:rounded-full max-lg:px-0 max-lg:gap-0")
             const sideBtnCompactTextClass =
-              "text-[12px] font-semibold leading-none truncate " + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
+              isPcLayout
+                ? "pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-[120] -translate-y-1/2 rounded-full border border-cyan-300/35 bg-slate-950/95 px-3 py-1.5 text-[12px] font-semibold leading-none whitespace-nowrap text-slate-100 opacity-0 shadow-[0_8px_18px_rgba(2,6,23,0.45)] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0 translate-x-[-6px]"
+                : "text-[12px] font-semibold leading-none truncate " + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
+            const profileMenuAvatarSrc =
+              currentUser != null
+                ? players.find((p) => p.id === currentUser.id)?.avatar ?? currentUser.avatar
+                : null
             return (
               <>
           {/* Крутить вне очереди — только на мобильной (на ПК убрано из бокового меню) */}
@@ -3940,63 +4037,97 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           )}
 
           {/* Ваш банк (сердца) */}
-          <div
-            className={
-              "flex w-full min-w-0 items-center gap-2 rounded-[999px] px-2 py-2 min-h-[40px] sm:px-3" +
-              (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2 max-lg:gap-2" : "")
-            }
-            style={{
-              background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
-            }}
-          >
-            <div
-              className={
-                "flex min-w-0 flex-1 items-center gap-2" +
-                (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")
-              }
+          {isPcLayout ? (
+            <button
+              type="button"
+              ref={bankPlusButtonRef}
+              onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+              className="group relative flex h-auto min-h-[3.5rem] w-14 flex-col items-center justify-center gap-0.5 rounded-full border px-1 py-1.5 transition-all hover:-translate-y-[1px] hover:brightness-110"
+              style={{
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                borderColor: "rgba(56,189,248,0.35)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+              }}
+              aria-label={`Ваш банк: ${voiceBalance}`}
             >
               <Heart
                 className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
                 style={{ color: "#fde68a" }}
                 fill="currentColor"
+                aria-hidden
               />
-              <BankHeartBalanceTooltip
-                voiceBalance={voiceBalance}
-                msUntilNext={msUntilNextBank}
-                activeBonus={bankActiveBonusTooltip}
-                onOpenShop={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
-                className="inline-flex shrink-0 items-baseline"
-                tabularClassName="text-[15px] font-black tabular-nums leading-none text-white sm:text-base"
-              />
-              <span
-                className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
-                style={{ color: "#cbd5e1" }}
-              >
-                {"Ваш банк"}
+              <span className="text-[11px] font-black tabular-nums leading-none text-white">{voiceBalance}</span>
+              <span className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-20 -translate-y-1/2 rounded-full border border-cyan-300/35 bg-slate-950/95 px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap text-slate-100 opacity-0 shadow-[0_8px_18px_rgba(2,6,23,0.45)] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0 translate-x-[-6px]">
+                Ваш банк
               </span>
-            </div>
-            <div className={"flex shrink-0 items-center gap-1" + (!leftSideMenuExpanded ? " max-lg:flex" : "")}>
-              <VkBankRewardVideoButton onNotify={showToast} />
-              <button
-                type="button"
-                ref={bankPlusButtonRef}
-                onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
-                style={{
-                  border: "1px solid rgba(56,189,248,0.5)",
-                  color: "#7dd3fc",
-                  background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-                }}
-                title="Пополнить банк"
-                aria-label="Открыть магазин сердец"
+            </button>
+          ) : (
+            <div
+              className={
+                "flex w-full min-w-0 items-center gap-2 rounded-[999px] px-2 py-2 min-h-[40px] sm:px-3" +
+                (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2 max-lg:gap-2" : "")
+              }
+              style={{
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                border: "1px solid rgba(56,189,248,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+              }}
+            >
+              <div
+                className={
+                  "flex min-w-0 flex-1 items-center gap-2" +
+                  (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")
+                }
               >
-                <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
-              </button>
+                <Heart
+                  className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
+                  style={{ color: "#fde68a" }}
+                  fill="currentColor"
+                />
+                <BankHeartBalanceTooltip
+                  voiceBalance={voiceBalance}
+                  msUntilNext={msUntilNextBank}
+                  activeBonus={bankActiveBonusTooltip}
+                  onOpenShop={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+                  className="inline-flex shrink-0 items-baseline"
+                  tabularClassName="text-[15px] font-black tabular-nums leading-none text-white sm:text-base"
+                />
+                <span
+                  className={"text-[11px] leading-none truncate " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
+                  style={{ color: "#cbd5e1" }}
+                >
+                  {"Ваш банк"}
+                </span>
+              </div>
+              <div className={"flex shrink-0 items-center gap-1" + (!leftSideMenuExpanded ? " max-lg:flex" : "")}>
+                <VkBankRewardVideoButton onNotify={showToast} />
+                <button
+                  type="button"
+                  ref={bankPlusButtonRef}
+                  onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95"
+                  style={{
+                    border: "1px solid rgba(56,189,248,0.5)",
+                    color: "#7dd3fc",
+                    background: "linear-gradient(180deg, rgba(56,189,248,0.22) 0%, rgba(14,116,144,0.2) 100%)",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+                  }}
+                  title="Пополнить банк"
+                  aria-label="Открыть магазин сердец"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Спонсорское видео в боковой панели (ПК) */}
+          {isPcLayout && (
+            <VkBankRewardVideoButton
+              onNotify={showToast}
+              className="h-14 w-14 rounded-full transition-all hover:-translate-y-[1px] hover:brightness-110"
+            />
+          )}
 
           {/* Магазин */}
           <button
@@ -4009,7 +4140,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             }}
           >
             <Gift className="h-4 w-4" style={{ color: "#1f2937" }} />
-            <span className={sideBtnTextClass} style={{ color: "#1f2937" }}>{"Магазин"}</span>
+            <span className={sideBtnTextClass} style={{ color: isPcLayout ? "#f8fafc" : "#1f2937" }}>{"Магазин"}</span>
           </button>
 
           {/* Профиль + личный чат (избранные / поклонники) */}
@@ -4019,8 +4150,30 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })}
               className={sideBtnCompactClass}
               style={darkSideBtnStyle}
+              title="Профиль"
+              aria-label="Профиль"
             >
-              <User className="h-3.5 w-3.5 shrink-0" style={{ color: "#e8c06a" }} />
+              {profileMenuAvatarSrc ? (
+                <span
+                  className={cn(
+                    "relative shrink-0 overflow-hidden rounded-full border border-white/35 bg-slate-800 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.35)]",
+                    isPcLayout ? "h-11 w-11" : "h-9 w-9",
+                  )}
+                >
+                  <img
+                    src={profileMenuAvatarSrc}
+                    alt=""
+                    width={44}
+                    height={44}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                  />
+                </span>
+              ) : (
+                <User className="h-3.5 w-3.5 shrink-0" style={{ color: "#e8c06a" }} aria-hidden />
+              )}
               <span className={sideBtnCompactTextClass} style={{ color: "#f0e0c8" }}>
                 {"Профиль"}
               </span>
@@ -4071,8 +4224,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
             }}
           >
-            <span className="text-base">{"🍾"}</span>
-            <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>
+            <span
+              className="animate-game-room-bottle-icon select-none text-[1.65rem] leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)] sm:text-[1.75rem]"
+              style={{ lineHeight: 1 }}
+              aria-hidden
+            >
+              {"🍾"}
+            </span>
+            <span className={sideBtnTextClass} style={{ color: isPcLayout ? "#f8fafc" : "#f0e0c8" }}>
               {"Бутылочка"}
             </span>
             {cooldownLeftMs > 0 && (
@@ -4084,6 +4243,76 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </span>
             )}
           </button>
+
+          {isPcLayout && (
+            <div className="relative z-0 h-14 w-14 shrink-0 overflow-visible">
+              <button
+                type="button"
+                onClick={() => setMusicEnabled((v) => !v)}
+                className={`${sideBtnClass} relative z-[1]`}
+                style={{
+                  background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                  border: "1px solid rgba(56,189,248,0.28)",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                }}
+                title={musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}
+                aria-label={musicEnabled ? "Выключить музыку" : "Включить музыку"}
+              >
+                <span className="relative z-[1] flex h-5 w-5 items-center justify-center overflow-visible">
+                  <Music
+                    className="relative z-0 h-5 w-5"
+                    style={{ color: musicEnabled ? "#facc15" : "#94a3b8" }}
+                  />
+                  {!musicEnabled && (
+                    <span
+                      className="pointer-events-none absolute z-[1] h-[2px] w-[18px] -rotate-45 rounded-full"
+                      style={{ background: "#f87171", boxShadow: "0 0 6px rgba(248,113,113,0.5)" }}
+                      aria-hidden
+                    />
+                  )}
+                  {!musicEnabled && (
+                    <div className="music-lure-layer--icon" aria-hidden>
+                      <span className="music-lure-note music-lure-note--1">♪</span>
+                      <span className="music-lure-note music-lure-note--2">♫</span>
+                      <span className="music-lure-note music-lure-note--3">♪</span>
+                    </div>
+                  )}
+                </span>
+                <span className={sideBtnTextClass} style={{ color: "#f8fafc" }}>
+                  {musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {isPcLayout && (
+            <button
+              type="button"
+              onClick={() => dispatch({ type: "SET_SOUNDS_ENABLED", enabled: soundsEnabled === false })}
+              className={sideBtnClass}
+              style={{
+                background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
+                border: "1px solid rgba(56,189,248,0.28)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+              }}
+              title={soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}
+              aria-label={soundsEnabled === false ? "Включить звуки" : "Выключить звуки"}
+            >
+              <span className="relative flex h-5 w-5 items-center justify-center">
+                <Headphones className="h-5 w-5" style={{ color: soundsEnabled === false ? "#94a3b8" : "#facc15" }} />
+                {soundsEnabled === false && (
+                  <span
+                    className="pointer-events-none absolute h-[2px] w-[18px] -rotate-45 rounded-full"
+                    style={{ background: "#f87171", boxShadow: "0 0 6px rgba(248,113,113,0.5)" }}
+                    aria-hidden
+                  />
+                )}
+              </span>
+              <span className={sideBtnTextClass} style={{ color: "#f8fafc" }}>
+                {soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}
+              </span>
+            </button>
+          )}
 
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -4097,7 +4326,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 }}
               >
                 <Menu className="h-4 w-4" style={{ color: "#e8c06a" }} />
-                <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Меню"}</span>
+                <span className={sideBtnTextClass} style={{ color: isPcLayout ? "#f8fafc" : "#f0e0c8" }}>{"Меню"}</span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -4139,24 +4368,25 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Текущий стол + счётчик */}
-          <div
-            className={
-              "flex items-center gap-2 rounded-[999px] px-3 py-2 min-h-[40px]" +
-              (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2" : "")
-            }
-            style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}
-            title={!leftSideMenuExpanded ? `${currentRoomName} — ${liveHumanCount}/10` : undefined}
-          >
-            <RotateCw className="h-3 w-3 shrink-0" style={{ color: "#94a3b8" }} />
-            <span
-              className={"text-[11px] leading-none " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
-              style={{ color: "#94a3b8" }}
+          {!isPcLayout && (
+            <div
+              className={
+                "flex items-center gap-2 rounded-[999px] px-3 py-2 min-h-[40px]" +
+                (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:px-2" : "")
+              }
+              style={{ background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(56,189,248,0.18)" }}
+              title={!leftSideMenuExpanded ? `${currentRoomName} — ${liveHumanCount}/10` : undefined}
             >
-              {currentRoomName}{" "}
-              <span className="tabular-nums text-cyan-300/70">{liveHumanCount}/10</span>
-            </span>
-          </div>
+              <RotateCw className="h-3 w-3 shrink-0" style={{ color: "#94a3b8" }} />
+              <span
+                className={"text-[11px] leading-none " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
+                style={{ color: "#94a3b8" }}
+              >
+                {currentRoomName}{" "}
+                <span className="tabular-nums text-cyan-300/70">{liveHumanCount}/10</span>
+              </span>
+            </div>
+          )}
               </>
             )
           })()}
@@ -4197,9 +4427,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       {/* ---- GAME BOARD CENTER ---- */}
       <div
         className={cn(
-          "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col items-center gap-1",
+          "relative flex min-h-0 min-w-0 flex-1 flex-col items-center",
+          isPcLayout ? "gap-0" : "gap-2 lg:gap-3",
           /* ПК: без overflow-y на колонке — иначе flex-центрирование растягивается по контенту и стол «прилипает» к верху */
-          isPcLayout ? "max-h-full min-w-0 flex-1 overflow-hidden" : "overflow-y-auto",
+          isPcLayout ? "z-30 max-h-full min-w-0 flex-1 overflow-hidden" : "z-10 overflow-y-auto",
           !isPcLayout && "pb-14 px-0.5 sm:px-1",
           isPcLayout
             ? "h-full w-full max-w-none min-h-0 self-stretch"
@@ -4231,42 +4462,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </div>
           </div>
         )}
-        {/* Инфо-статусы: донор бутылки + таймер — фиксированная высота, стол не прыгает */}
+        {/* Инфо-статусы: таймер хода (без статуса доната бутылки) */}
         <div
           className="z-30 flex w-full shrink-0 flex-col items-center justify-center gap-1"
-          style={{ minHeight: bottleDonorName ? 52 : 28 }}
+          style={{ minHeight: isPcLayout ? 0 : 28 }}
         >
-          {bottleDonorName && (
+          {!isMobile &&
+            currentUser &&
+            currentTurnPlayer?.id === currentUser.id &&
+            turnTimer !== null &&
+            !(isMyTurn && !pairKissCenterUi && !isSpinning && !showResult && countdown === null) && (
             <div
-              className="flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold"
-              style={{
-                background: "rgba(15,23,42,0.9)",
-                border: "1px solid #475569",
-                boxShadow: "0 3px 10px rgba(0,0,0,0.6)",
-                color: "#f0e0c8",
-              }}
-            >
-              <span>
-                {"Бутылку нашему столу подарил(а): "}
-                <span style={{ color: "#e8c06a" }}>{bottleDonorName}</span>
-              </span>
-              <button
-                onClick={handleThankDonor}
-                className="ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all hover:brightness-110 active:scale-95"
-                style={{
-                  background: "linear-gradient(135deg, #22c55e 0%, #15803d 100%)",
-                  border: "1px solid #166534",
-                  color: "#ecfdf5",
-                }}
-              >
-                {"Спасибо"}
-              </button>
-            </div>
-          )}
-
-          {!isMobile && currentUser && currentTurnPlayer?.id === currentUser.id && turnTimer !== null && (
-            <div
-              className="flex items-center gap-1.5 rounded-full px-3 py-1"
+              className="flex min-w-[8.75rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1"
               style={{
                 background: "rgba(15,23,42,0.9)",
                 border: "1px solid rgba(248, 250, 252, 0.3)",
@@ -4286,7 +4493,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           className={cn(
             "flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center",
             isMobile ? "items-stretch gap-1.5" : "items-center",
-            isPcLayout && "mx-auto max-h-full overflow-y-auto overflow-x-hidden px-2 lg:px-3",
+            isPcLayout && "mx-auto max-h-full justify-between overflow-y-auto overflow-x-visible px-2 pt-0 lg:px-3",
           )}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
@@ -4460,12 +4667,109 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </div>
           )}
         </div>
+        {/* Широкая панель эмоций над столом (ПК) */}
+        {isPcLayout && (
+          <div className="sticky top-[10px] z-[35] mb-2 w-full self-stretch">
+            <div className="w-full rounded-2xl border border-cyan-300/35 bg-slate-950/80 p-1 backdrop-blur-[2px] shadow-[0_12px_30px_rgba(2,6,23,0.52),inset_0_1px_0_rgba(255,255,255,0.1)]">
+              <div className="flex w-full items-center justify-center gap-2 px-1 py-1">
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-slate-600/70 bg-slate-900/80 px-3">
+                    <Sparkles className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
+                    <span className="text-[11px] font-extrabold text-amber-200">Банк эмоций</span>
+                    {limitedEmotionCounters.map((row) => (
+                      <span key={row.id} className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/65 bg-slate-900/75 px-2 py-0.5">
+                        {row.id === "beer" ? (
+                          <img src={assetUrl("kvas-big.svg")} alt="" className="h-4.5 w-4.5 object-contain" draggable={false} />
+                        ) : (
+                          <span className="text-sm leading-none" style={{ color: "#e2e8f0" }}>{row.emoji}</span>
+                        )}
+                        <span
+                          className="text-[11px] font-black tabular-nums"
+                          style={{ color: row.left > 0 ? "#67e8f9" : "#fda4af" }}
+                        >
+                          {row.used}/{row.limit}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+
+                  {isEmotionLimitReached && (
+                    <button
+                      type="button"
+                      onClick={openEmotionPurchaseModal}
+                      className="flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-extrabold transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+                      disabled={voiceBalance < EMOTION_QUOTA_FIRST_COST_PER_TYPE}
+                      style={{
+                        background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+                        color: "#0f172a",
+                        border: "1px solid rgba(103, 232, 249, 0.9)",
+                        boxShadow: "0 1px 0 rgba(30, 64, 175, 0.9)",
+                      }}
+                    >
+                      {`Купить +${EMOTION_QUOTA_PURCHASE_AMOUNT}`}
+                    </button>
+                  )}
+                </div>
+
+                <div className="min-w-0 max-w-[min(100%,58rem)] overflow-x-auto overflow-y-hidden overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+                  <div className="flex w-max items-center justify-center gap-2">
+                    {sidebarAvailableActions.filter((action) => action.id !== "skip").map((action) => {
+                      const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                      const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
+                      const canAfford = actionCost === 0 || voiceBalance >= actionCost
+                      const isDisabled = !isSidebarEmotionActionActive || !canAfford
+                      return (
+                        <button
+                          key={action.id}
+                          type="button"
+                          onClick={() => {
+                            if (sidebarGiftMode && sidebarTargetPlayer) {
+                              handleSidebarGiftEmotion(action.id)
+                              return
+                            }
+                            if (showResult && isMyTurn) {
+                              handlePerformAction(action.id)
+                              return
+                            }
+                            if (canRespondInResult) {
+                              handleResponseEmotion(action.id)
+                            }
+                          }}
+                          disabled={isDisabled}
+                          className="flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 py-0 pr-3.5 text-left text-[11px] font-extrabold leading-none transition-[transform,filter] hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+                          style={{
+                            background: style.bg,
+                            color: style.text,
+                            border: `1px solid ${style.border}`,
+                            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
+                          }}
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center [&_img]:h-6 [&_img]:w-6 [&_svg]:h-4.5 [&_svg]:w-4.5 [&>span]:text-base">
+                            {renderActionIcon(action)}
+                          </span>
+                          <span className="min-w-0 max-w-[8rem] truncate">{action.label}</span>
+                          {shouldShowActionCostBadge(action.id, actionCost) && (
+                            <span className="heart-price heart-price--badge ml-1 flex shrink-0 items-center rounded-full px-1.5 py-0.5 opacity-95">
+                              {actionCost}
+                              <Heart className="heart-price__icon h-3.5 w-3.5" fill="currentColor" />
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Стол ~60:50 (ширина/высота): моб — 90% / max 420px; ПК — вписать в min(72vh,78dvh) по высоте */}
         <div
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto rounded-2xl sm:rounded-3xl`
+              : `relative my-auto flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto rounded-2xl sm:rounded-3xl`
           }
           style={{
             ...(isMobile
@@ -4526,7 +4830,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   <button
                     type="button"
                     onClick={handlePauseGame}
-                    className="absolute bottom-2 left-2 z-[34] inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-300/40 bg-slate-900/85 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm transition hover:brightness-110 active:scale-95 sm:bottom-3 sm:left-3 sm:h-10 sm:w-10"
+                    className="absolute top-2 right-2 z-[37] inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-300/40 bg-slate-900/85 text-slate-100 shadow-[0_10px_22px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm transition hover:brightness-110 active:scale-95 sm:top-3 sm:right-3 sm:h-10 sm:w-10"
                     aria-label="Поставить игру на паузу"
                   >
                     <span className="text-sm leading-none sm:text-base" aria-hidden>
@@ -4535,7 +4839,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
-                  side="top"
+                  side="bottom"
                   sideOffset={8}
                   className="border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-100 shadow-xl"
                 >
@@ -4562,6 +4866,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 </TooltipContent>
               </Tooltip>
             </>
+          )}
+
+          {isPcLayout && (
+            <p
+              className="pointer-events-none absolute bottom-2 left-2 z-[36] max-w-[min(100%-5rem,20rem)] truncate text-left text-[11px] font-medium leading-tight sm:bottom-3 sm:left-3 sm:text-xs"
+              style={{
+                color: "rgba(148, 163, 184, 0.98)",
+                textShadow: "0 1px 3px rgba(2,6,23,0.95), 0 0 10px rgba(2,6,23,0.7)",
+              }}
+              title={`${currentRoomName} — ${liveHumanCount}/10`}
+            >
+              {currentRoomName}{" "}
+              <span className="tabular-nums text-cyan-300/85">{liveHumanCount}/10</span>
+            </p>
           )}
 
           {/* ---- PLAYERS around the circle ---- */}
@@ -4741,25 +5059,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                         <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                       </button>
                       <div className="flex flex-col gap-1.5 pt-0.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSidebarGiftMode(true)
-                          }}
-                          className={`flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:brightness-110 active:scale-[0.98] ${
-                            sidebarGiftMode
-                              ? "border-cyan-400/45 bg-slate-950/90 ring-1 ring-cyan-400/25"
-                              : "border-slate-500/30 bg-slate-950/70 hover:border-slate-400/35 hover:bg-slate-900/85"
-                          }`}
-                        >
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 shadow-[0_0_12px_rgba(34,211,238,0.12)]">
-                            <Sparkles className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-                          </span>
-                          <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-white antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-xs">
-                            Подарить эмоцию
-                          </span>
-                        </button>
                         {currentUser && (
                           <button
                             type="button"
@@ -4833,25 +5132,184 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             )
           })}
 
-          {/* ---- BOTTLE in the centre (на мобильной — крупнее) ---- */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
-            <div
-              style={isMobile ? { transform: "scale(1.4)" } : undefined}
-              className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
-            >
-              <Bottle
-                angle={bottleAngle}
-                isSpinning={isSpinning}
-                skin={effectiveBottleSkin as any}
-                skinImageUrl={bottleImageOnTable}
-                isDrunk={isCurrentTurnDrunk}
-                fortuneSegmentCount={players.length > 0 ? players.length : 8}
-              />
+          {/* ---- BOTTLE in the centre / pair-kiss choice card ---- */}
+          {/* Бутылка: всегда, кроме активного голосования «Поцелуются?». После resolved — под карточкой (z-20), пока не снимется фаза. */}
+          {!pairKissVotePanelActive ? (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+              <div
+                style={isMobile ? { transform: "scale(1.4)" } : undefined}
+                className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
+              >
+                <Bottle
+                  angle={bottleAngle}
+                  isSpinning={isSpinning}
+                  skin={effectiveBottleSkin as any}
+                  skinImageUrl={bottleImageOnTable}
+                  isDrunk={isCurrentTurnDrunk}
+                  fortuneSegmentCount={players.length > 0 ? players.length : 8}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
+          {pairKissPhase && pairKissModalPlayers ? (
+            <div
+              className={cn(
+                "absolute left-1/2 top-1/2 z-30 flex max-h-[min(92dvh,100%)] w-[min(280px,calc(100%-2rem))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 items-center justify-center md:w-[min(300px,calc(100%-3rem))] md:max-w-[calc(100%-3rem)]",
+                pairKissPhase.resolved && "pointer-events-none",
+              )}
+            >
+              {/* Круг + свечение: общая анимация появления / ухода */}
+              <div
+                className={cn(
+                  "relative isolate flex w-full max-w-full min-h-0 shrink-0 flex-col items-center justify-center overflow-visible rounded-full bg-transparent px-2 py-3 shadow-[0_0_20px_rgba(34,211,238,0.45),0_0_44px_rgba(56,189,248,0.22)] aspect-square",
+                  pairKissPhase.resolved ? "pair-kiss-card-exit" : "pair-kiss-card-enter",
+                )}
+                style={
+                  pairKissPhase.resolved
+                    ? ({
+                        "--pair-kiss-exit-delay": `${PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS}ms`,
+                      } as React.CSSProperties)
+                    : undefined
+                }
+              >
+              <div className="w-full px-1.5 py-0.5 md:px-2 md:py-1">
+                <div className="mb-1.5 flex items-center justify-center">
+                  <h3
+                    className="text-[1.15rem] font-extrabold leading-none text-white md:text-[1.3rem]"
+                    style={{ textShadow: "0 2px 10px rgba(0,0,0,0.55)" }}
+                  >
+                    Поцелуются?
+                  </h3>
+                </div>
+                <div className="mb-2 flex flex-col items-center gap-1">
+                  <span className="text-xs font-bold text-white md:text-sm" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.45)" }}>
+                    {`${pairKissDisplaySeconds} сек`}
+                  </span>
+                  <div className="h-1.5 w-24 overflow-hidden rounded-full bg-black/45 md:w-28">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-lime-300 to-emerald-400 transition-[width] duration-100 ease-linear"
+                      style={{ width: `${pairKissBarProgress * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="relative grid grid-cols-2 gap-2 md:gap-2.5">
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute left-1/2 top-4.5 z-20 flex -translate-x-1/2 items-center -space-x-1 md:top-5 md:-space-x-1.5",
+                      pairKissBothYes && "pair-kiss-heart-pulse-3s",
+                    )}
+                    aria-hidden
+                  >
+                    {pairKissBothYes && (
+                      <>
+                        <span className="pair-kiss-wave pair-kiss-wave-a" />
+                        <span className="pair-kiss-wave pair-kiss-wave-b" />
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-1">💖</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-2">💗</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-3">💘</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-4">💕</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-5">💞</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-6">💓</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-7">💝</span>
+                        <span className="pair-kiss-firework-heart pair-kiss-firework-heart-8">💟</span>
+                      </>
+                    )}
+                    <div style={{ width: 24, height: 36, color: pairKissPhase.choiceA === false ? "#0b0b0b" : "#FF223C" }}>
+                      <svg viewBox="0 0 193 311" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M153.75 200.738L192.188 136.675L147.344 79.0191L165.538 24.4379C86.8047 -29.759 0 10.216 0 104.644C0 187.093 119.989 277.677 167.075 310.028L192.188 264.8L153.75 200.738Z" fill="currentColor"/>
+                      </svg>
+                    </div>
+                    <div style={{ width: 24, height: 36, color: pairKissPhase.choiceB === false ? "#0b0b0b" : "#FF223C" }}>
+                      <svg viewBox="0 0 199 323" className="h-full w-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.8125 40.6167L0 79.0542L44.8438 136.71L6.40625 200.773L44.8438 264.835L12.8125 322.492C12.8125 322.492 198.594 207.307 198.594 104.679C198.594 2.05109 96.0938 -36.2583 12.8125 40.6167Z" fill="currentColor"/>
+                      </svg>
+                    </div>
+                  </div>
+                  {[pairKissModalPlayers.pa, pairKissModalPlayers.pb].map((player) => {
+                    const isA = player.id === pairKissPhase.idA
+                    const choice = isA ? pairKissPhase.choiceA : pairKissPhase.choiceB
+                    const choiceText =
+                      choice === null && !pairKissPhase.resolved
+                        ? "Ожидаем..."
+                        : choice === true
+                          ? "Да"
+                          : choice === false
+                            ? "Нет"
+                            : "—"
+                    const choiceColor =
+                      choice === true
+                        ? "text-lime-300"
+                        : choice === false
+                          ? "text-rose-300"
+                          : "text-slate-300"
+                    return (
+                      <div key={player.id} className="flex flex-col items-center">
+                        <div className="relative h-[3.25rem] w-[3.25rem] md:h-[3.75rem] md:w-[3.75rem]">
+                          <div className="h-full w-full overflow-hidden rounded-2xl border border-white/35 bg-slate-100 shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
+                            <img src={player.avatar} alt={player.name} className="h-full w-full object-cover" />
+                          </div>
+                        </div>
+                        <p
+                          className="mt-1 max-w-[5.75rem] truncate text-center text-[0.78rem] font-extrabold leading-none text-white md:max-w-[6.25rem] md:text-[0.85rem]"
+                          style={{ textShadow: "0 2px 10px rgba(0,0,0,0.55)" }}
+                        >
+                          {player.name}
+                        </p>
+                        <p className={`mt-0.5 text-[11px] font-bold md:text-xs ${choiceColor}`}>{choiceText}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {pairKissCanPick ? (
+                  <div className="mt-2.5 grid grid-cols-2 gap-1.5 md:gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onPairKissPick(pairKissMyPlayerId!, false)}
+                      className="h-8 rounded-lg bg-[#ff2b0a] text-base font-extrabold text-white shadow-[0_2px_0_#a61b08] transition-transform hover:brightness-110 active:scale-[0.98] md:h-9 md:text-lg"
+                    >
+                      Нет
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onPairKissPick(pairKissMyPlayerId!, true)}
+                      className="h-8 rounded-lg bg-[#8ad400] text-base font-extrabold text-white shadow-[0_2px_0_#4d7c0f] transition-transform hover:brightness-110 active:scale-[0.98] md:h-9 md:text-lg"
+                    >
+                      Да
+                    </button>
+                  </div>
+                ) : null}
+                <div
+                  className="mt-2.5 flex min-h-[2.75rem] flex-col items-center justify-center px-0.5"
+                  aria-live="polite"
+                >
+                  <p
+                    className="text-center text-[11px] font-semibold leading-snug text-slate-100 md:text-xs"
+                    style={{ textShadow: "0 1px 7px rgba(0,0,0,0.45)" }}
+                  >
+                    {pairKissBothAnswered ? "Игроки сделали свой выбор" : "Выбор"}
+                  </p>
+                </div>
+                {pairKissPhase.resolved && (
+                  <div className="pair-kiss-exit-particles" aria-hidden>
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-1" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-2" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-3" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-4" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-5" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-6" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-7" />
+                    <span className="pair-kiss-exit-particle pair-kiss-exit-particle-8" />
+                  </div>
+                )}
+              </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* ---- SPIN BUTTON in centre, over bottle ---- */}
-          {isMyTurn && !isSpinning && !showResult && countdown === null && (
+          {isMyTurn && !pairKissCenterUi && !isSpinning && !showResult && countdown === null && (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none">
               <button
                 onClick={handleSpin}
@@ -4872,11 +5330,32 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 <RotateCw className="h-6 w-6 shrink-0" strokeWidth={2.5} />
                 {"Крутить"}
               </button>
+              {!isMobile && turnTimer !== null && (
+                <div
+                  className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2"
+                  aria-hidden
+                >
+                  <div
+                    className="flex min-w-[8.75rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1"
+                    style={{
+                      background: "rgba(15,23,42,0.9)",
+                      border: "1px solid rgba(248, 250, 252, 0.3)",
+                      boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
+                    }}
+                  >
+                    <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
+                    <span className="text-sm font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
+                      {turnTimer}
+                    </span>
+                    <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* ---- COUNTDOWN overlay ---- */}
-          {countdown !== null && (
+          {!pairKissCenterUi && countdown !== null && (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
               <div
                 className="flex h-20 w-20 items-center justify-center rounded-full shadow-xl animate-in zoom-in duration-300"
@@ -4891,7 +5370,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           )}
 
           {/* ---- PREDICTION TIMER OVERLAY on the board ---- */}
-          {!CASUAL_MODE && predictionPhase && !isSpinning && !showResult && countdown === null && (
+          {!CASUAL_MODE && !pairKissCenterUi && predictionPhase && !isSpinning && !showResult && countdown === null && (
             <div className="absolute left-1/2 top-[15%] -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 animate-in fade-in duration-300">
               <div
                 className="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-lg"
@@ -5004,6 +5483,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </button>
             )}
           </div>
+
         </div>
 
         </div>
@@ -5069,7 +5549,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           isPcLayout
             ? chatPanelCollapsed
               ? "w-auto shrink-0 flex-none"
-              : "w-[clamp(200px,24vw,560px)] shrink-0 flex-none"
+              : "w-[350px] shrink-0 flex-none"
             : chatPanelCollapsed
               ? "w-auto shrink-0 flex-none"
               : "w-[clamp(200px,30vw,380px)] shrink-0 flex-none",
@@ -5091,7 +5571,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             <button
               type="button"
               onClick={() => setChatPanelCollapsed(true)}
-              className="mb-1.5 flex shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-200"
+              className="mb-1.5 mt-[65px] flex shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-slate-200"
               aria-label="Свернуть панель"
             >
               <span className="text-left text-[11px] font-semibold tracking-wide text-slate-400">
@@ -5099,7 +5579,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </span>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
-            <div className="mt-[56px] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="mt-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <TableChatPanel
                 gameLog={gameLog}
                 players={players}
@@ -5336,7 +5816,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   style={{ color: "#f0e0c8" }}
                 >
                   <span className="flex items-center gap-2">
-                    <span aria-hidden>🍾</span>
+                    <span
+                      className="animate-game-room-bottle-icon select-none text-xl leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+                      style={{ lineHeight: 1 }}
+                      aria-hidden
+                    >
+                      🍾
+                    </span>
                     Бутылочка
                   </span>
                   {cooldownLeftMs > 0 && (

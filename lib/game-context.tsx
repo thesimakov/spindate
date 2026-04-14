@@ -5,6 +5,7 @@ import {
   GAME_TABLE_LOG_MAX_ENTRIES,
   type GameState,
   type GameAction,
+  type PairKissOutcome,
   type Player,
   type InventoryItem,
   type GameLogEntry,
@@ -109,6 +110,7 @@ const initialState: GameState = {
   clientTabAway: {},
   gameSidePanel: null,
   chatPanelPlayer: null,
+  pairKissPhase: null,
 }
 
 const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
@@ -698,6 +700,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         gameLog: seedLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES),
         avatarFrames: nextFrames,
         clientTabAway: {},
+        pairKissPhase: null,
         }
       }
     case "SET_TABLES_COUNT":
@@ -724,10 +727,64 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         predictionPhase: false,
         spinSkips: nextSpinSkips,
         currentTurnDidSpin: true,
+        pairKissPhase: null,
       }
     }
     case "STOP_SPIN":
       return { ...state, isSpinning: false, showResult: true, resultAction: action.action }
+    case "BEGIN_PAIR_KISS_PHASE": {
+      return {
+        ...state,
+        pairKissPhase: {
+          roundKey: action.roundKey,
+          deadlineMs: action.deadlineMs,
+          idA: action.idA,
+          idB: action.idB,
+          choiceA: null,
+          choiceB: null,
+          resolved: false,
+          outcome: null,
+        },
+      }
+    }
+    case "SET_PAIR_KISS_CHOICE": {
+      const ph = state.pairKissPhase
+      if (!ph || ph.resolved) return state
+      if (action.playerId !== ph.idA && action.playerId !== ph.idB) return state
+      if (action.playerId === ph.idA && ph.choiceA !== null) return state
+      if (action.playerId === ph.idB && ph.choiceB !== null) return state
+      const choiceA = action.playerId === ph.idA ? action.yes : ph.choiceA
+      const choiceB = action.playerId === ph.idB ? action.yes : ph.choiceB
+      return {
+        ...state,
+        pairKissPhase: {
+          ...ph,
+          choiceA,
+          choiceB,
+        },
+      }
+    }
+    case "FINALIZE_PAIR_KISS": {
+      const ph = state.pairKissPhase
+      if (!ph || ph.resolved) return state
+      const ca = ph.choiceA ?? false
+      const cb = ph.choiceB ?? false
+      let outcome: PairKissOutcome
+      if (ca && cb) outcome = "both_yes"
+      else if (ca && !cb) outcome = "only_a"
+      else if (!ca && cb) outcome = "only_b"
+      else outcome = "both_no"
+      return {
+        ...state,
+        pairKissPhase: {
+          ...ph,
+          choiceA: ca,
+          choiceB: cb,
+          resolved: true,
+          outcome,
+        },
+      }
+    }
     case "NEXT_TURN": {
       if (state.players.length === 0) {
         return {
@@ -742,6 +799,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           pot: 0,
           predictionPhase: false,
           extraTurnPlayerId: undefined,
+          pairKissPhase: null,
         }
       }
 
@@ -785,6 +843,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         predictionPhase: false,
         roundNumber: state.roundNumber + 1,
         extraTurnPlayerId: undefined,
+        pairKissPhase: null,
       }
     }
     case "ADD_FAVORITE": {
@@ -886,6 +945,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         targetPlayer2: null,
         resultAction: null,
         isSpinning: false,
+        pairKissPhase: null,
       }
     case "ADD_LOG": {
       const nextLog = [...state.gameLog.slice(-GAME_TABLE_LOG_MAX_ENTRIES), action.entry].slice(-GAME_TABLE_LOG_MAX_ENTRIES)
@@ -1364,6 +1424,12 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         targetPlayer2: keepLocalSpinState ? state.targetPlayer2 : p.targetPlayer2,
         showResult: keepLocalResult ? state.showResult : p.showResult,
         resultAction: keepLocalResult ? state.resultAction : p.resultAction,
+        pairKissPhase:
+          p.pairKissPhase != null
+            ? p.pairKissPhase
+            : keepLocalResult
+              ? state.pairKissPhase ?? null
+              : null,
         roundNumber: p.roundNumber,
         predictionPhase: p.predictionPhase,
         currentTurnDidSpin: p.currentTurnDidSpin,

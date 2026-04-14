@@ -197,7 +197,7 @@ export async function addUserRoom(name: string, createdByUserId: number): Promis
 }
 
 /** Стоимость создания пользовательского стола (сердечки), единая для всех. */
-const CREATE_ROOM_COST_HEARTS = 50
+const CREATE_ROOM_COST_HEARTS = 10
 
 export async function getCreateRoomCost(): Promise<number> {
   return CREATE_ROOM_COST_HEARTS

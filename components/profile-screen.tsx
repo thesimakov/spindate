@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Bell,
   Flower2,
@@ -28,7 +28,7 @@ import { generateLogId } from "@/lib/ids"
 import { resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
-import { isVkRuntimeEnvironment, vkBridge } from "@/lib/vk-bridge"
+import { vkBridge } from "@/lib/vk-bridge"
 import { useSocialRuntime } from "@/lib/social-runtime"
 import { apiFetch } from "@/lib/api-fetch"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
@@ -39,7 +39,6 @@ import {
   ACHIEVEMENT_POST_CATALOG,
   ACHIEVEMENT_POST_CATALOG_BY_KEY,
 } from "@/lib/achievement-posts-catalog"
-import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
 
 const CLAIMED_ACHIEVEMENT_STORAGE_PREFIX = "spindate_achievement_status_claimed_v1_"
 
@@ -343,10 +342,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [showReceivedOnly, setShowReceivedOnly] = useState(false)
   const [claimedAchievementStatusKeys, setClaimedAchievementStatusKeys] = useState<Record<string, boolean>>({})
   const [eventsCatalogRows, setEventsCatalogRows] = useState<ProfileEventsCatalogRow[]>([])
-  const [achievementPostMetaByKey, setAchievementPostMetaByKey] = useState<
-    Record<string, { vkEnabled: boolean; postTextTemplate: string; imageUrl: string; published: boolean }>
-  >({})
-  const [achievementStoryBusyKey, setAchievementStoryBusyKey] = useState<string | null>(null)
   /** В модалке рамок: наведение на карточку — крупное превью; иначе показываем текущую рамку */
   const [frameHoverPreviewId, setFrameHoverPreviewId] = useState<string | null>(null)
   /** Анимация «как за столом» после успешной отправки розы */
@@ -412,27 +407,9 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         const data = (await res.json().catch(() => null)) as { ok?: boolean; rows?: unknown[] } | null
         if (!res.ok || data?.ok !== true || !Array.isArray(data.rows) || cancelled) return
         const parsed: ProfileEventsCatalogRow[] = []
-        const meta: Record<
-          string,
-          { vkEnabled: boolean; postTextTemplate: string; imageUrl: string; published: boolean }
-        > = {}
         for (const raw of data.rows) {
           if (!raw || typeof raw !== "object") continue
-          const x = raw as Partial<ProfileEventsCatalogRow> & {
-            group?: string
-            vkEnabled?: boolean
-            published?: boolean
-            postTextTemplate?: string
-            statsKeyTitle?: string
-          }
-          if (typeof x.achievementKey === "string") {
-            meta[x.achievementKey] = {
-              vkEnabled: x.vkEnabled === true,
-              postTextTemplate: typeof x.postTextTemplate === "string" ? x.postTextTemplate : "",
-              imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : "",
-              published: x.published === true,
-            }
-          }
+          const x = raw as Partial<ProfileEventsCatalogRow> & { group?: string }
           if (x.group !== "events") continue
           if (typeof x.achievementKey !== "string") continue
           const statsKeyTitle =
@@ -451,10 +428,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             imageUrl: typeof x.imageUrl === "string" ? x.imageUrl : "",
           })
         }
-        if (!cancelled) {
-          setAchievementPostMetaByKey(meta)
-          setEventsCatalogRows(parsed)
-        }
+        if (!cancelled) setEventsCatalogRows(parsed)
       } catch {
         /* остаётся fallback из статического каталога */
       }
@@ -558,61 +532,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       return next
     })
   }
-
-  const isAchievementVkShareEnabled = useCallback(
-    (achievementKey: string) => {
-      const m = achievementPostMetaByKey[achievementKey]
-      if (m) return m.vkEnabled
-      const entry = ACHIEVEMENT_POST_CATALOG_BY_KEY.get(achievementKey)
-      return !!entry && entry.group !== "system"
-    },
-    [achievementPostMetaByKey],
-  )
-
-  const handlePublishAchievementToVkStory = useCallback(
-    async (achievementKey: string, achievementTitle: string) => {
-      if (!currentUser) return
-      if (runtimeHost !== "vk") {
-        showToast("Сторис доступны в приложении ВКонтакте", "error")
-        return
-      }
-      setAchievementStoryBusyKey(achievementKey)
-      try {
-        if (!(await isVkRuntimeEnvironment())) {
-          showToast("Откройте игру из мини-приложения VK", "info")
-          return
-        }
-        if (!isAchievementVkShareEnabled(achievementKey)) {
-          showToast("Публикация для этого достижения выключена в админке", "info")
-          return
-        }
-        const meta = achievementPostMetaByKey[achievementKey]
-        const gameUrl =
-          getVkMiniAppPageUrl() ||
-          (typeof window !== "undefined" && window.location.origin?.startsWith("http")
-            ? window.location.origin
-            : "") ||
-          ""
-        if (!gameUrl) {
-          showToast("Не настроена ссылка на приложение", "error")
-          return
-        }
-        const stickerText = `${currentUser.name} — «${achievementTitle}»`.slice(0, 280)
-        const res = await vkBridge.showVkAchievementStoryBox({
-          backgroundImageUrl: meta?.imageUrl?.trim() || undefined,
-          appUrl: gameUrl,
-          stickerText,
-        })
-        showToast(
-          res.ok ? "Откройте редактор и опубликуйте историю" : "Не удалось открыть сторис",
-          res.ok ? "success" : "error",
-        )
-      } finally {
-        setAchievementStoryBusyKey(null)
-      }
-    },
-    [currentUser, runtimeHost, showToast, achievementPostMetaByKey, isAchievementVkShareEnabled],
-  )
 
   const handleClearStatus = async () => {
     if (!currentUser.status && !statusTrimmed) return
@@ -1309,7 +1228,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         {shown}/{row.target}
                       </span>
                       {row.done && (
-                        <div className="flex max-w-[min(100%,14rem)] flex-wrap items-center justify-end gap-1">
+                        <>
                           {claimedAchievementStatusKeys[row.achievementKey] ? (
                             <span className="rounded-lg border border-emerald-400/80 bg-emerald-100/90 px-2 py-1 text-xs font-black text-emerald-900">
                               Получено
@@ -1323,17 +1242,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                               Получить статус
                             </button>
                           )}
-                          {isAchievementVkShareEnabled(row.achievementKey) && (
-                            <button
-                              type="button"
-                              disabled={achievementStoryBusyKey === row.achievementKey}
-                              onClick={() => void handlePublishAchievementToVkStory(row.achievementKey, row.label)}
-                              className="rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-black text-violet-800 transition hover:bg-violet-100 disabled:opacity-50"
-                            >
-                              Сторис
-                            </button>
-                          )}
-                        </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -1417,7 +1326,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-[15px] font-black text-slate-900">{title}</p>
                           {done && (
-                            <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-wrap items-center justify-end gap-1">
+                            <div className="flex shrink-0 items-center gap-1">
                               {claimedAchievementStatusKeys[achievementKey] ? (
                                 <span className="rounded-lg border border-emerald-400/80 bg-emerald-100/90 px-2 py-1 text-xs font-black text-emerald-900">
                                   Получено
@@ -1429,16 +1338,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                                   className="rounded-lg border border-cyan-300 bg-cyan-50 px-2 py-1 text-xs font-black text-cyan-700 transition hover:bg-cyan-100"
                                 >
                                   Получить статус
-                                </button>
-                              )}
-                              {isAchievementVkShareEnabled(achievementKey) && (
-                                <button
-                                  type="button"
-                                  disabled={achievementStoryBusyKey === achievementKey}
-                                  onClick={() => void handlePublishAchievementToVkStory(achievementKey, title)}
-                                  className="rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-black text-violet-800 transition hover:bg-violet-100 disabled:opacity-50"
-                                >
-                                  Сторис
                                 </button>
                               )}
                             </div>

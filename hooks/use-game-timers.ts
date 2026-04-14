@@ -27,6 +27,8 @@ export interface UseGameTimersParams {
   currentUser: Player | null
   isSpinning: boolean
   showResult: boolean
+  /** Видна центральная модалка «Поцелуются?» — авто-NEXT_TURN по таймеру результата отключаем. */
+  pairKissCenterUi: boolean
   countdown: number | null
   predictionPhase: boolean
   dispatch: (action: GameAction) => void
@@ -56,6 +58,7 @@ export function useGameTimers({
   currentUser,
   isSpinning,
   showResult,
+  pairKissCenterUi,
   countdown,
   predictionPhase,
   dispatch,
@@ -67,6 +70,7 @@ export function useGameTimers({
   const currentTurnPlayerRef = useRef(currentTurnPlayer)
   const currentUserRef = useRef(currentUser)
   const showResultRef = useRef(showResult)
+  const pairKissCenterUiRef = useRef(pairKissCenterUi)
   const predictionPhaseRef = useRef(predictionPhase)
   const isSpinningRef = useRef(isSpinning)
   const countdownRef = useRef(countdown)
@@ -79,6 +83,9 @@ export function useGameTimers({
   useEffect(() => {
     showResultRef.current = showResult
   }, [showResult])
+  useEffect(() => {
+    pairKissCenterUiRef.current = pairKissCenterUi
+  }, [pairKissCenterUi])
   useEffect(() => {
     predictionPhaseRef.current = predictionPhase
   }, [predictionPhase])
@@ -234,7 +241,7 @@ export function useGameTimers({
   }, [])
 
   useEffect(() => {
-    if (!showResult || tableLoading) {
+    if (!showResult || tableLoading || pairKissCenterUi) {
       clearResultTimers()
       return
     }
@@ -254,7 +261,7 @@ export function useGameTimers({
     }, RESULT_AUTO_ADVANCE_MS)
 
     return clearResultTimers
-  }, [showResult, dispatch, clearResultTimers, tableLoading, roundNumber, currentTurnIndex])
+  }, [showResult, pairKissCenterUi, dispatch, clearResultTimers, tableLoading, roundNumber, currentTurnIndex])
 
   // --- Prediction timer ---
   const [predictionTimer, setPredictionTimer] = useState<number>(PREDICTION_DURATION)
@@ -379,6 +386,7 @@ export function useGameTimers({
 
       if (
         showResultRef.current &&
+        !pairKissCenterUiRef.current &&
         resultGuardRef.current.key &&
         Date.now() - resultGuardRef.current.startedAt >= RESULT_AUTO_ADVANCE_MS + 50
       ) {

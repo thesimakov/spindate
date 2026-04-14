@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { X, Sparkles, Gift, User } from "lucide-react"
+import { X, Gift, User } from "lucide-react"
 import { PlayerAvatar } from "@/components/player-avatar"
 import type { Player, GameAction } from "@/lib/game-types"
 import type { AvatarSteamFog } from "@/hooks/use-game-timers"
@@ -250,25 +250,6 @@ function GameBoardPlayersInner({
                     <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                   </button>
                   <div className="flex flex-col gap-1.5 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSidebarGiftMode(true)
-                      }}
-                      className={`flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:brightness-110 active:scale-[0.98] ${
-                        sidebarGiftMode
-                          ? "border-cyan-400/45 bg-slate-950/90 ring-1 ring-cyan-400/25"
-                          : "border-slate-500/30 bg-slate-950/70 hover:border-slate-400/35 hover:bg-slate-900/85"
-                      }`}
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 shadow-[0_0_12px_rgba(34,211,238,0.12)]">
-                        <Sparkles className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-                      </span>
-                      <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-white antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-xs">
-                        Подарить эмоцию
-                      </span>
-                    </button>
                     {currentUser && (
                       <button
                         type="button"

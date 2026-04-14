@@ -116,6 +116,23 @@ export interface GameLogEntry {
   timestamp: number
 }
 
+/** Итог голосования «Поцеловать?» в паре после бутылочки. */
+export type PairKissOutcome = "both_yes" | "only_a" | "only_b" | "both_no"
+
+/** Состояние модалки разбитого сердца (синхрон на столе). */
+export interface PairKissPhase {
+  roundKey: string
+  deadlineMs: number
+  /** Крутивший бутылку (левая половина сердца). */
+  idA: number
+  /** На кого указало горлышко (правая половина). */
+  idB: number
+  choiceA: boolean | null
+  choiceB: boolean | null
+  resolved: boolean
+  outcome: PairKissOutcome | null
+}
+
 /** Авторитетное состояние стола с сервера (синхронизация между живыми игроками) */
 export interface TableAuthorityPayload {
   revision: number
@@ -152,6 +169,11 @@ export interface TableAuthorityPayload {
   drunkUntil?: Record<number, number>
   /** Игрок свернул вкладку / долго неактивен — для остальных как «zzz»; синхронизируется. */
   clientTabAway?: Record<number, boolean>
+  /**
+   * Фаза «Поцеловать?» после остановки бутылки: idA — крутивший, idB — на кого указало горлышко.
+   * Синхронизируется между клиентами.
+   */
+  pairKissPhase?: PairKissPhase | null
 }
 
 export type BottleSkin =
@@ -384,6 +406,8 @@ export interface GameState {
   tablePaused?: boolean
   /** Временный уход со вкладки (см. TableAuthorityPayload.clientTabAway). */
   clientTabAway?: Record<number, boolean>
+  /** Фаза «Поцеловать?» после бутылочки (см. TableAuthorityPayload.pairKissPhase). */
+  pairKissPhase?: PairKissPhase | null
   /** Боковая панель поверх стола: профиль, магазин, избранное, рейтинг, ежедневные задачи. */
   gameSidePanel: GameSidePanelId | null
   /** Игрок, с которым открыт боковой чат (panel = "player-chat") */
@@ -414,6 +438,12 @@ export type GameAction =
   | { type: "TICK_COUNTDOWN" }
   | { type: "START_SPIN"; angle: number; target: Player; target2: Player }
   | { type: "STOP_SPIN"; action: string }
+  /** Начать 10 с голосования «Поцеловать?» после STOP_SPIN (синхрон). */
+  | { type: "BEGIN_PAIR_KISS_PHASE"; roundKey: string; deadlineMs: number; idA: number; idB: number }
+  /** Голос игрока A или B (только свой playerId). */
+  | { type: "SET_PAIR_KISS_CHOICE"; playerId: number; yes: boolean }
+  /** Зафиксировать выборы (таймаут → Нет), выставить outcome (синхрон). */
+  | { type: "FINALIZE_PAIR_KISS" }
   | { type: "NEXT_TURN" }
   | { type: "ADD_FAVORITE"; player: Player }
   | { type: "ADD_ADMIRER"; player: Player }

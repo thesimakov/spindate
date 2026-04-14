@@ -19,7 +19,7 @@ import { vkAdRewardPostUrl } from "@/lib/persist-user-game-state"
 import { isVkRuntimeEnvironment, showVkNativeAd } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
-const VK_REWARD_HEARTS = 25
+const VK_REWARD_HEARTS = 3
 /** Временно `false`: сразу открывается ролик спонсора ВК без белого диалога с таймером. Вернуть `true`, чтобы снова показать предэкран. */
 const REWARD_GATE_ENABLED = false
 /** Длительность предэкрана при REWARD_GATE_ENABLED. */
@@ -132,7 +132,10 @@ export function VkBankRewardVideoButton({
 
   const openGate = useCallback(async () => {
     if (busy) return
-    if (!(await isVkRuntimeEnvironment())) return
+    if (!(await isVkRuntimeEnvironment())) {
+      onNotify?.("Реклама доступна в приложении ВКонтакте", "info")
+      return
+    }
     if (!currentUser || currentUser.authProvider !== "vk") {
       onNotify?.("Войдите через ВКонтакте", "info")
       return
@@ -144,7 +147,7 @@ export function VkBankRewardVideoButton({
     setGateOpen(true)
   }, [busy, currentUser, onNotify, runAdAndClaim])
 
-  if (!vkEnv || !currentUser || currentUser.authProvider !== "vk" || vipActive) return null
+  if (!currentUser || vipActive) return null
 
   return (
     <>

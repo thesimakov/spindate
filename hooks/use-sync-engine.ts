@@ -16,6 +16,9 @@ function isTableSyncedAction(action: GameAction): boolean {
     case "TICK_COUNTDOWN":
     case "START_SPIN":
     case "STOP_SPIN":
+    case "BEGIN_PAIR_KISS_PHASE":
+    case "SET_PAIR_KISS_CHOICE":
+    case "FINALIZE_PAIR_KISS":
     case "NEXT_TURN":
     case "REQUEST_EXTRA_TURN":
     case "ADD_LOG":

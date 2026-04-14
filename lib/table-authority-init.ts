@@ -112,6 +112,7 @@ export function buildInitialAuthoritySnapshot(
     avatarFrames: {},
     drunkUntil: {},
     clientTabAway: {},
+    pairKissPhase: null,
   }
   return snapshot
 }

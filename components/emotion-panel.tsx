@@ -6,9 +6,11 @@ import type { PairAction, PairGenderCombo } from "@/lib/game-types"
 import { cn } from "@/lib/utils"
 
 const MOBILE_EMOTION_STRIP_SCROLL =
-  "flex w-full max-w-full items-center justify-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain py-0.5 [-webkit-overflow-scrolling:touch]"
+  "flex w-full max-w-full items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 py-1 [-webkit-overflow-scrolling:touch]"
 const MOBILE_EMOTION_STRIP_BTN =
-  "flex h-8 shrink-0 flex-row items-center gap-1 rounded-full px-2 py-0 pr-2.5 text-left text-[10px] font-bold leading-none transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
+  "flex h-9 shrink-0 flex-row items-center gap-1.5 rounded-full px-3 py-0 pr-3.5 text-left text-[11px] font-bold leading-none transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
+const MOBILE_EMOTION_PANEL_WINDOW =
+  "w-full rounded-2xl border border-cyan-300/30 bg-slate-950/78 shadow-[0_10px_26px_rgba(2,6,23,0.45),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md"
 
 const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow: string; text: string }> = {
   kiss:      { bg: "linear-gradient(180deg, #e74c3c 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
@@ -80,60 +82,46 @@ function EmotionPanelInner({
 }: EmotionPanelProps) {
   if (isPcLayout) return null
 
+  const activeActions = sidebarGiftMode && sidebarTargetPlayer
+    ? sidebarActions.filter((a) => a.id !== "skip")
+    : (isMyTurn || canRespondInResult)
+      ? availableActions.filter((a) => a.id !== "skip")
+      : []
+  const activeCombo = sidebarGiftMode && sidebarTargetPlayer ? effectiveSidebarCombo : currentPairCombo
+  const activeHandler = sidebarGiftMode && sidebarTargetPlayer
+    ? onGiftEmotion
+    : isMyTurn
+      ? onPerformAction
+      : canRespondInResult
+        ? onResponseEmotion
+        : null
+
   return (
     <div
       className={cn(
-        "h-[70px] w-full shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden px-0.5",
+        "h-[78px] w-full shrink-0 flex-col items-center justify-center overflow-hidden px-1",
         "flex md:hidden",
       )}
     >
       {showMobileEmotionStrip && (
-        <div className="relative z-[36] flex w-full max-w-full min-h-0 flex-col items-center justify-center gap-0.5">
-          {isEmotionLimitReached && (
-            <button
-              type="button"
-              onClick={onPurchaseQuota}
-              className="flex h-6 w-full max-w-[min(100%,20rem)] shrink-0 items-center justify-center gap-1 rounded-md px-2 text-[9px] font-bold leading-none transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
-              disabled={voiceBalance < quotaCost}
-              style={{
-                background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
-                color: "#0f172a",
-                border: "1px solid rgba(103, 232, 249, 0.85)",
-                boxShadow: "0 1px 0 rgba(30, 64, 175, 0.85)",
-              }}
-            >
-              {`Купить (+${quotaAmount})`}
-            </button>
-          )}
-
-          {sidebarGiftMode && sidebarTargetPlayer ? (
-            <ActionStrip
-              actions={sidebarActions.filter((a) => a.id !== "skip")}
-              combo={effectiveSidebarCombo}
-              getEffectiveActionCost={getEffectiveActionCost}
-              renderActionIcon={renderActionIcon}
-              onAction={onGiftEmotion}
-              alwaysEnabled
-            />
-          ) : isMyTurn ? (
-            <ActionStrip
-              actions={availableActions.filter((a) => a.id !== "skip")}
-              combo={currentPairCombo}
-              voiceBalance={voiceBalance}
-              getEffectiveActionCost={getEffectiveActionCost}
-              renderActionIcon={renderActionIcon}
-              onAction={onPerformAction}
-            />
-          ) : canRespondInResult ? (
-            <ActionStrip
-              actions={availableActions.filter((a) => a.id !== "skip")}
-              combo={currentPairCombo}
-              voiceBalance={voiceBalance}
-              getEffectiveActionCost={getEffectiveActionCost}
-              renderActionIcon={renderActionIcon}
-              onAction={onResponseEmotion}
-            />
-          ) : null}
+        <div className="relative z-[36] flex w-full max-w-[min(100%,44rem)] min-h-0 items-center justify-center">
+          <div className={MOBILE_EMOTION_PANEL_WINDOW}>
+            {activeActions.length > 0 && activeHandler ? (
+              <ActionStrip
+                actions={activeActions}
+                combo={activeCombo}
+                voiceBalance={voiceBalance}
+                getEffectiveActionCost={getEffectiveActionCost}
+                renderActionIcon={renderActionIcon}
+                onAction={activeHandler}
+                alwaysEnabled={sidebarGiftMode && !!sidebarTargetPlayer}
+                showPurchaseButton={isEmotionLimitReached}
+                onPurchaseQuota={onPurchaseQuota}
+                quotaAmount={quotaAmount}
+                quotaCost={quotaCost}
+              />
+            ) : null}
+          </div>
         </div>
       )}
     </div>
@@ -148,11 +136,43 @@ interface ActionStripProps {
   getEffectiveActionCost: (id: string, combo: PairGenderCombo | null) => number
   renderActionIcon: (action: PairAction) => React.ReactNode
   onAction: (id: string) => void
+  showPurchaseButton?: boolean
+  onPurchaseQuota?: () => void
+  quotaCost?: number
+  quotaAmount?: number
 }
 
-function ActionStrip({ actions, combo, voiceBalance = Infinity, alwaysEnabled, getEffectiveActionCost, renderActionIcon, onAction }: ActionStripProps) {
+function ActionStrip({
+  actions,
+  combo,
+  voiceBalance = Infinity,
+  alwaysEnabled,
+  getEffectiveActionCost,
+  renderActionIcon,
+  onAction,
+  showPurchaseButton = false,
+  onPurchaseQuota,
+  quotaCost = 0,
+  quotaAmount = 0,
+}: ActionStripProps) {
   return (
     <div className={MOBILE_EMOTION_STRIP_SCROLL}>
+      {showPurchaseButton && onPurchaseQuota && (
+        <button
+          type="button"
+          onClick={onPurchaseQuota}
+          className="flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-bold leading-none transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+          disabled={voiceBalance < quotaCost}
+          style={{
+            background: "linear-gradient(180deg, #22d3ee 0%, #6366f1 100%)",
+            color: "#0f172a",
+            border: "1px solid rgba(103, 232, 249, 0.85)",
+            boxShadow: "0 1px 0 rgba(30, 64, 175, 0.85)",
+          }}
+        >
+          {`Купить +${quotaAmount}`}
+        </button>
+      )}
       {actions.map((action) => {
         const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
         const actionCost = getEffectiveActionCost(action.id, combo)

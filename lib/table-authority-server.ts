@@ -83,6 +83,7 @@ function stabilizeAuthoritySnapshot(
         targetPlayer: null,
         targetPlayer2: null,
         resultAction: null,
+        pairKissPhase: null,
         // Считаем, что игрок крутил: watchdog не должен штрафовать skip-ом.
         currentTurnDidSpin: true,
       }

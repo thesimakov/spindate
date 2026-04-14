@@ -520,10 +520,19 @@ export function PlayerAvatar({
             }}
           >
             <span
-              className="font-semibold leading-none"
-              style={{ color: "#fff", fontSize: effectiveCompact ? 9 : 10 }}
+              className="inline-flex items-center gap-0.5 font-semibold leading-none"
+              style={{ fontSize: effectiveCompact ? 9 : 10 }}
             >
-              {effectiveCompact ? kissCount : (<>{"💋 "}{kissCount}</>)}
+              {effectiveCompact ? (
+                <span style={{ color: "#fff" }}>{kissCount}</span>
+              ) : (
+                <>
+                  <span className="inline-block shrink-0 brightness-0 invert" aria-hidden>
+                    💋
+                  </span>
+                  <span style={{ color: "#fff" }}>{kissCount}</span>
+                </>
+              )}
             </span>
           </div>
         )}

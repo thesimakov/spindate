@@ -45,9 +45,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
 
-  const amount = parseEnvInt("VK_AD_REWARD_HEARTS", 25)
-  const cooldownMs = parseEnvInt("VK_AD_REWARD_COOLDOWN_MS", 120_000)
-  const maxPerUtcDay = parseEnvInt("VK_AD_REWARD_MAX_PER_UTCDAY", 5)
+  const amount = parseEnvInt("VK_AD_REWARD_HEARTS", 3)
+  const cooldownMs = parseEnvInt("VK_AD_REWARD_COOLDOWN_MS", 1_800_000)
+  const maxPerUtcDay = parseEnvInt("VK_AD_REWARD_MAX_PER_UTCDAY", 48)
 
   const subjectKey = userId ? `u:${userId}` : `v:${vkUserId}`
 
