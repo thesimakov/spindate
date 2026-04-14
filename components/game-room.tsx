@@ -2504,6 +2504,28 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const ph = pairKissPhase
     /** Всегда до deadlineMs: раньше min(..., 1.2 с) после двух ответов обрывал отсчёт 10→0 и сразу ставил resolved. */
     const ms = Math.max(0, ph.deadlineMs - Date.now())
+    // #region agent log
+    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
+      body: JSON.stringify({
+        sessionId: "37ffa9",
+        location: "game-room.tsx:finalize_timer",
+        message: "pair_kiss_finalize_scheduled",
+        data: {
+          roundKey: ph.roundKey,
+          ms,
+          deadlineMs: ph.deadlineMs,
+          tablePlayerIdsKey,
+          choiceA: ph.choiceA,
+          choiceB: ph.choiceB,
+        },
+        timestamp: Date.now(),
+        hypothesisId: "H1",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {})
+    // #endregion
     const t = window.setTimeout(() => {
       dispatch({ type: "FINALIZE_PAIR_KISS" })
     }, ms)
@@ -2527,6 +2549,21 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const key = pairKissPhase.roundKey
     if (coordinatorId == null || currentUser.id !== coordinatorId) return
     if (pairKissAdvanceRef.current === key) return
+    // #region agent log
+    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
+      body: JSON.stringify({
+        sessionId: "37ffa9",
+        location: "game-room.tsx:next_turn_timer",
+        message: "pair_kiss_next_turn_scheduled",
+        data: { roundKey: key, coordinatorId, tablePlayerIdsKey, advanceRefBefore: pairKissAdvanceRef.current },
+        timestamp: Date.now(),
+        hypothesisId: "H2",
+        runId: "pre-fix",
+      }),
+    }).catch(() => {})
+    // #endregion
     const t = window.setTimeout(() => {
       if (pairKissAdvanceRef.current === key) return
       pairKissAdvanceRef.current = key
@@ -2537,12 +2574,22 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   useEffect(() => {
     if (!pairKissPhase?.resolved || pairKissPhase.outcome !== "both_yes") return
-    if (!currentUser || currentUser.id !== pairKissPhase.idA) return
+    if (!currentUser) return
     const key = pairKissPhase.roundKey
     if (pairKissStatusLogRef.current === key) return
     const a = players.find((p) => p.id === pairKissPhase.idA)
     const b = players.find((p) => p.id === pairKissPhase.idB)
     if (!a || !b) return
+    /** Раньше только idA слал ADD_LOG: если инициатор — бот, у живого игрока id !== idA → строка не попадала в лог/синк. */
+    const coordinatorId = getRoundDriverPlayerId(players)
+    const initiatorIsBot = a.isBot
+    const isCoordinator = coordinatorId != null && currentUser.id === coordinatorId
+    const isHumanInitiator = !initiatorIsBot && currentUser.id === pairKissPhase.idA
+    if (initiatorIsBot) {
+      if (!isCoordinator) return
+    } else if (!isHumanInitiator) {
+      return
+    }
     pairKissStatusLogRef.current = key
     dispatch({
       type: "ADD_LOG",
@@ -3995,7 +4042,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               type="button"
               ref={bankPlusButtonRef}
               onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
-              className="group relative flex h-auto min-h-[3.5rem] w-14 flex-col items-center justify-center gap-0.5 rounded-full border px-1 py-1.5 transition-all hover:-translate-y-[1px] hover:brightness-110"
+              className="group relative flex h-auto min-h-[4.5rem] w-12 flex-col items-center justify-center gap-1 rounded-full border px-1.5 py-2 transition-all hover:-translate-y-[1px] hover:brightness-110"
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
                 borderColor: "rgba(56,189,248,0.35)",
@@ -4004,12 +4051,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               aria-label={`Ваш банк: ${voiceBalance}`}
             >
               <Heart
-                className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
+                className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-6 w-6 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
                 style={{ color: "#fde68a" }}
                 fill="currentColor"
                 aria-hidden
               />
-              <span className="text-[11px] font-black tabular-nums leading-none text-white">{voiceBalance}</span>
+              <span className="text-[15px] font-black tabular-nums leading-none tracking-tight text-white">
+                {voiceBalance}
+              </span>
               <span className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-20 -translate-y-1/2 rounded-full border border-cyan-300/35 bg-slate-950/95 px-3 py-1.5 text-[12px] font-semibold whitespace-nowrap text-slate-100 opacity-0 shadow-[0_8px_18px_rgba(2,6,23,0.45)] transition-all duration-150 group-hover:opacity-100 group-hover:translate-x-0 translate-x-[-6px]">
                 Ваш банк
               </span>
