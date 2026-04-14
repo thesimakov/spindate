@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { X } from "lucide-react"
+import { Heart, X } from "lucide-react"
 import {
   Dialog,
   DialogClose,
@@ -16,6 +16,7 @@ import {
   buildVkGroupSubscribeRewardUrl,
   markVkGroupBellAnimationOff,
 } from "@/lib/vk-group-news-bell"
+import { VK_GROUP_SUBSCRIBE_BONUS_HEARTS } from "@/lib/vk-group-subscribe-constants"
 import { initVkResilient, joinVkCommunityGroup } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
 
@@ -133,19 +134,33 @@ export function VkGroupNewsModal({ open, onOpenChange, onNotify }: VkGroupNewsMo
                 >
                   У нас есть ВК группа, куда мы сообщаем о новостях
                 </p>
+                <p className="mx-auto max-w-[17rem] text-[13px] font-medium leading-snug text-slate-700 sm:text-sm">
+                  {"При подписке в банк эмоций начисляется "}
+                  <span className="whitespace-nowrap font-bold text-slate-900">
+                    +{VK_GROUP_SUBSCRIBE_BONUS_HEARTS} ❤
+                  </span>
+                  {" (один раз)."}
+                </p>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void handleSubscribe()}
                   className={cn(
-                    "mx-auto w-full max-w-[15rem] shrink-0 rounded-full px-6 py-3 text-[15px] font-bold text-white",
+                    "mx-auto flex w-full max-w-[15rem] shrink-0 items-center justify-center gap-2 rounded-full px-6 py-3 text-[15px] font-bold text-white",
                     "bg-gradient-to-b from-[#4ade80] via-[#22c55e] to-[#15803d]",
                     "shadow-[0_6px_0_rgba(21,128,61,0.4),0_10px_24px_rgba(22,163,74,0.32)]",
                     "transition active:translate-y-0.5 active:shadow-[0_3px_0_rgba(21,128,61,0.45)]",
                     "disabled:pointer-events-none disabled:opacity-60",
                   )}
                 >
-                  {busy ? "…" : "Подписаться"}
+                  {busy ? (
+                    "…"
+                  ) : (
+                    <>
+                      <Heart className="h-4 w-4 shrink-0 fill-white/25" aria-hidden />
+                      <span>Подписаться</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

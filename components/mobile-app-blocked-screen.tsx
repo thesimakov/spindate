@@ -14,6 +14,7 @@ import {
   VK_COMMUNITY_PUBLIC_URL,
 } from "@/lib/vk-bridge"
 import { buildVkGroupSubscribeRewardUrl, markVkGroupBellAnimationOff } from "@/lib/vk-group-news-bell"
+import { VK_GROUP_SUBSCRIBE_BONUS_HEARTS } from "@/lib/vk-group-subscribe-constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -132,7 +133,7 @@ export function MobileAppBlockedScreen() {
   const showSuccess = subscribeSuccess !== "none"
   const successFooter =
     subscribeSuccess === "granted"
-      ? "Вы получаете 30 сердец, зайдите с компьютера и начните игру."
+      ? `Вы получаете ${VK_GROUP_SUBSCRIBE_BONUS_HEARTS} сердец, зайдите с компьютера и начните игру.`
       : subscribeSuccess === "alreadyClaimed"
         ? "Бонус вы уже получали ранее. Зайдите с компьютера, чтобы продолжить игру."
         : null
@@ -180,7 +181,7 @@ export function MobileAppBlockedScreen() {
           ) : (
             <>
               <Heart className="mr-2 h-4 w-4 shrink-0 fill-white/20" aria-hidden />
-              Подписаться и получить 30&nbsp;❤
+              Подписаться и получить {VK_GROUP_SUBSCRIBE_BONUS_HEARTS}&nbsp;❤
             </>
           )}
         </Button>

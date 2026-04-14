@@ -3,9 +3,10 @@ import { getDb } from "@/lib/db"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
 import { vkGroupsIsMember } from "@/lib/vk-groups-server"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
+import { VK_GROUP_SUBSCRIBE_BONUS_HEARTS } from "@/lib/vk-group-subscribe-constants"
 
 const COMMUNITY_GROUP_ID = 236519647
-const BONUS_HEARTS = 30
+const BONUS_HEARTS = VK_GROUP_SUBSCRIBE_BONUS_HEARTS
 
 function parseInventoryJson(raw: string | undefined): unknown[] {
   if (!raw) return []

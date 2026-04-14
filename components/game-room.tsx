@@ -934,10 +934,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     pairKissPhase,
   } = state
   const [pairKissClock, setPairKissClock] = useState(() => Date.now())
-  /** Фиксация отображаемых секунд / полоски: после ответа обоих и после FINALIZE (без скачка к 0). */
-  const pairKissBothLockedSecRef = useRef<number | null>(null)
-  const pairKissDisplayedSecRef = useRef(1)
+  /** После FINALIZE фиксируем полоску для анимации ухода; секунды до этого идут с live-отсчётом до дедлайна. */
   const pairKissDisplayedProgressRef = useRef(0)
+  /** Сброс прогресса только при смене roundKey. */
+  const pairKissLockResetRoundKeyRef = useRef<string | null>(null)
   const pairKissModalPlayers = useMemo(() => {
     if (!pairKissPhase) return null
     const pa = players.find((p) => p.id === pairKissPhase.idA)
@@ -947,9 +947,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [pairKissPhase, players])
   /** Центральная модалка «Поцелуются?» реально на экране (есть оба игрока в списке). */
   const pairKissCenterUi = pairKissPhase != null && pairKissModalPlayers != null
-  /** Только окно голосования без resolved: бутылку прячем. После resolved бутылку снова показываем под анимацией ухода — иначе центр пустой до NEXT_TURN. */
-  const pairKissVotePanelActive =
-    pairKissPhase != null && pairKissModalPlayers != null && !pairKissPhase.resolved
   const tablePlayerIdsKey = useMemo(
     () =>
       players.length === 0 ? "" : [...players].map((p) => p.id).sort((a, b) => a - b).join(","),
@@ -959,7 +956,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     ? Math.max(0, pairKissPhase.deadlineMs - pairKissClock)
     : 0
   const pairKissSecondsLeft = pairKissPhase ? Math.max(0, pairKissMsLeft / 1000) : 0
-  const liveSec = pairKissPhase ? Math.max(1, Math.ceil(pairKissSecondsLeft)) : 1
+  const liveSec = pairKissPhase ? Math.max(0, Math.ceil(pairKissSecondsLeft)) : 1
   const liveProgress = pairKissPhase ? Math.min(1, pairKissMsLeft / PAIR_KISS_VOTE_DURATION_MS) : 0
   const pairKissMyPlayerId =
     currentUser && pairKissPhase && (currentUser.id === pairKissPhase.idA || currentUser.id === pairKissPhase.idB)
@@ -977,29 +974,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const pairKissBothYes = !!(pairKissPhase?.choiceA === true && pairKissPhase?.choiceB === true)
 
   if (pairKissPhase && !pairKissPhase.resolved) {
-    if (pairKissBothAnswered) {
-      if (pairKissBothLockedSecRef.current === null) {
-        pairKissBothLockedSecRef.current = liveSec
-        pairKissDisplayedProgressRef.current = liveProgress
-      }
-      pairKissDisplayedSecRef.current = pairKissBothLockedSecRef.current
-    } else {
-      pairKissBothLockedSecRef.current = null
-      pairKissDisplayedSecRef.current = liveSec
-      pairKissDisplayedProgressRef.current = liveProgress
-    }
+    pairKissDisplayedProgressRef.current = liveProgress
   } else if (!pairKissPhase) {
-    pairKissBothLockedSecRef.current = null
+    pairKissDisplayedProgressRef.current = 0
   }
 
-  const pairKissDisplaySeconds = pairKissPhase ? pairKissDisplayedSecRef.current : 1
-  /** Ширина полоски = доля оставшегося времени (1 → старт, 0 → конец). При resolved не подставлять 1 — иначе кажется откат к началу. */
+  /** Ширина полоски: до resolved — живой отсчёт; после — снимок для exit-анимации. */
   const pairKissBarProgress = pairKissPhase
     ? pairKissPhase.resolved
       ? Math.min(1, Math.max(0, pairKissDisplayedProgressRef.current))
-      : pairKissBothAnswered && pairKissBothLockedSecRef.current !== null
-        ? pairKissDisplayedProgressRef.current
-        : liveProgress
+      : liveProgress
     : 0
 
   const currentRoomName = roomNameForDisplay("", tableId)
@@ -2424,10 +2408,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   useEffect(() => {
     if (!pairKissPhase) {
-      pairKissBothLockedSecRef.current = null
+      pairKissLockResetRoundKeyRef.current = null
       return
     }
-    pairKissBothLockedSecRef.current = null
+    const k = pairKissPhase.roundKey
+    if (pairKissLockResetRoundKeyRef.current === k) return
+    pairKissLockResetRoundKeyRef.current = k
+    pairKissDisplayedProgressRef.current = 0
   }, [pairKissPhase?.roundKey])
   useEffect(() => {
     if (!pairKissPhase) {
@@ -2541,11 +2528,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (!currentUser) return
     const humanIds = players.filter((p) => !p.isBot).map((p) => p.id)
     const coordinatorId = humanIds.length > 0 ? Math.min(...humanIds) : null
-    if (coordinatorId == null || currentUser.id !== coordinatorId) return
     const key = pairKissPhase.roundKey
+    if (coordinatorId == null || currentUser.id !== coordinatorId) return
     if (pairKissAdvanceRef.current === key) return
-    pairKissAdvanceRef.current = key
     const t = window.setTimeout(() => {
+      if (pairKissAdvanceRef.current === key) return
+      pairKissAdvanceRef.current = key
       dispatch({ type: "NEXT_TURN" })
     }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
     return () => clearTimeout(t)
@@ -3235,44 +3223,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const handleChangeTable = async () => {
     if (!currentUser) return
     try {
-      const res = await apiFetch("/api/rooms/leave", {
+      await apiFetch("/api/rooms/leave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ userId: currentUser.id }),
       })
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
-        body: JSON.stringify({
-          sessionId: "1a9f11",
-          location: "game-room.tsx:handleChangeTable",
-          message: "rooms/leave response",
-          data: {
-            userId: currentUser.id,
-            ok: res.ok,
-            status: res.status,
-            hypothesisId: "H3",
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
     } catch {
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1a9f11" },
-        body: JSON.stringify({
-          sessionId: "1a9f11",
-          location: "game-room.tsx:handleChangeTable",
-          message: "rooms/leave threw",
-          data: { userId: currentUser.id, hypothesisId: "H3" },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       // при размонтировании GameRoom всё равно уйдёт leave через sync-engine
     }
     dispatch({ type: "SET_SCREEN", screen: "lobby" })
@@ -4667,9 +4624,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </div>
           )}
         </div>
-        {/* Широкая панель эмоций над столом (ПК) */}
+        {/* Широкая панель эмоций над столом (ПК): z ниже блока стола (см. z-[40] на столе), чтобы карточка «Поцелуются?» не уезжала под панель. */}
         {isPcLayout && (
-          <div className="sticky top-[10px] z-[35] mb-2 w-full self-stretch">
+          <div className="relative z-10 mb-2 w-full shrink-0 self-stretch">
             <div className="w-full rounded-2xl border border-cyan-300/35 bg-slate-950/80 p-1 backdrop-blur-[2px] shadow-[0_12px_30px_rgba(2,6,23,0.52),inset_0_1px_0_rgba(255,255,255,0.1)]">
               <div className="flex w-full items-center justify-center gap-2 px-1 py-1">
                 <div className="flex shrink-0 items-center gap-2">
@@ -4769,7 +4726,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
-              : `relative my-auto flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto rounded-2xl sm:rounded-3xl`
+              : `relative z-[40] my-auto flex aspect-[60/50] min-w-0 shrink-0 items-center justify-center mx-auto rounded-2xl sm:rounded-3xl`
           }
           style={{
             ...(isMobile
@@ -5133,8 +5090,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           })}
 
           {/* ---- BOTTLE in the centre / pair-kiss choice card ---- */}
-          {/* Бутылка: всегда, кроме активного голосования «Поцелуются?». После resolved — под карточкой (z-20), пока не снимется фаза. */}
-          {!pairKissVotePanelActive ? (
+          {/* Бутылка: скрыта на весь интервал pairKissPhase (голосование + исход + анимация ухода), иначе полупрозрачная карточка и z-index давали «просвет» на бутылку. */}
+          {!pairKissCenterUi ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
               <div
                 style={isMobile ? { transform: "scale(1.4)" } : undefined}
@@ -5154,7 +5111,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           {pairKissPhase && pairKissModalPlayers ? (
             <div
               className={cn(
-                "absolute left-1/2 top-1/2 z-30 flex max-h-[min(92dvh,100%)] w-[min(280px,calc(100%-2rem))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 items-center justify-center md:w-[min(300px,calc(100%-3rem))] md:max-w-[calc(100%-3rem)]",
+                "absolute left-1/2 top-1/2 z-[42] flex max-h-[min(92dvh,100%)] w-[min(280px,calc(100%-2rem))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 items-center justify-center md:w-[min(300px,calc(100%-3rem))] md:max-w-[calc(100%-3rem)]",
                 pairKissPhase.resolved && "pointer-events-none",
               )}
             >
@@ -5183,7 +5140,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 </div>
                 <div className="mb-2 flex flex-col items-center gap-1">
                   <span className="text-xs font-bold text-white md:text-sm" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.45)" }}>
-                    {`${pairKissDisplaySeconds} сек`}
+                    {`${pairKissPhase.resolved ? 0 : liveSec} сек`}
                   </span>
                   <div className="h-1.5 w-24 overflow-hidden rounded-full bg-black/45 md:w-28">
                     <div
