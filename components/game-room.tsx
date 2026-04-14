@@ -949,6 +949,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       players.length === 0 ? "" : [...players].map((p) => p.id).sort((a, b) => a - b).join(","),
     [players],
   )
+  /** Только вход/выход текущего игрока за стол; без смены при ответах в pair-kiss (иначе лишние сбросы FINALIZE). */
+  const currentUserSeatedAtTable = Boolean(currentUser && players.some((p) => p.id === currentUser.id))
   const pairKissMsLeft = pairKissPhase
     ? Math.max(0, pairKissPhase.deadlineMs - pairKissClock)
     : 0
@@ -2504,73 +2506,35 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const ph = pairKissPhase
     /** Всегда до deadlineMs: раньше min(..., 1.2 с) после двух ответов обрывал отсчёт 10→0 и сразу ставил resolved. */
     const ms = Math.max(0, ph.deadlineMs - Date.now())
-    // #region agent log
-    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
-      body: JSON.stringify({
-        sessionId: "37ffa9",
-        location: "game-room.tsx:finalize_timer",
-        message: "pair_kiss_finalize_scheduled",
-        data: {
-          roundKey: ph.roundKey,
-          ms,
-          deadlineMs: ph.deadlineMs,
-          tablePlayerIdsKey,
-          choiceA: ph.choiceA,
-          choiceB: ph.choiceB,
-        },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {})
-    // #endregion
     const t = window.setTimeout(() => {
       dispatch({ type: "FINALIZE_PAIR_KISS" })
     }, ms)
     return () => clearTimeout(t)
   }, [
     currentUser?.id,
-    tablePlayerIdsKey,
+    currentUserSeatedAtTable,
     pairKissPhase?.roundKey,
     pairKissPhase?.deadlineMs,
     pairKissPhase?.resolved,
-    pairKissPhase?.choiceA,
-    pairKissPhase?.choiceB,
     dispatch,
   ])
+
+  const pairKissHumanCoordinatorId = getRoundDriverPlayerId(players)
 
   useEffect(() => {
     if (!pairKissPhase?.resolved) return
     if (!currentUser) return
-    const humanIds = players.filter((p) => !p.isBot).map((p) => p.id)
-    const coordinatorId = humanIds.length > 0 ? Math.min(...humanIds) : null
+    const coordinatorId = pairKissHumanCoordinatorId
     const key = pairKissPhase.roundKey
     if (coordinatorId == null || currentUser.id !== coordinatorId) return
     if (pairKissAdvanceRef.current === key) return
-    // #region agent log
-    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
-      body: JSON.stringify({
-        sessionId: "37ffa9",
-        location: "game-room.tsx:next_turn_timer",
-        message: "pair_kiss_next_turn_scheduled",
-        data: { roundKey: key, coordinatorId, tablePlayerIdsKey, advanceRefBefore: pairKissAdvanceRef.current },
-        timestamp: Date.now(),
-        hypothesisId: "H2",
-        runId: "pre-fix",
-      }),
-    }).catch(() => {})
-    // #endregion
     const t = window.setTimeout(() => {
       if (pairKissAdvanceRef.current === key) return
       pairKissAdvanceRef.current = key
       dispatch({ type: "NEXT_TURN" })
     }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
     return () => clearTimeout(t)
-  }, [currentUser?.id, tablePlayerIdsKey, pairKissPhase?.resolved, pairKissPhase?.roundKey, dispatch])
+  }, [currentUser?.id, pairKissHumanCoordinatorId, pairKissPhase?.resolved, pairKissPhase?.roundKey, dispatch])
 
   useEffect(() => {
     if (!pairKissPhase?.resolved || pairKissPhase.outcome !== "both_yes") return

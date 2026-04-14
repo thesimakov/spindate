@@ -102,21 +102,6 @@ export function useSyncEngine(): SyncEngineResult {
         }),
       })
       if (res.ok) {
-        // #region agent log
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
-          body: JSON.stringify({
-            sessionId: "37ffa9",
-            location: "use-sync-engine.ts:pushTableAction",
-            message: "authority_pull_scheduled_after_push",
-            data: { tableId: tid, actionType: action.type },
-            timestamp: Date.now(),
-            hypothesisId: "H4",
-            runId: "pre-fix",
-          }),
-        }).catch(() => {})
-        // #endregion
         const pull = fetchTableAuthorityRef.current
         if (pull) {
           window.setTimeout(() => {
