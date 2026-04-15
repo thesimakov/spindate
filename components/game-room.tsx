@@ -801,9 +801,15 @@ const PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS = 3000
 const PAIR_KISS_EXIT_ANIM_DURATION_MS = 780
 /** После завершения таймера пары переходим к следующему ходу без дополнительной паузы. */
 const PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS = 0
-const TURN_ARROW_BASE_DIRECTION_DEG = -45
+// В этом SVG “носик” направлен примерно вниз-влево (≈135° от оси X вправо).
+const TURN_ARROW_BASE_DIRECTION_DEG = 135
 const TURN_ARROW_START_IS_CURRENT_TURN = true
-const TURN_ARROW_DISTANCE_PX = 90
+const TURN_ARROW_OUTSIDE_GAP_PX = 26
+const TURN_ARROW_EXTRA_ROTATE_DEG = 180
+const TURN_ARROW_LAUNCH_EXTRA_PX = 22
+const TURN_ARROW_LAUNCH_MS = 220
+const TURN_ARROW_TO_AVATAR_MS = 420
+const TURN_ARROW_HIDE_AFTER_MS = 520
 
 const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow: string; text: string }> = {
   kiss:      { bg: "linear-gradient(180deg, #e74c3c 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
@@ -1387,16 +1393,145 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const radiusY = radius * TABLE_ASPECT_WH
   const positions = circlePositions(playerSlots, radiusX, radiusY)
   const turnArrowAssetUrl = useMemo(() => publicUrl("/turn-current-arrow.svg"), [])
+  const tableSurfaceRef = useRef<HTMLDivElement | null>(null)
+  const bottleMeasureRef = useRef<HTMLDivElement | null>(null)
+  const [bottleDiameterPx, setBottleDiameterPx] = useState<number>(0)
+  const [turnArrowAngleDegPx, setTurnArrowAngleDegPx] = useState<number | null>(null)
+  const [turnArrowPosPx, setTurnArrowPosPx] = useState<{ x: number; y: number } | null>(null)
+  const [turnArrowTargetPx, setTurnArrowTargetPx] = useState<{ x: number; y: number } | null>(null)
+  const [turnArrowVisible, setTurnArrowVisible] = useState(true)
+  const [turnArrowTransitionMs, setTurnArrowTransitionMs] = useState(0)
+  const turnArrowAnimTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  useEffect(() => {
+    const el = bottleMeasureRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect
+      if (!r) return
+      const next = Math.round(Math.max(r.width, r.height))
+      if (next > 0) setBottleDiameterPx(next)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Позицию и угол стрелки вычисляем по реальному DOM-вектору (см. effect ниже)
+
+  const turnArrowSizePx = useMemo(() => {
+    if (isMobile) return manyPlayersOnMobile ? 22 : 26
+    return 30
+  }, [isMobile, manyPlayersOnMobile])
+
+  // distance теперь считается в effect по реальному DOM-вектору (turnArrowPosPx)
   const turnArrowAngleDeg = useMemo(() => {
     const pos = positions[currentTurnIndex]
     if (!pos) return null
-    const dx = pos.x - 50
-    const dy = pos.y - 50
-    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return null
-    const playerAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
-    const desiredTipDirection = TURN_ARROW_START_IS_CURRENT_TURN ? playerAngleDeg + 180 : playerAngleDeg
-    return desiredTipDirection - TURN_ARROW_BASE_DIRECTION_DEG
-  }, [positions, currentTurnIndex])
+    // Важно: pos.x / pos.y — проценты, но оси имеют разный масштаб (aspect).
+    // Нормализуем по радиусам, чтобы угол совпадал с реальным расположением игрока.
+    const dxN = (pos.x - 50) / Math.max(0.0001, radiusX)
+    const dyN = (pos.y - 50) / Math.max(0.0001, radiusY)
+    if (Math.abs(dxN) < 0.0001 && Math.abs(dyN) < 0.0001) return null
+    const playerAngleDeg = (Math.atan2(dyN, dxN) * 180) / Math.PI
+    // playerAngleDeg — направление от центра стола к центру аватарки текущего игрока.
+    // По требованию: «начало стрелочки» указывает на центр аватарки (т.е. стрелка ориентируется вдоль радиуса наружу).
+    const desiredArrowDirection = TURN_ARROW_START_IS_CURRENT_TURN ? playerAngleDeg : playerAngleDeg + 180
+    return desiredArrowDirection - TURN_ARROW_BASE_DIRECTION_DEG
+  }, [positions, currentTurnIndex, radiusX, radiusY])
+
+  // Берём реальный вектор (px) от центра бутылки к центру аватарки текущего хода —
+  // так стрелка всегда совпадает со статусом “чей ход”, даже если DOM чуть сместился.
+  useEffect(() => {
+    const bottleEl = bottleMeasureRef.current
+    const pid = currentTurnPlayer?.id
+    if (!bottleEl || pid == null) {
+      setTurnArrowAngleDegPx(null)
+      setTurnArrowPosPx(null)
+      return
+    }
+
+    const compute = () => {
+      const surface = tableSurfaceRef.current
+      const b = bottleEl.getBoundingClientRect()
+      const a = document.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${pid}"]`)
+      if (!a) return
+      const ar = a.getBoundingClientRect()
+
+      if (!surface) return
+      const sr = surface.getBoundingClientRect()
+
+      const bx = b.left + b.width / 2
+      const by = b.top + b.height / 2
+      const ax = ar.left + ar.width / 2
+      const ay = ar.top + ar.height / 2
+      const dx = ax - bx
+      const dy = ay - by
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+
+      const len = Math.hypot(dx, dy)
+      if (len < 0.5) return
+      const ux = dx / len
+      const uy = dy / len
+      const bottleRadius = b.width > 0 ? b.width / 2 : bottleDiameterPx > 0 ? bottleDiameterPx / 2 : 0
+
+      // Центр стрелки ставим СНАРУЖИ круга бутылки по тому же лучу:
+      // center = bottleCenter + unit * (radius + gap + halfSize)
+      const half = turnArrowSizePx / 2
+      const offset = bottleRadius + TURN_ARROW_OUTSIDE_GAP_PX + half
+      setTurnArrowPosPx({
+        x: bx - sr.left + ux * offset,
+        y: by - sr.top + uy * offset,
+      })
+      setTurnArrowTargetPx({
+        x: ax - sr.left,
+        y: ay - sr.top,
+      })
+
+      const playerAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+      const desiredArrowDirection = TURN_ARROW_START_IS_CURRENT_TURN ? playerAngleDeg : playerAngleDeg + 180
+      const finalDeg = desiredArrowDirection - TURN_ARROW_BASE_DIRECTION_DEG + TURN_ARROW_EXTRA_ROTATE_DEG
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
+        body: JSON.stringify({
+          sessionId: "37ffa9",
+          runId: "turn-arrow-pre-fix",
+          hypothesisId: "TA1",
+          location: "game-room.tsx:turnArrowCompute",
+          message: "turn_arrow_angle_computed",
+          data: {
+            currentTurnPlayerId: pid,
+            playerAngleDeg,
+            desiredArrowDirection,
+            baseDeg: TURN_ARROW_BASE_DIRECTION_DEG,
+            extraDeg: TURN_ARROW_EXTRA_ROTATE_DEG,
+            finalDeg,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
+      setTurnArrowAngleDegPx(finalDeg)
+    }
+
+    const r1 = window.requestAnimationFrame(() => {
+      compute()
+      window.requestAnimationFrame(compute)
+    })
+    window.addEventListener("resize", compute)
+    return () => {
+      window.cancelAnimationFrame(r1)
+      window.removeEventListener("resize", compute)
+    }
+  }, [currentTurnPlayer?.id, bottleDiameterPx, playerSlots, isMobile, showResult, isSpinning, countdown, pairKissCenterUi, turnArrowSizePx])
+
+  const clearTurnArrowAnimTimers = useCallback(() => {
+    for (const t of turnArrowAnimTimersRef.current) clearTimeout(t)
+    turnArrowAnimTimersRef.current = []
+  }, [])
+
+  useEffect(() => clearTurnArrowAnimTimers, [clearTurnArrowAnimTimers])
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
   // на targetPlayer / targetPlayer2 из состояния — это именно
@@ -1556,11 +1691,87 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (isSpinning || countdown !== null) return
     const canSpin = currentTurnPlayer?.isBot ? isRoundDriver : isMyTurn
     if (!canSpin) return
+    // Анимация “вылет” перед стартом кручения
+    if (turnArrowPosPx && turnArrowTargetPx) {
+      clearTurnArrowAnimTimers()
+      setTurnArrowVisible(true)
+      setTurnArrowTransitionMs(TURN_ARROW_LAUNCH_MS)
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
+        body: JSON.stringify({
+          sessionId: "37ffa9",
+          runId: "turn-arrow-pre-fix",
+          hypothesisId: "TA2",
+          location: "game-room.tsx:handleSpin",
+          message: "turn_arrow_launch_start",
+          data: { roundNumber, currentTurnIndex },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
+
+      const dx = turnArrowTargetPx.x - turnArrowPosPx.x
+      const dy = turnArrowTargetPx.y - turnArrowPosPx.y
+      const len = Math.hypot(dx, dy)
+      if (len > 0.5) {
+        const ux = dx / len
+        const uy = dy / len
+        setTurnArrowPosPx({
+          x: turnArrowPosPx.x + ux * TURN_ARROW_LAUNCH_EXTRA_PX,
+          y: turnArrowPosPx.y + uy * TURN_ARROW_LAUNCH_EXTRA_PX,
+        })
+      }
+
+      const t = setTimeout(() => setTurnArrowTransitionMs(0), TURN_ARROW_LAUNCH_MS + 40)
+      turnArrowAnimTimersRef.current.push(t)
+    }
     if (!CASUAL_MODE) {
       dispatch({ type: "END_PREDICTION_PHASE" })
     }
     dispatch({ type: "START_COUNTDOWN" })
-  }, [dispatch, isRoundDriver, isMyTurn, currentTurnPlayer?.isBot, isSpinning, countdown])
+  }, [
+    dispatch,
+    isRoundDriver,
+    isMyTurn,
+    currentTurnPlayer?.isBot,
+    isSpinning,
+    countdown,
+    turnArrowPosPx,
+    turnArrowTargetPx,
+    clearTurnArrowAnimTimers,
+    roundNumber,
+    currentTurnIndex,
+  ])
+
+  const wasSpinningRef = useRef(false)
+  useEffect(() => {
+    const prev = wasSpinningRef.current
+    wasSpinningRef.current = isSpinning
+    if (prev || !isSpinning) return
+    if (!turnArrowTargetPx) return
+    clearTurnArrowAnimTimers()
+    setTurnArrowTransitionMs(TURN_ARROW_TO_AVATAR_MS)
+    setTurnArrowPosPx(turnArrowTargetPx)
+    // #region agent log
+    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
+      body: JSON.stringify({
+        sessionId: "37ffa9",
+        runId: "turn-arrow-pre-fix",
+        hypothesisId: "TA3",
+        location: "game-room.tsx:isSpinningEffect",
+        message: "turn_arrow_fly_to_avatar_start",
+        data: { roundNumber, currentTurnIndex },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
+    const t = setTimeout(() => setTurnArrowVisible(false), TURN_ARROW_HIDE_AFTER_MS)
+    turnArrowAnimTimersRef.current.push(t)
+  }, [isSpinning, turnArrowTargetPx, clearTurnArrowAnimTimers, roundNumber, currentTurnIndex])
 
   const {
     turnTimer,
@@ -4768,6 +4979,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
         {/* Стол ~60:50 (ширина/высота): моб — 90% / max 420px; ПК — вписать в min(72vh,78dvh) по высоте */}
         <div
+          ref={tableSurfaceRef}
           className={
             isMobile
               ? `relative flex w-[90%] max-w-[min(90vw,420px)] shrink-0 items-center justify-center sm:max-w-[720px] md:max-h-[40vh] lg:max-h-none min-h-0 mx-auto rounded-2xl`
@@ -4914,6 +5126,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             return (
               <div
                 key={player.id}
+                data-turn-arrow-player-id={player.id}
                 className={cn(
                   "absolute -translate-x-1/2 -translate-y-1/2",
                   isAvatarMenuOpen ? "z-50" : "z-10",
@@ -5136,7 +5349,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
           {/* ---- BOTTLE in the centre / pair-kiss choice card ---- */}
           {bottleShouldRender ? (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+            <div
+              ref={bottleMeasureRef}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20"
+            >
               <div
                 style={isMobile ? { transform: "scale(1.4)" } : undefined}
                 className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
@@ -5152,19 +5368,29 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </div>
             </div>
           ) : null}
-          {!pairKissCenterUi && turnArrowAngleDeg != null && (
+          {!pairKissCenterUi && turnArrowVisible && turnArrowPosPx && (turnArrowAngleDegPx ?? turnArrowAngleDeg) != null && (
             <div
-              className="pointer-events-none absolute left-1/2 top-1/2 z-[33] -translate-x-1/2 -translate-y-1/2"
+              className="pointer-events-none absolute z-[33]"
               style={{
-                transform: `translate(-50%, -50%) rotate(${turnArrowAngleDeg}deg) translateX(${TURN_ARROW_DISTANCE_PX}px)`,
+                left: turnArrowPosPx.x,
+                top: turnArrowPosPx.y,
+                transform: `translate(-50%, -50%) rotate(${(turnArrowAngleDegPx ?? turnArrowAngleDeg)!}deg)`,
                 transformOrigin: "center center",
+                transition:
+                  turnArrowTransitionMs > 0
+                    ? `left ${turnArrowTransitionMs}ms ease-out, top ${turnArrowTransitionMs}ms ease-out`
+                    : "none",
               }}
               aria-hidden
             >
               <img
                 src={turnArrowAssetUrl}
                 alt=""
-                className="h-[30px] w-[30px] opacity-95 drop-shadow-[0_0_8px_rgba(255,255,255,0.45)]"
+                className={cn(
+                  "opacity-95 drop-shadow-[0_0_8px_rgba(255,255,255,0.45)]",
+                  isMyTurn && "drop-shadow-[0_0_14px_rgba(34,211,238,0.7)]",
+                )}
+                style={{ width: turnArrowSizePx, height: turnArrowSizePx }}
                 draggable={false}
               />
             </div>
