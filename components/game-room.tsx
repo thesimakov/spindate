@@ -799,9 +799,11 @@ const PAIR_KISS_VOTE_DURATION_MS = 10_000
 /** После завершения таймера / фиксации исхода держим карточку ещё 3 секунды. */
 const PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS = 3000
 const PAIR_KISS_EXIT_ANIM_DURATION_MS = 780
-/** Следующий ход после исчезновения карточки (задержка + длительность выхода + запас). */
-const PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS =
-  PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS + PAIR_KISS_EXIT_ANIM_DURATION_MS + 400
+/** После завершения таймера пары переходим к следующему ходу без дополнительной паузы. */
+const PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS = 0
+const TURN_ARROW_BASE_DIRECTION_DEG = -45
+const TURN_ARROW_START_IS_CURRENT_TURN = true
+const TURN_ARROW_DISTANCE_PX = 90
 
 const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow: string; text: string }> = {
   kiss:      { bg: "linear-gradient(180deg, #e74c3c 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
@@ -944,6 +946,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [pairKissPhase, players])
   /** Центральная модалка «Поцелуются?» реально на экране (есть оба игрока в списке). */
   const pairKissCenterUi = pairKissPhase != null && pairKissModalPlayers != null
+  /** Бутылка всегда остаётся на столе, даже когда поверх открыта карточка pair-kiss. */
+  const bottleShouldRender = true
   const tablePlayerIdsKey = useMemo(
     () =>
       players.length === 0 ? "" : [...players].map((p) => p.id).sort((a, b) => a - b).join(","),
@@ -1115,6 +1119,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   useEffect(() => { playersRef.current = players }, [players])
   const spinResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinSessionRef = useRef<string>("")
+  const spinStartedTurnKeyRef = useRef<string>("")
 
   const [tableLoading, setTableLoading] = useState(true)
   const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
@@ -1381,6 +1386,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const radiusX = radius
   const radiusY = radius * TABLE_ASPECT_WH
   const positions = circlePositions(playerSlots, radiusX, radiusY)
+  const turnArrowAssetUrl = useMemo(() => publicUrl("/turn-current-arrow.svg"), [])
+  const turnArrowAngleDeg = useMemo(() => {
+    const pos = positions[currentTurnIndex]
+    if (!pos) return null
+    const dx = pos.x - 50
+    const dy = pos.y - 50
+    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return null
+    const playerAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+    const desiredTipDirection = TURN_ARROW_START_IS_CURRENT_TURN ? playerAngleDeg + 180 : playerAngleDeg
+    return desiredTipDirection - TURN_ARROW_BASE_DIRECTION_DEG
+  }, [positions, currentTurnIndex])
 
   // Игровая логика (эмоции, подписи «Пара: ...») опирается
   // на targetPlayer / targetPlayer2 из состояния — это именно
@@ -1907,6 +1923,11 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (isSpinning) return
     const spinner = currentTurnPlayer
     if (!spinner) return
+    const turnKey = `${tableId}:${roundNumber}:${currentTurnIndex}`
+    const spinStillActiveForTurn =
+      spinStartedTurnKeyRef.current === turnKey &&
+      (spinResolveTimeoutRef.current != null || spinSessionRef.current !== "")
+    if (spinStillActiveForTurn) return
 
     // Крутящий + один случайный из оставшихся только противоположного пола.
     const others = filterOppositeGenderOthers(players, spinner)
@@ -1929,6 +1950,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const deltaToTarget = (desiredAngle - currentAngle + 360) % 360
     const totalAngle = bottleAngle + 360 * 5 + deltaToTarget
     const spinSessionKey = `${tableId}:${roundNumber}:${currentTurnIndex}:${spinner.id}`
+    spinStartedTurnKeyRef.current = turnKey
     spinSessionRef.current = spinSessionKey
 
     dispatch({ type: "END_PREDICTION_PHASE" })
@@ -2068,11 +2090,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   useEffect(() => {
     if (isSpinning) return
     spinSessionRef.current = ""
+    spinStartedTurnKeyRef.current = ""
     if (spinResolveTimeoutRef.current) {
       clearTimeout(spinResolveTimeoutRef.current)
       spinResolveTimeoutRef.current = null
     }
   }, [isSpinning, roundNumber, currentTurnIndex])
+
+  useEffect(() => {
+    spinStartedTurnKeyRef.current = ""
+  }, [tableId, roundNumber, currentTurnIndex])
 
   // Watchdog: если крутилка зависла >12 с — один координатор (мин. id за столом) сбрасывает спин и ход
   useEffect(() => {
@@ -2535,6 +2562,15 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
     return () => clearTimeout(t)
   }, [currentUser?.id, pairKissHumanCoordinatorId, pairKissPhase?.resolved, pairKissPhase?.roundKey, dispatch])
+
+  useEffect(() => {
+    if (!pairKissPhase?.resolved) return
+    const key = pairKissPhase.roundKey
+    const t = window.setTimeout(() => {
+      if (!pairKissPhase || !pairKissPhase.resolved || pairKissPhase.roundKey !== key) return
+    }, 4000)
+    return () => clearTimeout(t)
+  }, [pairKissPhase])
 
   useEffect(() => {
     if (!pairKissPhase?.resolved || pairKissPhase.outcome !== "both_yes") return
@@ -5099,8 +5135,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           })}
 
           {/* ---- BOTTLE in the centre / pair-kiss choice card ---- */}
-          {/* Бутылка: скрыта на весь интервал pairKissPhase (голосование + исход + анимация ухода), иначе полупрозрачная карточка и z-index давали «просвет» на бутылку. */}
-          {!pairKissCenterUi ? (
+          {bottleShouldRender ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
               <div
                 style={isMobile ? { transform: "scale(1.4)" } : undefined}
@@ -5117,6 +5152,23 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </div>
             </div>
           ) : null}
+          {!pairKissCenterUi && turnArrowAngleDeg != null && (
+            <div
+              className="pointer-events-none absolute left-1/2 top-1/2 z-[33] -translate-x-1/2 -translate-y-1/2"
+              style={{
+                transform: `translate(-50%, -50%) rotate(${turnArrowAngleDeg}deg) translateX(${TURN_ARROW_DISTANCE_PX}px)`,
+                transformOrigin: "center center",
+              }}
+              aria-hidden
+            >
+              <img
+                src={turnArrowAssetUrl}
+                alt=""
+                className="h-[30px] w-[30px] opacity-95 drop-shadow-[0_0_8px_rgba(255,255,255,0.45)]"
+                draggable={false}
+              />
+            </div>
+          )}
           {pairKissPhase && pairKissModalPlayers ? (
             <div
               className={cn(
@@ -5127,7 +5179,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               {/* Круг + свечение: общая анимация появления / ухода */}
               <div
                 className={cn(
-                  "relative isolate flex w-full max-w-full min-h-0 shrink-0 flex-col items-center justify-center overflow-visible rounded-full bg-transparent px-2 py-3 shadow-[0_0_20px_rgba(34,211,238,0.45),0_0_44px_rgba(56,189,248,0.22)] aspect-square",
+                  "relative isolate flex w-full max-w-full min-h-0 shrink-0 flex-col items-center justify-center overflow-visible rounded-full border border-cyan-200/20 bg-gradient-to-b from-slate-900/65 via-slate-900/55 to-slate-950/65 px-2 py-3 shadow-[0_0_20px_rgba(34,211,238,0.45),0_0_44px_rgba(56,189,248,0.22)] backdrop-blur-md aspect-square",
                   pairKissPhase.resolved ? "pair-kiss-card-exit" : "pair-kiss-card-enter",
                 )}
                 style={

@@ -140,9 +140,9 @@ export const Bottle = memo(function Bottle({
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
             style={{
               transform: `rotate(${renderAngle}deg)`,
-        transition: spinTransition,
-        willChange: "transform",
-      }}
+              transition: spinTransition,
+              willChange: "transform",
+            }}
           >
             <FortuneWheelArrow className="h-full w-full object-contain" />
           </div>

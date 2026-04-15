@@ -28,13 +28,22 @@ export function applyTableAuthorityAction(
       return { ...snapshot, generalChatMessages: trimRoomChatMessages(list) }
     }
     case "START_COUNTDOWN":
+      if (snapshot.isSpinning || snapshot.showResult || snapshot.pairKissPhase != null) {
+        return null
+      }
       return { ...snapshot, countdown: 3, spinStartedAtMs: null }
     case "TICK_COUNTDOWN":
+      if (snapshot.countdown == null || snapshot.isSpinning || snapshot.showResult || snapshot.pairKissPhase != null) {
+        return null
+      }
       return {
         ...snapshot,
         countdown: snapshot.countdown !== null && snapshot.countdown > 1 ? snapshot.countdown - 1 : null,
       }
     case "START_SPIN": {
+      if (snapshot.isSpinning || snapshot.showResult || snapshot.pairKissPhase != null) {
+        return null
+      }
       const t1 = playerById(snapshot.players, action.target.id) ?? action.target
       const t2 = playerById(snapshot.players, action.target2.id) ?? action.target2
       const spinnerId = snapshot.players[snapshot.currentTurnIndex]?.id
@@ -55,6 +64,9 @@ export function applyTableAuthorityAction(
       }
     }
     case "STOP_SPIN":
+      if (!snapshot.isSpinning) {
+        return null
+      }
       return { ...snapshot, isSpinning: false, spinStartedAtMs: null, showResult: true, resultAction: action.action }
     case "BEGIN_PAIR_KISS_PHASE": {
       const tp = snapshot.targetPlayer

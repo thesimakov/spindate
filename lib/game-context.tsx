@@ -1388,14 +1388,17 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       )
       const isInitiator = isMyTurnDirect || isBotTurnAndDriver
       const inActivePhase = state.countdown !== null || state.isSpinning || state.showResult
-      const keepLocal = isInitiator && inActivePhase
+      const sameTurnAsServer =
+        p.roundNumber === state.roundNumber &&
+        p.currentTurnIndex === state.currentTurnIndex
+      const keepLocal = isInitiator && inActivePhase && sameTurnAsServer
 
       const keepLocalCountdown = keepLocal && state.countdown !== null && (p.countdown === null || p.countdown >= state.countdown)
-      const keepLocalSpinState = keepLocal && state.isSpinning
+      /** Не держим локальный спин, если сервер уже сообщил isSpinning=false — иначе клиент может "залипнуть" в кручении. */
+      const keepLocalSpinState = keepLocal && state.isSpinning && p.isSpinning
       /** Только инициатор крутит локально; иначе все должны брать bottleAngle с сервера — иначе рассинхрон. */
       const keepLocalAngle = keepLocalSpinState
       const keepLocalResult = keepLocal && state.showResult && !p.showResult
-
       const localById = new Map(state.players.map((pl) => [pl.id, pl]))
       const mergedPlayers = p.players.map((pl) => {
         const prev = localById.get(pl.id)

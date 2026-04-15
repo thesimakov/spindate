@@ -35,7 +35,7 @@ export function TickerAnnouncementModal({
 }: TickerAnnouncementModalProps) {
   const [body, setBody] = useState("")
   const [linkUrl, setLinkUrl] = useState("")
-  const [tier, setTier] = useState<TickerAdTierId>("5m")
+  const [tier, setTier] = useState<TickerAdTierId>("8m")
   const [busy, setBusy] = useState(false)
 
   const canAfford = useCallback(
@@ -55,7 +55,7 @@ export function TickerAnnouncementModal({
   const reset = useCallback(() => {
     setBody("")
     setLinkUrl("")
-    setTier("5m")
+    setTier("8m")
   }, [])
 
   const handleClose = useCallback(() => {

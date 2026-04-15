@@ -146,6 +146,22 @@ async function senderCanFinalizePairKissFromSnapshot(
   return timedOut || bothAnswered
 }
 
+/** Turn-actions (countdown/spin lifecycle): только активный игрок; для хода бота — только round driver. */
+async function senderCanDriveTurnLifecycleFromSnapshot(
+  tableId: number,
+  senderId: number,
+): Promise<boolean> {
+  const snap = await getTableAuthoritySnapshot(tableId)
+  if (!snap) return false
+  const turnPlayer = snap.players[snap.currentTurnIndex]
+  if (!turnPlayer) return false
+  const roundDriverId = getRoundDriverPlayerId(snap.players)
+  if (turnPlayer.isBot) {
+    return roundDriverId != null && senderId === roundDriverId
+  }
+  return senderId === turnPlayer.id
+}
+
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
   const now = Date.now()
   const tableId = Math.floor(args.tableId)
@@ -164,6 +180,15 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     const snap = await getTableAuthoritySnapshot(tableId)
     const rd = snap ? getRoundDriverPlayerId(snap.players) : null
     if (rd == null || rd !== args.senderId) return { ok: false as const }
+  } else if (
+    args.action.type === "START_COUNTDOWN" ||
+    args.action.type === "TICK_COUNTDOWN" ||
+    args.action.type === "START_SPIN" ||
+    args.action.type === "STOP_SPIN"
+  ) {
+    if (!(await senderCanDriveTurnLifecycleFromSnapshot(tableId, args.senderId))) {
+      return { ok: false as const }
+    }
   } else if (args.action.type === "FINALIZE_PAIR_KISS") {
     if (!(await senderCanFinalizePairKissFromSnapshot(tableId, args.senderId))) {
       return { ok: false as const }
