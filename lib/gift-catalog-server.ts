@@ -7,6 +7,7 @@ type GiftCatalogDbRow = {
   name: string
   emoji: string
   img: string
+  music: string
   cost: number
   pay_currency: string
   stock: number
@@ -26,7 +27,7 @@ export function listGiftCatalogRows(options?: {
   const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""
   const rows = db
     .prepare(
-      `SELECT id, section, name, emoji, img, cost, pay_currency, stock, published, deleted
+      `SELECT id, section, name, emoji, img, music, cost, pay_currency, stock, published, deleted
        FROM gift_catalog
        ${whereSql}
        ORDER BY sort_order ASC, updated_at ASC`,
@@ -48,12 +49,15 @@ export function listGiftCatalogRows(options?: {
     const stockRaw = row.stock
     const stock = typeof stockRaw === "number" && Number.isFinite(stockRaw) ? Math.floor(stockRaw) : -1
 
+    const musicRaw = typeof row.music === "string" ? row.music.trim() : ""
+
     return {
       id: row.id as GiftCatalogRow["id"],
       section,
       name: row.name,
       emoji: row.emoji || "🎁",
       img: options?.resolveImage === false ? (row.img ?? "") : toGiftImageUrl(row.img ?? ""),
+      music: musicRaw,
       cost: Math.max(0, row.cost | 0),
       payCurrency,
       published: row.published === 1,
@@ -73,6 +77,8 @@ export function updateGiftCatalogEntry(input: {
   payCurrency?: "hearts" | "roses"
   /** −1 без лимита; иначе неотрицательное целое */
   stock?: number
+  /** Путь к загруженному аудио или пустая строка — общий звук по умолчанию */
+  music?: string
   published?: boolean
   deleted?: boolean
 }) {
@@ -82,7 +88,7 @@ export function updateGiftCatalogEntry(input: {
   const now = Date.now()
   const existing = db
     .prepare(
-      `SELECT id, section, name, emoji, img, cost, pay_currency, stock, published, deleted FROM gift_catalog WHERE id = ? LIMIT 1`,
+      `SELECT id, section, name, emoji, img, music, cost, pay_currency, stock, published, deleted FROM gift_catalog WHERE id = ? LIMIT 1`,
     )
     .get(safeId) as GiftCatalogDbRow | undefined
   const nextPayCurrency =
@@ -100,19 +106,22 @@ export function updateGiftCatalogEntry(input: {
         : Math.max(0, Math.floor(input.stock))
       : -1
 
+  const nextMusicInsert = typeof input.music === "string" ? input.music.trim() : ""
+
   if (!existing) {
     const sortOrder = db.prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM gift_catalog`).get() as {
       next: number
     }
     db.prepare(
-      `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, pay_currency, stock, published, deleted, sort_order, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO gift_catalog (id, section, name, emoji, img, music, cost, pay_currency, stock, published, deleted, sort_order, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       safeId,
       input.section ?? "paid",
       input.name?.trim() || safeId,
       input.emoji?.trim() || "🎁",
       typeof input.img === "string" ? input.img.trim() : "",
+      nextMusicInsert,
       Math.max(0, Math.floor(Number(input.cost) || 0)),
       nextPayCurrency,
       nextStockInsert,
@@ -143,12 +152,14 @@ export function updateGiftCatalogEntry(input: {
       : existingStock < 0
         ? -1
         : existingStock
+  const existingMusic = typeof existing.music === "string" ? existing.music.trim() : ""
+  const nextMusic = typeof input.music === "string" ? input.music.trim() : existingMusic
 
   db.prepare(
     `UPDATE gift_catalog
-     SET section = ?, name = ?, emoji = ?, img = ?, cost = ?, pay_currency = ?, stock = ?, published = ?, deleted = ?, updated_at = ?
+     SET section = ?, name = ?, emoji = ?, img = ?, music = ?, cost = ?, pay_currency = ?, stock = ?, published = ?, deleted = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(nextSection, nextName, nextEmoji, nextImg, nextCost, nextPayDb, nextStock, nextPublished, nextDeleted, now, safeId)
+  ).run(nextSection, nextName, nextEmoji, nextImg, nextMusic, nextCost, nextPayDb, nextStock, nextPublished, nextDeleted, now, safeId)
 }
 
 export type ConsumeGiftStockResult =
@@ -183,16 +194,22 @@ export function tryConsumeGiftStock(giftId: string): ConsumeGiftStockResult {
   })()
 }
 
-export function deleteGiftCatalogEntry(id: string): { removedImagePath: string | null } {
+export function deleteGiftCatalogEntry(id: string): {
+  removedImagePath: string | null
+  removedMusicPath: string | null
+} {
   if (typeof id !== "string" || !id.trim()) throw new Error("bad_gift_id")
   const safeId = id.trim()
   const db = getDb()
-  const existing = db.prepare(`SELECT id, img FROM gift_catalog WHERE id = ? LIMIT 1`).get(safeId) as
-    | { id: string; img: string }
+  const existing = db.prepare(`SELECT id, img, music FROM gift_catalog WHERE id = ? LIMIT 1`).get(safeId) as
+    | { id: string; img: string; music: string }
     | undefined
-  if (!existing) return { removedImagePath: null }
+  if (!existing) return { removedImagePath: null, removedMusicPath: null }
   db.prepare(`DELETE FROM gift_catalog WHERE id = ?`).run(safeId)
-  const pathTrimmed = typeof existing.img === "string" ? existing.img.trim() : ""
-  if (!pathTrimmed) return { removedImagePath: null }
-  return { removedImagePath: pathTrimmed }
+  const imgPath = typeof existing.img === "string" ? existing.img.trim() : ""
+  const musicPath = typeof existing.music === "string" ? existing.music.trim() : ""
+  return {
+    removedImagePath: imgPath || null,
+    removedMusicPath: musicPath || null,
+  }
 }

@@ -50,7 +50,15 @@ import { filterOppositeGenderOthers } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
 import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
-import { assetUrl, EMOJI_BANYA, EMOTION_SOUNDS, emotionSoundUrl, publicUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
+import {
+  assetUrl,
+  catalogMediaUrl,
+  EMOJI_BANYA,
+  EMOTION_SOUNDS,
+  emotionSoundUrl,
+  publicUrl,
+  resolveFrameCatalogAssetUrl,
+} from "@/lib/assets"
 import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
@@ -243,7 +251,7 @@ function logEventEmotionEmoji(entry: GameLogEntry, giftById?: ReadonlyMap<string
 
 /** Подсказка на центральный объект в строке «аватар » эмодзи ×N аватар». */
 /** Мета подарка для чата: дефолтный каталог + строки из API (админка). */
-type GiftChatDisplayMeta = { emoji: string; img: string; name: string }
+type GiftChatDisplayMeta = { emoji: string; img: string; name: string; music?: string }
 
 function pairChatCentralObjectHint(
   entry: GameLogEntry,
@@ -1110,10 +1118,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const giftDisplayById = useMemo(() => {
     const m = new Map<string, GiftChatDisplayMeta>()
     for (const row of DEFAULT_GIFT_CATALOG_ROWS) {
-      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim(), name: row.name })
+      m.set(row.id, {
+        emoji: row.emoji,
+        img: (row.img ?? "").trim(),
+        name: row.name,
+        music: (row.music ?? "").trim() || undefined,
+      })
     }
     for (const row of giftCatalogRows) {
-      m.set(row.id, { emoji: row.emoji, img: (row.img ?? "").trim(), name: row.name })
+      m.set(row.id, {
+        emoji: row.emoji,
+        img: (row.img ?? "").trim(),
+        name: row.name,
+        music: (row.music ?? "").trim() || undefined,
+      })
     }
     return m
   }, [giftCatalogRows])
@@ -1390,6 +1408,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
   const [giftPurchaseBusyKey, setGiftPurchaseBusyKey] = useState<string | null>(null)
+  const [careOfferOpen, setCareOfferOpen] = useState(false)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
   const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
   const [emotionPurchasePick, setEmotionPurchasePick] = useState({
@@ -2024,19 +2043,39 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [countdown, dispatch, tableLoading])
 
   /* ---- звук при эмоции (учитываем настройку из профиля) ---- */
-  const playEmotionSound = useCallback((actionId: string) => {
-    if (state.soundsEnabled === false || tableLoading) return
-    const path = EMOTION_SOUNDS[actionId]
-    if (!path || typeof window === "undefined") return
-    try {
-      const url = emotionSoundUrl(path)
-      const a = new Audio(url)
-      a.volume = 0.7
-      a.play().catch(() => {})
-    } catch {
-      // ignore
-    }
-  }, [state.soundsEnabled, tableLoading])
+  const playEmotionSound = useCallback(
+    (actionId: string) => {
+      if (state.soundsEnabled === false || tableLoading) return
+      const meta = giftDisplayById.get(String(actionId))
+      const customMusic = meta?.music?.trim()
+      if (customMusic) {
+        if (typeof window === "undefined") return
+        try {
+          const url = catalogMediaUrl(customMusic)
+          if (!url) return
+          const a = new Audio(url)
+          a.volume = 0.7
+          a.play().catch(() => {})
+        } catch {
+          // ignore
+        }
+        return
+      }
+      const path =
+        EMOTION_SOUNDS[actionId] ??
+        (giftCatalogLogTypeIds.has(String(actionId)) ? EMOTION_SOUNDS.gift_catalog : undefined)
+      if (!path || typeof window === "undefined") return
+      try {
+        const url = emotionSoundUrl(path)
+        const a = new Audio(url)
+        a.volume = 0.7
+        a.play().catch(() => {})
+      } catch {
+        // ignore
+      }
+    },
+    [state.soundsEnabled, tableLoading, giftCatalogLogTypeIds, giftDisplayById],
+  )
 
   /* ---- launch flying emoji ---- */
   const launchEmoji = useCallback(
@@ -3017,6 +3056,35 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     void fetchTableAuthority(tableId)
   }, [chatInput, currentUser, tablePaused, dispatch, fetchTableAuthority, tableId])
 
+  const handleChatAvatarMenuAction = useCallback(
+    (
+      action: "profile" | "reply" | "report",
+      ctx: { player: Player; text: string },
+    ) => {
+      const { player } = ctx
+      switch (action) {
+        case "profile":
+          dispatch({ type: "OPEN_PLAYER_MENU", player })
+          break
+        case "reply":
+          setChatInput((prev) => {
+            const mention = `@${player.name} `
+            if (!prev.trim()) return mention
+            return `${prev.trimEnd()} ${mention}`
+          })
+          showToast("Ник добавлен в поле ввода", "info")
+          break
+        case "report":
+          setContactUsOpen(true)
+          showToast("Опишите нарушение в форме обращения", "info")
+          break
+        default:
+          break
+      }
+    },
+    [dispatch, showToast, setContactUsOpen],
+  )
+
   const handleJoinPlayerHello = useCallback(
     (joinedPlayer: Player) => {
       if (!currentUser || tablePaused) return
@@ -3034,6 +3102,43 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       void fetchTableAuthority(tableId)
     },
     [currentUser, tablePaused, dispatch, fetchTableAuthority, tableId],
+  )
+
+  const handlePlayerProfileCareOffer = useCallback(
+    (payWith: "hearts" | "roses") => {
+      if (!currentUser || !playerMenuTarget) return
+      if (currentUser.id === playerMenuTarget.id) return
+      if (payWith === "hearts") {
+        if (voiceBalance < 50) {
+          showToast("Нужно 50 сердец", "error")
+          return
+        }
+        dispatch({ type: "PAY_VOICES", amount: 50 })
+      } else {
+        if (roseInventoryCount < 10) {
+          showToast("Нужно 10 роз", "error")
+          return
+        }
+        dispatch({ type: "REMOVE_INVENTORY_ROSES", amount: 10 })
+      }
+      dispatch({
+        type: "ADD_LOG",
+        entry: {
+          id: generateLogId(),
+          type: "care",
+          fromPlayer: currentUser,
+          toPlayer: playerMenuTarget,
+          text:
+            payWith === "hearts"
+              ? `${currentUser.name} начал(а) ухаживать за ${playerMenuTarget.name} (50 ❤ в банк игрока)`
+              : `${currentUser.name} начал(а) ухаживать за ${playerMenuTarget.name} (10 🌹)`,
+          timestamp: Date.now(),
+        },
+      })
+      setCareOfferOpen(false)
+      showToast("Ухаживание отправлено", "success")
+    },
+    [currentUser, playerMenuTarget, voiceBalance, roseInventoryCount, dispatch, showToast],
   )
 
   /* ---- player avatar click ---- */
@@ -5651,6 +5756,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 currentUserId={currentUser?.id}
                 chatDisabled={tablePaused}
                 onJoinPlayerHello={handleJoinPlayerHello}
+                onChatMenuAction={handleChatAvatarMenuAction}
                 className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
               />
             </div>
@@ -5669,7 +5775,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           isPcLayout
             ? chatPanelCollapsed
               ? "w-auto shrink-0 flex-none"
-              : "w-[350px] shrink-0 flex-none"
+              : "w-[402px] shrink-0 flex-none"
             : chatPanelCollapsed
               ? "w-auto shrink-0 flex-none"
               : "w-[clamp(200px,30vw,380px)] shrink-0 flex-none",
@@ -5687,7 +5793,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             <ChevronLeft className="h-4 w-4 shrink-0 text-slate-400" />
           </button>
         ) : (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1.5">
+          <div className="flex min-h-0 min-w-0 w-[350px] shrink-0 flex-none flex-col overflow-hidden px-2 pb-2 pt-1.5">
             <button
               type="button"
               onClick={() => setChatPanelCollapsed(true)}
@@ -5712,6 +5818,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 currentUserId={currentUser?.id}
                 chatDisabled={tablePaused}
                 onJoinPlayerHello={handleJoinPlayerHello}
+                onChatMenuAction={handleChatAvatarMenuAction}
                 className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
               />
             </div>
@@ -6254,6 +6361,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         const zodiacIdx = zodiacIdxFromName >= 0 ? zodiacIdxFromName : playerMenuTarget.id % 12
         const zodiacDisplay = ZODIAC_SIGNS[zodiacIdx]
         const zodiacSymbol = ZODIAC_SYMBOLS[zodiacIdx]
+        const targetAcceptsInvitesInProfile = effectiveOpenToChatInvites(playerMenuTarget, allowChatInvite)
         const profileMenuStats = computePlayerMenuProfileStats({
           inventory,
           rosesGiven,
@@ -6393,6 +6501,33 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   </div>
                   {playerMenuTab === "profile" && (
                     <>
+                      {currentUser && currentUser.id !== playerMenuTarget.id && !playerMenuTarget.isBot && (
+                        <div className="relative z-[1] mt-3 grid w-full min-w-0 grid-cols-[1fr_auto] gap-2">
+                          <button
+                            type="button"
+                            disabled={!targetAcceptsInvitesInProfile}
+                            onClick={() => {
+                              if (!targetAcceptsInvitesInProfile) {
+                                showToast("Игрок выключил общение в профиле", "info")
+                                return
+                              }
+                              dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
+                              dispatch({ type: "CLOSE_PLAYER_MENU" })
+                            }}
+                            className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-cyan-300/60 bg-gradient-to-b from-cyan-100 to-cyan-50 px-3 text-[15px] font-black text-cyan-950 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:brightness-[1.02] disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Написать
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCareOfferOpen(true)}
+                            className="inline-flex h-11 w-12 items-center justify-center rounded-2xl border border-fuchsia-300/65 bg-gradient-to-b from-fuchsia-100 to-violet-50 text-xl shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:brightness-[1.02]"
+                            aria-label="Начать ухаживать"
+                          >
+                            💍
+                          </button>
+                        </div>
+                      )}
                       {currentUser && currentUser.id !== playerMenuTarget.id && !playerMenuTarget.isBot && (
                         <div className="relative z-[1] mt-3 w-full max-w-sm px-0.5">
                           {admirers.some((a) => a.id === playerMenuTarget.id) ? (
@@ -6601,17 +6736,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   <p className="mb-2.5 text-[15px] font-black tracking-tight text-slate-900">Действия</p>
                   {/* Избранное и ухаживание — верхний ряд; розы и «от вас» — ниже; ВК + магазин */}
                   {(() => {
-                    const todayKey = new Date().toISOString().slice(0, 10)
-                    const careEntriesToday = gameLog.filter(
-                      (e) =>
-                        e.type === "care" &&
-                        e.toPlayer?.id === playerMenuTarget.id &&
-                        new Date(e.timestamp).toISOString().slice(0, 10) === todayKey,
-                    )
-                    const uniqueCarerIds = new Set(careEntriesToday.map((e) => e.fromPlayer?.id).filter(Boolean))
-                    const carersCount = uniqueCarerIds.size
-                    const currentUserAlreadyCared = currentUser && uniqueCarerIds.has(currentUser.id)
-                    const canCare = carersCount < 5 && !currentUserAlreadyCared && voiceBalance >= 50
                     const showVkRow = effectiveShowVkAfterCare(playerMenuTarget, courtshipProfileAllowed)
                     const targetAcceptsInvites = effectiveOpenToChatInvites(playerMenuTarget, allowChatInvite)
                     const isTargetFavorite = !!currentUser && favorites.some((f) => f.id === playerMenuTarget.id)
@@ -6619,35 +6743,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     const myRosesToThem = (rosesGiven ?? []).filter(
                       (r) => r.fromPlayerId === currentUser?.id && r.toPlayerId === playerMenuTarget.id,
                     ).length
-                    const careHandler = () => {
-                      if (!currentUser) return
-                      if (currentUserAlreadyCared) {
-                        showToast("Вы уже ухаживали сегодня", "info")
-                        return
-                      }
-                      if (carersCount >= 5) {
-                        showToast("Лимит ухаживаний за этим игроком на сегодня", "info")
-                        return
-                      }
-                      if (voiceBalance < 50) {
-                        showToast("Нужно 50 сердец", "error")
-                        return
-                      }
-                      dispatch({ type: "PAY_VOICES", amount: 50 })
-                      dispatch({
-                        type: "ADD_LOG",
-                        entry: {
-                          id: generateLogId(),
-                          type: "care",
-                          fromPlayer: currentUser!,
-                          toPlayer: playerMenuTarget,
-                          text: `${currentUser!.name} ухаживает за ${playerMenuTarget.name}`,
-                          timestamp: Date.now(),
-                        },
-                      })
-                      dispatch({ type: "CLOSE_PLAYER_MENU" })
-                      showToast("Ухаживание отправлено!", "success")
-                    }
                     const roseHandler = () => {
                       if (!currentUser) return
                       if (voiceBalance < 50) {
@@ -6702,25 +6797,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                             <Star className="h-7 w-7 shrink-0 text-amber-600" strokeWidth={2.25} />
                             <span className={`${titleCls} text-slate-900`}>В избранное</span>
                             <div className={priceCellGold}>бесплатно</div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={careHandler}
-                            disabled={!canCare}
-                            className={`${baseTile} ${baseTileNarrow} min-w-0 disabled:opacity-40`}
-                            style={{
-                              background: "linear-gradient(180deg, #ec4899 0%, #be185d 100%)",
-                              color: "#fff",
-                              border: "2px solid #9d174d",
-                              boxShadow: "0 2px 0 #831843",
-                            }}
-                          >
-                            <Heart className="h-7 w-7 shrink-0 text-white" strokeWidth={2.25} fill="currentColor" />
-                            <span className={`${titleCls} text-white [text-shadow:0_2px_8px_rgba(0,0,0,0.28)]`}>Ухаживать</span>
-                            <div className={priceCellLight}>
-                              <span>50</span>
-                              <Heart className="h-4 w-4 text-rose-600" fill="currentColor" />
-                            </div>
                           </button>
                           <button
                             type="button"
@@ -7088,6 +7164,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                     timestamp: Date.now(),
                                   } as GameLogEntry,
                                 })
+                                playEmotionSound(gift.id)
                                 if (limitedStock) void refreshGiftCatalog()
                               }
                               const isHeartPaidSection = section.key === "hearts"
@@ -7168,6 +7245,41 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       )}
 
       {/* магазин теперь отдельным экраном (ShopScreen) */}
+      {careOfferOpen && playerMenuTarget && currentUser && currentUser.id !== playerMenuTarget.id && (
+        <div className="fixed inset-0 z-[185] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-3xl border border-fuchsia-300/45 bg-gradient-to-b from-slate-900 to-slate-950 p-4 shadow-2xl">
+            <p className="text-center text-[19px] font-black text-slate-100">Начать ухаживать</p>
+            <p className="mt-1 text-center text-[14px] text-slate-300">
+              Выберите способ подарка для <span className="font-bold text-white">{playerMenuTarget.name}</span>
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => handlePlayerProfileCareOffer("hearts")}
+                disabled={voiceBalance < 50}
+                className="rounded-2xl border border-amber-300/55 bg-gradient-to-b from-amber-200 to-amber-100 px-4 py-3 text-[15px] font-black text-slate-900 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Подарить игроку — 50 ❤
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePlayerProfileCareOffer("roses")}
+                disabled={roseInventoryCount < 10}
+                className="rounded-2xl border border-fuchsia-300/55 bg-gradient-to-b from-fuchsia-200 to-fuchsia-100 px-4 py-3 text-[15px] font-black text-slate-900 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Подарить игроку — 10 🌹
+              </button>
+              <button
+                type="button"
+                onClick={() => setCareOfferOpen(false)}
+                className="rounded-2xl border border-slate-500/70 bg-slate-800 px-4 py-2.5 text-[14px] font-semibold text-slate-200 transition hover:bg-slate-700"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -7226,6 +7338,7 @@ function TableChatPanel({
   chatDisabled,
   className,
   onJoinPlayerHello,
+  onChatMenuAction,
 }: {
   gameLog: GameLogEntry[]
   players: Player[]
@@ -7241,6 +7354,10 @@ function TableChatPanel({
   chatDisabled?: boolean
   className?: string
   onJoinPlayerHello?: (joinedPlayer: Player) => void
+  onChatMenuAction?: (
+    action: "profile" | "reply" | "report",
+    ctx: { player: Player; text: string },
+  ) => void
 }) {
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const prevFeedLenRef = useRef(0)
@@ -7336,6 +7453,7 @@ function TableChatPanel({
                 repeatCount={row.count}
                 chatDisabled={chatDisabled}
                 onJoinPlayerHello={onJoinPlayerHello}
+                onChatMenuAction={onChatMenuAction}
               />
             ),
           )}
@@ -7647,6 +7765,7 @@ function ChatBubble({
   repeatCount = 1,
   chatDisabled = false,
   onJoinPlayerHello,
+  onChatMenuAction,
 }: {
   entry: GameLogEntry
   players: Player[]
@@ -7657,15 +7776,72 @@ function ChatBubble({
   repeatCount?: number
   chatDisabled?: boolean
   onJoinPlayerHello?: (joinedPlayer: Player) => void
+  onChatMenuAction?: (
+    action: "profile" | "reply" | "report",
+    ctx: { player: Player; text: string },
+  ) => void
 }) {
   const isOwn = entry.fromPlayer?.id === currentUserId
   const isChat = entry.type === "chat"
   const showRepeat = repeatCount > 1 && !isChat
 
   if (isChat) {
+    const chatMenuCtx = entry.fromPlayer
+      ? { player: entry.fromPlayer, text: entry.text }
+      : null
+    const chatMenuItemClass =
+      "cursor-pointer rounded-none border-b border-slate-200/90 px-3 py-2.5 text-left text-[14px] font-medium text-slate-900 focus:bg-slate-100 data-[highlighted]:bg-slate-100 dark:border-slate-600/80 dark:text-slate-100 dark:focus:bg-slate-800 dark:data-[highlighted]:bg-slate-800"
+
     return (
       <div className={cn("flex w-full items-end gap-2.5", isOwn ? "flex-row-reverse" : "flex-row")}>
-        {entry.fromPlayer && !isOwn && (
+        {entry.fromPlayer && !isOwn && onChatMenuAction && chatMenuCtx && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "mb-0.5 h-11 w-11 shrink-0 overflow-hidden rounded-full outline-none ring-offset-2 transition-opacity hover:opacity-95 focus-visible:ring-2 focus-visible:ring-cyan-400/55",
+                  TABLE_CHAT_ROOM_AVATAR_RING,
+                )}
+                aria-label={`Меню сообщения от ${entry.fromPlayer.name}`}
+              >
+                <img
+                  src={entry.fromPlayer.avatar}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(e) => tableChatPlayerAvatarOnError(e, entry.fromPlayer!)}
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="bottom"
+              sideOffset={6}
+              className="z-[80] w-[min(100vw-1.5rem,13.5rem)] overflow-hidden rounded-xl border border-slate-200/90 bg-white/[0.97] p-0 shadow-[0_8px_32px_rgba(15,23,42,0.18)] backdrop-blur-md dark:border-slate-600/80 dark:bg-slate-900/[0.97]"
+            >
+              <DropdownMenuItem
+                className={chatMenuItemClass}
+                onSelect={() => onChatMenuAction("profile", chatMenuCtx)}
+              >
+                Профиль
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className={chatMenuItemClass}
+                onSelect={() => onChatMenuAction("reply", chatMenuCtx)}
+              >
+                Ответить
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                className="cursor-pointer rounded-none px-3 py-2.5 text-left text-[14px] font-medium focus:bg-red-500/10 data-[highlighted]:bg-red-500/10"
+                onSelect={() => onChatMenuAction("report", chatMenuCtx)}
+              >
+                Пожаловаться
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {entry.fromPlayer && !isOwn && !onChatMenuAction && (
           <div
             className={cn(
               "mb-0.5 h-11 w-11 shrink-0 overflow-hidden rounded-full",

@@ -284,6 +284,10 @@ function migrate(database: Database.Database) {
   if (!giftColsStock.some((c) => c.name === "stock")) {
     database.exec(`ALTER TABLE gift_catalog ADD COLUMN stock INTEGER NOT NULL DEFAULT -1`)
   }
+  const giftColsMusic = database.prepare(`PRAGMA table_info(gift_catalog)`).all() as { name: string }[]
+  if (!giftColsMusic.some((c) => c.name === "music")) {
+    database.exec(`ALTER TABLE gift_catalog ADD COLUMN music TEXT NOT NULL DEFAULT ''`)
+  }
   const hasPremiumFrames = (database.prepare(`SELECT COUNT(*) as c FROM frame_catalog WHERE section = 'premium'`).get() as { c: number })?.c > 0
   if (hasPremiumFrames) {
     database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)

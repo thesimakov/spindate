@@ -2,9 +2,9 @@ import path from "node:path"
 import { unlink } from "node:fs/promises"
 import {
   CATALOG_UPLOAD_API_PREFIX,
-  CATALOG_UPLOAD_FILENAME_RE,
   getCatalogUploadRoot,
   isAllowedCatalogUploadBucket,
+  isAllowedCatalogUploadFileName,
 } from "@/lib/catalog-upload-paths"
 
 function normalizePath(raw: string): string | null {
@@ -22,7 +22,7 @@ async function removeCatalogApiUpload(withLeading: string): Promise<boolean> {
   const parts = rest.split("/").filter(Boolean)
   if (parts.length !== 2) return false
   const [bucket, fileName] = parts
-  if (!isAllowedCatalogUploadBucket(bucket) || !CATALOG_UPLOAD_FILENAME_RE.test(fileName)) return false
+  if (!isAllowedCatalogUploadBucket(bucket) || !isAllowedCatalogUploadFileName(bucket, fileName)) return false
   const root = path.resolve(getCatalogUploadRoot())
   const absTarget = path.resolve(root, bucket, fileName)
   const bucketRoot = path.resolve(root, bucket)

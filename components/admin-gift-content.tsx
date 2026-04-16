@@ -14,6 +14,8 @@ type RowDraft = {
   name: string
   emoji: string
   img: string
+  /** Путь `/api/catalog/upload-asset/gift_music/...` или пусто */
+  music: string
   cost: number
   /** −1 — без лимита; 0 и выше — остаток в каталоге. */
   stock: number
@@ -38,6 +40,7 @@ function parseRows(rows: unknown): RowDraft[] {
       img?: string
       cost?: number
       stock?: number
+      music?: string
       payCurrency?: string
       pay_currency?: string
       published?: boolean
@@ -69,6 +72,7 @@ function parseRows(rows: unknown): RowDraft[] {
       name: typeof rec.name === "string" && rec.name.trim() ? rec.name.trim() : rec.id,
       emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "🎁",
       img: typeof rec.img === "string" ? rec.img.trim() : "",
+      music: typeof rec.music === "string" ? rec.music.trim() : "",
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
       stock,
       payCurrency,
@@ -109,6 +113,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     name: "Новый подарок",
     emoji: "🎁",
     img: "",
+    music: "",
     cost: 1,
     stock: -1,
     payCurrency: "hearts",
@@ -205,6 +210,37 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     [token, postUpdate],
   )
 
+  const uploadGiftMusic = useCallback(
+    async (id: string, file: File) => {
+      setBusyId(id)
+      setError("")
+      try {
+        const form = new FormData()
+        form.set("file", file)
+        form.set("bucket", "gift_music")
+        const res = await apiFetch("/api/admin/content/upload-audio", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+          cache: "no-store",
+          credentials: "include",
+          body: form,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || typeof data.path !== "string") {
+          setError(`Не удалось загрузить аудио: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+          return
+        }
+        updateRow(id, { music: data.path })
+        await postUpdate(id, { music: data.path })
+      } catch {
+        setError("Ошибка сети при загрузке музыки")
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [token, postUpdate],
+  )
+
   const addBusyKey = "__new_gift__"
   const uploadNewGiftImage = useCallback(
     async (file: File) => {
@@ -236,6 +272,36 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     [token],
   )
 
+  const uploadNewGiftMusic = useCallback(
+    async (file: File) => {
+      setBusyId(addBusyKey)
+      setError("")
+      try {
+        const form = new FormData()
+        form.set("file", file)
+        form.set("bucket", "gift_music")
+        const res = await apiFetch("/api/admin/content/upload-audio", {
+          method: "POST",
+          headers: { "X-Admin-Token": token },
+          cache: "no-store",
+          credentials: "include",
+          body: form,
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || typeof data.path !== "string") {
+          setError(`Не удалось загрузить аудио: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+          return
+        }
+        setAddDraft((prev) => ({ ...prev, music: data.path }))
+      } catch {
+        setError("Ошибка сети при загрузке музыки")
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [token],
+  )
+
   const total = rows.length
   const publishedCount = useMemo(() => rows.filter((r) => r.published && !r.deleted).length, [rows])
   const createFromAddDraft = useCallback(async () => {
@@ -260,6 +326,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       name: "Новый подарок",
       emoji: "🎁",
       img: "",
+      music: "",
       cost: addTier === "free" ? 0 : prev.cost,
       stock: prev.stock,
       payCurrency: prev.payCurrency,
@@ -399,6 +466,33 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                 </label>
               </div>
             </label>
+            <label className="text-[11px] text-slate-400 md:col-span-2">
+              Музыка при дарении (опционально, MP3 и др.)
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={addDraft.music}
+                  readOnly
+                  className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                  placeholder="пусто — звук по умолчанию"
+                />
+                <label className="inline-flex cursor-pointer shrink-0 items-center rounded-lg border border-violet-500/50 bg-slate-700/80 px-2.5 py-1.5 text-xs font-medium text-violet-100 hover:bg-slate-600">
+                  Загрузить аудио
+                  <input
+                    type="file"
+                    accept="audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/webm,.mp3,.m4a,.aac,.wav,.ogg,.opus,.webm"
+                    className="hidden"
+                    disabled={busyId === addBusyKey}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.currentTarget.value = ""
+                      if (!file) return
+                      void uploadNewGiftMusic(file)
+                    }}
+                  />
+                </label>
+              </div>
+            </label>
           </div>
           <p className="mt-2 text-xs text-slate-400">ID можно задать вручную, если оставить пустым - сформируется автоматически.</p>
           <button
@@ -481,6 +575,46 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                   </div>
                 </label>
                 <label className="block text-[11px] text-slate-400">
+                  Музыка при дарении (опционально)
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={row.music}
+                      readOnly
+                      className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                      placeholder="пусто — звук по умолчанию"
+                    />
+                    <label className="inline-flex shrink-0 cursor-pointer items-center rounded-lg border border-violet-500/50 bg-slate-700/80 px-2.5 py-1.5 text-xs font-medium text-violet-100 hover:bg-slate-600">
+                      Загрузить аудио
+                      <input
+                        type="file"
+                        accept="audio/mpeg,audio/mp3,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/webm,.mp3,.m4a,.aac,.wav,.ogg,.opus,.webm"
+                        className="hidden"
+                        disabled={busyId === row.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.currentTarget.value = ""
+                          if (!file) return
+                          void uploadGiftMusic(row.id, file)
+                        }}
+                      />
+                    </label>
+                    {row.music ? (
+                      <button
+                        type="button"
+                        disabled={busyId === row.id}
+                        onClick={() => {
+                          updateRow(row.id, { music: "" })
+                          void postUpdate(row.id, { music: "" })
+                        }}
+                        className="shrink-0 rounded-lg border border-slate-500 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
+                      >
+                        Сбросить
+                      </button>
+                    ) : null}
+                  </div>
+                </label>
+                <label className="block text-[11px] text-slate-400">
                   Оплата
                   <select
                     value={row.payCurrency}
@@ -528,6 +662,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                       name: row.name,
                       emoji: row.emoji,
                       img: row.img,
+                      music: row.music,
                       cost: row.cost,
                       stock: row.stock,
                       payCurrency: row.payCurrency,

@@ -29,8 +29,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400, headers: NO_CACHE })
     }
     if (body?.deleted === true) {
-      const { removedImagePath } = deleteGiftCatalogEntry(id)
+      const { removedImagePath, removedMusicPath } = deleteGiftCatalogEntry(id)
       if (removedImagePath) await removeAdminUploadedAssetIfExists(removedImagePath)
+      if (removedMusicPath) await removeAdminUploadedAssetIfExists(removedMusicPath)
       const rows = listGiftCatalogRows({ includeDeleted: true, resolveImage: false })
       return NextResponse.json({ ok: true, rows }, { headers: NO_CACHE })
     }
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
       cost: typeof body?.cost === "number" ? body.cost : undefined,
       payCurrency: body?.payCurrency === "roses" || body?.payCurrency === "hearts" ? body.payCurrency : undefined,
       stock: typeof body?.stock === "number" ? body.stock : undefined,
+      music: typeof body?.music === "string" ? body.music : undefined,
       published: typeof body?.published === "boolean" ? body.published : undefined,
     })
     const rows = listGiftCatalogRows({ includeDeleted: true, resolveImage: false })

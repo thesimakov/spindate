@@ -2,9 +2,9 @@ import { NextResponse } from "next/server"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
 import {
-  CATALOG_UPLOAD_FILENAME_RE,
   getCatalogUploadRoot,
   isAllowedCatalogUploadBucket,
+  isAllowedCatalogUploadFileName,
 } from "@/lib/catalog-upload-paths"
 
 export const dynamic = "force-dynamic"
@@ -17,11 +17,18 @@ const EXT_MIME: Record<string, string> = {
   ".webp": "image/webp",
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".opus": "audio/opus",
+  ".webm": "audio/webm",
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ bucket: string; fileName: string }> }) {
   const { bucket, fileName } = await ctx.params
-  if (!isAllowedCatalogUploadBucket(bucket) || !CATALOG_UPLOAD_FILENAME_RE.test(fileName)) {
+  if (!isAllowedCatalogUploadBucket(bucket) || !isAllowedCatalogUploadFileName(bucket, fileName)) {
     return new NextResponse("Not Found", { status: 404 })
   }
 

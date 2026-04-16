@@ -115,6 +115,8 @@ export const EMOJI_BANYA = "/assets/7786876.svg"
 
 /** Звуки при эмоциях (MP3 в public/assets/; путь `music/…` — из public/music/) */
 export const EMOTION_SOUNDS: Record<string, string> = {
+  /** Дарение предмета из каталога подарков — один общий SFX для всех id подарков */
+  gift_catalog: "9160bfefbb62e94654645.mp3",
   kiss: "kiss_mkqxy6eu.mp3",
   diamond: "001_38372.mp3",
   flowers: "546546745.mp3",
