@@ -173,10 +173,11 @@ export type ConsumeGiftStockResult =
   | { ok: true; unlimited: false; stockAfter: number }
   | { ok: false; reason: "not_found" | "out_of_stock" | "unpublished" }
 
-/** Атомарно уменьшает остаток на 1 для подарка с лимитом (stock ≥ 0). Для stock &lt; 0 ничего не меняет — «без лимита». */
-export function tryConsumeGiftStock(giftId: string): ConsumeGiftStockResult {
+/** Атомарно уменьшает остаток на `amount` для подарка с лимитом (stock ≥ 0). Для stock &lt; 0 ничего не меняет — «без лимита». */
+export function tryConsumeGiftStock(giftId: string, amount = 1): ConsumeGiftStockResult {
   const safeId = typeof giftId === "string" ? giftId.trim() : ""
   if (!safeId) return { ok: false, reason: "not_found" }
+  const safeAmount = Number.isFinite(amount) ? Math.max(1, Math.floor(amount)) : 1
   const db = getDb()
   return db.transaction((): ConsumeGiftStockResult => {
     const row = db
@@ -188,11 +189,11 @@ export function tryConsumeGiftStock(giftId: string): ConsumeGiftStockResult {
     const stockRaw = row.stock
     const stock = typeof stockRaw === "number" && Number.isFinite(stockRaw) ? Math.floor(stockRaw) : -1
     if (stock < 0) return { ok: true, unlimited: true }
-    if (stock <= 0) return { ok: false, reason: "out_of_stock" }
+    if (stock < safeAmount) return { ok: false, reason: "out_of_stock" }
     const now = Date.now()
     const upd = db
-      .prepare(`UPDATE gift_catalog SET stock = stock - 1, updated_at = ? WHERE id = ? AND stock > 0`)
-      .run(now, safeId)
+      .prepare(`UPDATE gift_catalog SET stock = stock - ?, updated_at = ? WHERE id = ? AND stock >= ?`)
+      .run(safeAmount, now, safeId, safeAmount)
     if (upd.changes === 0) return { ok: false, reason: "out_of_stock" }
     const nextRow = db.prepare(`SELECT stock FROM gift_catalog WHERE id = ?`).get(safeId) as { stock: number }
     const next = typeof nextRow?.stock === "number" ? Math.floor(nextRow.stock) : 0

@@ -20,6 +20,7 @@ type GameSidePanelShellProps = {
   contentClassName?: string
   closeButtonClassName?: string
   overlayClassName?: string
+  allowBackgroundInteraction?: boolean
 }
 
 export function GameSidePanelShell({
@@ -35,6 +36,7 @@ export function GameSidePanelShell({
   contentClassName,
   closeButtonClassName,
   overlayClassName,
+  allowBackgroundInteraction = false,
 }: GameSidePanelShellProps) {
   const isMaterial = variant === "material"
   const basePanel =
@@ -64,15 +66,25 @@ export function GameSidePanelShell({
 
   return (
     <>
-      <button
-        type="button"
-        className={cn(
-          "side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]",
-          overlayClassName,
-        )}
-        onClick={onClose}
-        aria-label="Закрыть"
-      />
+      {allowBackgroundInteraction ? (
+        <div
+          className={cn(
+            "side-panel-overlay-fade-in pointer-events-none fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]",
+            overlayClassName,
+          )}
+          aria-hidden
+        />
+      ) : (
+        <button
+          type="button"
+          className={cn(
+            "side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]",
+            overlayClassName,
+          )}
+          onClick={onClose}
+          aria-label="Закрыть"
+        />
+      )}
       <div
         role="dialog"
         aria-modal

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -8,6 +9,8 @@ type GiftAchievementModalProps = {
   imageUrl: string
   achievementTitle: string
   description: string
+  /** Пол получателя (текущего пользователя), чтобы заголовок был грамматически корректным. */
+  recipientGender?: "male" | "female"
   shareBusy?: boolean
   onClose: () => void
   onShare: () => void
@@ -18,11 +21,56 @@ export function GiftAchievementModal({
   imageUrl,
   achievementTitle,
   description,
+  recipientGender,
   shareBusy = false,
   onClose,
   onShare,
 }: GiftAchievementModalProps) {
   if (!open) return null
+
+  const hasLoggedRef = useRef(false)
+  useEffect(() => {
+    if (!open) return
+    if (hasLoggedRef.current) return
+    hasLoggedRef.current = true
+    // #region agent log
+    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+      body: JSON.stringify({
+        sessionId: "b06cc0",
+        runId: "pre-fix",
+        hypothesisId: "H1",
+        location: "gift-achievement-modal.tsx:render",
+        message: "GiftAchievementModal render for closeability",
+        timestamp: Date.now(),
+        data: { open, shareBusy, recipientGender },
+      }),
+    }).catch(() => {})
+    // #endregion
+  }, [open, shareBusy, recipientGender])
+
+  const handleClose = () => {
+    // #region agent log
+    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+      body: JSON.stringify({
+        sessionId: "b06cc0",
+        runId: "pre-fix",
+        hypothesisId: "H2",
+        location: "gift-achievement-modal.tsx:handleClose",
+        message: "GiftAchievementModal close handler invoked",
+        timestamp: Date.now(),
+        data: { open, shareBusy, recipientGender },
+      }),
+    }).catch(() => {})
+    // #endregion
+    onClose()
+  }
+
+  const titleText =
+    recipientGender === "female" ? "Ты получила достижение" : recipientGender === "male" ? "Ты получил достижение" : "Ты получил(А) достижение"
 
   return (
     <div
@@ -31,7 +79,24 @@ export function GiftAchievementModal({
       aria-modal="true"
       aria-labelledby="gift-achievement-title"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !shareBusy) onClose()
+        if (e.target === e.currentTarget && !shareBusy) {
+          // #region agent log
+          fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+            body: JSON.stringify({
+              sessionId: "b06cc0",
+              runId: "pre-fix",
+              hypothesisId: "H3",
+              location: "gift-achievement-modal.tsx:overlayClick",
+              message: "Overlay click on background triggers close",
+              timestamp: Date.now(),
+              data: { shareBusy },
+            }),
+          }).catch(() => {})
+          // #endregion
+          handleClose()
+        }
       }}
     >
       <div className="relative w-full max-w-[min(100%,26rem)] overflow-hidden rounded-[2rem] bg-[#f4f4fb] shadow-[0_28px_80px_rgba(0,0,0,0.45)]">
@@ -39,7 +104,7 @@ export function GiftAchievementModal({
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_right_top,rgba(255,220,120,0.45),transparent_28%),radial-gradient(circle_at_left_center,rgba(255,255,255,0.2),transparent_35%)]" />
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={shareBusy}
             className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-60"
             aria-label="Закрыть"
@@ -47,7 +112,7 @@ export function GiftAchievementModal({
             <X className="h-5 w-5" />
           </button>
           <h2 id="gift-achievement-title" className="relative text-2xl font-black tracking-tight text-white sm:text-[1.85rem]">
-            Ты получил(А) достижение
+            {titleText}
           </h2>
         </div>
 

@@ -20,8 +20,10 @@ export async function POST(req: Request) {
   if (!giftId) {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400, headers: NO_CACHE })
   }
+  const amountRaw = Number((body as { amount?: unknown })?.amount)
+  const amount = Number.isFinite(amountRaw) ? Math.max(1, Math.floor(amountRaw)) : 1
 
-  const result = tryConsumeGiftStock(giftId)
+  const result = tryConsumeGiftStock(giftId, amount)
   if (!result.ok) {
     const status =
       result.reason === "out_of_stock" ? 409 : result.reason === "unpublished" ? 404 : 404

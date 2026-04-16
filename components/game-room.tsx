@@ -657,9 +657,10 @@ interface FlyingEmoji {
 }
 
 /** Длительность плавного полёта подарка по дуге Безье (мс). */
-const GIFT_FLY_DURATION_MS = 2100
+// "Вау"-анимация: медленнее и заметнее
+const GIFT_FLY_DURATION_MS = 3200
 /** Длительность CSS `gift-arrival-burst` — иконка подарка на аватаре после этого. */
-const GIFT_ARRIVAL_PARTICLE_DURATION_MS = 930
+const GIFT_ARRIVAL_PARTICLE_DURATION_MS = 1400
 
 /** Полёт подарка из каталога к центру аватарки получателя (плавная квадратичная кривая). */
 interface GiftCatalogFlyFx {
@@ -703,11 +704,11 @@ function mulberry32(seed: number) {
 function GiftArrivalParticleBurst({ x, y, burstKey }: { x: number; y: number; burstKey: string }) {
   const particles = useMemo(() => {
     const rnd = mulberry32(hashStringToSeed(burstKey))
-    return Array.from({ length: 22 }, () => ({
+    return Array.from({ length: 32 }, () => ({
       angle: rnd() * Math.PI * 2,
-      dist: 56 + rnd() * 118,
-      size: 3 + rnd() * 8,
-      delay: rnd() * 140,
+      dist: 64 + rnd() * 136,
+      size: 4 + rnd() * 14,
+      delay: rnd() * 190,
       hue: 36 + rnd() * 28,
     }))
   }, [burstKey])
@@ -796,8 +797,10 @@ function GiftCatalogBezierFly({
       if (el) {
         el.style.left = `${x}px`
         el.style.top = `${y}px`
-        const scale = 1 - 0.34 * rawT
-        el.style.transform = `translate(-50%, -50%) scale(${scale})`
+        // Старт крупнее и с лёгким "кручением" для эффекта вау
+        const scale = 1.35 - 0.38 * rawT
+        const rot = -8 + 16 * rawT
+        el.style.transform = `translate(-50%, -50%) scale(${scale}) rotate(${rot}deg)`
         el.style.opacity = `${1 - 0.82 * rawT * rawT}`
       }
       if (rawT < 1) {
@@ -820,7 +823,7 @@ function GiftCatalogBezierFly({
       style={{
         left: startX,
         top: startY,
-        transform: "translate(-50%, -50%) scale(1)",
+        transform: "translate(-50%, -50%) scale(1.35)",
         opacity: 1,
       }}
       aria-hidden
@@ -829,11 +832,11 @@ function GiftCatalogBezierFly({
         <img
           src={imgSrc}
           alt=""
-          className="h-10 w-10 rounded-xl object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]"
+          className="h-14 w-14 rounded-2xl object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.5)]"
           draggable={false}
         />
       ) : (
-        <span className="block text-[2rem] leading-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]">
+        <span className="block text-[2.8rem] leading-none drop-shadow-[0_10px_18px_rgba(0,0,0,0.5)]">
           {emoji || "🎁"}
         </span>
       )}
@@ -1677,6 +1680,11 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
   const [giftPurchaseBusyKey, setGiftPurchaseBusyKey] = useState<string | null>(null)
+  const [giftBatchPickerOpen, setGiftBatchPickerOpen] = useState(false)
+  /** Массовый выбор: мужчины и женщины включаются независимо (можно оба сразу). */
+  const [giftBatchMaleOn, setGiftBatchMaleOn] = useState(false)
+  const [giftBatchFemaleOn, setGiftBatchFemaleOn] = useState(false)
+  const [giftCatalogRecipientIds, setGiftCatalogRecipientIds] = useState<number[]>([])
   const [careOfferOpen, setCareOfferOpen] = useState(false)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
   const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
@@ -1723,6 +1731,67 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [betPlaced, setBetPlaced] = useState(false)
   const [betWinnings, setBetWinnings] = useState<number | null>(null)
   const botActionRoundRef = useRef<number | null>(null)
+
+  const giftDrawerEligibleRecipients = useMemo(
+    () => players.filter((p) => p.id !== currentUser?.id),
+    [players, currentUser?.id],
+  )
+
+  const selectedGiftRecipients = useMemo(() => {
+    if (giftBatchMaleOn || giftBatchFemaleOn) {
+      const idSet = new Set<number>()
+      if (giftBatchMaleOn) {
+        for (const p of giftDrawerEligibleRecipients) {
+          if (p.gender === "male") idSet.add(p.id)
+        }
+      }
+      if (giftBatchFemaleOn) {
+        for (const p of giftDrawerEligibleRecipients) {
+          if (p.gender === "female") idSet.add(p.id)
+        }
+      }
+      const resolved = giftDrawerEligibleRecipients.filter((p) => idSet.has(p.id))
+      if (resolved.length > 0) return resolved
+    }
+    // Когда массовые флаги выключены, список получателей управляется вручную `giftCatalogRecipientIds`.
+    // Если он пустой — значит, пользователь удалил всех выбранных, и подарок никому не уйдет.
+    const baseIds = giftCatalogRecipientIds
+    const idSet = new Set(baseIds)
+    const resolved = giftDrawerEligibleRecipients.filter((p) => idSet.has(p.id))
+    if (resolved.length > 0) return resolved
+    return baseIds.length === 0 ? [] : giftCatalogDrawerPlayer ? [giftCatalogDrawerPlayer] : []
+  }, [
+    giftBatchMaleOn,
+    giftBatchFemaleOn,
+    giftCatalogDrawerPlayer,
+    giftCatalogRecipientIds,
+    giftDrawerEligibleRecipients,
+  ])
+
+  useEffect(() => {
+    if (!giftCatalogDrawerPlayer) {
+      setGiftBatchPickerOpen(false)
+      setGiftBatchMaleOn(false)
+      setGiftBatchFemaleOn(false)
+      setGiftCatalogRecipientIds([])
+      return
+    }
+    setGiftBatchPickerOpen(false)
+    setGiftBatchMaleOn(false)
+    setGiftBatchFemaleOn(false)
+    setGiftCatalogRecipientIds([giftCatalogDrawerPlayer.id])
+  }, [giftCatalogDrawerPlayer])
+
+  const removeGiftRecipient = useCallback(
+    (recipientId: number) => {
+      // Удаление отменяет массовый режим и переводит выбор в ручной список оставшихся.
+      setGiftBatchMaleOn(false)
+      setGiftBatchFemaleOn(false)
+      const remaining = selectedGiftRecipients.filter((p) => p.id !== recipientId)
+      setGiftCatalogRecipientIds(remaining.map((p) => p.id))
+    },
+    [selectedGiftRecipients],
+  )
 
   const currentTurnPlayer = players[currentTurnIndex]
   const isMyTurn = currentUser?.id === currentTurnPlayer?.id
@@ -3386,13 +3455,71 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       emoji?: string,
       imgSrcRaw?: string,
     ) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+        body: JSON.stringify({
+          sessionId: "b06cc0",
+          location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:entry",
+          message: "gift fly trigger called",
+          data: {
+            buttonKey,
+            recipientPlayerId,
+            giftTypeId,
+            refKeysSample: Object.keys(giftCatalogButtonRefs.current).slice(0, 12),
+            hasButtonForKey: Boolean(giftCatalogButtonRefs.current[buttonKey]),
+          },
+          timestamp: Date.now(),
+          hypothesisId: "H1",
+        }),
+      }).catch(() => {})
+      // #endregion
       const buttonEl = giftCatalogButtonRefs.current[buttonKey]
       const surface = tableSurfaceRef.current
-      if (!buttonEl || !surface) return
+      if (!buttonEl || !surface) {
+        // #region agent log
+        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+          body: JSON.stringify({
+            sessionId: "b06cc0",
+            location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:early",
+            message: "gift fly aborted: missing button or surface",
+            data: { hasButtonEl: Boolean(buttonEl), hasSurface: Boolean(surface) },
+            timestamp: Date.now(),
+            hypothesisId: "H1-H2",
+          }),
+        }).catch(() => {})
+        // #endregion
+        return
+      }
       const avatarWrap = surface.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${recipientPlayerId}"]`)
       const from = buttonEl.getBoundingClientRect()
       const to = avatarWrap?.getBoundingClientRect()
-      if (!to || from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return
+      if (!to || from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) {
+        // #region agent log
+        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+          body: JSON.stringify({
+            sessionId: "b06cc0",
+            location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:early",
+            message: "gift fly aborted: bad avatar or rects",
+            data: {
+              hasAvatarWrap: Boolean(avatarWrap),
+              fromW: from.width,
+              fromH: from.height,
+              toW: to?.width,
+              toH: to?.height,
+            },
+            timestamp: Date.now(),
+            hypothesisId: "H3-H4",
+          }),
+        }).catch(() => {})
+        // #endregion
+        return
+      }
       const id = `gift_fly_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
       const startX = from.left + from.width / 2
       const startY = from.top + from.height / 2
@@ -3404,6 +3531,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         ...prev.slice(-7),
         { id, recipientPlayerId, giftTypeId, emoji, imgSrc, startX, startY, endX, endY },
       ])
+      // #region agent log
+      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+        body: JSON.stringify({
+          sessionId: "b06cc0",
+          location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:success",
+          message: "gift fly fx queued",
+          data: { id, buttonKey, recipientPlayerId },
+          timestamp: Date.now(),
+          hypothesisId: "H1-ok",
+        }),
+      }).catch(() => {})
+      // #endregion
     },
     [],
   )
@@ -4070,9 +4211,27 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         open={giftAchievementOpen}
         imageUrl={publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH)}
         achievementTitle={GIFT_ACHIEVEMENT_TITLE}
+        recipientGender={currentUser?.gender === "female" ? "female" : "male"}
         description="Ура! Ты выполнил(а) достижение за подарки и получил(а) награду."
         shareBusy={giftAchievementShareBusy}
-        onClose={() => setGiftAchievementOpen(false)}
+        onClose={() => {
+          // #region agent log
+          fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+            body: JSON.stringify({
+              sessionId: "b06cc0",
+              runId: "pre-fix",
+              hypothesisId: "H4",
+              location: "game-room.tsx:GiftAchievementModal:parentOnClose",
+              message: "Parent onClose called",
+              timestamp: Date.now(),
+              data: { giftAchievementOpen, giftAchievementShareBusy },
+            }),
+          }).catch(() => {})
+          // #endregion
+          setGiftAchievementOpen(false)
+        }}
         onShare={() => void handleShareGiftAchievement()}
       />
       {currentUser && (
@@ -5581,7 +5740,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
           {/* ---- BOTTLE in the centre / pair-kiss choice card ---- */}
           {bottleShouldRender ? (
-            <div className="absolute inset-0 z-20">
+            <div className="pointer-events-none absolute inset-0 z-20">
               <BottleCenter
                 measureRef={bottleMeasureRef}
                 bottleAngle={bottleAngle}
@@ -5864,6 +6023,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 onSend={handleSendChat}
                 logEndRef={logEndRef}
                 currentUserId={currentUser?.id}
+                currentUserIsVip={currentUser?.isVip}
                 chatDisabled={tablePaused}
                 onJoinPlayerHello={handleJoinPlayerHello}
                 onChatMenuAction={handleChatAvatarMenuAction}
@@ -5926,6 +6086,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 onSend={handleSendChat}
                 logEndRef={logEndRef}
                 currentUserId={currentUser?.id}
+                currentUserIsVip={currentUser?.isVip}
                 chatDisabled={tablePaused}
                 onJoinPlayerHello={handleJoinPlayerHello}
                 onChatMenuAction={handleChatAvatarMenuAction}
@@ -7115,9 +7276,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       {/* Каталог подарков — та же оболочка, что у магазина (GameSidePanelShell) */}
       {giftCatalogDrawerPlayer && currentUser && (
         <GameSidePanelShell
-          title={`Подарки для ${giftCatalogDrawerPlayer.name}`}
+          title={
+            selectedGiftRecipients.length > 1
+              ? `Подарки для ${selectedGiftRecipients.length} игроков`
+              : `Подарки для ${giftCatalogDrawerPlayer.name}`
+          }
           subtitle="оплата сердечками или розами — по каталогу"
-          onClose={() => setGiftCatalogDrawerPlayer(null)}
+          allowBackgroundInteraction
+          onClose={() => {
+            setGiftCatalogDrawerPlayer(null)
+            setGiftBatchPickerOpen(false)
+            setGiftBatchMaleOn(false)
+            setGiftBatchFemaleOn(false)
+            setGiftCatalogRecipientIds([])
+          }}
           variant="material"
           overlayClassName="bg-transparent backdrop-blur-none"
           panelClassName="!border-amber-500/25 !bg-[linear-gradient(165deg,rgba(30,41,59,0.98)_0%,rgba(15,23,42,0.98)_50%,rgba(30,41,59,0.98)_100%)] !shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
@@ -7131,12 +7303,128 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
           <div className="relative z-[1] flex min-h-0 min-w-0 w-full flex-1 flex-col">
-                <div className="mb-2 flex items-center justify-center">
-                  <div
-                    ref={giftDrawerAvatarRef}
-                    className="rounded-full ring-2 ring-amber-400/35 ring-offset-2 ring-offset-slate-900"
-                  >
-                    <PlayerAvatar player={giftCatalogDrawerPlayer} size={56} hideNameLabel />
+                <div className="mb-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Выбери получателей</p>
+                      <p className="mt-1 text-[13px] font-medium leading-snug text-slate-300/95">
+                        {giftBatchMaleOn && giftBatchFemaleOn
+                          ? "Выбраны все мужчины и все женщины за столом"
+                          : giftBatchMaleOn
+                            ? "Выбраны все мужчины за столом"
+                            : giftBatchFemaleOn
+                              ? "Выбраны все женщины за столом"
+                              : "Сейчас выбран один игрок"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {giftBatchPickerOpen && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const maleIds = giftDrawerEligibleRecipients.filter((p) => p.gender === "male").map((p) => p.id)
+                              if (!giftBatchMaleOn && maleIds.length === 0) {
+                                showToast("За столом нет мужчин для выбора", "info")
+                                return
+                              }
+                              setGiftBatchMaleOn((prev) => !prev)
+                            }}
+                            className={`flex h-9 min-w-[2.5rem] items-center justify-center rounded-full border px-3 text-sm font-bold transition-all ${
+                              giftBatchMaleOn
+                                ? "border-cyan-400/35 bg-cyan-500/10 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                                : "border-slate-600/50 bg-slate-800/60 text-slate-300 hover:border-slate-500/60 hover:bg-slate-800/90"
+                            }`}
+                            aria-label="Выбрать всех мужчин"
+                            title="Выбрать всех мужчин"
+                          >
+                            М
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const femaleIds = giftDrawerEligibleRecipients.filter((p) => p.gender === "female").map((p) => p.id)
+                              if (!giftBatchFemaleOn && femaleIds.length === 0) {
+                                showToast("За столом нет женщин для выбора", "info")
+                                return
+                              }
+                              setGiftBatchFemaleOn((prev) => !prev)
+                            }}
+                            className={`flex h-9 min-w-[2.5rem] items-center justify-center rounded-full border px-3 text-sm font-bold transition-all ${
+                              giftBatchFemaleOn
+                                ? "border-rose-400/35 bg-rose-500/10 text-rose-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                                : "border-slate-600/50 bg-slate-800/60 text-slate-300 hover:border-slate-500/60 hover:bg-slate-800/90"
+                            }`}
+                            aria-label="Выбрать всех женщин"
+                            title="Выбрать всех женщин"
+                          >
+                            Ж
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setGiftBatchPickerOpen((prev) => !prev)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-600/55 bg-slate-800/70 text-slate-200 transition-all hover:border-slate-500/70 hover:bg-slate-800"
+                        aria-label="Массовый выбор получателей"
+                        title="Массовый выбор получателей"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="-mx-0.5 overflow-x-auto pb-0.5">
+                    <div className="flex min-w-max items-center gap-1.5 px-0.5">
+                      {selectedGiftRecipients.map((recipient) => (
+                        <div
+                          key={recipient.id}
+                          onClick={() => {
+                            setGiftBatchMaleOn(false)
+                            setGiftBatchFemaleOn(false)
+                            setGiftCatalogRecipientIds([recipient.id])
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          className="relative flex max-w-[11rem] overflow-visible items-center gap-2 rounded-2xl border border-slate-600/45 bg-slate-900/35 py-1 pl-1 pr-2.5 text-left text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all hover:border-slate-500/55 hover:bg-slate-800/45 active:scale-[0.99]"
+                          title={`Выбран: ${recipient.name}`}
+                        >
+                          <button
+                            type="button"
+                            aria-label={`Удалить ${recipient.name} из получателей`}
+                            title="Удалить"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeGiftRecipient(recipient.id)
+                            }}
+                            className="absolute -right-1.5 -top-1.5 z-[2] flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+                          >
+                            <X className="h-3 w-3" strokeWidth={2.25} />
+                          </button>
+                          <div
+                            ref={recipient.id === giftCatalogDrawerPlayer.id ? giftDrawerAvatarRef : undefined}
+                            className="shrink-0 overflow-hidden rounded-full ring-1 ring-white/10"
+                          >
+                            <PlayerAvatar player={recipient} size={34} hideNameLabel />
+                          </div>
+                          <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-200/95">{recipient.name}</span>
+                        </div>
+                      ))}
+                      {(giftBatchMaleOn || giftBatchFemaleOn) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGiftBatchMaleOn(false)
+                            setGiftBatchFemaleOn(false)
+                            setGiftCatalogRecipientIds([giftCatalogDrawerPlayer.id])
+                          }}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-600/50 bg-slate-900/40 text-slate-400 transition-all hover:border-slate-500/60 hover:bg-slate-800/50 hover:text-slate-200"
+                          aria-label="Сбросить массовый выбор"
+                          title="Сбросить массовый выбор"
+                        >
+                          <X className="h-4 w-4" strokeWidth={2.25} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div
@@ -7226,38 +7514,43 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                         ) : (
                           <div className="grid grid-cols-3 content-start gap-2 sm:gap-2.5">
                             {section.gifts.map((gift) => {
-                              const toId = giftCatalogDrawerPlayer.id
                               const busyKey = `${section.key}-${gift.id}`
-                              const alreadyGifted = inventory.some(
-                                (item) =>
-                                  item.fromPlayerId === currentUser.id &&
-                                  item.toPlayerId === toId &&
-                                  item.type === gift.id,
+                              const pendingRecipients = selectedGiftRecipients.filter(
+                                (recipient) =>
+                                  !inventory.some(
+                                    (item) =>
+                                      item.fromPlayerId === currentUser.id &&
+                                      item.toPlayerId === recipient.id &&
+                                      item.type === gift.id,
+                                  ),
                               )
+                              const recipientCount = pendingRecipients.length
                               const needPay = gift.cost > 0
                               const paysWithRoses = gift.payCurrency === "roses"
                               const stock = typeof gift.stock === "number" ? gift.stock : -1
                               const limitedStock = stock >= 0
-                              const outOfStock = limitedStock && stock === 0
+                              const outOfStock = limitedStock && stock < recipientCount
+                              const totalCost = gift.cost * recipientCount
                               const canAfford = needPay
                                 ? paysWithRoses
-                                  ? roseInventoryCount >= gift.cost
-                                  : voiceBalance >= gift.cost
+                                  ? roseInventoryCount >= totalCost
+                                  : voiceBalance >= totalCost
                                 : true
                               const disabled =
-                                alreadyGifted ||
+                                recipientCount === 0 ||
                                 (needPay && !canAfford) ||
                                 outOfStock ||
                                 giftPurchaseBusyKey === busyKey
                               const handleGiftClick = async () => {
                                 if (disabled) return
-                                if (limitedStock) {
-                                  setGiftPurchaseBusyKey(busyKey)
-                                  try {
+                                setGiftPurchaseBusyKey(busyKey)
+                                const recipients = [...pendingRecipients]
+                                try {
+                                  if (limitedStock) {
                                     const res = await apiFetch("/api/catalog/gifts/consume", {
                                       method: "POST",
                                       headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({ giftId: gift.id }),
+                                      body: JSON.stringify({ giftId: gift.id, amount: recipientCount }),
                                     })
                                     const data = await res.json().catch(() => null)
                                     if (!res.ok || !data?.ok) {
@@ -7270,58 +7563,67 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                       void refreshGiftCatalog()
                                       return
                                     }
-                                  } finally {
-                                    setGiftPurchaseBusyKey(null)
                                   }
-                                }
-                                if (needPay) {
-                                  if (paysWithRoses) {
-                                    dispatch({ type: "REMOVE_INVENTORY_ROSES", amount: gift.cost })
-                                  } else {
-                                    dispatch({ type: "PAY_VOICES", amount: gift.cost })
+                                  if (needPay) {
+                                    if (paysWithRoses) {
+                                      dispatch({ type: "REMOVE_INVENTORY_ROSES", amount: totalCost })
+                                    } else {
+                                      dispatch({ type: "PAY_VOICES", amount: totalCost })
+                                    }
                                   }
+                                  recipients.forEach((recipient, index) => {
+                                    const eventTs = Date.now() + index
+                                    dispatch({
+                                      type: "ADD_INVENTORY_ITEM",
+                                      item: {
+                                        type: gift.id,
+                                        fromPlayerId: currentUser.id,
+                                        fromPlayerName: currentUser.name,
+                                        timestamp: eventTs,
+                                        toPlayerId: recipient.id,
+                                      },
+                                    })
+                                    const logId = generateLogId()
+                                    dispatch({
+                                      type: "ADD_LOG",
+                                      entry: {
+                                        id: logId,
+                                        type: gift.id as GameLogEntry["type"],
+                                        fromPlayer: currentUser,
+                                        toPlayer: recipient,
+                                        text: `${currentUser.name} дарит подарок «${gift.name}» игроку ${recipient.name}`,
+                                        timestamp: eventTs,
+                                      } as GameLogEntry,
+                                    })
+                                    void applyGiftProgressResult(
+                                      recordGiftProgress({
+                                        dedupeId: logId,
+                                        fromPlayer: currentUser,
+                                        toPlayer: recipient,
+                                        giftId: gift.id,
+                                        heartsCost: gift.payCurrency === "hearts" ? gift.cost : 0,
+                                        rosesCost: gift.payCurrency === "roses" ? gift.cost : 0,
+                                      }),
+                                    )
+                                    triggerGiftCatalogFlyToAvatar(
+                                      busyKey,
+                                      recipient.id,
+                                      gift.id,
+                                      gift.emoji,
+                                      gift.img,
+                                    )
+                                  })
+                                  playEmotionSound(gift.id)
+                                  showToast(
+                                    recipients.length > 1
+                                      ? `Подарок отправлен ${recipients.length} игрокам`
+                                      : `Подарок отправлен ${recipients[0]?.name ?? "игроку"}`,
+                                    "success",
+                                  )
+                                  if (limitedStock) void refreshGiftCatalog()
+                                } finally {
+                                  setGiftPurchaseBusyKey(null)
                                 }
-                                dispatch({
-                                  type: "ADD_INVENTORY_ITEM",
-                                  item: {
-                                    type: gift.id,
-                                    fromPlayerId: currentUser.id,
-                                    fromPlayerName: currentUser.name,
-                                    timestamp: Date.now(),
-                                    toPlayerId: toId,
-                                  },
-                                })
-                                const logId = generateLogId()
-                                dispatch({
-                                  type: "ADD_LOG",
-                                  entry: {
-                                    id: logId,
-                                    type: gift.id as GameLogEntry["type"],
-                                    fromPlayer: currentUser,
-                                    toPlayer: giftCatalogDrawerPlayer,
-                                    text: `${currentUser.name} дарит подарок «${gift.name}» игроку ${giftCatalogDrawerPlayer.name}`,
-                                    timestamp: Date.now(),
-                                  } as GameLogEntry,
-                                })
-                                void applyGiftProgressResult(
-                                  recordGiftProgress({
-                                    dedupeId: logId,
-                                    fromPlayer: currentUser,
-                                    toPlayer: giftCatalogDrawerPlayer,
-                                    giftId: gift.id,
-                                    heartsCost: gift.payCurrency === "hearts" ? gift.cost : 0,
-                                    rosesCost: gift.payCurrency === "roses" ? gift.cost : 0,
-                                  }),
-                                )
-                                triggerGiftCatalogFlyToAvatar(
-                                  busyKey,
-                                  giftCatalogDrawerPlayer.id,
-                                  gift.id,
-                                  gift.emoji,
-                                  gift.img,
-                                )
-                                playEmotionSound(gift.id)
-                                if (limitedStock) void refreshGiftCatalog()
                               }
                               const isHeartPaidSection = section.key === "hearts"
                               const isRosePremiumSection = section.key === "premium_roses"
@@ -7363,9 +7665,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                   <span className="line-clamp-2 min-h-[2rem] w-full px-0.5 text-center text-[9px] font-medium leading-tight text-slate-400 group-hover:text-slate-300 sm:min-h-[2.25rem] sm:text-[10px]">
                                     {gift.name}
                                   </span>
-                                  {alreadyGifted ? (
+                                  {recipientCount === 0 ? (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300/90 sm:text-[10px]">
-                                      ✓ Дарено
+                                      ✓ Уже есть
                                     </span>
                                   ) : outOfStock ? (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-slate-500/40 bg-slate-800/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">
@@ -7380,14 +7682,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                       <span className="text-[10px] leading-none sm:text-[11px]" aria-hidden>
                                         🌹
                                       </span>
-                                      {gift.cost}
+                                      {totalCost}
                                     </span>
                                   ) : (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center gap-0.5 rounded-full border border-rose-500/30 bg-gradient-to-b from-rose-500/20 to-slate-900/60 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] sm:text-[10px]">
                                       <span className="text-[10px] leading-none text-rose-400 sm:text-[11px]" aria-hidden>
                                         ❤
                                       </span>
-                                      {gift.cost}
+                                      {totalCost}
                                     </span>
                                   )}
                                 </button>
@@ -7565,6 +7867,7 @@ function TableChatPanel({
   onSend,
   logEndRef,
   currentUserId,
+  currentUserIsVip,
   chatDisabled,
   className,
   onJoinPlayerHello,
@@ -7581,6 +7884,7 @@ function TableChatPanel({
   onSend: () => void
   logEndRef: RefObject<HTMLDivElement | null>
   currentUserId?: number
+  currentUserIsVip?: boolean
   chatDisabled?: boolean
   className?: string
   onJoinPlayerHello?: (joinedPlayer: Player) => void
@@ -7699,7 +8003,10 @@ function TableChatPanel({
           aria-label="Поле ввода сообщения"
         >
           <TableChatEmojiPicker
-            disabled={chatDisabled}
+            disabled={chatDisabled || !currentUserIsVip}
+            title={
+              chatDisabled ? "Чат на паузе" : currentUserIsVip ? "Смайлики" : "Смайлики доступны только для VIP"
+            }
             onEmojiSelect={(emoji) => setChatInput((prev) => prev + emoji)}
           />
           <input

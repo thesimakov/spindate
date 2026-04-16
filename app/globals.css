@@ -3678,17 +3678,29 @@
 
 /* Всплеск частиц при прилёте подарка из каталога */
 .gift-arrival-particle {
-  animation: gift-arrival-burst 0.92s cubic-bezier(0.22, 0.82, 0.28, 1) forwards;
+  animation: gift-arrival-burst 1.25s cubic-bezier(0.16, 1, 0.28, 1) forwards;
 }
 
 @keyframes gift-arrival-burst {
   0% {
     opacity: 1;
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0) scale(1.15);
+    filter: blur(0px) saturate(1.2) brightness(1.15);
+  }
+  28% {
+    opacity: 1;
+    transform: translate(calc(var(--gift-px) * 0.32), calc(var(--gift-py) * 0.32)) scale(1.65);
+    filter: blur(0.2px) saturate(1.4) brightness(1.25);
+  }
+  55% {
+    opacity: 0.9;
+    transform: translate(calc(var(--gift-px) * 0.68), calc(var(--gift-py) * 0.68)) scale(0.95);
+    filter: blur(0.6px) saturate(1.15) brightness(1.05);
   }
   100% {
     opacity: 0;
-    transform: translate(var(--gift-px), var(--gift-py)) scale(0.12);
+    transform: translate(var(--gift-px), var(--gift-py)) scale(0.28);
+    filter: blur(1.1px) saturate(1) brightness(0.95);
   }
 }
 

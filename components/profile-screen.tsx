@@ -1877,9 +1877,27 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         open={giftAchievementOpen}
         imageUrl={publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH)}
         achievementTitle={GIFT_ACHIEVEMENT_TITLE}
+        recipientGender={currentUser?.gender === "female" ? "female" : "male"}
         description="Ура! Ты выполнил(а) достижение за подарки и получил(а) награду."
         shareBusy={giftAchievementShareBusy}
-        onClose={() => setGiftAchievementOpen(false)}
+        onClose={() => {
+          // #region agent log
+          fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
+            body: JSON.stringify({
+              sessionId: "b06cc0",
+              runId: "pre-fix",
+              hypothesisId: "H4",
+              location: "profile-screen.tsx:GiftAchievementModal:parentOnClose",
+              message: "Parent onClose called",
+              timestamp: Date.now(),
+              data: { giftAchievementOpen, giftAchievementShareBusy },
+            }),
+          }).catch(() => {})
+          // #endregion
+          setGiftAchievementOpen(false)
+        }}
         onShare={() => void handleShareGiftAchievement()}
       />
       {isPanel ? (

@@ -808,7 +808,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           <div className="px-4 pb-3 pt-2">
             <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
-              {Math.round(15 / 7)} голоса в неделю
+              {Math.round(15 / 7)} голоса в день
             </div>
               <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">15 голосов</p>
             <button
@@ -835,7 +835,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
           </div>
           <div className="px-4 pb-3 pt-2">
             <div className="rounded-xl border border-slate-300/90 bg-[#e5e7eb] px-3 py-2 text-center text-sm font-semibold text-slate-600 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
-              {Math.round(50 / 4)} голосов в неделю
+              {Math.round(50 / 30)} голоса в день
             </div>
               <p className="mt-2 text-center text-xl font-black tracking-tight text-slate-800 sm:text-2xl">50 голосов</p>
             <button
