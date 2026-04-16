@@ -125,6 +125,7 @@ function migrate(database: Database.Database) {
       name TEXT NOT NULL,
       emoji TEXT NOT NULL DEFAULT '🎁',
       img TEXT NOT NULL DEFAULT '',
+      limited INTEGER NOT NULL DEFAULT 0,
       cost INTEGER NOT NULL DEFAULT 0,
       published INTEGER NOT NULL DEFAULT 1,
       deleted INTEGER NOT NULL DEFAULT 0,
@@ -288,6 +289,10 @@ function migrate(database: Database.Database) {
   if (!giftColsMusic.some((c) => c.name === "music")) {
     database.exec(`ALTER TABLE gift_catalog ADD COLUMN music TEXT NOT NULL DEFAULT ''`)
   }
+  const giftColsLimited = database.prepare(`PRAGMA table_info(gift_catalog)`).all() as { name: string }[]
+  if (!giftColsLimited.some((c) => c.name === "limited")) {
+    database.exec(`ALTER TABLE gift_catalog ADD COLUMN limited INTEGER NOT NULL DEFAULT 0`)
+  }
   const hasPremiumFrames = (database.prepare(`SELECT COUNT(*) as c FROM frame_catalog WHERE section = 'premium'`).get() as { c: number })?.c > 0
   if (hasPremiumFrames) {
     database.exec(`UPDATE frame_catalog SET section = 'paid' WHERE section = 'premium'`)
@@ -408,8 +413,8 @@ function migrate(database: Database.Database) {
   })
 
   const insertGift = database.prepare(
-    `INSERT INTO gift_catalog (id, section, name, emoji, img, cost, pay_currency, stock, published, deleted, sort_order, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `INSERT INTO gift_catalog (id, section, name, emoji, img, limited, cost, pay_currency, stock, published, deleted, sort_order, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(id) DO NOTHING`,
   )
   DEFAULT_GIFT_CATALOG_ROWS.forEach((row, index) => {
@@ -419,6 +424,7 @@ function migrate(database: Database.Database) {
       row.name,
       row.emoji,
       row.img ?? "",
+      row.limited ? 1 : 0,
       row.cost,
       row.payCurrency,
       row.stock ?? -1,

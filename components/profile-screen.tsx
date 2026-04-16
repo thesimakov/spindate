@@ -32,6 +32,7 @@ import { vkBridge } from "@/lib/vk-bridge"
 import { useSocialRuntime } from "@/lib/social-runtime"
 import { apiFetch } from "@/lib/api-fetch"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
+import { DEFAULT_GIFT_CATALOG_ROWS, type GiftCatalogRow } from "@/lib/gift-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
 import { useGiftCatalog } from "@/lib/use-gift-catalog"
 import { getTableSyncDispatch } from "@/lib/table-sync-registry"
@@ -114,7 +115,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const { host: runtimeHost } = useSocialRuntime()
   const { state, dispatch } = useGame()
   const { rows: frameCatalogRows } = useFrameCatalog()
-  const { rows: giftCatalogRows } = useGiftCatalog()
+  const { rows: giftCatalogRows, refresh: refreshGiftCatalog } = useGiftCatalog()
   const {
     currentUser,
     players,
@@ -336,6 +337,9 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [status, setStatus] = useState("")
   const [avatarInput, setAvatarInput] = useState(currentUser?.avatar ?? "")
   const [showGiveRoseModal, setShowGiveRoseModal] = useState(false)
+  const [limitedGiftChoice, setLimitedGiftChoice] = useState<GiftCatalogRow | null>(null)
+  const [limitedGiftTargetId, setLimitedGiftTargetId] = useState<number | null>(null)
+  const [giftBuyBusyId, setGiftBuyBusyId] = useState<string | null>(null)
   const [showFramesModal, setShowFramesModal] = useState(false)
   const [profileDailyLevel, setProfileDailyLevel] = useState(1)
   const [profileTab, setProfileTab] = useState<"profile" | "achievements" | "gifts">("profile")
@@ -551,6 +555,144 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const isPanel = variant === "panel"
+  const profileGiftRows = (giftCatalogRows.length > 0 ? giftCatalogRows : DEFAULT_GIFT_CATALOG_ROWS).filter(
+    (row) => row.published && !row.deleted,
+  )
+  const giftRecipients = players.filter((p) => p.id !== currentUser.id)
+
+  const tryConsumeGiftStockBeforeBuy = async (gift: GiftCatalogRow): Promise<boolean> => {
+    if (gift.stock < 0) return true
+    try {
+      const res = await apiFetch("/api/catalog/gifts/consume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ giftId: gift.id }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { ok?: boolean; reason?: "not_found" | "out_of_stock" | "unpublished" }
+        | null
+      if (!res.ok || data?.ok !== true) {
+        showToast(data?.reason === "out_of_stock" ? "Подарок закончился" : "Не удалось выкупить подарок", "error")
+        void refreshGiftCatalog()
+        return false
+      }
+      return true
+    } catch {
+      showToast("Ошибка сети при выкупе подарка", "error")
+      return false
+    }
+  }
+
+  const payForGiftPurchase = (gift: GiftCatalogRow): boolean => {
+    if (gift.payCurrency === "roses") {
+      const need = Math.max(0, gift.cost)
+      if (rosesBalance < need) {
+        showToast("Недостаточно роз", "error")
+        return false
+      }
+      if (need > 0) dispatch({ type: "REMOVE_INVENTORY_ROSES", amount: need })
+      return true
+    }
+    const need = Math.max(0, gift.cost)
+    if (voiceBalance < need) {
+      showToast("Недостаточно сердец", "error")
+      return false
+    }
+    if (need > 0) dispatch({ type: "PAY_VOICES", amount: need })
+    return true
+  }
+
+  const handleBuyGiftForSelf = async (gift: GiftCatalogRow) => {
+    if (giftBuyBusyId) return
+    if (gift.stock === 0) {
+      showToast("Подарок закончился", "error")
+      return
+    }
+    if (gift.limited) {
+      if (limitedGiftTargetId == null && giftRecipients.length > 0) {
+        setLimitedGiftTargetId(giftRecipients[0]!.id)
+      }
+      setLimitedGiftChoice(gift)
+      return
+    }
+    setGiftBuyBusyId(gift.id)
+    try {
+      const stockOk = await tryConsumeGiftStockBeforeBuy(gift)
+      if (!stockOk) return
+      const paid = payForGiftPurchase(gift)
+      if (!paid) {
+        if (gift.stock >= 0) void refreshGiftCatalog()
+        return
+      }
+      dispatch({
+        type: "ADD_INVENTORY_ITEM",
+        item: {
+          type: gift.id,
+          fromPlayerId: currentUser.id,
+          fromPlayerName: currentUser.name,
+          timestamp: Date.now(),
+        },
+      })
+      showToast("Подарок выкуплен и добавлен в инвентарь", "success")
+      if (gift.stock >= 0) void refreshGiftCatalog()
+    } finally {
+      setGiftBuyBusyId(null)
+    }
+  }
+
+  const handleLimitedGiftDecision = async (mode: "keep" | "gift") => {
+    const gift = limitedGiftChoice
+    if (!gift || giftBuyBusyId) return
+    const selectedTargetId = limitedGiftTargetId ?? giftRecipients[0]?.id ?? null
+    if (mode === "gift" && selectedTargetId == null) {
+      showToast("Выберите игрока", "error")
+      return
+    }
+    const target = mode === "gift" ? players.find((p) => p.id === selectedTargetId) : undefined
+    if (mode === "gift" && !target) {
+      showToast("Игрок не найден", "error")
+      return
+    }
+    setGiftBuyBusyId(gift.id)
+    try {
+      const stockOk = await tryConsumeGiftStockBeforeBuy(gift)
+      if (!stockOk) return
+      const paid = payForGiftPurchase(gift)
+      if (!paid) {
+        if (gift.stock >= 0) void refreshGiftCatalog()
+        return
+      }
+      dispatch({
+        type: "ADD_INVENTORY_ITEM",
+        item: {
+          type: gift.id,
+          fromPlayerId: currentUser.id,
+          fromPlayerName: currentUser.name,
+          timestamp: Date.now(),
+          ...(mode === "gift" && target ? { toPlayerId: target.id } : {}),
+        },
+      })
+      if (mode === "gift" && target) {
+        dispatch({
+          type: "ADD_LOG",
+          entry: {
+            id: generateLogId(),
+            type: gift.id,
+            fromPlayer: currentUser,
+            toPlayer: target,
+            text: `${currentUser.name} подарил(а) ${gift.name} игроку ${target.name}`,
+            timestamp: Date.now(),
+          },
+        })
+      }
+      setLimitedGiftChoice(null)
+      showToast(mode === "gift" ? "Лимитированный подарок отправлен" : "Лимитированный подарок оставлен в инвентаре", "success")
+      if (gift.stock >= 0) void refreshGiftCatalog()
+    } finally {
+      setGiftBuyBusyId(null)
+    }
+  }
 
   const handleInviteFriends = async () => {
     if (runtimeHost !== "vk") {
@@ -1370,14 +1512,52 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         )}
 
         {profileTab === "gifts" && currentUser && (
-          <ProfileReceivedGiftsSection
-            targetUserId={currentUser.id}
-            inventory={inventory}
-            rosesGiven={rosesGiven}
-            catalogRows={giftCatalogRows}
-            perspective="self"
-            className={sectionCardClass}
-          />
+          <>
+            <ProfileReceivedGiftsSection
+              targetUserId={currentUser.id}
+              inventory={inventory}
+              rosesGiven={rosesGiven}
+              catalogRows={giftCatalogRows}
+              perspective="self"
+              className={sectionCardClass}
+            />
+            <section className={`${sectionCardClass} space-y-3`}>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[15px] font-black text-slate-900">Выкупить подарок себе</h3>
+                <span className="text-[12px] font-semibold text-slate-500">Лимитированные можно сохранить или подарить</span>
+              </div>
+              <ul className="space-y-2">
+                {profileGiftRows.map((gift) => {
+                  const isBusy = giftBuyBusyId === gift.id
+                  const outOfStock = gift.stock === 0
+                  const canAfford = gift.payCurrency === "roses" ? rosesBalance >= gift.cost : voiceBalance >= gift.cost
+                  return (
+                    <li key={gift.id} className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-black text-slate-900">
+                          <span aria-hidden>{gift.emoji || "🎁"} </span>
+                          {gift.name}
+                        </p>
+                        <p className="text-[12px] font-semibold text-slate-500">
+                          {gift.payCurrency === "roses" ? `${gift.cost} роз` : `${gift.cost} ❤`}
+                          {gift.limited ? " · лимитированный" : ""}
+                          {outOfStock ? " · закончилось" : ""}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="shrink-0 rounded-xl text-[13px] font-black"
+                        disabled={isBusy || outOfStock || !canAfford}
+                        onClick={() => void handleBuyGiftForSelf(gift)}
+                      >
+                        {isBusy ? "Покупка..." : "Выкупить"}
+                      </Button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          </>
         )}
 
       {profileTab === "profile" && (
@@ -1784,6 +1964,75 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             >
               Закрыть
             </Button>
+          </div>
+        </div>
+      )}
+
+      {limitedGiftChoice && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          style={{ background: "rgba(2,6,23,0.76)", backdropFilter: "blur(10px)" }}
+          onClick={() => {
+            if (giftBuyBusyId) return
+            setLimitedGiftChoice(null)
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border p-4 shadow-xl"
+            style={{
+              borderColor: "rgba(56,189,248,0.28)",
+              background: "linear-gradient(165deg, rgba(15,23,42,0.98) 0%, rgba(2,6,23,0.98) 55%, rgba(15,23,42,0.98) 100%)",
+              boxShadow: "0 0 0 1px rgba(56, 189, 248, 0.08), 0 16px 32px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-2 text-lg font-black text-slate-100">
+              {limitedGiftChoice.emoji || "🎁"} {limitedGiftChoice.name}
+            </h3>
+            <p className="mb-3 text-[15px] font-medium text-slate-200">
+              Это лимитированный подарок. Можно оставить его у себя или сразу подарить игроку.
+            </p>
+            <label className="mb-3 block text-[12px] font-semibold text-slate-300">
+              Кому подарить
+              <select
+                className="mt-1 w-full rounded-xl border border-slate-600 bg-slate-900 px-2 py-2 text-[15px] font-semibold text-slate-100 outline-none"
+                value={limitedGiftTargetId ?? ""}
+                onChange={(e) => setLimitedGiftTargetId(Number(e.target.value))}
+                disabled={giftRecipients.length === 0 || giftBuyBusyId === limitedGiftChoice.id}
+              >
+                {giftRecipients.length === 0 && <option value="">Нет игроков</option>}
+                {giftRecipients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid grid-cols-1 gap-2">
+              <Button
+                className="rounded-xl text-[15px] font-black"
+                disabled={giftBuyBusyId === limitedGiftChoice.id}
+                onClick={() => void handleLimitedGiftDecision("keep")}
+              >
+                Оставить себе
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-xl text-[15px] font-black"
+                disabled={giftRecipients.length === 0 || giftBuyBusyId === limitedGiftChoice.id}
+                onClick={() => void handleLimitedGiftDecision("gift")}
+              >
+                Подарить игроку
+              </Button>
+              <Button
+                variant="ghost"
+                className="rounded-xl text-[15px] font-black text-slate-300 hover:text-slate-100"
+                disabled={giftBuyBusyId === limitedGiftChoice.id}
+                onClick={() => setLimitedGiftChoice(null)}
+              >
+                Отмена
+              </Button>
+            </div>
           </div>
         </div>
       )}

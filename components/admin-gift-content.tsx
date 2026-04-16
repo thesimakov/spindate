@@ -16,6 +16,8 @@ type RowDraft = {
   img: string
   /** Путь `/api/catalog/upload-asset/gift_music/...` или пусто */
   music: string
+  /** Лимитированный подарок: в профиле доступно «оставить себе / подарить». */
+  limited: boolean
   cost: number
   /** −1 — без лимита; 0 и выше — остаток в каталоге. */
   stock: number
@@ -41,6 +43,7 @@ function parseRows(rows: unknown): RowDraft[] {
       cost?: number
       stock?: number
       music?: string
+      limited?: boolean
       payCurrency?: string
       pay_currency?: string
       published?: boolean
@@ -73,6 +76,7 @@ function parseRows(rows: unknown): RowDraft[] {
       emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "🎁",
       img: typeof rec.img === "string" ? rec.img.trim() : "",
       music: typeof rec.music === "string" ? rec.music.trim() : "",
+      limited: rec.limited === true,
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
       stock,
       payCurrency,
@@ -114,6 +118,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     emoji: "🎁",
     img: "",
     music: "",
+    limited: false,
     cost: 1,
     stock: -1,
     payCurrency: "hearts",
@@ -327,6 +332,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       emoji: "🎁",
       img: "",
       music: "",
+      limited: false,
       cost: addTier === "free" ? 0 : prev.cost,
       stock: prev.stock,
       payCurrency: prev.payCurrency,
@@ -416,6 +422,18 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
               </select>
             </label>
             <label className="text-[11px] text-slate-400">
+              Лимитированный
+              <div className="mt-1 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100">
+                <input
+                  type="checkbox"
+                  checked={addDraft.limited}
+                  onChange={(e) => setAddDraft((p) => ({ ...p, limited: e.target.checked }))}
+                  className="h-4 w-4 rounded border-slate-500 accent-violet-500"
+                />
+                <span>Да</span>
+              </div>
+            </label>
+            <label className="text-[11px] text-slate-400">
               Стоимость ({addDraft.payCurrency === "roses" ? "роз" : "❤"})
               <input
                 type="number"
@@ -491,6 +509,16 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                     }}
                   />
                 </label>
+              </div>
+              <div
+                className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  addDraft.music
+                    ? "border border-emerald-500/35 bg-emerald-500/10 text-emerald-300"
+                    : "border border-slate-500/40 bg-slate-800/70 text-slate-400"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${addDraft.music ? "bg-emerald-400" : "bg-slate-500"}`} aria-hidden />
+                {addDraft.music ? "Файл загружен и доступен" : "Файл не загружен"}
               </div>
             </label>
           </div>
@@ -613,6 +641,28 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                       </button>
                     ) : null}
                   </div>
+                  <div
+                    className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      row.music
+                        ? "border border-emerald-500/35 bg-emerald-500/10 text-emerald-300"
+                        : "border border-slate-500/40 bg-slate-800/70 text-slate-400"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${row.music ? "bg-emerald-400" : "bg-slate-500"}`} aria-hidden />
+                    {row.music ? "Файл загружен и доступен" : "Файл не загружен"}
+                  </div>
+                </label>
+                <label className="block text-[11px] text-slate-400">
+                  Лимитированный
+                  <div className="mt-1 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={row.limited}
+                      onChange={(e) => updateRow(row.id, { limited: e.target.checked })}
+                      className="h-4 w-4 rounded border-slate-500 accent-violet-500"
+                    />
+                    <span>Да</span>
+                  </div>
                 </label>
                 <label className="block text-[11px] text-slate-400">
                   Оплата
@@ -663,6 +713,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                       emoji: row.emoji,
                       img: row.img,
                       music: row.music,
+                      limited: row.limited,
                       cost: row.cost,
                       stock: row.stock,
                       payCurrency: row.payCurrency,

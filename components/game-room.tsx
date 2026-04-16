@@ -1588,7 +1588,19 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       window.removeEventListener("scroll", compute, true)
       window.clearTimeout(delayed)
     }
-  }, [currentTurnPlayer?.id, bottleDiameterPx, playerSlots, isMobile, showResult, isSpinning, countdown, pairKissCenterUi, turnArrowSizePx])
+  }, [
+    currentTurnPlayer?.id,
+    currentTurnIndex,
+    tablePlayerIdsKey,
+    bottleDiameterPx,
+    playerSlots,
+    isMobile,
+    showResult,
+    isSpinning,
+    countdown,
+    pairKissCenterUi,
+    turnArrowSizePx,
+  ])
 
   useEffect(() => {
     if (pairKissCenterUi || isSpinning) return
@@ -7094,7 +7106,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                               const toId = giftCatalogDrawerPlayer.id
                               const busyKey = `${section.key}-${gift.id}`
                               const alreadyGifted = inventory.some(
-                                (item) => item.toPlayerId === toId && item.type === gift.id,
+                                (item) =>
+                                  item.fromPlayerId === currentUser.id &&
+                                  item.toPlayerId === toId &&
+                                  item.type === gift.id,
                               )
                               const needPay = gift.cost > 0
                               const paysWithRoses = gift.payCurrency === "roses"
