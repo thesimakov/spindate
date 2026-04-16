@@ -1430,7 +1430,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         pairKissPhase:
           p.pairKissPhase != null
             ? p.pairKissPhase
-            : keepLocal
+            : keepLocalResult
               ? state.pairKissPhase ?? null
               : null,
         roundNumber: p.roundNumber,

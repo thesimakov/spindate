@@ -3670,5 +3670,25 @@
   .animate-game-room-bottle-icon {
     animation: none !important;
   }
+
+  .gift-arrival-particle {
+    animation-duration: 0.35s !important;
+  }
+}
+
+/* Всплеск частиц при прилёте подарка из каталога */
+.gift-arrival-particle {
+  animation: gift-arrival-burst 0.92s cubic-bezier(0.22, 0.82, 0.28, 1) forwards;
+}
+
+@keyframes gift-arrival-burst {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--gift-px), var(--gift-py)) scale(0.12);
+  }
 }
 

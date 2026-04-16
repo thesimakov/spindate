@@ -212,10 +212,15 @@ const CHAT_PAIR_ACTION_PHRASE: Partial<Record<GameLogEntry["type"], string>> = {
   skip: "Пропустил(а) ход",
 }
 
+/** Поцелуй после взаимного «Да» в голосовании пары (в логе раньше был «крепкий поцелуй»). */
+function isMutualKissPairLogText(text: unknown): boolean {
+  const t = typeof text === "string" ? text.toLowerCase() : ""
+  return t.includes("взаимный поцелуй") || t.includes("крепкий поцелуй")
+}
+
 /** Эмодзи для строки чата «аватар — аватар — эмоция — число». */
 function logEventEmotionEmoji(entry: GameLogEntry, giftById?: ReadonlyMap<string, GiftChatDisplayMeta>): string | null {
-  const isStrongKissStatus =
-    entry.type === "kiss" && typeof entry.text === "string" && entry.text.toLowerCase().includes("крепкий поцелуй")
+  const isStrongKissStatus = entry.type === "kiss" && isMutualKissPairLogText(entry.text)
   if (isStrongKissStatus) return null
   if (entry.frameGift) return "\uD83D\uDDBC\uFE0F"
   const dyn = giftById?.get(String(entry.type))
@@ -268,9 +273,8 @@ function pairChatCentralObjectHint(
 }
 
 function logEventActionShortLabel(entry: GameLogEntry, giftById?: ReadonlyMap<string, GiftChatDisplayMeta>): string | null {
-  const isStrongKissStatus =
-    entry.type === "kiss" && typeof entry.text === "string" && entry.text.toLowerCase().includes("крепкий поцелуй")
-  if (isStrongKissStatus) return "Крепкий поцелуй"
+  const isStrongKissStatus = entry.type === "kiss" && isMutualKissPairLogText(entry.text)
+  if (isStrongKissStatus) return "Взаимный поцелуй"
   if (entry.frameGift?.frameName?.trim()) {
     return `Подарил(а) рамку «${entry.frameGift.frameName.trim()}»`
   }
@@ -512,6 +516,7 @@ const EMOTION_QUOTA_PURCHASE_AMOUNT = 50
 const EMOTION_QUOTA_FIRST_COST_PER_TYPE = 5
 const EMOTION_QUOTA_NEXT_COST_PER_TYPE = 15
 const EMOTION_GIFT_IMAGE_FRAMES = 16
+const EXTRA_SPIN_COST = 2
 
 function nextEmotionGiftFrameNum(current: number): number {
   return (current % EMOTION_GIFT_IMAGE_FRAMES) + 1
@@ -640,15 +645,189 @@ interface FlyingEmoji {
   toY: number
 }
 
+/** Длительность плавного полёта подарка по дуге Безье (мс). */
+const GIFT_FLY_DURATION_MS = 2100
+/** Длительность CSS `gift-arrival-burst` — иконка подарка на аватаре после этого. */
+const GIFT_ARRIVAL_PARTICLE_DURATION_MS = 930
+
+/** Полёт подарка из каталога к центру аватарки получателя (плавная квадратичная кривая). */
 interface GiftCatalogFlyFx {
   id: string
+  recipientPlayerId: number
+  giftTypeId: string
   emoji?: string
   imgSrc?: string
   startX: number
   startY: number
-  deltaX: number
-  deltaY: number
-  started: boolean
+  endX: number
+  endY: number
+}
+
+interface GiftArrivalBurst {
+  id: string
+  x: number
+  y: number
+  burstKey: string
+}
+
+function hashStringToSeed(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+function mulberry32(seed: number) {
+  let a = seed
+  return () => {
+    let t = (a += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function GiftArrivalParticleBurst({ x, y, burstKey }: { x: number; y: number; burstKey: string }) {
+  const particles = useMemo(() => {
+    const rnd = mulberry32(hashStringToSeed(burstKey))
+    return Array.from({ length: 22 }, () => ({
+      angle: rnd() * Math.PI * 2,
+      dist: 56 + rnd() * 118,
+      size: 3 + rnd() * 8,
+      delay: rnd() * 140,
+      hue: 36 + rnd() * 28,
+    }))
+  }, [burstKey])
+  return (
+    <div className="pointer-events-none fixed z-[204]" style={{ left: x, top: y }} aria-hidden>
+      {particles.map((p, i) => (
+        <span
+          key={i}
+          className="gift-arrival-particle absolute rounded-full"
+          style={
+            {
+              width: p.size,
+              height: p.size,
+              left: -p.size / 2,
+              top: -p.size / 2,
+              animationDelay: `${p.delay}ms`,
+              "--gift-px": `${Math.cos(p.angle) * p.dist}px`,
+              "--gift-py": `${Math.sin(p.angle) * p.dist}px`,
+              background: `radial-gradient(circle, hsla(${p.hue}, 96%, 74%, 0.98) 0%, hsla(${Math.round(p.hue + 14)}, 88%, 52%, 0.4) 52%, transparent 72%)`,
+              boxShadow: `0 0 ${5 + p.size}px hsla(${p.hue}, 100%, 68%, 0.55)`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+function GiftCatalogBezierFly({
+  startX,
+  startY,
+  endX,
+  endY,
+  emoji,
+  imgSrc,
+  durationMs,
+  onFinished,
+}: {
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+  emoji?: string
+  imgSrc?: string
+  durationMs: number
+  onFinished: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const onFin = useRef(onFinished)
+  onFin.current = onFinished
+
+  useEffect(() => {
+    let raf = 0
+    let cancelled = false
+    const reduced =
+      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const dur = reduced ? Math.min(durationMs, 520) : durationMs
+
+    const dx = endX - startX
+    const dy = endY - startY
+    const len = Math.hypot(dx, dy)
+    const midX = (startX + endX) / 2
+    const midY = (startY + endY) / 2
+    let perpX = 0
+    let perpY = 1
+    if (len > 0.01) {
+      perpX = -dy / len
+      perpY = dx / len
+    }
+    const arcLift = Math.min(120, Math.max(28, len * 0.16))
+    const cpX = midX + perpX * arcLift
+    const cpY = midY + perpY * arcLift
+
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      if (cancelled) return
+      const rawT = Math.min(1, (now - t0) / dur)
+      const t = easeInOutCubic(rawT)
+      const oneMt = 1 - t
+      const x = oneMt * oneMt * startX + 2 * oneMt * t * cpX + t * t * endX
+      const y = oneMt * oneMt * startY + 2 * oneMt * t * cpY + t * t * endY
+      const el = ref.current
+      if (el) {
+        el.style.left = `${x}px`
+        el.style.top = `${y}px`
+        const scale = 1 - 0.34 * rawT
+        el.style.transform = `translate(-50%, -50%) scale(${scale})`
+        el.style.opacity = `${1 - 0.82 * rawT * rawT}`
+      }
+      if (rawT < 1) {
+        raf = requestAnimationFrame(tick)
+      } else if (!cancelled) {
+        onFin.current()
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+    }
+  }, [startX, startY, endX, endY, durationMs])
+
+  return (
+    <div
+      ref={ref}
+      className="pointer-events-none fixed z-[205] will-change-[left,top,transform,opacity]"
+      style={{
+        left: startX,
+        top: startY,
+        transform: "translate(-50%, -50%) scale(1)",
+        opacity: 1,
+      }}
+      aria-hidden
+    >
+      {imgSrc ? (
+        <img
+          src={imgSrc}
+          alt=""
+          className="h-10 w-10 rounded-xl object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]"
+          draggable={false}
+        />
+      ) : (
+        <span className="block text-[2rem] leading-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]">
+          {emoji || "🎁"}
+        </span>
+      )}
+    </div>
+  )
 }
 
 function ThanksCloudBubble({ variant = "fly" }: { variant?: "fly" | "chat" }) {
@@ -837,12 +1016,11 @@ const NEXT_KISS_ANNOUNCE_MS = 5_000
 // В этом SVG “носик” направлен примерно вниз-влево (≈135° от оси X вправо).
 const TURN_ARROW_BASE_DIRECTION_DEG = 135
 const TURN_ARROW_START_IS_CURRENT_TURN = true
-const TURN_ARROW_OUTSIDE_GAP_PX = 26
+const TURN_ARROW_OUTSIDE_GAP_PX = 12
 const TURN_ARROW_EXTRA_ROTATE_DEG = 180
 const TURN_ARROW_LAUNCH_EXTRA_PX = 22
 const TURN_ARROW_LAUNCH_MS = 220
 const TURN_ARROW_TO_AVATAR_MS = 420
-const TURN_ARROW_HIDE_AFTER_MS = 520
 
 const ACTION_BUTTON_STYLES: Record<string, { bg: string; border: string; shadow: string; text: string }> = {
   kiss:      { bg: "linear-gradient(180deg, #e74c3c 0%, #c0392b 100%)", border: "#a93226", shadow: "#7b241c", text: "#ffffff" },
@@ -895,12 +1073,22 @@ const TABLE_STYLE_BACKGROUNDS: Record<
     "linear-gradient(168deg, rgba(15, 23, 42, 0.70) 0%, rgba(30, 27, 75, 0.54) 32%, rgba(49, 46, 129, 0.40) 52%, rgba(15, 23, 42, 0.64) 78%, rgba(9, 9, 26, 0.74) 100%)",
 }
 
-/** Центральный «стол» (скруглённый блок с аватарами): базовый тёмный градиент. */
-const GAME_TABLE_SURFACE_BG =
-  "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.55) 0%, rgba(15,23,42,0.95) 60%, rgba(2,6,23,1) 100%)"
-/** nebula_mockup: слабее заливка, чтобы сквозь стол читалась туманность фона. */
-const GAME_TABLE_SURFACE_BG_NEBULA =
-  "radial-gradient(circle at 50% 42%, rgba(79,70,229,0.2) 0%, rgba(30,27,75,0.34) 48%, rgba(15,23,42,0.38) 100%)"
+/** Текстура столешницы (public/assets/game-table-wood.png). */
+const GAME_TABLE_WOOD_TEXTURE_URL = publicUrl("/assets/game-table-wood.png")
+/**
+ * Градиент поверх фото дерева: читаемость UI; нижний слой — `url(...)` в style.
+ * Порядок слоёв CSS: первый перечислен — сверху.
+ */
+const GAME_TABLE_OVER_WOOD_SCRIM =
+  "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.22) 0%, rgba(15,23,42,0.48) 58%, rgba(2,6,23,0.62) 100%)"
+const GAME_TABLE_OVER_WOOD_SCRIM_NEBULA =
+  "radial-gradient(circle at 50% 42%, rgba(79,70,229,0.09) 0%, rgba(30,27,75,0.26) 48%, rgba(15,23,42,0.4) 100%)"
+
+function gameTableSurfaceBackground(isNebula: boolean): string {
+  const scrim = isNebula ? GAME_TABLE_OVER_WOOD_SCRIM_NEBULA : GAME_TABLE_OVER_WOOD_SCRIM
+  return `${scrim}, url(${GAME_TABLE_WOOD_TEXTURE_URL}) center center / cover no-repeat`
+}
+
 const GAME_TABLE_INNER_VIGNETTE_BG =
   "radial-gradient(circle at center, rgba(15,23,42,0.82) 0%, rgba(15,23,42,0.96) 68%, rgba(2,6,23,1) 100%)"
 const GAME_TABLE_INNER_VIGNETTE_BG_NEBULA =
@@ -1433,11 +1621,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [tableHelloBurst, setTableHelloBurst] = useState<{ seed: string; key: number } | null>(null)
   const [chatRequestPrompt, setChatRequestPrompt] = useState<{ id: string; fromName: string } | null>(null)
   const [giftCatalogFlyFx, setGiftCatalogFlyFx] = useState<GiftCatalogFlyFx[]>([])
+  const [giftArrivalBursts, setGiftArrivalBursts] = useState<GiftArrivalBurst[]>([])
+  /** Скрыть последний подарок каталога на аватаре до конца частиц после полёта */
+  const [catalogGiftAvatarHold, setCatalogGiftAvatarHold] = useState<{
+    playerId: number
+    giftTypeId: string
+  } | null>(null)
   const tableHelloLogSeenRef = useRef(new Set<string>())
   const chatRequestSeenRef = useRef(new Set<string>())
   const playerMenuAvatarRef = useRef<HTMLDivElement | null>(null)
+  const giftDrawerAvatarRef = useRef<HTMLDivElement | null>(null)
   const giftCatalogButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
-  const giftCatalogFlyTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const giftCatalogFlyTimersRef = useRef<ReturnType<typeof globalThis.setTimeout>[]>([])
   const tableHelloBurstKeyRef = useRef(0)
   const emotionGiftFrameRef = useRef(0)
   const [chatInput, setChatInput] = useState("")
@@ -1837,8 +2032,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     clearTurnArrowAnimTimers()
     setTurnArrowTransitionMs(TURN_ARROW_TO_AVATAR_MS)
     setTurnArrowPosPx(turnArrowTargetPx)
-    const t = setTimeout(() => setTurnArrowVisible(false), TURN_ARROW_HIDE_AFTER_MS)
-    turnArrowAnimTimersRef.current.push(t)
+    /* Стрелка хода остаётся видимой на всём протяжении вращения бутылки */
   }, [isSpinning, turnArrowTargetPx, clearTurnArrowAnimTimers, roundNumber, currentTurnIndex])
 
   const finalizeSpinFromMeta = useCallback((meta: NonNullable<typeof spinResolveMetaRef.current>) => {
@@ -2269,7 +2463,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       }
 
       if (!EMOTION_TYPES.has(entry.type)) continue
-      if (entry.type === "kiss" && String(entry.text ?? "").toLowerCase().includes("крепкий поцелуй")) continue
+      if (entry.type === "kiss" && isMutualKissPairLogText(entry.text)) continue
       if (entry.fromPlayer?.id === currentUser.id) continue
       if (!entry.fromPlayer || !entry.toPlayer) continue
 
@@ -2962,7 +3156,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         toPlayer: b,
         toPlayer2: b,
         pairIds: sortedPairIds(a, b),
-        text: `${a.name} — крепкий поцелуй — ${b.name}`,
+        text: `${a.name} — взаимный поцелуй — ${b.name}`,
         timestamp: Date.now(),
       },
     })
@@ -3090,32 +3284,35 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     [currentUser, voiceBalance, dispatch, showToast],
   )
 
-  const triggerGiftCatalogFlyToAvatar = useCallback((buttonKey: string, emoji?: string, imgSrcRaw?: string) => {
-    const buttonEl = giftCatalogButtonRefs.current[buttonKey]
-    const avatarEl = playerMenuAvatarRef.current
-    if (!buttonEl || !avatarEl) return
-    const from = buttonEl.getBoundingClientRect()
-    const to = avatarEl.getBoundingClientRect()
-    if (from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return
-    const id = `gift_fly_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    const startX = from.left + from.width / 2
-    const startY = from.top + from.height / 2
-    const endX = to.left + to.width / 2
-    const endY = to.top + to.height / 2
-    const imgSrc = typeof imgSrcRaw === "string" && imgSrcRaw.trim() ? imgSrcRaw.trim() : undefined
-    setGiftCatalogFlyFx((prev) => [
-      ...prev.slice(-7),
-      { id, emoji, imgSrc, startX, startY, deltaX: endX - startX, deltaY: endY - startY, started: false },
-    ])
-    requestAnimationFrame(() => {
-      setGiftCatalogFlyFx((prev) => prev.map((x) => (x.id === id ? { ...x, started: true } : x)))
-    })
-    const t = setTimeout(() => {
-      setGiftCatalogFlyFx((prev) => prev.filter((x) => x.id !== id))
-      giftCatalogFlyTimersRef.current = giftCatalogFlyTimersRef.current.filter((x) => x !== t)
-    }, 760)
-    giftCatalogFlyTimersRef.current.push(t)
-  }, [])
+  const triggerGiftCatalogFlyToAvatar = useCallback(
+    (
+      buttonKey: string,
+      recipientPlayerId: number,
+      giftTypeId: string,
+      emoji?: string,
+      imgSrcRaw?: string,
+    ) => {
+      const buttonEl = giftCatalogButtonRefs.current[buttonKey]
+      const surface = tableSurfaceRef.current
+      if (!buttonEl || !surface) return
+      const avatarWrap = surface.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${recipientPlayerId}"]`)
+      const from = buttonEl.getBoundingClientRect()
+      const to = avatarWrap?.getBoundingClientRect()
+      if (!to || from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return
+      const id = `gift_fly_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      const startX = from.left + from.width / 2
+      const startY = from.top + from.height / 2
+      const endX = to.left + to.width / 2
+      const endY = to.top + to.height / 2
+      const imgSrc = typeof imgSrcRaw === "string" && imgSrcRaw.trim() ? imgSrcRaw.trim() : undefined
+      setCatalogGiftAvatarHold({ playerId: recipientPlayerId, giftTypeId })
+      setGiftCatalogFlyFx((prev) => [
+        ...prev.slice(-7),
+        { id, recipientPlayerId, giftTypeId, emoji, imgSrc, startX, startY, endX, endY },
+      ])
+    },
+    [],
+  )
 
   /* ---- send chat message ---- */
   const handleSendChat = useCallback(() => {
@@ -3277,20 +3474,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     setGiftCatalogDrawerPlayer(null)
   }
 
-  /* ---- extra spin (pay 50 voices) ---- */
+  /* ---- extra spin (pay voices) ---- */
   const handleExtraSpin = () => {
-    if (voiceBalance < 10) {
-      showToast("Нужно минимум 10 сердец", "error")
+    if (voiceBalance < EXTRA_SPIN_COST) {
+      showToast(`Нужно минимум ${EXTRA_SPIN_COST} сердца`, "error")
       return
     }
-    dispatch({ type: "PAY_VOICES", amount: 10 })
+    dispatch({ type: "PAY_VOICES", amount: EXTRA_SPIN_COST })
     dispatch({
       type: "ADD_LOG",
         entry: {
           id: generateLogId(),
           type: "system",
           fromPlayer: currentUser!,
-          text: `${currentUser!.name} заплатил(а) 10 сердец за внеочередное кручение бутылки`,
+          text: `${currentUser!.name} заплатил(а) ${EXTRA_SPIN_COST} сердца за внеочередное кручение бутылки`,
           timestamp: Date.now(),
         },
     })
@@ -4442,7 +4639,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             <div className={isPcLayout ? "hidden" : "md:hidden"}>
               <button
                 onClick={handleExtraSpin}
-                disabled={voiceBalance < 10}
+                disabled={voiceBalance < EXTRA_SPIN_COST}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                 style={{
                   background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
@@ -4452,7 +4649,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 }}
               >
                 <RotateCw className="h-3.5 w-3.5" />
-                {"Крутить вне очереди (10)"}
+                {`Крутить вне очереди (${EXTRA_SPIN_COST})`}
               </button>
             </div>
           )}
@@ -5114,8 +5311,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   width: "min(90%, min(100%, calc(min(72vh, 78dvh) * 60 / 50)))",
                   maxWidth: "100%",
                 }),
-            background:
-              tableStyle === "nebula_mockup" ? GAME_TABLE_SURFACE_BG_NEBULA : GAME_TABLE_SURFACE_BG,
+            background: gameTableSurfaceBackground(tableStyle === "nebula_mockup"),
             boxShadow:
               tableStyle === "nebula_mockup"
                 ? isMobile
@@ -5226,7 +5422,15 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             const isClickableForPrediction =
               predictionPhase && !predictionMade && !isSpinning && !showResult &&
               player.id !== currentUser?.id
-            const bigGiftSequence = getBigGiftSequenceForPlayer(player.id)
+            const bigGiftSequenceRaw = getBigGiftSequenceForPlayer(player.id)
+            const bigGiftSequence =
+              catalogGiftAvatarHold?.playerId === player.id
+                ? (() => {
+                    const idx = bigGiftSequenceRaw.lastIndexOf(catalogGiftAvatarHold.giftTypeId)
+                    if (idx === -1) return bigGiftSequenceRaw
+                    return [...bigGiftSequenceRaw.slice(0, idx), ...bigGiftSequenceRaw.slice(idx + 1)]
+                  })()
+                : bigGiftSequenceRaw
             const hasRoseGiven = (rosesGiven ?? []).some((r) => r.toPlayerId === player.id)
             const giftIcons = hasRoseGiven
               ? [...getGiftsForPlayer(player.id), "rose" as const]
@@ -5680,7 +5884,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 <button
                   type="button"
                   onClick={handleExtraSpin}
-                  disabled={voiceBalance < 10}
+                  disabled={voiceBalance < EXTRA_SPIN_COST}
                   className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                   style={{
                     background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
@@ -5690,7 +5894,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   }}
                 >
                   <RotateCw className="h-4 w-4 shrink-0" />
-                  Крутить вне очереди (10)
+                  {`Крутить вне очереди (${EXTRA_SPIN_COST})`}
                 </button>
               )}
             </div>
@@ -6199,7 +6403,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                       handleExtraSpin()
                       setShowMobileMoreMenu(false)
                     }}
-                    disabled={voiceBalance < 10}
+                    disabled={voiceBalance < EXTRA_SPIN_COST}
                     className="mx-2 mb-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                     style={{
                       background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
@@ -6209,7 +6413,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     }}
                   >
                     <RotateCw className="h-4 w-4 shrink-0" />
-                    Крутить вне очереди (10 ❤)
+                    {`Крутить вне очереди (${EXTRA_SPIN_COST} ❤)`}
                   </button>
                 )}
                 <button
@@ -6491,7 +6695,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                         return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
                       })()
                     return (
-                  <div ref={playerMenuAvatarRef} className="relative z-[1]">
+                  <div
+                    ref={playerMenuAvatarRef}
+                    className="relative z-[1] rounded-full"
+                  >
                     <PlayerAvatar
                       player={playerMenuTarget}
                       frameId={menuFrameId}
@@ -7094,7 +7301,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           subtitle="оплата сердечками или розами — по каталогу"
           onClose={() => setGiftCatalogDrawerPlayer(null)}
           variant="material"
-          overlayClassName="bg-black/65"
+          overlayClassName="bg-transparent backdrop-blur-none"
           panelClassName="!border-amber-500/25 !bg-[linear-gradient(165deg,rgba(30,41,59,0.98)_0%,rgba(15,23,42,0.98)_50%,rgba(30,41,59,0.98)_100%)] !shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
           headerRight={
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500/25 to-amber-500/20 ring-1 ring-rose-400/20">
@@ -7106,6 +7313,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
           <div className="relative z-[1] flex min-h-0 min-w-0 w-full flex-1 flex-col">
+                <div className="mb-2 flex items-center justify-center">
+                  <div
+                    ref={giftDrawerAvatarRef}
+                    className="rounded-full ring-2 ring-amber-400/35 ring-offset-2 ring-offset-slate-900"
+                  >
+                    <PlayerAvatar player={giftCatalogDrawerPlayer} size={56} hideNameLabel />
+                  </div>
+                </div>
                 <div
                   className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
                   style={{
@@ -7269,7 +7484,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                     timestamp: Date.now(),
                                   } as GameLogEntry,
                                 })
-                                triggerGiftCatalogFlyToAvatar(busyKey, gift.emoji, gift.img)
+                                triggerGiftCatalogFlyToAvatar(
+                                  busyKey,
+                                  giftCatalogDrawerPlayer.id,
+                                  gift.id,
+                                  gift.emoji,
+                                  gift.img,
+                                )
                                 playEmotionSound(gift.id)
                                 if (limitedStock) void refreshGiftCatalog()
                               }
@@ -7354,33 +7575,37 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       )}
 
       {giftCatalogFlyFx.map((fx) => (
-        <div
+        <GiftCatalogBezierFly
           key={fx.id}
-          className="pointer-events-none fixed z-[205] will-change-[transform,opacity]"
-          style={{
-            left: `${fx.startX}px`,
-            top: `${fx.startY}px`,
-            transform: fx.started
-              ? `translate(${fx.deltaX}px, ${fx.deltaY}px) scale(0.62)`
-              : "translate(0px, 0px) scale(1)",
-            opacity: fx.started ? 0.18 : 1,
-            transition: "transform 720ms cubic-bezier(0.2, 0.75, 0.22, 1), opacity 720ms ease",
+          startX={fx.startX}
+          startY={fx.startY}
+          endX={fx.endX}
+          endY={fx.endY}
+          emoji={fx.emoji}
+          imgSrc={fx.imgSrc}
+          durationMs={GIFT_FLY_DURATION_MS}
+          onFinished={() => {
+            const burstId = `burst_${fx.id}`
+            setGiftCatalogFlyFx((prev) => prev.filter((x) => x.id !== fx.id))
+            setGiftArrivalBursts((prev) => [...prev.slice(-6), { id: burstId, x: fx.endX, y: fx.endY, burstKey: fx.id }])
+            const particleClearMs =
+              typeof window !== "undefined" &&
+              window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                ? 400
+                : GIFT_ARRIVAL_PARTICLE_DURATION_MS
+            const tid = globalThis.setTimeout(() => {
+              setGiftArrivalBursts((prev) => prev.filter((b) => b.id !== burstId))
+              setCatalogGiftAvatarHold((h) =>
+                h?.playerId === fx.recipientPlayerId && h?.giftTypeId === fx.giftTypeId ? null : h,
+              )
+              giftCatalogFlyTimersRef.current = giftCatalogFlyTimersRef.current.filter((t) => t !== tid)
+            }, particleClearMs)
+            giftCatalogFlyTimersRef.current.push(tid)
           }}
-          aria-hidden
-        >
-          {fx.imgSrc ? (
-            <img
-              src={fx.imgSrc}
-              alt=""
-              className="h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-xl object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]"
-              draggable={false}
-            />
-          ) : (
-            <span className="block -translate-x-1/2 -translate-y-1/2 text-[2rem] leading-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]">
-              {fx.emoji || "🎁"}
-            </span>
-          )}
-        </div>
+        />
+      ))}
+      {giftArrivalBursts.map((b) => (
+        <GiftArrivalParticleBurst key={b.id} x={b.x} y={b.y} burstKey={b.burstKey} />
       ))}
 
       {/* магазин теперь отдельным экраном (ShopScreen) */}

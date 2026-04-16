@@ -2,6 +2,8 @@
 
 import { X } from "lucide-react"
 
+import { cn } from "@/lib/utils"
+
 type GameSidePanelShellProps = {
   title: string
   subtitle?: string
@@ -64,9 +66,10 @@ export function GameSidePanelShell({
     <>
       <button
         type="button"
-        className={
-          "side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px] " + (overlayClassName ?? "")
-        }
+        className={cn(
+          "side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]",
+          overlayClassName,
+        )}
         onClick={onClose}
         aria-label="Закрыть"
       />
