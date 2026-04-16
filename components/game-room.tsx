@@ -1403,6 +1403,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     seatConfirmed,
     liveHumanCount,
   } = useSyncEngine()
+
+  const tableChatEmojiVipActive = useMemo(
+    () =>
+      !!currentUser?.isVip && (currentUser.vipUntilTs == null || currentUser.vipUntilTs > Date.now()),
+    [currentUser?.isVip, currentUser?.vipUntilTs],
+  )
+
+  const openShopForVipFromChat = useCallback(() => {
+    dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })
+  }, [dispatch])
+
   const playersRef = useRef(players)
   useEffect(() => { playersRef.current = players }, [players])
   const isSpinningRef = useRef(isSpinning)
@@ -3672,7 +3683,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /* ---- player avatar click ---- */
   const handlePlayerClick = (player: Player) => {
     if (player.id === currentUser?.id) return
-    if (pairKissPhase) return
 
     // During prediction phase - select player directly on the board
     if (predictionPhase && !predictionMade && !isSpinning && !showResult) {
@@ -3784,12 +3794,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [effectiveSidebarCombo, sidebarGiftMode])
 
   const isSidebarEmotionActionActive =
-    !!currentUser && !currentUser.isBot && sidebarGiftMode && !!sidebarTargetPlayer && !pairKissPhase
+    !!currentUser && !currentUser.isBot && sidebarGiftMode && !!sidebarTargetPlayer
 
   const showMobileEmotionStrip =
-    isMobile &&
-    !pairKissPhase &&
-    Boolean(sidebarGiftMode && sidebarTargetPlayer)
+    isMobile && Boolean(sidebarGiftMode && sidebarTargetPlayer)
 
   const todayStart = useMemo(() => {
     const d = new Date(now)
@@ -5812,15 +5820,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           {pairKissPhase && pairKissModalPlayers ? (
             <div
               className={cn(
-                "absolute left-1/2 top-1/2 z-[42] flex max-h-[min(92dvh,100%)] w-[min(280px,calc(100%-2rem))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 items-center justify-center md:w-[min(300px,calc(100%-3rem))] md:max-w-[calc(100%-3rem)]",
-                pairKissPhase.resolved && "pointer-events-none",
+                "pointer-events-none absolute left-1/2 top-1/2 z-[42] flex max-h-[min(92dvh,100%)] w-[min(280px,calc(100%-2rem))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 items-center justify-center md:w-[min(300px,calc(100%-3rem))] md:max-w-[calc(100%-3rem)]",
               )}
             >
               {/* Круг + свечение: общая анимация появления / ухода */}
               <div
                 className={cn(
                   "relative isolate flex w-full max-w-full min-h-0 shrink-0 flex-col items-center justify-center overflow-visible rounded-full border border-cyan-200/20 bg-gradient-to-b from-slate-900/65 via-slate-900/55 to-slate-950/65 px-2 py-3 shadow-[0_0_20px_rgba(34,211,238,0.45),0_0_44px_rgba(56,189,248,0.22)] backdrop-blur-md aspect-square",
-                  pairKissPhase.resolved ? "pair-kiss-card-exit" : "pair-kiss-card-enter",
+                  pairKissPhase.resolved ? "pointer-events-none pair-kiss-card-exit" : "pointer-events-auto pair-kiss-card-enter",
                 )}
                 style={
                   pairKissPhase.resolved
@@ -6040,8 +6047,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 onSend={handleSendChat}
                 logEndRef={logEndRef}
                 currentUserId={currentUser?.id}
-                currentUserIsVip={currentUser?.isVip}
+                currentUserIsVip={tableChatEmojiVipActive}
                 chatDisabled={tablePaused}
+                onBecomeVip={openShopForVipFromChat}
                 onJoinPlayerHello={handleJoinPlayerHello}
                 onChatMenuAction={handleChatAvatarMenuAction}
                 className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
@@ -6103,8 +6111,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 onSend={handleSendChat}
                 logEndRef={logEndRef}
                 currentUserId={currentUser?.id}
-                currentUserIsVip={currentUser?.isVip}
+                currentUserIsVip={tableChatEmojiVipActive}
                 chatDisabled={tablePaused}
+                onBecomeVip={openShopForVipFromChat}
                 onJoinPlayerHello={handleJoinPlayerHello}
                 onChatMenuAction={handleChatAvatarMenuAction}
                 className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
@@ -7886,6 +7895,7 @@ function TableChatPanel({
   currentUserId,
   currentUserIsVip,
   chatDisabled,
+  onBecomeVip,
   className,
   onJoinPlayerHello,
   onChatMenuAction,
@@ -7903,6 +7913,8 @@ function TableChatPanel({
   currentUserId?: number
   currentUserIsVip?: boolean
   chatDisabled?: boolean
+  /** Открыть магазин для оформления VIP (смайлики в чате только у VIP). */
+  onBecomeVip?: () => void
   className?: string
   onJoinPlayerHello?: (joinedPlayer: Player) => void
   onChatMenuAction?: (
@@ -8025,6 +8037,11 @@ function TableChatPanel({
               chatDisabled ? "Чат на паузе" : currentUserIsVip ? "Смайлики" : "Смайлики доступны только для VIP"
             }
             onEmojiSelect={(emoji) => setChatInput((prev) => prev + emoji)}
+            onBecomeVip={
+              currentUserId != null && onBecomeVip && !chatDisabled && !currentUserIsVip
+                ? onBecomeVip
+                : undefined
+            }
           />
           <input
             type="text"
