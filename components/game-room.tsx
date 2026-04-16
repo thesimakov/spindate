@@ -3310,6 +3310,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       return
     }
     pairKissStatusLogRef.current = key
+    // Чтобы рейтинг «Любвеобильные» засчитывал поцелуй обоим участникам окна,
+    // добавляем два лог-ивента `kiss`: по одному на каждого игрока.
+    const ts = Date.now()
+    const pairIds = sortedPairIds(a, b)
     dispatch({
       type: "ADD_LOG",
       entry: {
@@ -3318,9 +3322,22 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         fromPlayer: a,
         toPlayer: b,
         toPlayer2: b,
-        pairIds: sortedPairIds(a, b),
+        pairIds,
         text: `${a.name} — взаимный поцелуй — ${b.name}`,
-        timestamp: Date.now(),
+        timestamp: ts,
+      },
+    })
+    dispatch({
+      type: "ADD_LOG",
+      entry: {
+        id: generateLogId(),
+        type: "kiss",
+        fromPlayer: b,
+        toPlayer: a,
+        toPlayer2: a,
+        pairIds,
+        text: `${b.name} — взаимный поцелуй — ${a.name}`,
+        timestamp: ts,
       },
     })
   }, [currentUser?.id, players, pairKissPhase, dispatch])
