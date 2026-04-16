@@ -640,6 +640,17 @@ interface FlyingEmoji {
   toY: number
 }
 
+interface GiftCatalogFlyFx {
+  id: string
+  emoji?: string
+  imgSrc?: string
+  startX: number
+  startY: number
+  deltaX: number
+  deltaY: number
+  started: boolean
+}
+
 function ThanksCloudBubble({ variant = "fly" }: { variant?: "fly" | "chat" }) {
   const uid = useId().replace(/:/g, "")
   const gid = `tcg-${variant}-${uid}`
@@ -1420,7 +1431,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [steamPuffs, setSteamPuffs] = useState<SteamPuff[]>([])
   /** Полноэкранные 👋 по записи hello в gameLog (одинаковый seed id на всех клиентах). */
   const [tableHelloBurst, setTableHelloBurst] = useState<{ seed: string; key: number } | null>(null)
+  const [chatRequestPrompt, setChatRequestPrompt] = useState<{ id: string; fromName: string } | null>(null)
+  const [giftCatalogFlyFx, setGiftCatalogFlyFx] = useState<GiftCatalogFlyFx[]>([])
   const tableHelloLogSeenRef = useRef(new Set<string>())
+  const chatRequestSeenRef = useRef(new Set<string>())
+  const playerMenuAvatarRef = useRef<HTMLDivElement | null>(null)
+  const giftCatalogButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const giftCatalogFlyTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const tableHelloBurstKeyRef = useRef(0)
   const emotionGiftFrameRef = useRef(0)
   const [chatInput, setChatInput] = useState("")
@@ -2325,10 +2342,33 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [gameLog])
 
   useEffect(() => {
+    if (!currentUser) return
+    for (const e of gameLog) {
+      if (e.type !== "chat_request") continue
+      if (chatRequestSeenRef.current.has(e.id)) continue
+      chatRequestSeenRef.current.add(e.id)
+      if (e.toPlayer?.id !== currentUser.id) continue
+      const fromName = e.fromPlayer?.name?.trim() || "Игрок"
+      setChatRequestPrompt({ id: e.id, fromName })
+    }
+    if (chatRequestSeenRef.current.size > 400) {
+      const ids = Array.from(chatRequestSeenRef.current)
+      for (const id of ids.slice(0, ids.length - 200)) chatRequestSeenRef.current.delete(id)
+    }
+  }, [gameLog, currentUser])
+
+  useEffect(() => {
     if (tableHelloBurst == null) return
     const t = window.setTimeout(() => setTableHelloBurst(null), 2800)
     return () => window.clearTimeout(t)
   }, [tableHelloBurst])
+
+  useEffect(() => {
+    return () => {
+      giftCatalogFlyTimersRef.current.forEach(clearTimeout)
+      giftCatalogFlyTimersRef.current = []
+    }
+  }, [])
 
   /* ---- start the actual spin ---- */
   const startSpin = useCallback(() => {
@@ -3049,6 +3089,33 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     },
     [currentUser, voiceBalance, dispatch, showToast],
   )
+
+  const triggerGiftCatalogFlyToAvatar = useCallback((buttonKey: string, emoji?: string, imgSrcRaw?: string) => {
+    const buttonEl = giftCatalogButtonRefs.current[buttonKey]
+    const avatarEl = playerMenuAvatarRef.current
+    if (!buttonEl || !avatarEl) return
+    const from = buttonEl.getBoundingClientRect()
+    const to = avatarEl.getBoundingClientRect()
+    if (from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return
+    const id = `gift_fly_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    const startX = from.left + from.width / 2
+    const startY = from.top + from.height / 2
+    const endX = to.left + to.width / 2
+    const endY = to.top + to.height / 2
+    const imgSrc = typeof imgSrcRaw === "string" && imgSrcRaw.trim() ? imgSrcRaw.trim() : undefined
+    setGiftCatalogFlyFx((prev) => [
+      ...prev.slice(-7),
+      { id, emoji, imgSrc, startX, startY, deltaX: endX - startX, deltaY: endY - startY, started: false },
+    ])
+    requestAnimationFrame(() => {
+      setGiftCatalogFlyFx((prev) => prev.map((x) => (x.id === id ? { ...x, started: true } : x)))
+    })
+    const t = setTimeout(() => {
+      setGiftCatalogFlyFx((prev) => prev.filter((x) => x.id !== id))
+      giftCatalogFlyTimersRef.current = giftCatalogFlyTimersRef.current.filter((x) => x !== t)
+    }, 760)
+    giftCatalogFlyTimersRef.current.push(t)
+  }, [])
 
   /* ---- send chat message ---- */
   const handleSendChat = useCallback(() => {
@@ -4542,7 +4609,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               title="Личные сообщения"
               aria-label="Открыть личные сообщения"
             >
-              <MessageCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "#e8c06a" }} />
+              <span className="relative z-[1] flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-visible">
+                <MessageCircle className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
+                {(pmUnreadCount > 0 || chatRequestPrompt != null) && (
+                  <div className="music-lure-layer--icon" aria-hidden>
+                    <span className="music-lure-note music-lure-note--1">💬</span>
+                    <span className="music-lure-note music-lure-note--2">🗨️</span>
+                    <span className="music-lure-note music-lure-note--3">💬</span>
+                  </div>
+                )}
+              </span>
               <span className={sideBtnCompactTextClass} style={{ color: "#f0e0c8" }}>
                 {"Чат"}
               </span>
@@ -6415,14 +6491,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                         return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
                       })()
                     return (
-                  <PlayerAvatar
-                    player={playerMenuTarget}
-                    frameId={menuFrameId}
-                    frameBorder={menuFrameMeta?.border}
-                    frameShadow={menuFrameMeta?.shadow}
-                    frameSvgPath={menuFrameMeta?.svgPath}
-                    size={isMobile ? 100 : 128}
-                  />
+                  <div ref={playerMenuAvatarRef} className="relative z-[1]">
+                    <PlayerAvatar
+                      player={playerMenuTarget}
+                      frameId={menuFrameId}
+                      frameBorder={menuFrameMeta?.border}
+                      frameShadow={menuFrameMeta?.shadow}
+                      frameSvgPath={menuFrameMeta?.svgPath}
+                      size={isMobile ? 100 : 128}
+                    />
+                  </div>
                     )
                   })()}
                   <h2 className="relative z-[1] mt-3 max-w-full px-1 text-center text-xl font-black leading-tight tracking-tight text-slate-900 sm:text-2xl">
@@ -6517,16 +6595,28 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                         <div className="relative z-[1] mt-3 grid w-full min-w-0 grid-cols-[1fr_auto] gap-2">
                           <button
                             type="button"
-                            disabled={!targetAcceptsInvitesInProfile}
                             onClick={() => {
+                              if (!currentUser) return
                               if (!targetAcceptsInvitesInProfile) {
-                                showToast("Игрок выключил общение в профиле", "info")
+                                dispatch({
+                                  type: "ADD_LOG",
+                                  entry: {
+                                    id: generateLogId(),
+                                    type: "chat_request",
+                                    fromPlayer: currentUser,
+                                    toPlayer: playerMenuTarget,
+                                    text: `С тобой хочет общаться ${currentUser.name}`,
+                                    timestamp: Date.now(),
+                                  },
+                                })
+                                showToast("Запрос на общение отправлен", "success")
+                                dispatch({ type: "CLOSE_PLAYER_MENU" })
                                 return
                               }
-                              dispatch({ type: "OPEN_CHAT", player: playerMenuTarget })
+                              dispatch({ type: "OPEN_SIDE_CHAT", player: playerMenuTarget })
                               dispatch({ type: "CLOSE_PLAYER_MENU" })
                             }}
-                            className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-cyan-300/60 bg-gradient-to-b from-cyan-100 to-cyan-50 px-3 text-[15px] font-black text-cyan-950 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:brightness-[1.02] disabled:cursor-not-allowed disabled:opacity-45"
+                            className="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-cyan-300/60 bg-gradient-to-b from-cyan-100 to-cyan-50 px-3 text-[15px] font-black text-cyan-950 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:brightness-[1.02]"
                           >
                             Написать
                           </button>
@@ -7179,6 +7269,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                     timestamp: Date.now(),
                                   } as GameLogEntry,
                                 })
+                                triggerGiftCatalogFlyToAvatar(busyKey, gift.emoji, gift.img)
                                 playEmotionSound(gift.id)
                                 if (limitedStock) void refreshGiftCatalog()
                               }
@@ -7188,6 +7279,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                 <button
                                   key={`${section.key}-${gift.id}`}
                                   type="button"
+                                  ref={(el) => {
+                                    giftCatalogButtonRefs.current[busyKey] = el
+                                  }}
                                   onClick={handleGiftClick}
                                   aria-label={gift.name}
                                   title={gift.name}
@@ -7259,7 +7353,74 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         </GameSidePanelShell>
       )}
 
+      {giftCatalogFlyFx.map((fx) => (
+        <div
+          key={fx.id}
+          className="pointer-events-none fixed z-[205] will-change-[transform,opacity]"
+          style={{
+            left: `${fx.startX}px`,
+            top: `${fx.startY}px`,
+            transform: fx.started
+              ? `translate(${fx.deltaX}px, ${fx.deltaY}px) scale(0.62)`
+              : "translate(0px, 0px) scale(1)",
+            opacity: fx.started ? 0.18 : 1,
+            transition: "transform 720ms cubic-bezier(0.2, 0.75, 0.22, 1), opacity 720ms ease",
+          }}
+          aria-hidden
+        >
+          {fx.imgSrc ? (
+            <img
+              src={fx.imgSrc}
+              alt=""
+              className="h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-xl object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]"
+              draggable={false}
+            />
+          ) : (
+            <span className="block -translate-x-1/2 -translate-y-1/2 text-[2rem] leading-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.42)]">
+              {fx.emoji || "🎁"}
+            </span>
+          )}
+        </div>
+      ))}
+
       {/* магазин теперь отдельным экраном (ShopScreen) */}
+      {chatRequestPrompt && (
+        <div className="fixed inset-0 z-[186] flex items-center justify-center bg-black/55 p-4">
+          <div className="w-full max-w-sm rounded-3xl border border-cyan-300/45 bg-gradient-to-b from-slate-900 to-slate-950 p-4 shadow-2xl">
+            <p className="text-center text-[19px] font-black text-slate-100">Запрос на общение</p>
+            <p className="mt-2 text-center text-[15px] text-slate-200">
+              С тобой хочет общаться <span className="font-black text-cyan-200">{chatRequestPrompt.fromName}</span>
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setChatRequestPrompt(null)
+                  try {
+                    if (typeof window !== "undefined") {
+                      window.sessionStorage.setItem("spindate_focus_chat_invite_setting_v1", "1")
+                    }
+                  } catch {
+                    // ignore storage errors
+                  }
+                  dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })
+                }}
+                className="rounded-2xl border border-cyan-300/55 bg-gradient-to-b from-cyan-200 to-cyan-100 px-4 py-3 text-[15px] font-black text-slate-900 transition hover:brightness-105"
+              >
+                Настройка
+              </button>
+              <button
+                type="button"
+                onClick={() => setChatRequestPrompt(null)}
+                className="rounded-2xl border border-slate-500/70 bg-slate-800 px-4 py-2.5 text-[14px] font-semibold text-slate-200 transition hover:bg-slate-700"
+              >
+                Позже
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {careOfferOpen && playerMenuTarget && currentUser && currentUser.id !== playerMenuTarget.id && (
         <div className="fixed inset-0 z-[185] flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-3xl border border-fuchsia-300/45 bg-gradient-to-b from-slate-900 to-slate-950 p-4 shadow-2xl">

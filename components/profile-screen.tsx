@@ -42,6 +42,7 @@ import {
 } from "@/lib/achievement-posts-catalog"
 
 const CLAIMED_ACHIEVEMENT_STORAGE_PREFIX = "spindate_achievement_status_claimed_v1_"
+const FOCUS_CHAT_INVITE_SETTING_KEY = "spindate_focus_chat_invite_setting_v1"
 
 function loadClaimedAchievementKeys(userId: number): Record<string, boolean> {
   if (typeof window === "undefined") return {}
@@ -356,6 +357,11 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [vkLeaderBusy, setVkLeaderBusy] = useState(false)
   const [vkWallBusy, setVkWallBusy] = useState(false)
   const roseGiftFxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatInvitePulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatInviteHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const chatInviteCheckboxRef = useRef<HTMLInputElement | null>(null)
+  const [chatInvitePulse, setChatInvitePulse] = useState(false)
+  const [chatInviteHintVisible, setChatInviteHintVisible] = useState(false)
   const { toast, showToast } = useInlineToast(1700)
   useEffect(() => {
     setName(initialName)
@@ -396,8 +402,49 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   useEffect(() => {
     return () => {
       if (roseGiftFxTimeoutRef.current) clearTimeout(roseGiftFxTimeoutRef.current)
+      if (chatInvitePulseTimeoutRef.current) clearTimeout(chatInvitePulseTimeoutRef.current)
+      if (chatInviteHintTimeoutRef.current) clearTimeout(chatInviteHintTimeoutRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (variant !== "panel" || !currentUser) return
+    let shouldFocus = false
+    try {
+      shouldFocus = typeof window !== "undefined" && window.sessionStorage.getItem(FOCUS_CHAT_INVITE_SETTING_KEY) === "1"
+    } catch {
+      shouldFocus = false
+    }
+    if (!shouldFocus) return
+    try {
+      if (typeof window !== "undefined") window.sessionStorage.removeItem(FOCUS_CHAT_INVITE_SETTING_KEY)
+    } catch {
+      // ignore
+    }
+    const t = setTimeout(() => {
+      const el = chatInviteCheckboxRef.current
+      if (!el) return
+      el.scrollIntoView({ behavior: "smooth", block: "center" })
+      try {
+        el.focus({ preventScroll: true })
+      } catch {
+        el.focus()
+      }
+      setChatInvitePulse(true)
+      if (chatInvitePulseTimeoutRef.current) clearTimeout(chatInvitePulseTimeoutRef.current)
+      chatInvitePulseTimeoutRef.current = setTimeout(() => {
+        setChatInvitePulse(false)
+        chatInvitePulseTimeoutRef.current = null
+      }, 1800)
+      setChatInviteHintVisible(true)
+      if (chatInviteHintTimeoutRef.current) clearTimeout(chatInviteHintTimeoutRef.current)
+      chatInviteHintTimeoutRef.current = setTimeout(() => {
+        setChatInviteHintVisible(false)
+        chatInviteHintTimeoutRef.current = null
+      }, 4200)
+    }, 120)
+    return () => clearTimeout(t)
+  }, [variant, currentUser])
 
   useEffect(() => {
     let cancelled = false
@@ -1675,23 +1722,39 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             : "Кто нажал «Ухаживание» — сможет написать вам личное сообщение в игре."}
         </p>
 
-        <label className={`flex cursor-pointer items-center gap-3 ${sectionCardClass}`}>
+        <label
+          className={cn(
+            `flex cursor-pointer items-center gap-3 ${sectionCardClass}`,
+            chatInvitePulse && "ring-2 ring-cyan-400/70 ring-offset-1 ring-offset-white transition",
+          )}
+        >
           <input
             type="checkbox"
+            ref={chatInviteCheckboxRef}
             checked={effectiveOpenToChatInvites(currentUser, allowChatInvite)}
-            onChange={(e) =>
+            onChange={(e) => {
+              if (chatInviteHintTimeoutRef.current) {
+                clearTimeout(chatInviteHintTimeoutRef.current)
+                chatInviteHintTimeoutRef.current = null
+              }
+              setChatInviteHintVisible(false)
               dispatch({
                 type: "SET_ALLOW_CHAT_INVITE",
                 playerId: currentUser.id,
                 allowed: e.target.checked,
               })
-            }
+            }}
             className="h-4 w-4 rounded border-slate-300 accent-amber-500 transition-transform duration-200 checked:scale-110"
           />
           <span className="text-[15px] font-bold text-slate-900">
             {"Общение"}
           </span>
         </label>
+        {chatInviteHintVisible && (
+          <div className="-mt-1 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-[13px] font-semibold text-cyan-900 shadow-[0_6px_14px_rgba(6,182,212,0.15)]">
+            Включите «Общение», чтобы принимать запросы на личный чат.
+          </div>
+        )}
         <p className="-mt-2 text-[15px] font-medium text-slate-700">
           {effectiveOpenToChatInvites(currentUser, allowChatInvite)
             ? "У вас включена кнопка «Пригласить общаться» — другие могут пригласить вас в личный чат."
