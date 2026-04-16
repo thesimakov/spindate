@@ -177,9 +177,9 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
       return { ok: false as const }
     }
   } else if (args.action.type === "BEGIN_PAIR_KISS_PHASE") {
-    const snap = await getTableAuthoritySnapshot(tableId)
-    const rd = snap ? getRoundDriverPlayerId(snap.players) : null
-    if (rd == null || rd !== args.senderId) return { ok: false as const }
+    if (!(await senderCanDriveTurnLifecycleFromSnapshot(tableId, args.senderId))) {
+      return { ok: false as const }
+    }
   } else if (
     args.action.type === "START_COUNTDOWN" ||
     args.action.type === "TICK_COUNTDOWN" ||

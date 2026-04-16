@@ -74,20 +74,47 @@ function stabilizeAuthoritySnapshot(
       next = { ...next, spinStartedAtMs: nowMs }
       changed = true
     } else if (nowMs - started >= SPIN_STUCK_MS) {
-      const recoveredBase: TableAuthorityPayload = {
-        ...next,
-        isSpinning: false,
-        spinStartedAtMs: null,
-        countdown: null,
-        showResult: false,
-        targetPlayer: null,
-        targetPlayer2: null,
-        resultAction: null,
-        pairKissPhase: null,
-        // Считаем, что игрок крутил: watchdog не должен штрафовать skip-ом.
-        currentTurnDidSpin: true,
+      const spinner = next.targetPlayer2
+      const target = next.targetPlayer
+      const canOpenPairKiss = spinner != null && target != null
+      const recoveredBase: TableAuthorityPayload = canOpenPairKiss
+        ? {
+            ...next,
+            isSpinning: false,
+            spinStartedAtMs: null,
+            countdown: null,
+            showResult: true,
+            resultAction: next.resultAction ?? "skip",
+            pairKissPhase: {
+              roundKey: `${next.tableId}:${next.roundNumber}:${next.currentTurnIndex}:${spinner.id}:${target.id}:srv-watchdog`,
+              deadlineMs: nowMs + 10_000,
+              idA: spinner.id,
+              idB: target.id,
+              choiceA: null,
+              choiceB: null,
+              resolved: false,
+              outcome: null,
+            },
+            currentTurnDidSpin: true,
+          }
+        : {
+            ...next,
+            isSpinning: false,
+            spinStartedAtMs: null,
+            countdown: null,
+            showResult: false,
+            targetPlayer: null,
+            targetPlayer2: null,
+            resultAction: null,
+            pairKissPhase: null,
+            // Считаем, что игрок крутил: watchdog не должен штрафовать skip-ом.
+            currentTurnDidSpin: true,
+          }
+      if (!canOpenPairKiss) {
+        next = applyTableAuthorityAction(recoveredBase, { type: "NEXT_TURN" }) ?? recoveredBase
+      } else {
+        next = recoveredBase
       }
-      next = applyTableAuthorityAction(recoveredBase, { type: "NEXT_TURN" }) ?? recoveredBase
       changed = true
     }
   } else if (next.spinStartedAtMs != null) {

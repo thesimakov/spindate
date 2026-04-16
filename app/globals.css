@@ -179,6 +179,26 @@
     max-height: 100dvh;
     max-height: -webkit-fill-available;
   }
+  /* Глобальный минимум читаемого текста: не даём utility-классам опускаться ниже 14px. */
+  :where(
+    [class*="text-xs"],
+    [class*="text-[8px]"],
+    [class*="text-[9px]"],
+    [class*="text-[10px]"],
+    [class*="text-[11px]"],
+    [class*="text-[12px]"],
+    [class*="text-[13px]"],
+    [class*="text-[0.7"],
+    [class*="text-[0.8"],
+    [class*="text-[0.81"],
+    [class*="text-[0.82"],
+    [class*="text-[0.83"],
+    [class*="text-[0.84"],
+    [class*="text-[0.85"]
+  ) {
+    font-size: 14px !important;
+    line-height: 1.25;
+  }
 }
 
 /* Цены в сердечках — единый заметный стиль (число + иконка) */
@@ -211,12 +231,12 @@
     }
   }
   .heart-price--compact {
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     font-weight: 800;
   }
   @media (min-width: 640px) {
     .heart-price--compact {
-      font-size: 0.85rem;
+      font-size: 0.875rem;
     }
   }
   /* Бейдж цены в кнопках эмоций — читаемее число + ❤ */

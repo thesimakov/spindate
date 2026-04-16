@@ -116,6 +116,19 @@ function sortedPairIds(a: Player, b: Player): [number, number] {
   return a.id < b.id ? [a.id, b.id] : [b.id, a.id]
 }
 
+function nextKissForms(gender: string | undefined): {
+  nextWord: string
+  youWord: string
+} {
+  if (gender === "female") {
+    return { nextWord: "Следующая", youWord: "следующей" }
+  }
+  if (gender === "male") {
+    return { nextWord: "Следующий", youWord: "следующим" }
+  }
+  return { nextWord: "Следующий игрок", youWord: "следующим" }
+}
+
 /** Лента чата: не ставим crossOrigin на аватары (ломает загрузку с CDN ВК/ОК без CORS). */
 function tableChatPlayerAvatarOnError(e: SyntheticEvent<HTMLImageElement>, player: Player) {
   const img = e.currentTarget
@@ -798,9 +811,9 @@ const PAIR_KISS_VOTE_DURATION_MS = 10_000
 
 /** После завершения таймера / фиксации исхода держим карточку ещё 3 секунды. */
 const PAIR_KISS_EXIT_PAUSE_AFTER_RESOLVED_MS = 3000
-const PAIR_KISS_EXIT_ANIM_DURATION_MS = 780
 /** После завершения таймера пары переходим к следующему ходу без дополнительной паузы. */
 const PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS = 0
+const NEXT_KISS_ANNOUNCE_MS = 5_000
 // В этом SVG “носик” направлен примерно вниз-влево (≈135° от оси X вправо).
 const TURN_ARROW_BASE_DIRECTION_DEG = 135
 const TURN_ARROW_START_IS_CURRENT_TURN = true
@@ -836,8 +849,6 @@ const MOBILE_EMOTION_STRIP_BTN =
   "flex min-h-[2.75rem] shrink-0 flex-row items-center gap-2 rounded-full px-3 py-1.5 pr-3.5 text-left text-xs font-extrabold leading-tight sm:text-sm transition-[transform,filter] hover:brightness-105 active:scale-[0.98] disabled:opacity-40"
 
 /** Подсказка у блока эмоций — только для участника пары, который отвечает взаимностью (не крутивший бутылку). */
-const EMOTION_RECIPROCAL_HINT_SRC = "/assets/emotion-reciprocal-hint.png"
-
 // isTableSyncedAction moved to hooks/use-sync-engine.ts
 
 
@@ -939,6 +950,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     pairKissPhase,
   } = state
   const [pairKissClock, setPairKissClock] = useState(() => Date.now())
+  const [nextKissAnnouncementUntilMs, setNextKissAnnouncementUntilMs] = useState<number | null>(null)
+  const [nextKissAnnouncementPlayerId, setNextKissAnnouncementPlayerId] = useState<number | null>(null)
+  const [nextKissAnnouncementClock, setNextKissAnnouncementClock] = useState(() => Date.now())
   /** После FINALIZE фиксируем полоску для анимации ухода; секунды до этого идут с live-отсчётом до дедлайна. */
   const pairKissDisplayedProgressRef = useRef(0)
   /** Сброс прогресса только при смене roundKey. */
@@ -994,6 +1008,27 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       ? Math.min(1, Math.max(0, pairKissDisplayedProgressRef.current))
       : liveProgress
     : 0
+  const nextKissAnnouncementSeconds = nextKissAnnouncementUntilMs
+    ? Math.max(0, Math.ceil((nextKissAnnouncementUntilMs - nextKissAnnouncementClock) / 1000))
+    : 0
+  const nextKissAnnouncementPlayer = useMemo(
+    () => (nextKissAnnouncementPlayerId == null ? null : players.find((p) => p.id === nextKissAnnouncementPlayerId) ?? null),
+    [nextKissAnnouncementPlayerId, players],
+  )
+  const nextKissAnnouncementActive =
+    !pairKissCenterUi &&
+    !isSpinning &&
+    !showResult &&
+    countdown === null &&
+    nextKissAnnouncementUntilMs != null &&
+    nextKissAnnouncementSeconds > 0 &&
+    nextKissAnnouncementPlayer != null
+
+  useEffect(() => {
+    if (nextKissAnnouncementUntilMs == null) return
+    const id = window.setInterval(() => setNextKissAnnouncementClock(Date.now()), 150)
+    return () => window.clearInterval(id)
+  }, [nextKissAnnouncementUntilMs])
 
   const currentRoomName = roomNameForDisplay("", tableId)
   const frameCatalogSource = useMemo(
@@ -1126,6 +1161,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const spinResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinSessionRef = useRef<string>("")
   const spinStartedTurnKeyRef = useRef<string>("")
+  const spinResolveDeadlineRef = useRef<number | null>(null)
+  const spinResolveMetaRef = useRef<{
+    spinSessionKey: string
+    spinner: Player
+    target: Player
+    roundNumber: number
+    currentTurnIndex: number
+    predictions: typeof predictions
+    bets: typeof bets
+    pot: number
+    tableId: number
+  } | null>(null)
+  const pendingNextKissAnnouncementRoundKeyRef = useRef<string | null>(null)
+  const playedNextKissAnnouncementRoundKeyRef = useRef<string | null>(null)
 
   const [tableLoading, setTableLoading] = useState(true)
   const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
@@ -1352,7 +1401,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [chatInput, setChatInput] = useState("")
   const logEndRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
-  const underBoardStatusRef = useRef<HTMLDivElement>(null)
 
   // Prediction state
   const [predictionTarget, setPredictionTarget] = useState<Player | null>(null)
@@ -1419,8 +1467,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   // Позицию и угол стрелки вычисляем по реальному DOM-вектору (см. effect ниже)
 
   const turnArrowSizePx = useMemo(() => {
-    if (isMobile) return manyPlayersOnMobile ? 22 : 26
-    return 30
+    if (isMobile) return manyPlayersOnMobile ? 28 : 34
+    return 40
   }, [isMobile, manyPlayersOnMobile])
 
   // distance теперь считается в effect по реальному DOM-вектору (turnArrowPosPx)
@@ -1453,8 +1501,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const compute = () => {
       const surface = tableSurfaceRef.current
       const b = bottleEl.getBoundingClientRect()
-      const a = document.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${pid}"]`)
-      if (!a) return
+      const a = surface.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${pid}"]`)
+      if (!a) {
+        setTurnArrowPosPx(null)
+        setTurnArrowTargetPx(null)
+        setTurnArrowAngleDegPx(null)
+        return
+      }
       const ar = a.getBoundingClientRect()
 
       if (!surface) return
@@ -1520,11 +1573,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       window.requestAnimationFrame(compute)
     })
     window.addEventListener("resize", compute)
+    window.addEventListener("scroll", compute, true)
+    const delayed = window.setTimeout(compute, 120)
     return () => {
       window.cancelAnimationFrame(r1)
       window.removeEventListener("resize", compute)
+      window.removeEventListener("scroll", compute, true)
+      window.clearTimeout(delayed)
     }
   }, [currentTurnPlayer?.id, bottleDiameterPx, playerSlots, isMobile, showResult, isSpinning, countdown, pairKissCenterUi, turnArrowSizePx])
+
+  useEffect(() => {
+    if (pairKissCenterUi || isSpinning) return
+    setTurnArrowVisible(true)
+  }, [pairKissCenterUi, isSpinning, roundNumber, currentTurnIndex, currentTurnPlayer?.id])
 
   const clearTurnArrowAnimTimers = useCallback(() => {
     for (const t of turnArrowAnimTimersRef.current) clearTimeout(t)
@@ -1772,6 +1834,128 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const t = setTimeout(() => setTurnArrowVisible(false), TURN_ARROW_HIDE_AFTER_MS)
     turnArrowAnimTimersRef.current.push(t)
   }, [isSpinning, turnArrowTargetPx, clearTurnArrowAnimTimers, roundNumber, currentTurnIndex])
+
+  const finalizeSpinFromMeta = useCallback((meta: NonNullable<typeof spinResolveMetaRef.current>) => {
+    if (spinSessionRef.current !== meta.spinSessionKey) return
+    if (!CASUAL_MODE) {
+      const aliveIds = new Set(meta.predictions.map((pred) => pred.playerId))
+      meta.bets.forEach((b) => aliveIds.add(b.playerId))
+      for (const pl of playersRef.current) aliveIds.add(pl.id)
+      const safePredictions = meta.predictions.filter(
+        (pred) =>
+          aliveIds.has(pred.playerId) &&
+          aliveIds.has(pred.targetPair[0]) &&
+          aliveIds.has(pred.targetPair[1]),
+      )
+      const safeBets = meta.bets.filter(
+        (b) =>
+          aliveIds.has(b.playerId) &&
+          aliveIds.has(b.targetPair[0]) &&
+          aliveIds.has(b.targetPair[1]),
+      )
+
+      const actualPair = sortPair(meta.target.id, meta.spinner.id)
+
+      safePredictions.forEach((pred) => {
+        const isCorrect = pairsMatch(pred.targetPair, actualPair)
+        if (pred.playerId === currentUser?.id) {
+          if (isCorrect) {
+            dispatch({ type: "ADD_BONUS", amount: 10 })
+            setPredictionResult("correct")
+          } else {
+            dispatch({ type: "ADD_BONUS", amount: -10 })
+            setPredictionResult("wrong")
+          }
+        }
+      })
+
+      const predMap = new Map<string, number[]>()
+      safePredictions.forEach((pred) => {
+        const key = `${pred.targetPair[0]}_${pred.targetPair[1]}`
+        const arr = predMap.get(key) || []
+        arr.push(pred.playerId)
+        predMap.set(key, arr)
+      })
+      predMap.forEach((playerIds) => {
+        if (playerIds.length >= 2) {
+          playerIds.forEach((pid) => {
+            if (pid === currentUser?.id && currentUser) {
+              dispatch({ type: "ADD_BONUS", amount: 5 })
+              dispatch({
+                type: "ADD_LOG",
+                entry: {
+                  id: generateLogId(),
+                  type: "prediction",
+                  fromPlayer: currentUser,
+                  text: "Совпадение прогнозов! +5 бонусов",
+                  timestamp: Date.now(),
+                },
+              })
+            }
+          })
+        }
+      })
+
+      const correctPredictors = safePredictions.filter((pred) => pairsMatch(pred.targetPair, actualPair))
+      correctPredictors.forEach((pred) => {
+        if (pred.playerId === currentUser?.id && currentUser) {
+          dispatch({
+            type: "ADD_INVENTORY_ITEM",
+            item: {
+              type: "rose",
+              fromPlayerId: 0,
+              fromPlayerName: "Система",
+              timestamp: Date.now(),
+            },
+          })
+          dispatch({
+            type: "ADD_LOG",
+            entry: {
+              id: generateLogId(),
+              type: "rose",
+              fromPlayer: currentUser,
+              text: `${currentUser.name} угадал(а) пару и получает розу!`,
+              timestamp: Date.now(),
+            },
+          })
+        }
+      })
+
+      const winningBets = safeBets.filter((b) => pairsMatch(b.targetPair, actualPair))
+      const totalWinningStakes = winningBets.reduce((sum, b) => sum + b.amount, 0)
+
+      if (totalWinningStakes > 0 && meta.pot > 0) {
+        winningBets.forEach((b) => {
+          const winAmount = Math.floor((b.amount / totalWinningStakes) * meta.pot)
+          if (b.playerId === currentUser?.id && currentUser) {
+            dispatch({ type: "PAY_VOICES", amount: -winAmount })
+            setBetWinnings(winAmount)
+            dispatch({
+              type: "ADD_LOG",
+              entry: {
+                id: generateLogId(),
+                type: "system",
+                fromPlayer: currentUser,
+                text: `${currentUser.name} выиграл(а) ${winAmount} сердец из банка!`,
+                timestamp: Date.now(),
+              },
+            })
+          }
+        })
+      }
+    }
+
+    dispatch({ type: "STOP_SPIN", action: "skip" })
+    const rk = `${meta.tableId}:${meta.roundNumber}:${meta.currentTurnIndex}:${meta.spinner.id}:${meta.target.id}`
+    dispatch({
+      type: "BEGIN_PAIR_KISS_PHASE",
+      roundKey: rk,
+      deadlineMs: Date.now() + PAIR_KISS_VOTE_DURATION_MS,
+      idA: meta.spinner.id,
+      idB: meta.target.id,
+    })
+    spinResolveDeadlineRef.current = null
+  }, [currentUser, dispatch])
 
   const {
     turnTimer,
@@ -2171,137 +2355,32 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       clearTimeout(spinResolveTimeoutRef.current)
       spinResolveTimeoutRef.current = null
     }
+    spinResolveMetaRef.current = {
+      spinSessionKey,
+      spinner,
+      target,
+      roundNumber,
+      currentTurnIndex,
+      predictions,
+      bets,
+      pot,
+      tableId,
+    }
+    spinResolveDeadlineRef.current = Date.now() + 6000
     spinResolveTimeoutRef.current = setTimeout(() => {
-      if (spinSessionRef.current !== spinSessionKey) return
-
-      if (!CASUAL_MODE) {
-        const aliveIds = new Set(players.map((p) => p.id))
-        const safePredictions = predictions.filter(
-          (pred) =>
-            aliveIds.has(pred.playerId) &&
-            aliveIds.has(pred.targetPair[0]) &&
-            aliveIds.has(pred.targetPair[1]),
-        )
-        const safeBets = bets.filter(
-          (b) =>
-            aliveIds.has(b.playerId) &&
-            aliveIds.has(b.targetPair[0]) &&
-            aliveIds.has(b.targetPair[1]),
-        )
-
-        // --- Оценка прогнозов ---
-        const actualPair = sortPair(target.id, spinner.id)
-
-        // Check each prediction
-        safePredictions.forEach(pred => {
-          const isCorrect = pairsMatch(pred.targetPair, actualPair)
-          if (pred.playerId === currentUser?.id) {
-            if (isCorrect) {
-              dispatch({ type: "ADD_BONUS", amount: 10 })
-              setPredictionResult("correct")
-            } else {
-              dispatch({ type: "ADD_BONUS", amount: -10 })
-              setPredictionResult("wrong")
-            }
-          }
-        })
-
-        // Check matching predictions between players - bonus for same prediction
-        const predMap = new Map<string, number[]>()
-        safePredictions.forEach(pred => {
-          const key = `${pred.targetPair[0]}_${pred.targetPair[1]}`
-          const arr = predMap.get(key) || []
-          arr.push(pred.playerId)
-          predMap.set(key, arr)
-        })
-        predMap.forEach((playerIds) => {
-          if (playerIds.length >= 2) {
-            playerIds.forEach(pid => {
-              if (pid === currentUser?.id) {
-                dispatch({ type: "ADD_BONUS", amount: 5 })
-                dispatch({
-                  type: "ADD_LOG",
-                  entry: {
-                    id: generateLogId(),
-                    type: "prediction",
-                    fromPlayer: currentUser!,
-                    text: `Совпадение прогнозов! +5 бонусов`,
-                    timestamp: Date.now(),
-                  },
-                })
-              }
-            })
-          }
-        })
-
-        // Correct prediction = rose
-        const correctPredictors = safePredictions.filter(pred => pairsMatch(pred.targetPair, actualPair))
-        correctPredictors.forEach(pred => {
-          if (pred.playerId === currentUser?.id) {
-            dispatch({
-              type: "ADD_INVENTORY_ITEM",
-              item: {
-                type: "rose",
-                fromPlayerId: 0,
-                fromPlayerName: "Система",
-                timestamp: Date.now(),
-              },
-            })
-            dispatch({
-              type: "ADD_LOG",
-              entry: {
-                id: generateLogId(),
-                type: "rose",
-                fromPlayer: currentUser!,
-                text: `${currentUser!.name} угадал(а) пару и получает розу!`,
-                timestamp: Date.now(),
-              },
-            })
-          }
-        })
-
-        // --- Evaluate bets ---
-        const winningBets = safeBets.filter(b => pairsMatch(b.targetPair, actualPair))
-        const totalWinningStakes = winningBets.reduce((sum, b) => sum + b.amount, 0)
-
-        if (totalWinningStakes > 0 && pot > 0) {
-          winningBets.forEach(b => {
-            const winAmount = Math.floor((b.amount / totalWinningStakes) * pot)
-            if (b.playerId === currentUser?.id) {
-              dispatch({ type: "PAY_VOICES", amount: -winAmount }) // negative = add voices
-              setBetWinnings(winAmount)
-              dispatch({
-                type: "ADD_LOG",
-                entry: {
-                  id: generateLogId(),
-                  type: "system",
-                  fromPlayer: currentUser!,
-                  text: `${currentUser!.name} выиграл(а) ${winAmount} сердец из банка!`,
-                  timestamp: Date.now(),
-                },
-              })
-            }
-          })
-        }
-      }
-
-      dispatch({ type: "STOP_SPIN", action: "skip" })
-      const rk = `${tableId}:${roundNumber}:${currentTurnIndex}:${spinner.id}:${target.id}`
-      dispatch({
-        type: "BEGIN_PAIR_KISS_PHASE",
-        roundKey: rk,
-        deadlineMs: Date.now() + PAIR_KISS_VOTE_DURATION_MS,
-        idA: spinner.id,
-        idB: target.id,
-      })
+      const meta = spinResolveMetaRef.current
+      if (!meta || meta.spinSessionKey !== spinSessionKey) return
+      finalizeSpinFromMeta(meta)
     }, 6000)
      
-  }, [players, currentTurnPlayer, dispatch, predictions, bets, pot, currentUser, bottleAngle, tableId, roundNumber, currentTurnIndex, isSpinning, showToast])
+  }, [players, currentTurnPlayer, dispatch, predictions, bets, pot, bottleAngle, tableId, roundNumber, currentTurnIndex, isSpinning, showToast, finalizeSpinFromMeta])
 
   useEffect(() => {
     if (isSpinning) return
     spinSessionRef.current = ""
     spinStartedTurnKeyRef.current = ""
+    spinResolveDeadlineRef.current = null
+    spinResolveMetaRef.current = null
     if (spinResolveTimeoutRef.current) {
       clearTimeout(spinResolveTimeoutRef.current)
       spinResolveTimeoutRef.current = null
@@ -2312,7 +2391,32 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     spinStartedTurnKeyRef.current = ""
   }, [tableId, roundNumber, currentTurnIndex])
 
-  // Watchdog: если крутилка зависла >12 с — один координатор (мин. id за столом) сбрасывает спин и ход
+  useEffect(() => {
+    if (!isSpinning) return
+    const tryFinalize = () => {
+      const deadline = spinResolveDeadlineRef.current
+      const meta = spinResolveMetaRef.current
+      if (deadline == null || meta == null) return
+      if (Date.now() < deadline) return
+      if (spinResolveTimeoutRef.current) {
+        clearTimeout(spinResolveTimeoutRef.current)
+        spinResolveTimeoutRef.current = null
+      }
+      finalizeSpinFromMeta(meta)
+    }
+    tryFinalize()
+    const onVisibility = () => tryFinalize()
+    window.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("focus", onVisibility)
+    const interval = window.setInterval(tryFinalize, 350)
+    return () => {
+      window.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("focus", onVisibility)
+      window.clearInterval(interval)
+    }
+  }, [isSpinning, finalizeSpinFromMeta])
+
+  // Watchdog: если крутилка зависла >12 с — один координатор завершает спин и переводит в pair-kiss (fallback — NEXT_TURN).
   useEffect(() => {
     if (!isSpinning) return
     if (!currentUser || players.length === 0) return
@@ -2322,10 +2426,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (currentUser.id !== coordinatorId) return
     const watchdog = setTimeout(() => {
       dispatch({ type: "STOP_SPIN", action: "skip" })
+      if (currentTurnPlayer && targetPlayer) {
+        dispatch({
+          type: "BEGIN_PAIR_KISS_PHASE",
+          roundKey: `${tableId}:${roundNumber}:${currentTurnIndex}:${currentTurnPlayer.id}:${targetPlayer.id}:watchdog`,
+          deadlineMs: Date.now() + PAIR_KISS_VOTE_DURATION_MS,
+          idA: currentTurnPlayer.id,
+          idB: targetPlayer.id,
+        })
+        return
+      }
       dispatch({ type: "NEXT_TURN" })
     }, 12_000)
     return () => clearTimeout(watchdog)
-  }, [isSpinning, dispatch, currentUser?.id, tablePlayerIdsKey])
+  }, [isSpinning, dispatch, currentUser?.id, tablePlayerIdsKey, currentTurnPlayer, targetPlayer, tableId, roundNumber, currentTurnIndex])
 
   const startSpinRef = useRef(startSpin)
   useEffect(() => { startSpinRef.current = startSpin }, [startSpin])
@@ -2456,96 +2570,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (actionId === "skip") {
       handleSkipTurn()
     }
-  }
-
-  /* ---- response emotions from target player ---- */
-  const handleResponseEmotion = (actionId: string) => {
-    if (!currentUser || !resolvedTargetPlayer || !resolvedTargetPlayer2) return
-    const from = currentUser
-    if (from.id !== resolvedTargetPlayer.id && from.id !== resolvedTargetPlayer2.id) return
-
-    // Кому летит ответная эмоция:
-    // если крутил другой игрок/бот — отвечаем ему;
-    // если крутил сам пользователь — отвечаем второму участнику пары.
-    let to: Player
-    if (currentTurnPlayer && currentTurnPlayer.id !== from.id) {
-      to = currentTurnPlayer
-    } else {
-      to = from.id === resolvedTargetPlayer.id ? resolvedTargetPlayer2 : resolvedTargetPlayer
-    }
-
-    const fromIdx = players.findIndex((p) => p.id === from.id)
-    const toIdx = players.findIndex((p) => p.id === to.id)
-    if (fromIdx === -1 || toIdx === -1) return
-
-    const pairCombo = getPairGenderCombo(resolvedTargetPlayer, resolvedTargetPlayer2)
-    const actionCost = getEffectiveActionCost(actionId, pairCombo)
-    const hasDailyLimit = actionId === "kiss" || actionId === "beer" || actionId === "cocktail"
-    const dailyLimit = getDailyEmotionLimitForActionId(actionId, emotionDailyBoost)
-
-    // Оплата за ответную эмоцию (та же цена, что и за основное действие)
-    const actionDef = PAIR_ACTIONS.find((a) => a.id === actionId)
-    if (actionDef && hasDailyLimit) {
-      const todayCount = getLimitedEmotionUseCount(from.id, actionId as "kiss" | "beer" | "cocktail")
-      if (todayCount >= dailyLimit) {
-        showToast(`Лимит на сегодня: ${dailyLimit}`, "info")
-        return
-      }
-    }
-    if (actionDef && actionCost > 0) {
-      if (voiceBalance < actionCost) {
-        showToast("Недостаточно сердец", "error")
-        return
-      }
-      dispatch({ type: "PAY_VOICES", amount: actionCost })
-    }
-
-    const emojiMap: Record<string, string> = {
-      kiss: "💋",
-      flowers: "💐",
-      diamond: "💎",
-      cocktail: "",
-      tools: "🛠️",
-      lipstick: "💄",
-      chat: "💬",
-      song: "🎵",
-      rose: "🌹",
-      hug: "🤗",
-      selfie: "📸",
-    }
-
-    // Звук сразу по клику (контекст жеста пользователя)
-    playEmotionSound(actionId)
-    if (actionId === "banya") {
-      launchEmoji(fromIdx, toIdx, "🧹", assetUrl(EMOJI_BANYA))
-      launchSteam(toIdx)
-    } else if (actionId === "cocktail") {
-      launchEmotionGiftImage(fromIdx, toIdx)
-    } else if (actionId === "beer") {
-      launchEmoji(fromIdx, toIdx, undefined, assetUrl("kvas-big.svg"))
-    } else if (emojiMap[actionId]) {
-      launchEmoji(fromIdx, toIdx, emojiMap[actionId])
-    }
-    if (actionId === "beer") {
-      dispatch({ type: "ADD_DRUNK_TIME", playerId: from.id, ms: 60_000 })
-    }
-
-    const label = actionDef?.label ?? actionId
-
-    const pairIdsForResponse = sortedPairIds(resolvedTargetPlayer, resolvedTargetPlayer2)
-
-    dispatch({
-      type: "ADD_LOG",
-      entry: {
-        id: generateLogId(),
-        type: actionId as GameLogEntry["type"],
-        fromPlayer: from,
-        toPlayer: to,
-        pairIds: pairIdsForResponse,
-        text: `${from.name} отвечает: ${label} ${to.name}`,
-        timestamp: Date.now(),
-      },
-    })
   }
 
   const handleSidebarGiftEmotion = (actionId: string) => {
@@ -2776,6 +2800,37 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   useEffect(() => {
     if (!pairKissPhase?.resolved) return
+    pendingNextKissAnnouncementRoundKeyRef.current = pairKissPhase.roundKey
+  }, [pairKissPhase?.resolved, pairKissPhase?.roundKey])
+
+  useEffect(() => {
+    const roundKey = pendingNextKissAnnouncementRoundKeyRef.current
+    if (!roundKey || pairKissPhase != null) return
+    if (playedNextKissAnnouncementRoundKeyRef.current === roundKey) return
+    if (!currentTurnPlayer) return
+    setNextKissAnnouncementPlayerId(currentTurnPlayer.id)
+    setNextKissAnnouncementUntilMs(Date.now() + NEXT_KISS_ANNOUNCE_MS)
+    playedNextKissAnnouncementRoundKeyRef.current = roundKey
+    pendingNextKissAnnouncementRoundKeyRef.current = null
+  }, [pairKissPhase, currentTurnPlayer?.id, roundNumber])
+
+  useEffect(() => {
+    if (nextKissAnnouncementUntilMs == null) return
+    const left = nextKissAnnouncementUntilMs - Date.now()
+    if (left <= 0) {
+      setNextKissAnnouncementUntilMs(null)
+      setNextKissAnnouncementPlayerId(null)
+      return
+    }
+    const t = window.setTimeout(() => {
+      setNextKissAnnouncementUntilMs(null)
+      setNextKissAnnouncementPlayerId(null)
+    }, left)
+    return () => window.clearTimeout(t)
+  }, [nextKissAnnouncementUntilMs])
+
+  useEffect(() => {
+    if (!pairKissPhase?.resolved) return
     const key = pairKissPhase.roundKey
     const t = window.setTimeout(() => {
       if (!pairKissPhase || !pairKissPhase.resolved || pairKissPhase.roundKey !== key) return
@@ -2979,6 +3034,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /* ---- player avatar click ---- */
   const handlePlayerClick = (player: Player) => {
     if (player.id === currentUser?.id) return
+    if (pairKissPhase) return
 
     // During prediction phase - select player directly on the board
     if (predictionPhase && !predictionMade && !isSpinning && !showResult) {
@@ -3055,17 +3111,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     showToast("Внеочередное кручение оплачено", "success")
   }
 
-  /* ---- get pair combo for current result ---- */
-  const currentPairCombo: PairGenderCombo | null =
-    resolvedTargetPlayer && resolvedTargetPlayer2
-      ? getPairGenderCombo(resolvedTargetPlayer, resolvedTargetPlayer2)
-      : null
-
-  const availableActions = useMemo(() => {
-    if (!currentPairCombo) return []
-    return getActionsForPair(currentPairCombo)
-  }, [currentPairCombo])
-
   const canRespondInResult = !!(
     showResult &&
     !pairKissPhase &&
@@ -3084,11 +3129,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       return getPairGenderCombo(currentUser, sidebarTargetPlayer)
     }
     // Во время модалки «Поцеловать?» набор по паре бутылки не показываем; подарок по аватарке — выше.
-    if (showResult && !pairKissPhase) {
-      return currentPairCombo
-    }
     return null
-  }, [sidebarGiftMode, currentUser, sidebarTargetPlayer, currentPairCombo, showResult, pairKissPhase])
+  }, [sidebarGiftMode, currentUser, sidebarTargetPlayer])
 
   useEffect(() => {
     if (sidebarActionCombo) {
@@ -3104,33 +3146,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   }, [effectiveSidebarCombo, sidebarGiftMode])
 
   const isSidebarEmotionActionActive =
-    (!!currentUser && !currentUser.isBot && sidebarGiftMode && !!sidebarTargetPlayer) ||
-    (showResult && isMyTurn && !pairKissPhase) ||
-    canRespondInResult
-
-  const sidebarEmotionTitle = sidebarGiftMode ? "Подарить эмоцию" : "Эмоции"
-  const sidebarEmotionSubtitle =
-    sidebarGiftMode && sidebarTargetPlayer
-      ? `Выбрано: ${sidebarTargetPlayer.name}`
-      : "Нажми на аватар игрока за столом"
-  const shouldShowSidebarEmotionSubtitle =
-    sidebarGiftMode && !!sidebarTargetPlayer
+    !!currentUser && !currentUser.isBot && sidebarGiftMode && !!sidebarTargetPlayer && !pairKissPhase
 
   const showMobileEmotionStrip =
     isMobile &&
     !pairKissPhase &&
-    Boolean(
-      (sidebarGiftMode && sidebarTargetPlayer) ||
-        (showResult &&
-          resolvedTargetPlayer &&
-          resolvedTargetPlayer2 &&
-          (isEmotionLimitReached ||
-            isMyTurn ||
-            (currentUser &&
-              !currentUser.isBot &&
-              (currentUser.id === resolvedTargetPlayer.id ||
-                currentUser.id === resolvedTargetPlayer2.id)))),
-    )
+    Boolean(sidebarGiftMode && sidebarTargetPlayer)
 
   const todayStart = useMemo(() => {
     const d = new Date(now)
@@ -4735,154 +4756,47 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 {`Купить (+${EMOTION_QUOTA_PURCHASE_AMOUNT})`}
               </button>
             )}
-            {sidebarGiftMode && sidebarTargetPlayer ? (
-              <div className={MOBILE_EMOTION_STRIP_SCROLL}>
-                {sidebarAvailableActions.filter((action) => action.id !== "skip").map((action) => {
-                  const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                  const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
-                  return (
-                    <button
-                      key={action.id}
-                      type="button"
-                      onClick={() => handleSidebarGiftEmotion(action.id)}
-                      disabled={false}
-                      className={MOBILE_EMOTION_STRIP_BTN}
-                      style={{
-                        background: style.bg,
-                        color: style.text,
-                        border: `1px solid ${style.border}`,
-                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
-                      }}
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
-                        {renderActionIcon(action)}
-                      </span>
-                      <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
-                      {shouldShowActionCostBadge(action.id, actionCost) && (
-                        <span
-                          className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
-                          style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
-                        >
-                          {actionCost}
-                          <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            ) : isMyTurn ? (
-              <div className="flex w-full max-w-[min(100%,24rem)] min-w-0 items-start">
-                <div className={cn(MOBILE_EMOTION_STRIP_SCROLL, "min-w-0 flex-1")}>
-                  {availableActions.filter((action) => action.id !== "skip").map((action) => {
-                    const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                    const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                    const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                    return (
-                      <button
-                        key={action.id}
-                        onClick={() => handlePerformAction(action.id)}
-                        disabled={!canAfford}
-                        className={MOBILE_EMOTION_STRIP_BTN}
-                        style={{
-                          background: style.bg,
-                          color: style.text,
-                          border: `1px solid ${style.border}`,
-                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
-                        }}
+            <div className={MOBILE_EMOTION_STRIP_SCROLL}>
+              {sidebarAvailableActions.filter((action) => action.id !== "skip").map((action) => {
+                const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
+                const actionCost = getEffectiveActionCost(action.id, effectiveSidebarCombo)
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => handleSidebarGiftEmotion(action.id)}
+                    disabled={false}
+                    className={MOBILE_EMOTION_STRIP_BTN}
+                    style={{
+                      background: style.bg,
+                      color: style.text,
+                      border: `1px solid ${style.border}`,
+                      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
+                    }}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
+                      {renderActionIcon(action)}
+                    </span>
+                    <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
+                    {shouldShowActionCostBadge(action.id, actionCost) && (
+                      <span
+                        className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
+                        style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
                       >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
-                          {renderActionIcon(action)}
-                        </span>
-                        <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
-                        {shouldShowActionCostBadge(action.id, actionCost) && (
-                          <span
-                            className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
-                            style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
-                          >
-                            {actionCost}
-                            <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-                {showPairEmotionHint ? (
-                  <div className="relative w-0 shrink-0 self-stretch overflow-visible" aria-hidden>
-                    <img
-                      src={EMOTION_RECIPROCAL_HINT_SRC}
-                      alt=""
-                      width={160}
-                      height={100}
-                      className="pointer-events-none absolute left-0 top-0 z-10 ml-1 h-12 w-auto max-w-[min(7.5rem,28vw)] select-none object-contain object-left-top md:hidden sm:h-14 sm:max-w-[min(9rem,32vw)]"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              currentUser &&
-              !currentUser.isBot &&
-              resolvedTargetPlayer &&
-              resolvedTargetPlayer2 &&
-              (currentUser.id === resolvedTargetPlayer.id || currentUser.id === resolvedTargetPlayer2.id) && (
-                <div className="flex w-full max-w-[min(100%,24rem)] min-w-0 items-start">
-                  <div className={cn(MOBILE_EMOTION_STRIP_SCROLL, "min-w-0 flex-1")}>
-                    {availableActions.filter((action) => action.id !== "skip").map((action) => {
-                      const style = ACTION_BUTTON_STYLES[action.id] || ACTION_BUTTON_STYLES.skip
-                      const actionCost = getEffectiveActionCost(action.id, currentPairCombo)
-                      const canAfford = actionCost === 0 || voiceBalance >= actionCost
-                      return (
-                        <button
-                          key={action.id}
-                          type="button"
-                          disabled={!canAfford}
-                          onClick={() => handleResponseEmotion(action.id)}
-                          className={MOBILE_EMOTION_STRIP_BTN}
-                          style={{
-                            background: style.bg,
-                            color: style.text,
-                            border: `1px solid ${style.border}`,
-                            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), 0 1px 0 ${style.shadow}`,
-                          }}
-                        >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center [&>img]:h-7 [&>img]:w-7 [&>svg]:h-6 [&>svg]:w-6 [&>span]:text-xl">
-                            {renderActionIcon(action)}
-                          </span>
-                          <span className="min-w-0 max-w-[11rem] truncate sm:max-w-[13rem]">{action.label}</span>
-                          {shouldShowActionCostBadge(action.id, actionCost) && (
-                            <span
-                              className="heart-price heart-price--badge flex shrink-0 items-center rounded-full px-2 py-0.5 opacity-95"
-                              style={{ background: "rgba(0,0,0,0.18)", color: style.text }}
-                            >
-                              {actionCost}
-                              <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {showPairEmotionHint ? (
-                    <div className="relative w-0 shrink-0 self-stretch overflow-visible" aria-hidden>
-                      <img
-                        src={EMOTION_RECIPROCAL_HINT_SRC}
-                        alt=""
-                        width={160}
-                        height={100}
-                        className="pointer-events-none absolute left-0 top-0 z-10 ml-1 h-12 w-auto max-w-[min(7.5rem,28vw)] select-none object-contain object-left-top md:hidden sm:h-14 sm:max-w-[min(9rem,32vw)]"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              )
-            )}
+                        {actionCost}
+                        <Heart className="heart-price__icon h-4 w-4" fill="currentColor" />
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
             </div>
           )}
         </div>
         {/* Широкая панель эмоций над столом (ПК): z ниже блока стола (см. z-[40] на столе), чтобы карточка «Поцелуются?» не уезжала под панель. */}
         {isPcLayout && (
-          <div className="relative z-10 mb-2 w-full shrink-0 self-stretch">
+          <div className="sticky top-0 z-[45] mb-2 w-full shrink-0 self-stretch">
             <div className="w-full rounded-2xl border border-cyan-300/35 bg-slate-950/80 p-1 backdrop-blur-[2px] shadow-[0_12px_30px_rgba(2,6,23,0.52),inset_0_1px_0_rgba(255,255,255,0.1)]">
               <div className="flex w-full items-center justify-center gap-2 px-1 py-1">
                 <div className="flex shrink-0 items-center gap-2">
@@ -4938,14 +4852,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                           onClick={() => {
                             if (sidebarGiftMode && sidebarTargetPlayer) {
                               handleSidebarGiftEmotion(action.id)
-                              return
-                            }
-                            if (showResult && isMyTurn) {
-                              handlePerformAction(action.id)
-                              return
-                            }
-                            if (canRespondInResult) {
-                              handleResponseEmotion(action.id)
                             }
                           }}
                           disabled={isDisabled}
@@ -5551,6 +5457,35 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </div>
             </div>
           ) : null}
+          {nextKissAnnouncementActive && nextKissAnnouncementPlayer ? (
+            <div className="absolute left-1/2 top-1/2 z-[42] flex w-[min(320px,calc(100%-2rem))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-3 rounded-2xl border border-cyan-300/45 bg-slate-950/92 px-4 py-4 text-center shadow-[0_0_28px_rgba(34,211,238,0.25)] backdrop-blur-sm">
+              <p className="text-base font-extrabold leading-tight text-slate-50">
+                {currentUser?.id === nextKissAnnouncementPlayer.id
+                  ? `Вы целуетесь ${nextKissForms(nextKissAnnouncementPlayer.gender).youWord}`
+                  : `${nextKissForms(nextKissAnnouncementPlayer.gender).nextWord} целуется — ${nextKissAnnouncementPlayer.name}`}
+              </p>
+              <p className="text-sm font-bold text-cyan-200">
+                {nextKissAnnouncementSeconds} сек
+              </p>
+              {currentUser && (
+                <button
+                  type="button"
+                  onClick={handleExtraSpin}
+                  disabled={voiceBalance < 10}
+                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
+                  style={{
+                    background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
+                    color: "#fff",
+                    border: "2px solid #7d3c98",
+                    boxShadow: "0 2px 0 #5b2c6f",
+                  }}
+                >
+                  <RotateCw className="h-4 w-4 shrink-0" />
+                  Крутить вне очереди (10)
+                </button>
+              )}
+            </div>
+          ) : null}
 
           {/* ---- SPIN BUTTON in centre, over bottle ---- */}
           {isMyTurn && !pairKissCenterUi && !isSpinning && !showResult && countdown === null && (
@@ -5653,81 +5588,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               )}
             </div>
           )}
-        </div>
-
-        {/* ---- UNDER-BOARD CONTROLS (SPIN / STATUS / RESULT) + кнопка «Крутить вне очереди»; на мобильной — ниже и крупнее ---- */}
-        <div
-          ref={underBoardStatusRef}
-          className="mt-2 md:mt-1.5 lg:mt-6 mb-0.5 flex min-h-[58px] md:min-h-[64px] lg:min-h-[80px] w-full flex-col items-center justify-center gap-1.5 md:gap-1.5 lg:gap-3 px-2 shrink-0"
-        >
-          <div className="flex flex-wrap items-center justify-center gap-2.5 md:gap-2 lg:gap-4">
-            {/* Who's turn label */}
-            {!isSpinning && !showResult && countdown === null && currentTurnPlayer && (
-              <div
-                className="rounded-full px-4 py-2.5 md:px-3 md:py-1.5 lg:px-5 lg:py-2.5 shadow-lg whitespace-nowrap"
-                style={{
-                  background: "rgba(15, 23, 42, 0.85)",
-                  border: "1px solid #475569",
-                }}
-              >
-                <span className="text-sm md:text-xs lg:text-base font-bold" style={{ color: "#e8c06a" }}>
-                  {isMyTurn ? "Ваш ход!" : `Ход: ${currentTurnPlayer.name}`}
-                </span>
-              </div>
-            )}
-
-            {/* Pair status directly under the board when result is shown */}
-            {showResult && resolvedTargetPlayer && resolvedTargetPlayer2 && currentTurnPlayer && (
-              <div
-                className="rounded-full px-5 py-2.5 md:px-4 md:py-1 lg:px-6 lg:py-2.5 text-sm md:text-[12px] lg:text-[15px] font-bold"
-                style={{
-                  background: "rgba(15,23,42,0.95)",
-                  border: "1px solid rgba(248,250,252,0.35)",
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.85)",
-                  color: "#e5e7eb",
-                }}
-              >
-                <span>{currentTurnPlayer.name}</span>
-                <span style={{ color: "#9ca3af" }}>{" → "}</span>
-                <span>{resolvedTargetPlayer.name}</span>
-              </div>
-            )}
-
-            {/* Spinning status */}
-            {isSpinning && (
-              <div
-                className="rounded-full px-4 py-2.5 md:px-3 md:py-1.5 lg:px-5 lg:py-2.5 shadow-lg whitespace-nowrap"
-                style={{
-                  background: "rgba(15, 23, 42, 0.85)",
-                  border: "1px solid #334155",
-                }}
-              >
-                <p className="text-sm md:text-xs lg:text-base font-semibold animate-pulse" style={{ color: "#e8c06a" }}>
-                  {"Крутится..."}
-                </p>
-              </div>
-            )}
-
-            {/* Крутить вне очереди — сбоку от статуса; на мобильной компактнее */}
-            {!isMyTurn && !isSpinning && !showResult && countdown === null && currentUser && (
-              <button
-                type="button"
-                onClick={handleExtraSpin}
-                disabled={voiceBalance < 10}
-                className="flex items-center gap-1.5 lg:gap-2.5 rounded-full px-3 py-1.5 lg:px-5 lg:py-2.5 text-[11px] lg:text-sm font-bold shadow-lg transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
-                style={{
-                  background: "linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)",
-                  color: "#fff",
-                  border: "2px solid #7d3c98",
-                  boxShadow: "0 2px 0 #5b2c6f",
-                }}
-              >
-                <RotateCw className="h-3 w-3 lg:h-4 lg:w-4 shrink-0" />
-                <span className="whitespace-nowrap">Крутить вне очереди (10)</span>
-              </button>
-            )}
-          </div>
-
         </div>
 
         </div>

@@ -437,7 +437,7 @@ export function PlayerAvatar({
         {/* Статус «в игре» (мини-игра Угадай-ка) — снизу по центру */}
         {inGame && !isTarget && (
           <div
-            className="absolute left-1/2 z-[10] -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+            className="absolute left-1/2 z-[10] -translate-x-1/2 whitespace-nowrap rounded-full px-1.5 py-0.5 text-sm font-bold"
             style={{
               bottom: effectiveCompact ? -14 : -16,
               background: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)",
@@ -493,10 +493,10 @@ export function PlayerAvatar({
               aria-label={`Статус: ${statusText}`}
               title={statusText}
             >
-              <span className="text-[10px] leading-none">💬</span>
+              <span className="text-sm leading-none">💬</span>
             </div>
             <div
-              className="pointer-events-none absolute right-6 top-1/2 max-w-0 -translate-y-1/2 overflow-hidden whitespace-nowrap rounded-full border border-sky-200/60 bg-slate-900/95 px-0 py-0 text-[10px] font-bold text-sky-100 opacity-0 shadow-[0_6px_16px_rgba(2,6,23,0.55)] transition-all duration-200 group-hover:max-w-[140px] group-hover:px-2.5 group-hover:py-1 group-hover:opacity-100"
+              className="pointer-events-none absolute right-6 top-1/2 max-w-0 -translate-y-1/2 overflow-hidden whitespace-nowrap rounded-full border border-sky-200/60 bg-slate-900/95 px-0 py-0 text-sm font-bold text-sky-100 opacity-0 shadow-[0_6px_16px_rgba(2,6,23,0.55)] transition-all duration-200 group-hover:max-w-[140px] group-hover:px-2.5 group-hover:py-1 group-hover:opacity-100"
               aria-hidden
             >
               {statusText}
@@ -661,7 +661,7 @@ export function PlayerAvatar({
             <span
               className="block w-full truncate text-center font-semibold leading-tight"
               style={{
-                fontSize: effectiveCompact ? 10 : 12,
+                fontSize: 14,
                 color: "#f8fafc",
                 textShadow: "0 1px 2px rgba(0,0,0,0.5)",
               }}
@@ -681,7 +681,7 @@ export function PlayerAvatar({
               <span
                 className="truncate text-center font-bold leading-tight"
                 style={{
-                  fontSize: effectiveCompact ? 8 : 9,
+                  fontSize: 14,
                   color: "#fff",
                   textTransform: "uppercase",
                   letterSpacing: "0.5px",
@@ -708,7 +708,7 @@ export function PlayerAvatar({
               <span
                 className="block w-full truncate text-center font-semibold leading-tight"
                 style={{
-                  fontSize: effectiveCompact ? 10 : 12,
+                  fontSize: 14,
                   color: "#f8fafc",
                   textShadow: "0 1px 2px rgba(0,0,0,0.5)",
                 }}
@@ -731,7 +731,7 @@ export function PlayerAvatar({
               <span
                 className="truncate text-center font-bold leading-tight"
                 style={{
-                  fontSize: effectiveCompact ? 8 : 9,
+                  fontSize: 14,
                   color: "#fff",
                   textTransform: "uppercase",
                   letterSpacing: "0.5px",
