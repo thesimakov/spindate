@@ -18,6 +18,10 @@ export type GiftCatalogRow = {
   payCurrency: GiftPayCurrency
   published: boolean
   deleted?: boolean
+  /**
+   * Остаток в каталоге: **−1** — без лимита; **0** — закончилось; **>0** — сколько штук можно выдать.
+   */
+  stock: number
 }
 
 export function toGiftImageUrl(raw: string): string {
@@ -30,13 +34,13 @@ export function toGiftImageUrl(raw: string): string {
 }
 
 export const DEFAULT_GIFT_CATALOG_ROWS: GiftCatalogRow[] = [
-  { id: "toy_bear", section: "vip", name: "Плюшевый мишка", emoji: "🧸", img: "", cost: 10, payCurrency: "hearts", published: true },
-  { id: "plush_heart", section: "paid", name: "Подушка-сердце", emoji: "❤️", img: "", cost: 8, payCurrency: "hearts", published: true },
-  { id: "toy_car", section: "paid", name: "Игрушечная машинка", emoji: "🚗", img: "", cost: 7, payCurrency: "hearts", published: true },
-  { id: "toy_ball", section: "paid", name: "Футбольный мяч", emoji: "⚽️", img: "", cost: 6, payCurrency: "hearts", published: true },
-  { id: "souvenir_magnet", section: "paid", name: "Магнитик на холодильник", emoji: "🧲", img: "", cost: 3, payCurrency: "hearts", published: true },
-  { id: "souvenir_keychain", section: "paid", name: "Брелок-сувенир", emoji: "🔑", img: "", cost: 5, payCurrency: "hearts", published: true },
-  { id: "chocolate_box", section: "paid", name: "Коробка конфет", emoji: "🍫", img: "", cost: 4, payCurrency: "hearts", published: true },
+  { id: "toy_bear", section: "vip", name: "Плюшевый мишка", emoji: "🧸", img: "", cost: 10, payCurrency: "hearts", published: true, stock: -1 },
+  { id: "plush_heart", section: "paid", name: "Подушка-сердце", emoji: "❤️", img: "", cost: 8, payCurrency: "hearts", published: true, stock: -1 },
+  { id: "toy_car", section: "paid", name: "Игрушечная машинка", emoji: "🚗", img: "", cost: 7, payCurrency: "hearts", published: true, stock: -1 },
+  { id: "toy_ball", section: "paid", name: "Футбольный мяч", emoji: "⚽️", img: "", cost: 6, payCurrency: "hearts", published: true, stock: -1 },
+  { id: "souvenir_magnet", section: "paid", name: "Магнитик на холодильник", emoji: "🧲", img: "", cost: 3, payCurrency: "hearts", published: true, stock: -1 },
+  { id: "souvenir_keychain", section: "paid", name: "Брелок-сувенир", emoji: "🔑", img: "", cost: 5, payCurrency: "hearts", published: true, stock: -1 },
+  { id: "chocolate_box", section: "paid", name: "Коробка конфет", emoji: "🍫", img: "", cost: 4, payCurrency: "hearts", published: true, stock: -1 },
 ]
 
 export function isGiftCatalogId(value: string): value is InventoryItem["type"] {
@@ -90,6 +94,10 @@ export function normalizeGiftCatalogRows(
           : Number(rec.cost) >= 25
             ? "vip"
             : "paid"
+    const rawStock = (rec as { stock?: unknown }).stock
+    const stock =
+      typeof rawStock === "number" && Number.isFinite(rawStock) ? Math.floor(rawStock) : -1
+
     const normalized: GiftCatalogRow = {
       id: rec.id,
       section,
@@ -100,6 +108,7 @@ export function normalizeGiftCatalogRows(
       payCurrency,
       published: rec.published !== false,
       deleted: rec.deleted === true,
+      stock: stock < 0 ? -1 : stock,
     }
     if (!options?.includeDeleted && normalized.deleted) continue
     if (options?.onlyPublished && !normalized.published) continue

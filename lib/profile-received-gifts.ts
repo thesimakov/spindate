@@ -1,6 +1,6 @@
 import type { GiftCatalogRow } from "@/lib/gift-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS, toGiftImageUrl } from "@/lib/gift-catalog"
-import { PAIR_ACTIONS, type InventoryItem } from "@/lib/game-types"
+import { PAIR_ACTIONS, type GameLogEntry, type InventoryItem } from "@/lib/game-types"
 
 /** Эмодзи для подарков-эмоций за столом (PAIR_ACTIONS), если нет картинки в каталоге */
 const PAIR_GIFT_EMOJI: Partial<Record<string, string>> = {
@@ -43,6 +43,30 @@ export function aggregateReceivedGiftsByType(args: {
     map.set("rose", (map.get("rose") ?? 0) + roseSocial)
   }
   return map
+}
+
+/** Сводка для панели «Поцелуи — Подарки — Розы» в профиле игрока за столом. */
+export function computePlayerMenuProfileStats(args: {
+  inventory: InventoryItem[]
+  rosesGiven: Array<{ fromPlayerId: number; toPlayerId: number; timestamp: number }> | undefined
+  gameLog: readonly GameLogEntry[]
+  userId: number
+}): { kisses: number; gifts: number; roses: number } {
+  const counts = aggregateReceivedGiftsByType({
+    inventory: args.inventory,
+    rosesGiven: args.rosesGiven,
+    userId: args.userId,
+  })
+  let gifts = 0
+  for (const [type, n] of counts) {
+    if (type === "rose" || type === "kiss") continue
+    gifts += n
+  }
+  const roses = counts.get("rose") ?? 0
+  const kisses = args.gameLog.filter(
+    (e) => e.type === "kiss" && e.toPlayer?.id === args.userId,
+  ).length
+  return { kisses, gifts, roses }
 }
 
 function resolveLabelEmojiImg(

@@ -57,6 +57,7 @@ import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { ProfileReceivedGiftsSection } from "@/components/profile-received-gifts-section"
+import { computePlayerMenuProfileStats } from "@/lib/profile-received-gifts"
 import { TableChatEmojiPicker } from "@/components/table-chat-emoji-picker"
 import { BottleCatalogModal } from "@/components/bottle-catalog-modal"
 import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
@@ -895,7 +896,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const { state } = useGame()
   const { rows: bottleCatalogRows, mainBottleId } = useBottleCatalog()
   const { rows: frameCatalogRows } = useFrameCatalog()
-  const { rows: giftCatalogRows } = useGiftCatalog()
+  const { rows: giftCatalogRows, refresh: refreshGiftCatalog } = useGiftCatalog()
   useTheme()
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Только два режима: телефон (`isMobile`) и ПК (`isPcLayout`), без отдельного «планшетного» слоя по max-md/md/lg. */
@@ -1388,6 +1389,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [sidebarTargetPlayer, setSidebarTargetPlayer] = useState<Player | null>(null)
   const [sidebarGiftMode, setSidebarGiftMode] = useState(false)
   const [giftCatalogDrawerPlayer, setGiftCatalogDrawerPlayer] = useState<Player | null>(null)
+  const [giftPurchaseBusyKey, setGiftPurchaseBusyKey] = useState<string | null>(null)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
   const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
   const [emotionPurchasePick, setEmotionPurchasePick] = useState({
@@ -6252,6 +6254,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         const zodiacIdx = zodiacIdxFromName >= 0 ? zodiacIdxFromName : playerMenuTarget.id % 12
         const zodiacDisplay = ZODIAC_SIGNS[zodiacIdx]
         const zodiacSymbol = ZODIAC_SYMBOLS[zodiacIdx]
+        const profileMenuStats = computePlayerMenuProfileStats({
+          inventory,
+          rosesGiven,
+          gameLog,
+          userId: playerMenuTarget.id,
+        })
         return (
         <GameSidePanelShell
           title="Профиль игрока"
@@ -6336,24 +6344,55 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     </div>
                     </div>
                   </div>
+                  <div
+                    className="relative z-[1] mt-3 w-full min-w-0 overflow-hidden rounded-2xl border border-sky-400/30 px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_20px_rgba(14,165,233,0.2)] sm:px-3 sm:py-3.5"
+                    style={{
+                      background:
+                        "linear-gradient(155deg, rgba(125, 211, 252, 0.98) 0%, rgba(56, 189, 248, 0.88) 42%, rgba(14, 165, 233, 0.82) 100%)",
+                    }}
+                    aria-label="Статистика игрока за столом"
+                  >
+                    <div
+                      className="pointer-events-none absolute inset-0 opacity-[0.4]"
+                      aria-hidden
+                      style={{
+                        backgroundImage: `radial-gradient(circle at 18% 28%, rgba(255,255,255,0.5) 0%, transparent 42%),
+                          radial-gradient(circle at 82% 72%, rgba(255,255,255,0.22) 0%, transparent 38%),
+                          radial-gradient(circle at 50% 55%, rgba(255,255,255,0.12) 0%, transparent 55%)`,
+                      }}
+                    />
+                    <div className="relative grid grid-cols-3 gap-1.5 text-center sm:gap-2">
+                      <div className="flex min-w-0 flex-col items-center gap-1">
+                        <span className="text-[1.65rem] leading-none drop-shadow-sm sm:text-[1.85rem]" aria-hidden>
+                          💋
+                        </span>
+                        <span className="text-[15px] font-black tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(15,23,42,0.35)]">
+                          {profileMenuStats.kisses}
+                        </span>
+                        <span className="text-[14px] font-semibold leading-tight text-sky-950/85">Поцелуи</span>
+                      </div>
+                      <div className="flex min-w-0 flex-col items-center gap-1">
+                        <span className="text-[1.65rem] leading-none drop-shadow-sm sm:text-[1.85rem]" aria-hidden>
+                          🎁
+                        </span>
+                        <span className="text-[15px] font-black tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(15,23,42,0.35)]">
+                          {profileMenuStats.gifts}
+                        </span>
+                        <span className="text-[14px] font-semibold leading-tight text-sky-950/85">Подарки</span>
+                      </div>
+                      <div className="flex min-w-0 flex-col items-center gap-1">
+                        <span className="text-[1.65rem] leading-none drop-shadow-sm sm:text-[1.85rem]" aria-hidden>
+                          🌹
+                        </span>
+                        <span className="text-[15px] font-black tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(15,23,42,0.35)]">
+                          {profileMenuStats.roses}
+                        </span>
+                        <span className="text-[14px] font-semibold leading-tight text-sky-950/85">Розы</span>
+                      </div>
+                    </div>
+                  </div>
                   {playerMenuTab === "profile" && (
                     <>
-                      <div className="relative z-[1] mt-3 flex w-full min-w-0 flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {}}
-                          className="group flex h-11 min-w-0 w-full flex-row flex-nowrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 shadow-[0_6px_14px_rgba(15,23,42,0.10)] transition-all hover:bg-slate-50 sm:h-12 sm:gap-2.5 sm:px-4"
-                          aria-label="Сколько роз получил игрок"
-                        >
-                          <Flower2 className="h-6 w-6 shrink-0 text-fuchsia-600" strokeWidth={2.25} aria-hidden />
-                          <span className="shrink-0 text-base font-black tabular-nums text-slate-900 sm:text-lg">
-                            {(rosesGiven ?? []).filter((r) => r.toPlayerId === playerMenuTarget.id).length}
-                          </span>
-                          <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-slate-700">
-                            получено
-                          </span>
-                        </button>
-                      </div>
                       {currentUser && currentUser.id !== playerMenuTarget.id && !playerMenuTarget.isBot && (
                         <div className="relative z-[1] mt-3 w-full max-w-sm px-0.5">
                           {admirers.some((a) => a.id === playerMenuTarget.id) ? (
@@ -6977,19 +7016,50 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                           <div className="grid grid-cols-3 content-start gap-2 sm:gap-2.5">
                             {section.gifts.map((gift) => {
                               const toId = giftCatalogDrawerPlayer.id
+                              const busyKey = `${section.key}-${gift.id}`
                               const alreadyGifted = inventory.some(
                                 (item) => item.toPlayerId === toId && item.type === gift.id,
                               )
                               const needPay = gift.cost > 0
                               const paysWithRoses = gift.payCurrency === "roses"
+                              const stock = typeof gift.stock === "number" ? gift.stock : -1
+                              const limitedStock = stock >= 0
+                              const outOfStock = limitedStock && stock === 0
                               const canAfford = needPay
                                 ? paysWithRoses
                                   ? roseInventoryCount >= gift.cost
                                   : voiceBalance >= gift.cost
                                 : true
-                              const disabled = alreadyGifted || (needPay && !canAfford)
-                              const handleGiftClick = () => {
+                              const disabled =
+                                alreadyGifted ||
+                                (needPay && !canAfford) ||
+                                outOfStock ||
+                                giftPurchaseBusyKey === busyKey
+                              const handleGiftClick = async () => {
                                 if (disabled) return
+                                if (limitedStock) {
+                                  setGiftPurchaseBusyKey(busyKey)
+                                  try {
+                                    const res = await apiFetch("/api/catalog/gifts/consume", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ giftId: gift.id }),
+                                    })
+                                    const data = await res.json().catch(() => null)
+                                    if (!res.ok || !data?.ok) {
+                                      showToast(
+                                        data?.error === "out_of_stock"
+                                          ? "Этот подарок закончился"
+                                          : "Не удалось оформить подарок",
+                                        "error",
+                                      )
+                                      void refreshGiftCatalog()
+                                      return
+                                    }
+                                  } finally {
+                                    setGiftPurchaseBusyKey(null)
+                                  }
+                                }
                                 if (needPay) {
                                   if (paysWithRoses) {
                                     dispatch({ type: "REMOVE_INVENTORY_ROSES", amount: gift.cost })
@@ -7018,6 +7088,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                     timestamp: Date.now(),
                                   } as GameLogEntry,
                                 })
+                                if (limitedStock) void refreshGiftCatalog()
                               }
                               const isHeartPaidSection = section.key === "hearts"
                               const isRosePremiumSection = section.key === "premium_roses"
@@ -7059,6 +7130,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                   {alreadyGifted ? (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300/90 sm:text-[10px]">
                                       ✓ Дарено
+                                    </span>
+                                  ) : outOfStock ? (
+                                    <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-slate-500/40 bg-slate-800/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">
+                                      закончилось
                                     </span>
                                   ) : gift.cost === 0 ? (
                                     <span className="inline-flex min-w-[2.75rem] items-center justify-center rounded-full border border-sky-400/35 bg-gradient-to-b from-sky-500/25 to-sky-600/10 px-2 py-0.5 text-[9px] font-extrabold tabular-nums text-sky-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] sm:text-[10px]">

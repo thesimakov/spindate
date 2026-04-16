@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       img: typeof body?.img === "string" ? body.img : undefined,
       cost: typeof body?.cost === "number" ? body.cost : undefined,
       payCurrency: body?.payCurrency === "roses" || body?.payCurrency === "hearts" ? body.payCurrency : undefined,
+      stock: typeof body?.stock === "number" ? body.stock : undefined,
       published: typeof body?.published === "boolean" ? body.published : undefined,
     })
     const rows = listGiftCatalogRows({ includeDeleted: true, resolveImage: false })

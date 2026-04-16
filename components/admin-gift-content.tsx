@@ -15,6 +15,8 @@ type RowDraft = {
   emoji: string
   img: string
   cost: number
+  /** −1 — без лимита; 0 и выше — остаток в каталоге. */
+  stock: number
   /** Оплата в игре: сердечки или розы из инвентаря (блок «Премиум подарки»). */
   payCurrency: GiftPayCurrency
   published: boolean
@@ -35,6 +37,7 @@ function parseRows(rows: unknown): RowDraft[] {
       emoji?: string
       img?: string
       cost?: number
+      stock?: number
       payCurrency?: string
       pay_currency?: string
       published?: boolean
@@ -53,6 +56,13 @@ function parseRows(rows: unknown): RowDraft[] {
           : Number(rec.cost) >= 10
             ? "vip"
             : "paid"
+    const rawStock = rec.stock
+    const stock =
+      typeof rawStock === "number" && Number.isFinite(rawStock)
+        ? rawStock < 0
+          ? -1
+          : Math.max(0, Math.floor(rawStock))
+        : -1
     parsed.push({
       id: rec.id,
       section,
@@ -60,6 +70,7 @@ function parseRows(rows: unknown): RowDraft[] {
       emoji: typeof rec.emoji === "string" && rec.emoji.trim() ? rec.emoji.trim() : "🎁",
       img: typeof rec.img === "string" ? rec.img.trim() : "",
       cost: Number.isFinite(Number(rec.cost)) ? Math.max(0, Math.floor(Number(rec.cost))) : 0,
+      stock,
       payCurrency,
       published: rec.published !== false,
       deleted: rec.deleted === true,
@@ -99,6 +110,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
     emoji: "🎁",
     img: "",
     cost: 1,
+    stock: -1,
     payCurrency: "hearts",
     published: true,
     deleted: false,
@@ -237,6 +249,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       id,
       section: nextSection,
       cost: Math.max(0, Math.floor(Number(nextCost) || 0)),
+      stock: addDraft.stock < 0 ? -1 : Math.max(0, Math.floor(addDraft.stock)),
       payCurrency: addDraft.payCurrency,
       published: true,
       deleted: false,
@@ -248,6 +261,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
       emoji: "🎁",
       img: "",
       cost: addTier === "free" ? 0 : prev.cost,
+      stock: prev.stock,
       payCurrency: prev.payCurrency,
     }))
   }, [addDraft, addTier, postUpdate, rows])
@@ -342,6 +356,20 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                 step={1}
                 value={addDraft.cost}
                 onChange={(e) => setAddDraft((p) => ({ ...p, cost: Math.max(0, Math.floor(Number(e.target.value) || 0)) }))}
+                className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+              />
+            </label>
+            <label className="text-[11px] text-slate-400">
+              Количество (−1 без лимита)
+              <input
+                type="number"
+                min={-1}
+                step={1}
+                value={addDraft.stock}
+                onChange={(e) => {
+                  const v = Math.floor(Number(e.target.value) || 0)
+                  setAddDraft((p) => ({ ...p, stock: v < 0 ? -1 : v }))
+                }}
                 className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
               />
             </label>
@@ -474,6 +502,20 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                     className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
                   />
                 </label>
+                <label className="block text-[11px] text-slate-400">
+                  Количество (−1 без лимита)
+                  <input
+                    type="number"
+                    min={-1}
+                    step={1}
+                    value={row.stock}
+                    onChange={(e) => {
+                      const v = Math.floor(Number(e.target.value) || 0)
+                      updateRow(row.id, { stock: v < 0 ? -1 : v })
+                    }}
+                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+                  />
+                </label>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -487,6 +529,7 @@ export function AdminGiftContent({ token }: AdminGiftContentProps) {
                       emoji: row.emoji,
                       img: row.img,
                       cost: row.cost,
+                      stock: row.stock,
                       payCurrency: row.payCurrency,
                     })
                   }
