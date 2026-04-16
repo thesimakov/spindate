@@ -1090,9 +1090,9 @@ function gameTableSurfaceBackground(isNebula: boolean): string {
 }
 
 const GAME_TABLE_INNER_VIGNETTE_BG =
-  "radial-gradient(circle at center, rgba(15,23,42,0.82) 0%, rgba(15,23,42,0.96) 68%, rgba(2,6,23,1) 100%)"
+  "radial-gradient(circle at center, rgba(15,23,42,0.52) 0%, rgba(15,23,42,0.72) 68%, rgba(2,6,23,0.82) 100%)"
 const GAME_TABLE_INNER_VIGNETTE_BG_NEBULA =
-  "radial-gradient(circle at center, rgba(15,23,42,0.42) 0%, rgba(15,23,42,0.52) 62%, rgba(9,9,26,0.58) 100%)"
+  "radial-gradient(circle at center, rgba(15,23,42,0.28) 0%, rgba(15,23,42,0.38) 62%, rgba(9,9,26,0.44) 100%)"
 
 type GameRoomProps = {
   /** Число диалогов с непрочитанным (поклонники + избранные), для бейджа «Чат». */
@@ -5328,8 +5328,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             style={{
               boxShadow:
                 tableStyle === "nebula_mockup"
-                  ? "inset 0 0 52px rgba(0,0,0,0.4)"
-                  : "inset 0 0 56px rgba(0,0,0,0.78)",
+                  ? "inset 0 0 52px rgba(0,0,0,0.28)"
+                  : "inset 0 0 56px rgba(0,0,0,0.52)",
               background:
                 tableStyle === "nebula_mockup"
                   ? GAME_TABLE_INNER_VIGNETTE_BG_NEBULA
