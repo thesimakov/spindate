@@ -2,9 +2,9 @@ import type { LivePlayer } from "@/lib/live-tables-core"
 import type { Player } from "@/lib/game-types"
 import { joinSpecificRoom, leaveLiveTable, getTableInfo } from "@/lib/live-tables-server"
 import { ensureTableAuthority, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
-import { isRoomDisabledForJoin, loadRoomRegistry } from "@/lib/rooms/room-registry"
+import { createPublicRoom, isRoomDisabledForJoin, loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
-import type { LobbyRoomRow, RoomStatePayload } from "@/lib/rooms/types"
+import type { LobbyRoomRow, RoomMeta, RoomStatePayload } from "@/lib/rooms/types"
 import { DEFAULT_ROOM_BOTTLE_SKIN, normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
 import { resolveEffectiveTableStyle } from "@/lib/table-style-global-server"
 import { QueueManager } from "@/lib/rooms/queue-manager"
@@ -22,6 +22,40 @@ export type EnterRoomResult =
 
 export class RoomManager {
   constructor(private readonly queue: QueueManager) {}
+
+  private async tryJoinRoomId(live: LivePlayer, roomId: number): Promise<{ ok: boolean; tablesCount: number }> {
+    const joined = await joinSpecificRoom({
+      player: live,
+      roomId,
+      maxTableSize: ROOM_MAX_PLAYERS,
+    })
+    if (!joined.ok) return { ok: false, tablesCount: 0 }
+    await ensureTableAuthority(roomId)
+    return { ok: true, tablesCount: joined.tablesCount }
+  }
+
+  private async resolvePublicRoomJoinTarget(requestedRoomId: number, reg: { rooms: RoomMeta[] }): Promise<number> {
+    const candidates = reg.rooms.filter((r) => !r.isUserRoom && !isRoomDisabledForJoin(r))
+    const scored: Array<{ roomId: number; liveCount: number }> = []
+    for (const room of candidates) {
+      const info = await getTableInfo(room.roomId)
+      const liveCount = info?.livePlayers.length ?? 0
+      if (liveCount < ROOM_MAX_PLAYERS) {
+        scored.push({ roomId: room.roomId, liveCount })
+      }
+    }
+    if (scored.length > 0) {
+      scored.sort((a, b) => {
+        if (a.roomId === requestedRoomId) return -1
+        if (b.roomId === requestedRoomId) return 1
+        if (b.liveCount !== a.liveCount) return b.liveCount - a.liveCount
+        return a.roomId - b.roomId
+      })
+      return scored[0]!.roomId
+    }
+    const created = await createPublicRoom()
+    return created.roomId
+  }
 
   async getLobbyRows(): Promise<LobbyRoomRow[]> {
     const reg = await loadRoomRegistry()
@@ -83,25 +117,40 @@ export class RoomManager {
     const ids = reg.rooms.filter((r) => !isRoomDisabledForJoin(r)).map((r) => r.roomId)
     if (!ids.includes(requestedRoomId)) {
       await this.tryEnqueue(live, requestedRoomId)
-      return { kind: "queued", position: (await this.queue.position(live.id)) ?? 1 }
+      return { kind: "queued", position: (await this.queue.position(live.id, requestedRoomId)) ?? 1 }
     }
 
-    const first = await joinSpecificRoom({
-      player: live,
-      roomId: requestedRoomId,
-      maxTableSize: ROOM_MAX_PLAYERS,
-    })
-    if (first.ok) {
-      await ensureTableAuthority(requestedRoomId)
-      return { kind: "joined", roomId: requestedRoomId, tablesCount: first.tablesCount }
+    if (requestedMeta?.isUserRoom === true) {
+      const first = await this.tryJoinRoomId(live, requestedRoomId)
+      if (first.ok) {
+        await this.queue.remove(live.id)
+        return { kind: "joined", roomId: requestedRoomId, tablesCount: first.tablesCount }
+      }
+      await this.tryEnqueue(live, requestedRoomId)
+      const pos = await this.queue.position(live.id, requestedRoomId)
+      return { kind: "queued", position: pos ?? 1 }
     }
 
+    const targetRoomId = await this.resolvePublicRoomJoinTarget(requestedRoomId, reg)
+    const joined = await this.tryJoinRoomId(live, targetRoomId)
+    if (joined.ok) {
+      await this.queue.remove(live.id)
+      return { kind: "joined", roomId: targetRoomId, tablesCount: joined.tablesCount }
+    }
+    const fallbackCreated = await createPublicRoom()
+    const fallback = await this.tryJoinRoomId(live, fallbackCreated.roomId)
+    if (fallback.ok) {
+      await this.queue.remove(live.id)
+      return { kind: "joined", roomId: fallbackCreated.roomId, tablesCount: fallback.tablesCount }
+    }
     await this.tryEnqueue(live, requestedRoomId)
-    const pos = await this.queue.position(live.id)
+    const pos = await this.queue.position(live.id, requestedRoomId)
     return { kind: "queued", position: pos ?? 1 }
   }
 
   private async tryEnqueue(live: LivePlayer, requestedRoomId: number): Promise<void> {
+    const existing = await this.queue.getEntry(live.id)
+    if (existing?.requestedRoomId === requestedRoomId) return
     await this.queue.remove(live.id)
     await this.queue.enqueue({
       userId: live.id,
@@ -117,33 +166,17 @@ export class RoomManager {
   }
 
   /**
-   * После освобождения места — взять следующего из очереди и посадить в первую доступную комнату.
+   * После освобождения места — взять следующего ожидающего именно для этого стола.
    */
-  async admitNextFromQueue(): Promise<{ player: Player; roomId: number } | null> {
-    const next = await this.queue.dequeue()
+  async admitNextFromQueue(requestedRoomId: number): Promise<{ player: Player; roomId: number } | null> {
+    const next = await this.queue.dequeueForRoom(requestedRoomId)
     if (!next) return null
     const live = toLivePlayer(next.player)
-    const reg = await loadRoomRegistry()
-    const allowedIds = reg.rooms.filter((r) => !isRoomDisabledForJoin(r)).map((r) => r.roomId)
-    const tryOrder = [
-      next.requestedRoomId,
-      ...allowedIds.filter((id) => id !== next.requestedRoomId),
-    ]
-    const seen = new Set<number>()
-    for (const rid of tryOrder) {
-      if (seen.has(rid)) continue
-      seen.add(rid)
-      const r = await joinSpecificRoom({
-        player: live,
-        roomId: rid,
-        maxTableSize: ROOM_MAX_PLAYERS,
-      })
-      if (r.ok) {
-        await ensureTableAuthority(rid)
-        return { player: next.player, roomId: rid }
-      }
+    const joined = await this.tryJoinRoomId(live, next.requestedRoomId)
+    if (joined.ok) {
+      return { player: next.player, roomId: next.requestedRoomId }
     }
-    await this.queue.enqueue(next)
+    await this.tryEnqueue(live, next.requestedRoomId)
     return null
   }
 }

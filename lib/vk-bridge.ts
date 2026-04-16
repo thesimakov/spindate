@@ -1294,6 +1294,39 @@ export async function showVkWallPostConfirm(
   }
 }
 
+export async function showVkStoryBox(input: {
+  imageUrl: string
+  attachmentText?: string
+  attachmentUrl?: string
+  locked?: boolean
+}): Promise<boolean> {
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return false
+  const imageUrl = resolvePublicUrlForVkAttachment(input.imageUrl)
+  if (!imageUrl) return false
+  const attachmentUrl = resolvePublicUrlForVkAttachment(input.attachmentUrl) ?? input.attachmentUrl?.trim() ?? ""
+  try {
+    await b.send("VKWebAppShowStoryBox" as never, {
+      background_type: "image",
+      url: imageUrl,
+      locked: input.locked === true,
+      ...(attachmentUrl
+        ? {
+            attachment: {
+              type: "url",
+              text: (input.attachmentText?.trim() || "Открыть игру").slice(0, 80),
+              url: attachmentUrl,
+            },
+          }
+        : {}),
+    } as never)
+    return true
+  } catch (e) {
+    console.warn("[VK] VKWebAppShowStoryBox", e)
+    return false
+  }
+}
+
 export const vkBridge = {
   getUserInfo,
   showPaymentWall,
@@ -1325,6 +1358,7 @@ export const vkBridge = {
   joinVkCommunityGroup,
   openVkUrl,
   showVkWallPostConfirm,
+  showVkStoryBox,
   readVkUserIdFromClientLocation,
   readVkLaunchParamValue,
   readVkIsRecommendedFromLocation,

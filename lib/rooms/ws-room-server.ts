@@ -182,7 +182,7 @@ export class WsRoomServer {
       liveCount: (await this.rooms.buildRoomState(roomId)).livePlayers.length,
       clientRequestId: reqId,
     })
-    const admitted = await this.rooms.admitNextFromQueue()
+    const admitted = await this.rooms.admitNextFromQueue(roomId)
     if (admitted) await this.broadcastLobby()
     await this.broadcastLobby()
     send(ws, { type: "queue_update", position: null, clientRequestId: reqId })
@@ -209,7 +209,7 @@ export class WsRoomServer {
         userId: player.id,
         liveCount: (await this.rooms.buildRoomState(prev)).livePlayers.length,
       })
-      const admitted = await this.rooms.admitNextFromQueue()
+      const admitted = await this.rooms.admitNextFromQueue(prev)
       if (admitted) await this.broadcastLobby()
     }
     ctx.roomId = null

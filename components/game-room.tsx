@@ -70,6 +70,7 @@ import { BankPassiveBurstOverlay } from "@/components/bank-passive-burst"
 import { SpaceRocketsLayer } from "@/components/space-rockets-layer"
 import { NebulaMockupSkinLayer } from "@/components/nebula-mockup-skin-layer"
 import { BankHeartBalanceTooltip } from "@/components/bank-heart-balance-tooltip"
+import { GiftAchievementModal } from "@/components/gift-achievement-modal"
 import { useBankPassive } from "@/hooks/use-bank-passive"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
@@ -98,14 +99,24 @@ import { useTheme } from "next-themes"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
+import { formatAchievementPostText } from "@/lib/achievement-posts-format"
 import { DEFAULT_BOTTLE_CATALOG_ROWS, type BottleCatalogSkinRow } from "@/lib/bottle-catalog"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
 import { useGiftCatalog } from "@/lib/use-gift-catalog"
+import { isVkRuntimeEnvironment, showVkStoryBox } from "@/lib/vk-bridge"
 import { GameBoardPlayers } from "@/components/game-board-players"
 import { BottleCenter } from "@/components/bottle-center"
+import {
+  GIFT_ACHIEVEMENT_IMAGE_PATH,
+  GIFT_ACHIEVEMENT_TITLE,
+  isGiftRatingType,
+  type GiftProgressStats,
+} from "@/lib/gift-progress-shared"
+import { recordGiftProgress } from "@/lib/gift-progress-client"
+import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -1458,6 +1469,50 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   })
 
   const { toast, showToast } = useInlineToast(2000)
+  const [_giftProgressStats, setGiftProgressStats] = useState<GiftProgressStats | null>(null)
+  const [giftAchievementOpen, setGiftAchievementOpen] = useState(false)
+  const [giftAchievementShareBusy, setGiftAchievementShareBusy] = useState(false)
+
+  const applyGiftProgressResult = useCallback(
+    async (promise: Promise<{ stats: GiftProgressStats | null; achievementUnlockedNow: boolean }>) => {
+      const result = await promise
+      if (result.stats) setGiftProgressStats(result.stats)
+      if (result.achievementUnlockedNow) setGiftAchievementOpen(true)
+    },
+    [],
+  )
+
+  const handleShareGiftAchievement = useCallback(async () => {
+    if (!currentUser) return
+    const vkOk = await isVkRuntimeEnvironment()
+    if (!vkOk) {
+      showToast("Публикация достижения доступна в приложении VK", "info")
+      return
+    }
+    const gameUrl =
+      getVkMiniAppPageUrl() ||
+      (typeof window !== "undefined" && window.location.origin ? window.location.origin : "") ||
+      "https://vk.com/app54511363"
+    const _message = formatAchievementPostText({
+      template: "",
+      playerName: currentUser.name,
+      achievementTitle: GIFT_ACHIEVEMENT_TITLE,
+      gameUrl,
+    })
+    setGiftAchievementShareBusy(true)
+    try {
+      const ok = await showVkStoryBox({
+        imageUrl: publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH),
+        attachmentText: "Играть",
+        attachmentUrl: gameUrl,
+        locked: true,
+      })
+      showToast(ok ? "VK Stories открыты" : "Не удалось открыть VK Stories", ok ? "success" : "error")
+      if (ok) setGiftAchievementOpen(false)
+    } finally {
+      setGiftAchievementShareBusy(false)
+    }
+  }, [currentUser, showToast])
 
   useEffect(() => {
     if (bankHeartPulseTimeoutRef.current) {
@@ -2859,10 +2914,11 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
     const pairText = `${tp.name} & ${tp2.name}`
     const pairIdsForLog = actionId === "skip" ? undefined : sortedPairIds(tp, tp2)
+    const logId = generateLogId()
     dispatch({
       type: "ADD_LOG",
       entry: {
-        id: generateLogId(),
+        id: logId,
         type: actionId as GameLogEntry["type"],
         fromPlayer: currentTurnPlayer,
         toPlayer: tp,
@@ -2871,6 +2927,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         timestamp: Date.now(),
       },
     })
+    if (!currentTurnPlayer.isBot && isGiftRatingType(actionId)) {
+      void applyGiftProgressResult(
+        recordGiftProgress({
+          dedupeId: logId,
+          fromPlayer: currentTurnPlayer,
+          toPlayer: tp,
+          giftId: actionId,
+          heartsCost: actionCost,
+        }),
+      )
+    }
 
     if (actionId === "skip") {
       handleSkipTurn()
@@ -2936,11 +3003,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
 
     const pairIdsSidebar = sortedPairIds(currentUser, sidebarTargetPlayer)
+    const logId = generateLogId()
 
     dispatch({
       type: "ADD_LOG",
       entry: {
-        id: generateLogId(),
+        id: logId,
         type: actionId as GameLogEntry["type"],
         fromPlayer: currentUser,
         toPlayer: sidebarTargetPlayer,
@@ -2949,6 +3017,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         timestamp: Date.now(),
       },
     })
+    if (isGiftRatingType(actionId)) {
+      void applyGiftProgressResult(
+        recordGiftProgress({
+          dedupeId: logId,
+          fromPlayer: currentUser,
+          toPlayer: sidebarTargetPlayer,
+          giftId: actionId,
+          heartsCost: actionCost,
+        }),
+      )
+    }
   }
 
   /* ---- skip / advance turn ---- */
@@ -3987,6 +4066,15 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       {tableStyle === "cosmic_rockets" && <SpaceRocketsLayer />}
       {tableStyle === "nebula_mockup" && <NebulaMockupSkinLayer />}
       {toast && <InlineToast toast={toast} />}
+      <GiftAchievementModal
+        open={giftAchievementOpen}
+        imageUrl={publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH)}
+        achievementTitle={GIFT_ACHIEVEMENT_TITLE}
+        description="Ура! Ты выполнил(а) достижение за подарки и получил(а) награду."
+        shareBusy={giftAchievementShareBusy}
+        onClose={() => setGiftAchievementOpen(false)}
+        onShare={() => void handleShareGiftAchievement()}
+      />
       {currentUser && (
         <TickerAnnouncementModal
           open={tickerAnnouncementOpen}
@@ -7203,10 +7291,11 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                     toPlayerId: toId,
                                   },
                                 })
+                                const logId = generateLogId()
                                 dispatch({
                                   type: "ADD_LOG",
                                   entry: {
-                                    id: generateLogId(),
+                                    id: logId,
                                     type: gift.id as GameLogEntry["type"],
                                     fromPlayer: currentUser,
                                     toPlayer: giftCatalogDrawerPlayer,
@@ -7214,6 +7303,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                                     timestamp: Date.now(),
                                   } as GameLogEntry,
                                 })
+                                void applyGiftProgressResult(
+                                  recordGiftProgress({
+                                    dedupeId: logId,
+                                    fromPlayer: currentUser,
+                                    toPlayer: giftCatalogDrawerPlayer,
+                                    giftId: gift.id,
+                                    heartsCost: gift.payCurrency === "hearts" ? gift.cost : 0,
+                                    rosesCost: gift.payCurrency === "roses" ? gift.cost : 0,
+                                  }),
+                                )
                                 triggerGiftCatalogFlyToAvatar(
                                   busyKey,
                                   giftCatalogDrawerPlayer.id,

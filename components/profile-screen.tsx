@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
+import { GiftAchievementModal } from "@/components/gift-achievement-modal"
 import { PlayerAvatar } from "@/components/player-avatar"
 import { ProfileReceivedGiftsSection } from "@/components/profile-received-gifts-section"
 import { useGame } from "@/lib/game-context"
@@ -25,7 +26,7 @@ import { PAIR_ACTIONS } from "@/lib/game-types"
 import type { GameLogEntry } from "@/lib/game-types"
 import { effectiveOpenToChatInvites, effectiveShowVkAfterCare } from "@/lib/player-profile-prefs"
 import { generateLogId } from "@/lib/ids"
-import { resolveFrameCatalogAssetUrl } from "@/lib/assets"
+import { publicUrl, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 import { useInlineToast } from "@/hooks/use-inline-toast"
 import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
@@ -40,6 +41,15 @@ import {
   ACHIEVEMENT_POST_CATALOG,
   ACHIEVEMENT_POST_CATALOG_BY_KEY,
 } from "@/lib/achievement-posts-catalog"
+import { formatAchievementPostText } from "@/lib/achievement-posts-format"
+import {
+  GIFT_ACHIEVEMENT_IMAGE_PATH,
+  GIFT_ACHIEVEMENT_TITLE,
+  isGiftRatingType,
+  type GiftProgressStats,
+} from "@/lib/gift-progress-shared"
+import { fetchGiftProgressStats, recordGiftProgress } from "@/lib/gift-progress-client"
+import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
 
 const CLAIMED_ACHIEVEMENT_STORAGE_PREFIX = "spindate_achievement_status_claimed_v1_"
 const FOCUS_CHAT_INVITE_SETTING_KEY = "spindate_focus_chat_invite_setting_v1"
@@ -73,7 +83,6 @@ function genderLabel(g: string) {
   return g === "male" ? "Мужчина" : g === "female" ? "Женщина" : "—"
 }
 
-const GIFT_IDS = new Set(["flowers", "diamond", "song", "rose", "gift_voice", "tools", "lipstick"])
 const PROFILE_LEVEL_MAX = 30
 
 /** Текст статуса (до 15 симв.): оверрайд из админки, иначе каталог по ключу, иначе подпись строки. */
@@ -193,12 +202,12 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         : 0,
     [currentUser, gameLog],
   )
-  const giftSpent = useMemo(
+  const localGiftSpent = useMemo(
     () =>
       currentUser
         ? gameLog.reduce((sum, entry) => {
             if (entry.fromPlayer?.id !== currentUser.id) return sum
-            if (!GIFT_IDS.has(entry.type)) return sum
+            if (!isGiftRatingType(entry.type)) return sum
             const action = PAIR_ACTIONS.find((a) => a.id === entry.type)
             return sum + (action?.cost ?? 0)
           }, 0)
@@ -245,7 +254,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     }
     const sentToys = sentLogs.filter((e) => e.type === "toy_bear" || e.type === "toy_car" || e.type === "toy_ball").length
     const sentSeasonal = sentLogs.filter((e) => e.type === "plush_heart" || e.type === "souvenir_keychain" || e.type === "souvenir_magnet").length
-    const sentGiftCount = sentLogs.filter((e) => GIFT_IDS.has(e.type)).length
+    const sentGiftCount = sentLogs.filter((e) => isGiftRatingType(e.type)).length
     const recvSoft = inventory.filter(
       (i) => i.type === "toy_bear" || i.type === "toy_car" || i.type === "toy_ball" || i.type === "plush_heart",
     ).length
@@ -311,7 +320,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const achievementStatusDelta = useMemo(() => {
     const baseDone =
       (heartbreakerCount >= 100 ? 1 : 0) +
-      (giftSpent >= 1000 ? 1 : 0) +
+      (localGiftSpent >= 1000 ? 1 : 0) +
       (spinCount >= 50 ? 1 : 0)
     const eventsDone = ACHIEVEMENT_POST_CATALOG.filter((x) => x.group === "events").reduce((sum, ev) => {
       const stat = achievementStats[ev.title]
@@ -319,7 +328,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       return sum + (stat.current >= stat.target ? 1 : 0)
     }, 0)
     return baseDone + eventsDone
-  }, [achievementStats, heartbreakerCount, giftSpent, spinCount])
+  }, [achievementStats, heartbreakerCount, localGiftSpent, spinCount])
 
   /** Опционально: открыть запись на стене через VKWebAppOpenWallPost (задайте в .env). */
   const vkOpenWallNews = useMemo(() => {
@@ -356,6 +365,9 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [vkHomeBusy, setVkHomeBusy] = useState(false)
   const [vkLeaderBusy, setVkLeaderBusy] = useState(false)
   const [vkWallBusy, setVkWallBusy] = useState(false)
+  const [giftProgressStats, setGiftProgressStats] = useState<GiftProgressStats | null>(null)
+  const [giftAchievementOpen, setGiftAchievementOpen] = useState(false)
+  const [giftAchievementShareBusy, setGiftAchievementShareBusy] = useState(false)
   const roseGiftFxTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const chatInvitePulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const chatInviteHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -363,6 +375,75 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [chatInvitePulse, setChatInvitePulse] = useState(false)
   const [chatInviteHintVisible, setChatInviteHintVisible] = useState(false)
   const { toast, showToast } = useInlineToast(1700)
+
+  useEffect(() => {
+    if (!currentUser) {
+      setGiftProgressStats(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      const stats = await fetchGiftProgressStats(currentUser)
+      if (!cancelled && stats) setGiftProgressStats(stats)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser])
+
+  const giftSpent = giftProgressStats?.heartsSpent ?? localGiftSpent
+
+  const applyGiftProgressResult = async (
+    promise: Promise<{ stats: GiftProgressStats | null; achievementUnlockedNow: boolean }>,
+  ) => {
+    const result = await promise
+    if (result.stats) setGiftProgressStats(result.stats)
+    if (result.achievementUnlockedNow) setGiftAchievementOpen(true)
+  }
+
+  const resolvedAchievementStats = useMemo(() => {
+    if (!giftProgressStats) return achievementStats
+    return {
+      ...achievementStats,
+      "Помощь новичкам": {
+        current: giftProgressStats.giftsSentCount,
+        target: 50,
+        known: true,
+      },
+    }
+  }, [achievementStats, giftProgressStats])
+
+  const handleShareGiftAchievement = async () => {
+    if (!currentUser) return
+    const vkOk = await vkBridge.isVkRuntimeEnvironment()
+    if (!vkOk) {
+      showToast("Публикация достижения доступна в приложении VK", "info")
+      return
+    }
+    const gameUrl =
+      getVkMiniAppPageUrl() ||
+      (typeof window !== "undefined" && window.location.origin ? window.location.origin : "") ||
+      "https://vk.com/app54511363"
+    const _message = formatAchievementPostText({
+      template: "",
+      playerName: currentUser.name,
+      achievementTitle: GIFT_ACHIEVEMENT_TITLE,
+      gameUrl,
+    })
+    setGiftAchievementShareBusy(true)
+    try {
+      const ok = await vkBridge.showVkStoryBox({
+        imageUrl: publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH),
+        attachmentText: "Играть",
+        attachmentUrl: gameUrl,
+        locked: true,
+      })
+      showToast(ok ? "VK Stories открыты" : "Не удалось открыть VK Stories", ok ? "success" : "error")
+      if (ok) setGiftAchievementOpen(false)
+    } finally {
+      setGiftAchievementShareBusy(false)
+    }
+  }
   useEffect(() => {
     setName(initialName)
   }, [initialName])
@@ -721,10 +802,11 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         },
       })
       if (mode === "gift" && target) {
+        const logId = generateLogId()
         dispatch({
           type: "ADD_LOG",
           entry: {
-            id: generateLogId(),
+            id: logId,
             type: gift.id,
             fromPlayer: currentUser,
             toPlayer: target,
@@ -732,6 +814,16 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             timestamp: Date.now(),
           },
         })
+        void applyGiftProgressResult(
+          recordGiftProgress({
+            dedupeId: logId,
+            fromPlayer: currentUser,
+            toPlayer: target,
+            giftId: gift.id,
+            heartsCost: gift.payCurrency === "hearts" ? gift.cost : 0,
+            rosesCost: gift.payCurrency === "roses" ? gift.cost : 0,
+          }),
+        )
       }
       setLimitedGiftChoice(null)
       showToast(mode === "gift" ? "Лимитированный подарок отправлен" : "Лимитированный подарок оставлен в инвентаре", "success")
@@ -1474,7 +1566,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
             <ul className="flex flex-col gap-2">
               {eventsListResolved
                 .map((row) => {
-                  const stat = achievementStats[row.statsKeyTitle]
+                  const stat = resolvedAchievementStats[row.statsKeyTitle]
                   const current = stat?.current ?? 0
                   const target = stat?.target ?? 1
                   const known = stat?.known ?? false
@@ -1781,6 +1873,15 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
   return (
     <>
+      <GiftAchievementModal
+        open={giftAchievementOpen}
+        imageUrl={publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH)}
+        achievementTitle={GIFT_ACHIEVEMENT_TITLE}
+        description="Ура! Ты выполнил(а) достижение за подарки и получил(а) награду."
+        shareBusy={giftAchievementShareBusy}
+        onClose={() => setGiftAchievementOpen(false)}
+        onShare={() => void handleShareGiftAchievement()}
+      />
       {isPanel ? (
         <>
           {toast && <InlineToast toast={toast} />}

@@ -13,6 +13,5 @@ export async function POST(req: Request) {
   }
   const { rooms } = getRoomServices()
   await rooms.leaveRoom(userId)
-  await rooms.admitNextFromQueue()
   return NextResponse.json({ ok: true }, { headers: NO_CACHE })
 }

@@ -9,7 +9,7 @@ import {
 import { roomsRegistryKey, userRoomVotesKey } from "@/lib/rooms/keys"
 import { getTableInfo, leaveLiveTable } from "@/lib/live-tables-server"
 
-const SEED_COUNT = 10
+const SEED_COUNT = 1
 const USER_ROOM_TTL_MS = 24 * 60 * 60 * 1000
 
 declare global {
@@ -106,6 +106,41 @@ async function evictExpiredRooms(roomIds: number[]): Promise<void> {
   }
 }
 
+async function compactPublicRooms(state: RoomRegistryState): Promise<boolean> {
+  const publicRooms = state.rooms.filter((room) => room.isUserRoom !== true)
+  if (publicRooms.length === 0) {
+    state.rooms.unshift({
+      roomId: 1,
+      name: "Игровой стол #1",
+      bottleSkin: DEFAULT_ROOM_BOTTLE_SKIN,
+      tableStyle: DEFAULT_ROOM_TABLE_STYLE,
+    })
+    state.nextRoomId = Math.max(state.nextRoomId, 2)
+    return true
+  }
+
+  const occupiedIds = new Set<number>()
+  for (const room of publicRooms) {
+    const info = await getTableInfo(room.roomId)
+    if ((info?.livePlayers.length ?? 0) > 0) occupiedIds.add(room.roomId)
+  }
+
+  const keepIds = new Set<number>()
+  if (occupiedIds.size > 0) {
+    for (const roomId of occupiedIds) keepIds.add(roomId)
+  } else {
+    const fallback = [...publicRooms].sort((a, b) => a.roomId - b.roomId)[0]
+    if (fallback) keepIds.add(fallback.roomId)
+  }
+
+  const nextRooms = state.rooms.filter((room) => room.isUserRoom === true || keepIds.has(room.roomId))
+  if (nextRooms.length === state.rooms.length) return false
+  state.rooms = nextRooms
+  const maxRoomId = state.rooms.reduce((max, room) => Math.max(max, room.roomId), 0)
+  state.nextRoomId = Math.max(state.nextRoomId, maxRoomId + 1, 2)
+  return true
+}
+
 async function normalizeAndCleanupRegistry(state: RoomRegistryState): Promise<RoomRegistryState> {
   const now = Date.now()
   const migrated = migrateLegacyRoomNames(state)
@@ -113,8 +148,9 @@ async function normalizeAndCleanupRegistry(state: RoomRegistryState): Promise<Ro
   const changedAppearance = ensureRoomAppearanceDefaults(migrated)
   const expiredIds = extractExpiredUserRoomIds(migrated, now)
   const changedExpired = removeRoomsByIds(migrated, expiredIds)
+  const changedPublicCompaction = await compactPublicRooms(migrated)
 
-  if (changedCreatedAt || changedExpired || changedAppearance) {
+  if (changedCreatedAt || changedExpired || changedAppearance || changedPublicCompaction) {
     await saveRoomRegistry(migrated)
   }
   if (expiredIds.length > 0) {
@@ -220,6 +256,20 @@ export async function createUserRoomPaid(
     isUserRoom: true,
     createdByUserId,
     createdAtMs: Date.now(),
+  }
+  state.rooms.push(meta)
+  await saveRoomRegistry(state)
+  return meta
+}
+
+export async function createPublicRoom(): Promise<RoomMeta> {
+  const state = await loadRoomRegistry()
+  const roomId = state.nextRoomId++
+  const meta: RoomMeta = {
+    roomId,
+    name: `Игровой стол #${roomId}`,
+    bottleSkin: DEFAULT_ROOM_BOTTLE_SKIN,
+    tableStyle: DEFAULT_ROOM_TABLE_STYLE,
   }
   state.rooms.push(meta)
   await saveRoomRegistry(state)

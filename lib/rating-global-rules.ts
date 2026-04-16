@@ -1,4 +1,5 @@
 import type { GameLogEntry, Player } from "@/lib/game-types"
+import { GIFT_RATING_TYPE_SET } from "@/lib/gift-progress-shared"
 
 /** Стоимость действий для рейтинга «Добрые» (сердца) */
 export const KIND_ACTION_COST: Record<string, number> = {
@@ -10,15 +11,7 @@ export const KIND_ACTION_COST: Record<string, number> = {
   lipstick: 5,
 }
 
-export const RATING_GIFT_TYPES = new Set<string>([
-  "rose",
-  "flowers",
-  "song",
-  "diamond",
-  "gift_voice",
-  "tools",
-  "lipstick",
-])
+export const RATING_GIFT_TYPES = GIFT_RATING_TYPE_SET
 
 export type RatingCategory = "love" | "gift" | "kind"
 
@@ -55,6 +48,12 @@ export function ratingActorKey(from: Player): string | null {
   if (from.isBot) return null
   if (from.authProvider === "login" && from.authUserId?.trim()) {
     return `login:${from.authUserId.trim()}`
+  }
+  if (from.authProvider === "ok") {
+    const ok = from.okUserId ?? from.id
+    if (typeof ok === "number" && Number.isInteger(ok) && ok > 0) {
+      return `ok:${ok}`
+    }
   }
   const vk = from.vkUserId ?? (from.authProvider === "vk" || from.authProvider === undefined ? from.id : undefined)
   if (typeof vk === "number" && Number.isInteger(vk) && vk > 0) {

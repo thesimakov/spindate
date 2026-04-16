@@ -186,6 +186,7 @@ export function RoomLobbyScreen() {
   const [joiningId, setJoiningId] = useState<number | null>(null)
   const [error, setError] = useState("")
   const [queuePos, setQueuePos] = useState<number | null>(null)
+  const [waitingRoomId, setWaitingRoomId] = useState<number | null>(null)
   const [createCost, setCreateCost] = useState(DEFAULT_CREATE_COST)
   const [buyLoading, setBuyLoading] = useState(false)
 
@@ -368,63 +369,113 @@ export function RoomLobbyScreen() {
     }
   }, [user?.id, user?.authProvider, user?.vkUserId])
 
-  const enterGameAfterJoin = async (
-    player: Player,
-    data: {
-      roomId: number
-      livePlayers: Player[]
-      tablesCount?: number
-      createdByUserId?: number
-      bottleSkin?: BottleSkin
-      tableStyle?: RoomTableStyle
-    },
-  ) => {
-    const maxTableSize = isDesktopUser ? 10 : 6
-    const targetMales = isDesktopUser ? 5 : 3
-    const targetFemales = isDesktopUser ? 5 : 3
-    const allBots = generateBots(220, player.gender)
-    const finalPlayers = composeTablePlayers({
-      currentUser: { ...player, isBot: false },
-      livePlayers: data.livePlayers.map((p) => ({ ...p, isBot: false })),
-      existingPlayers: [],
-      maxTableSize,
-      targetMales,
-      targetFemales,
-      botPool: allBots,
-    }).sort(() => Math.random() - 0.5)
+  const enterGameAfterJoin = useCallback(
+    async (
+      player: Player,
+      data: {
+        roomId: number
+        livePlayers: Player[]
+        tablesCount?: number
+        createdByUserId?: number
+        bottleSkin?: BottleSkin
+        tableStyle?: RoomTableStyle
+      },
+    ) => {
+      const maxTableSize = isDesktopUser ? 10 : 6
+      const targetMales = isDesktopUser ? 5 : 3
+      const targetFemales = isDesktopUser ? 5 : 3
+      const allBots = generateBots(220, player.gender)
+      const finalPlayers = composeTablePlayers({
+        currentUser: { ...player, isBot: false },
+        livePlayers: data.livePlayers.map((p) => ({ ...p, isBot: false })),
+        existingPlayers: [],
+        maxTableSize,
+        targetMales,
+        targetFemales,
+        botPool: allBots,
+      }).sort(() => Math.random() - 0.5)
 
-    dispatch({
-      type: "SET_TABLE",
-      players: finalPlayers,
-      tableId: data.roomId,
-      roomCreatorPlayerId:
-        typeof data.createdByUserId === "number" ? data.createdByUserId : null,
-      bottleSkin: data.bottleSkin,
-      tableStyle: data.tableStyle,
-    })
-    dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount ?? 1 })
-    try {
-      const st = await apiFetch("/api/table/state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ tableId: data.roomId, sinceRevision: 0 }),
+      dispatch({
+        type: "SET_TABLE",
+        players: finalPlayers,
+        tableId: data.roomId,
+        roomCreatorPlayerId:
+          typeof data.createdByUserId === "number" ? data.createdByUserId : null,
+        bottleSkin: data.bottleSkin,
+        tableStyle: data.tableStyle,
       })
-      const stData = await st.json().catch(() => null)
-      if (st.ok && stData?.snapshot) {
-        dispatch({ type: "SYNC_TABLE_AUTHORITY", payload: stData.snapshot })
+      dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount ?? 1 })
+      try {
+        const st = await apiFetch("/api/table/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ tableId: data.roomId, sinceRevision: 0 }),
+        })
+        const stData = await st.json().catch(() => null)
+        if (st.ok && stData?.snapshot) {
+          dispatch({ type: "SYNC_TABLE_AUTHORITY", payload: stData.snapshot })
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
+      dispatch({ type: "SET_SCREEN", screen: "game" })
+    },
+    [dispatch, isDesktopUser],
+  )
+
+  useEffect(() => {
+    if (!user || waitingRoomId == null || queuePos == null) return
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const res = await apiFetch("/api/rooms/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ roomId: waitingRoomId, user }),
+        })
+        const data = await res.json().catch(() => null)
+        if (cancelled) return
+        if (!res.ok || !data?.ok) {
+          setError(typeof data?.error === "string" ? data.error : "Не удалось дождаться входа")
+          setQueuePos(null)
+          setWaitingRoomId(null)
+          return
+        }
+        if (data.queued) {
+          setQueuePos(typeof data.position === "number" ? data.position : 1)
+          return
+        }
+        setQueuePos(null)
+        setWaitingRoomId(null)
+        await enterGameAfterJoin(user, {
+          roomId: data.roomId,
+          livePlayers: Array.isArray(data.livePlayers) ? data.livePlayers : [],
+          tablesCount: data.tablesCount,
+          createdByUserId: typeof data.createdByUserId === "number" ? data.createdByUserId : undefined,
+          bottleSkin: typeof data.bottleSkin === "string" ? (data.bottleSkin as BottleSkin) : undefined,
+          tableStyle: typeof data.tableStyle === "string" ? (data.tableStyle as RoomTableStyle) : undefined,
+        })
+        markRoomVisited(user, data.roomId)
+      } catch {
+        if (!cancelled) setError("Сеть недоступна")
+      }
     }
-    dispatch({ type: "SET_SCREEN", screen: "game" })
-  }
+    const timerId = window.setInterval(() => void poll(), 3000)
+    void poll()
+    return () => {
+      cancelled = true
+      window.clearInterval(timerId)
+    }
+  }, [enterGameAfterJoin, queuePos, user, waitingRoomId])
 
   const handleJoin = async (roomId: number) => {
     if (!user) return
     setJoiningId(roomId)
     setError("")
     setQueuePos(null)
+    setWaitingRoomId(null)
     try {
       const res = await apiFetch("/api/rooms/join", {
         method: "POST",
@@ -440,9 +491,11 @@ export function RoomLobbyScreen() {
       }
       if (data.queued) {
         setQueuePos(typeof data.position === "number" ? data.position : 1)
+        setWaitingRoomId(roomId)
         setJoiningId(null)
         return
       }
+      setWaitingRoomId(null)
       await enterGameAfterJoin(user, {
         roomId: data.roomId,
         livePlayers: Array.isArray(data.livePlayers) ? data.livePlayers : [],
@@ -635,6 +688,16 @@ export function RoomLobbyScreen() {
 
   return (
     <div className="relative flex h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden">
+      {queuePos != null && waitingRoomId != null ? (
+        <LobbySpotlightModal
+          open
+          title="Вы находитесь в режиме ожидания"
+          body={`До момента, когда игрок покинет игровой стол, мы тебя запустим.\n\nТекущая позиция в очереди: №${queuePos}.`}
+          buttonLabel="Ожидаем"
+          titleId="room-wait-queue-title"
+          onContinue={() => {}}
+        />
+      ) : null}
       {showLobbyAnnounce && lobbyAnnounceData ? (
         <LobbySpotlightModal
           open
@@ -687,11 +750,6 @@ export function RoomLobbyScreen() {
             </p>
           </div>
 
-          {queuePos != null && (
-            <div className="shrink-0 border-b border-amber-500/20 bg-amber-950/35 px-4 py-2.5 text-center text-sm text-amber-100">
-              Все столы заняты. Вы в очереди: №{queuePos}
-            </div>
-          )}
           {error ? (
             <div className="shrink-0 border-b border-red-500/20 bg-red-950/30 px-4 py-2 text-center text-sm text-red-200">
               {error}

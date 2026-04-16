@@ -14,6 +14,23 @@ function memQueue(): QueueEntry[] {
 }
 
 export class QueueManager {
+  private async listEntries(): Promise<QueueEntry[]> {
+    const r = getRedis()
+    if (r) {
+      const items = await r.lrange(roomQueueKey(), 0, -1)
+      const out: QueueEntry[] = []
+      for (const raw of items) {
+        try {
+          out.push(JSON.parse(raw) as QueueEntry)
+        } catch {
+          continue
+        }
+      }
+      return out
+    }
+    return [...memQueue()]
+  }
+
   async enqueue(entry: QueueEntry): Promise<number> {
     const r = getRedis()
     if (r) {
@@ -25,21 +42,16 @@ export class QueueManager {
     return q.length
   }
 
-  async position(userId: number): Promise<number | null> {
-    const r = getRedis()
-    if (r) {
-      const items = await r.lrange(roomQueueKey(), 0, -1)
-      for (let i = 0; i < items.length; i++) {
-        try {
-          const e = JSON.parse(items[i]!) as QueueEntry
-          if (e.userId === userId) return i + 1
-        } catch {
-          continue
-        }
-      }
-      return null
-    }
-    const idx = memQueue().findIndex((e) => e.userId === userId)
+  async getEntry(userId: number): Promise<QueueEntry | null> {
+    const items = await this.listEntries()
+    return items.find((e) => e.userId === userId) ?? null
+  }
+
+  async position(userId: number, requestedRoomId?: number): Promise<number | null> {
+    const items = (await this.listEntries()).filter((e) =>
+      requestedRoomId != null ? e.requestedRoomId === requestedRoomId : true,
+    )
+    const idx = items.findIndex((e) => e.userId === userId)
     return idx >= 0 ? idx + 1 : null
   }
 
@@ -108,5 +120,17 @@ export class QueueManager {
     }
     const q = memQueue()
     return q.shift() ?? null
+  }
+
+  async dequeueForRoom(requestedRoomId: number): Promise<QueueEntry | null> {
+    const tid = Math.floor(requestedRoomId)
+    if (!Number.isInteger(tid) || tid <= 0) return null
+    const entries = await this.listEntries()
+    const idx = entries.findIndex((e) => e.requestedRoomId === tid)
+    if (idx < 0) return null
+    const picked = entries[idx] ?? null
+    if (!picked) return null
+    await this.remove(picked.userId)
+    return picked
   }
 }
