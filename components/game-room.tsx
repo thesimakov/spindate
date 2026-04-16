@@ -1158,6 +1158,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   } = useSyncEngine()
   const playersRef = useRef(players)
   useEffect(() => { playersRef.current = players }, [players])
+  const isSpinningRef = useRef(isSpinning)
+  useEffect(() => {
+    isSpinningRef.current = isSpinning
+  }, [isSpinning])
   const spinResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinSessionRef = useRef<string>("")
   const spinStartedTurnKeyRef = useRef<string>("")
@@ -1500,6 +1504,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
     const compute = () => {
       const surface = tableSurfaceRef.current
+      if (!surface) {
+        setTurnArrowPosPx(null)
+        setTurnArrowTargetPx(null)
+        setTurnArrowAngleDegPx(null)
+        return
+      }
       const b = bottleEl.getBoundingClientRect()
       const a = surface.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${pid}"]`)
       if (!a) {
@@ -1509,8 +1519,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         return
       }
       const ar = a.getBoundingClientRect()
-
-      if (!surface) return
       const sr = surface.getBoundingClientRect()
 
       const bx = b.left + b.width / 2
@@ -1905,6 +1913,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       idB: meta.target.id,
     })
     spinResolveDeadlineRef.current = null
+    spinSessionRef.current = ""
+    spinResolveMetaRef.current = null
+    if (spinResolveTimeoutRef.current) {
+      clearTimeout(spinResolveTimeoutRef.current)
+      spinResolveTimeoutRef.current = null
+    }
   }, [currentUser, dispatch])
 
   const {
@@ -2330,15 +2344,43 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   useEffect(() => {
     if (isSpinning) return
+
+    const meta = spinResolveMetaRef.current
+    const deadline = spinResolveDeadlineRef.current
+
+    /** Кратковременный isSpinning=false от sync: не сбрасываем meta, по окончании окна — finalize. */
     if (
       !showResult &&
       countdown === null &&
-      spinResolveMetaRef.current &&
-      spinResolveDeadlineRef.current != null &&
-      Date.now() <= spinResolveDeadlineRef.current + 2500
+      meta != null &&
+      deadline != null &&
+      Date.now() <= deadline + 2500
     ) {
+      const ms = Math.max(0, deadline + 2500 - Date.now() + 20)
+      const t = window.setTimeout(() => {
+        if (isSpinningRef.current) return
+        const m = spinResolveMetaRef.current
+        const d = spinResolveDeadlineRef.current
+        if (!m || d == null) return
+        if (Date.now() < d) return
+        if (spinSessionRef.current === m.spinSessionKey) {
+          finalizeSpinFromMeta(m)
+        }
+      }, ms)
+      return () => window.clearTimeout(t)
+    }
+
+    /** Дедлайн прошёл, а таймер не отработал — добиваем finalize один раз. */
+    if (
+      meta != null &&
+      deadline != null &&
+      Date.now() >= deadline &&
+      spinSessionRef.current === meta.spinSessionKey
+    ) {
+      finalizeSpinFromMeta(meta)
       return
     }
+
     spinSessionRef.current = ""
     spinResolveDeadlineRef.current = null
     spinResolveMetaRef.current = null
@@ -2346,7 +2388,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       clearTimeout(spinResolveTimeoutRef.current)
       spinResolveTimeoutRef.current = null
     }
-  }, [isSpinning, roundNumber, currentTurnIndex])
+  }, [isSpinning, roundNumber, currentTurnIndex, showResult, countdown, finalizeSpinFromMeta])
 
   useEffect(() => {
     spinStartedTurnKeyRef.current = ""
@@ -4412,7 +4454,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   ? formatCooldown(cooldownLeftMs)
                   : "Бутылочка"
             }
-            className={sideBtnClass}
+            className={cn(
+              sideBtnClass,
+              isPcLayout &&
+                cooldownLeftMs > 0 &&
+                "h-[4.35rem] w-14 flex-col items-center justify-center gap-0.5 rounded-[999px]",
+            )}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
               border: "1px solid rgba(56,189,248,0.28)",
@@ -4420,7 +4467,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             }}
           >
             <span
-              className="animate-game-room-bottle-icon select-none text-[1.65rem] leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)] sm:text-[1.75rem]"
+              className={cn(
+                "animate-game-room-bottle-icon select-none leading-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]",
+                isPcLayout && cooldownLeftMs > 0 ? "text-[1.35rem]" : "text-[1.65rem] sm:text-[1.75rem]",
+              )}
               style={{ lineHeight: 1 }}
               aria-hidden
             >
@@ -4431,7 +4481,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </span>
             {cooldownLeftMs > 0 && (
               <span
-                className={"ml-auto text-xs font-semibold " + (!leftSideMenuExpanded ? "max-lg:hidden" : "")}
+                className={cn(
+                  isPcLayout ? "mt-[1px] text-[10px] font-medium leading-none" : "ml-auto text-xs font-semibold",
+                  !leftSideMenuExpanded ? "max-lg:hidden" : "",
+                )}
                 style={{ color: "#e8c06a" }}
               >
                 {formatCooldown(cooldownLeftMs)}
