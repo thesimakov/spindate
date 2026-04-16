@@ -59,6 +59,7 @@ const SPIN_STUCK_MS = 16_000
  */
 function stabilizeAuthoritySnapshot(
   snapshot: TableAuthorityPayload,
+  tableId: number,
   nowMs = Date.now(),
 ): { snapshot: TableAuthorityPayload; changed: boolean } {
   let next = snapshot
@@ -86,7 +87,7 @@ function stabilizeAuthoritySnapshot(
             showResult: true,
             resultAction: next.resultAction ?? "skip",
             pairKissPhase: {
-              roundKey: `${next.tableId}:${next.roundNumber}:${next.currentTurnIndex}:${spinner.id}:${target.id}:srv-watchdog`,
+              roundKey: `${tableId}:${next.roundNumber}:${next.currentTurnIndex}:${spinner.id}:${target.id}:srv-watchdog`,
               deadlineMs: nowMs + 10_000,
               idA: spinner.id,
               idB: target.id,
@@ -197,7 +198,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
         out = null
         return null
       }
-      const stabilized = stabilizeAuthoritySnapshot(next)
+      const stabilized = stabilizeAuthoritySnapshot(next, tid)
       out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot
       return JSON.stringify(out)
     })
@@ -209,7 +210,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
     const prev = store.get(tid) ?? null
     const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
     if (!next) return null
-    const stabilized = stabilizeAuthoritySnapshot(next)
+    const stabilized = stabilizeAuthoritySnapshot(next, tid)
     const out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot
     store.set(tid, out)
     return out
@@ -228,7 +229,7 @@ export async function getTableAuthoritySnapshot(tableId: number): Promise<TableA
       }
       try {
         const snap = JSON.parse(raw) as TableAuthorityPayload
-        const stabilized = stabilizeAuthoritySnapshot(snap)
+        const stabilized = stabilizeAuthoritySnapshot(snap, tid)
         out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
         return JSON.stringify(out)
       } catch {
@@ -241,7 +242,7 @@ export async function getTableAuthoritySnapshot(tableId: number): Promise<TableA
   return runMemoryAuthorityOp(tid, async () => {
     const snap = getMemoryStore().get(tid) ?? null
     if (!snap) return null
-    const stabilized = stabilizeAuthoritySnapshot(snap)
+    const stabilized = stabilizeAuthoritySnapshot(snap, tid)
     const out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
     if (stabilized.changed) getMemoryStore().set(tid, out)
     return out
@@ -266,7 +267,7 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
       const applied = applyTableAuthorityAction(snap, action)
       if (!applied) return raw
       let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
-      const stabilized = stabilizeAuthoritySnapshot(next)
+      const stabilized = stabilizeAuthoritySnapshot(next, tid)
       if (stabilized.changed) {
         next = { ...stabilized.snapshot, revision: next.revision + 1 }
       }
@@ -283,7 +284,7 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
     const applied = applyTableAuthorityAction(snap, action)
     if (!applied) return null
     let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
-    const stabilized = stabilizeAuthoritySnapshot(next)
+    const stabilized = stabilizeAuthoritySnapshot(next, tid)
     if (stabilized.changed) {
       next = { ...stabilized.snapshot, revision: next.revision + 1 }
     }
