@@ -87,7 +87,9 @@ export function useSyncEngine(): SyncEngineResult {
     const current = syncMetaRef.current
     const tid = Math.floor(Number(current.tableId))
     if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
-    if (!seatConfirmedRef.current) return
+    if (!seatConfirmedRef.current) {
+      return
+    }
     try {
       const res = await apiFetch("/api/table/events", {
         method: "POST",

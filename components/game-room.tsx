@@ -1543,28 +1543,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       const playerAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
       const desiredArrowDirection = TURN_ARROW_START_IS_CURRENT_TURN ? playerAngleDeg : playerAngleDeg + 180
       const finalDeg = desiredArrowDirection - TURN_ARROW_BASE_DIRECTION_DEG + TURN_ARROW_EXTRA_ROTATE_DEG
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
-        body: JSON.stringify({
-          sessionId: "37ffa9",
-          runId: "turn-arrow-pre-fix",
-          hypothesisId: "TA1",
-          location: "game-room.tsx:turnArrowCompute",
-          message: "turn_arrow_angle_computed",
-          data: {
-            currentTurnPlayerId: pid,
-            playerAngleDeg,
-            desiredArrowDirection,
-            baseDeg: TURN_ARROW_BASE_DIRECTION_DEG,
-            extraDeg: TURN_ARROW_EXTRA_ROTATE_DEG,
-            finalDeg,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       setTurnArrowAngleDegPx(finalDeg)
     }
 
@@ -1758,21 +1736,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       clearTurnArrowAnimTimers()
       setTurnArrowVisible(true)
       setTurnArrowTransitionMs(TURN_ARROW_LAUNCH_MS)
-      // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
-        body: JSON.stringify({
-          sessionId: "37ffa9",
-          runId: "turn-arrow-pre-fix",
-          hypothesisId: "TA2",
-          location: "game-room.tsx:handleSpin",
-          message: "turn_arrow_launch_start",
-          data: { roundNumber, currentTurnIndex },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
 
       const dx = turnArrowTargetPx.x - turnArrowPosPx.x
       const dy = turnArrowTargetPx.y - turnArrowPosPx.y
@@ -1816,27 +1779,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     clearTurnArrowAnimTimers()
     setTurnArrowTransitionMs(TURN_ARROW_TO_AVATAR_MS)
     setTurnArrowPosPx(turnArrowTargetPx)
-    // #region agent log
-    fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "37ffa9" },
-      body: JSON.stringify({
-        sessionId: "37ffa9",
-        runId: "turn-arrow-pre-fix",
-        hypothesisId: "TA3",
-        location: "game-room.tsx:isSpinningEffect",
-        message: "turn_arrow_fly_to_avatar_start",
-        data: { roundNumber, currentTurnIndex },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     const t = setTimeout(() => setTurnArrowVisible(false), TURN_ARROW_HIDE_AFTER_MS)
     turnArrowAnimTimersRef.current.push(t)
   }, [isSpinning, turnArrowTargetPx, clearTurnArrowAnimTimers, roundNumber, currentTurnIndex])
 
   const finalizeSpinFromMeta = useCallback((meta: NonNullable<typeof spinResolveMetaRef.current>) => {
-    if (spinSessionRef.current !== meta.spinSessionKey) return
+    if (spinSessionRef.current !== meta.spinSessionKey) {
+      return
+    }
     if (!CASUAL_MODE) {
       const aliveIds = new Set(meta.predictions.map((pred) => pred.playerId))
       meta.bets.forEach((b) => aliveIds.add(b.playerId))
@@ -2319,6 +2269,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const spinner = currentTurnPlayer
     if (!spinner) return
     const turnKey = `${tableId}:${roundNumber}:${currentTurnIndex}`
+    if (spinStartedTurnKeyRef.current === turnKey) {
+      return
+    }
     const spinStillActiveForTurn =
       spinStartedTurnKeyRef.current === turnKey &&
       (spinResolveTimeoutRef.current != null || spinSessionRef.current !== "")
@@ -2377,8 +2330,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   useEffect(() => {
     if (isSpinning) return
+    if (
+      !showResult &&
+      countdown === null &&
+      spinResolveMetaRef.current &&
+      spinResolveDeadlineRef.current != null &&
+      Date.now() <= spinResolveDeadlineRef.current + 2500
+    ) {
+      return
+    }
     spinSessionRef.current = ""
-    spinStartedTurnKeyRef.current = ""
     spinResolveDeadlineRef.current = null
     spinResolveMetaRef.current = null
     if (spinResolveTimeoutRef.current) {
