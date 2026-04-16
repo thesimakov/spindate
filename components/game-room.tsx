@@ -1073,20 +1073,19 @@ const TABLE_STYLE_BACKGROUNDS: Record<
     "linear-gradient(168deg, rgba(15, 23, 42, 0.70) 0%, rgba(30, 27, 75, 0.54) 32%, rgba(49, 46, 129, 0.40) 52%, rgba(15, 23, 42, 0.64) 78%, rgba(9, 9, 26, 0.74) 100%)",
 }
 
-/** Текстура столешницы (public/assets/game-table-wood.png). */
-const GAME_TABLE_WOOD_TEXTURE_URL = publicUrl("/assets/game-table-wood.png")
+/** Фон столешницы: дерево + брендинг (public/assets/game-table-surface.png). */
+const GAME_TABLE_SURFACE_URL = publicUrl("/assets/game-table-surface.png")
 /**
- * Градиент поверх фото дерева: читаемость UI; нижний слой — `url(...)` в style.
- * Порядок слоёв CSS: первый перечислен — сверху.
+ * Режим nebula: лёгкий фиолетовый скрим поверх той же текстуры.
+ * Базовый режим — только исходная композиция (без второго тёмного слоя поверх).
  */
-const GAME_TABLE_OVER_WOOD_SCRIM =
-  "radial-gradient(circle at 50% 45%, rgba(30,58,95,0.22) 0%, rgba(15,23,42,0.48) 58%, rgba(2,6,23,0.62) 100%)"
 const GAME_TABLE_OVER_WOOD_SCRIM_NEBULA =
   "radial-gradient(circle at 50% 42%, rgba(79,70,229,0.09) 0%, rgba(30,27,75,0.26) 48%, rgba(15,23,42,0.4) 100%)"
 
 function gameTableSurfaceBackground(isNebula: boolean): string {
-  const scrim = isNebula ? GAME_TABLE_OVER_WOOD_SCRIM_NEBULA : GAME_TABLE_OVER_WOOD_SCRIM
-  return `${scrim}, url(${GAME_TABLE_WOOD_TEXTURE_URL}) center center / cover no-repeat`
+  const base = `url(${GAME_TABLE_SURFACE_URL}) center center / cover no-repeat`
+  if (isNebula) return `${GAME_TABLE_OVER_WOOD_SCRIM_NEBULA}, ${base}`
+  return base
 }
 
 const GAME_TABLE_INNER_VIGNETTE_BG =
@@ -7975,12 +7974,16 @@ function PairStripEmotionBlock({
   const giftImg = giftDisplayById.get(String(entry.type))?.img?.trim()
   const centralHint = pairChatCentralObjectHint(entry, giftDisplayById)
   const accentColor = PAIR_LOG_ACCENT_MAP[entry.type] ?? "#cbd5e1"
+  const fullPairActionLabel = entry.type === "kiss" && isMutualKissPairLogText(entry.text)
   return (
     <span className="inline-flex shrink-0 items-center gap-0.5">
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
           <span
-            className="inline-flex max-h-8 min-h-7 min-w-0 max-w-[min(100%,7rem)] cursor-default items-center justify-center rounded-md outline-none ring-0 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/40"
+            className={cn(
+              "inline-flex max-h-8 min-h-7 min-w-0 cursor-default items-center justify-center rounded-md outline-none ring-0 transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/40",
+              fullPairActionLabel ? "max-w-[min(100%,12rem)]" : "max-w-[min(100%,7rem)]",
+            )}
             aria-label={centralHint}
             tabIndex={0}
           >
@@ -8006,7 +8009,12 @@ function PairStripEmotionBlock({
             ) : (
               actionShort && (
                 <span
-                  className="max-w-[5rem] shrink truncate text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
+                  className={cn(
+                    "shrink text-[10px] font-semibold leading-tight sm:text-[11px]",
+                    fullPairActionLabel
+                      ? "max-w-[min(100%,11rem)] whitespace-nowrap sm:max-w-[12rem]"
+                      : "max-w-[5rem] truncate sm:max-w-[6.5rem]",
+                  )}
                   style={{ color: accentColor }}
                 >
                   {actionShort}
@@ -8356,6 +8364,7 @@ function ChatBubble({
   if (showPairRow && pairAvatars) {
     const { left, right } = pairAvatars
     const centralHint = pairChatCentralObjectHint(entry, giftDisplayById)
+    const fullPairActionLabel = entry.type === "kiss" && isMutualKissPairLogText(entry.text)
     const labelForA11y = [left.name, right.name, actionShort ?? emotionEmoji ?? "событие", repeatCount].join(", ")
     return (
       <div className="flex w-full justify-start">
@@ -8377,7 +8386,10 @@ function ChatBubble({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <span
-                className="inline-flex max-h-8 min-h-7 min-w-0 max-w-[min(100%,7rem)] cursor-default items-center justify-center rounded outline-none focus-visible:outline-none"
+                className={cn(
+                  "inline-flex max-h-8 min-h-7 min-w-0 cursor-default items-center justify-center rounded outline-none focus-visible:outline-none",
+                  fullPairActionLabel ? "max-w-[min(100%,12rem)]" : "max-w-[min(100%,7rem)]",
+                )}
                 aria-label={centralHint}
                 tabIndex={0}
               >
@@ -8403,7 +8415,12 @@ function ChatBubble({
                 ) : (
                   actionShort && (
                     <span
-                      className="max-w-[5rem] shrink truncate text-[10px] font-semibold leading-tight sm:max-w-[6.5rem] sm:text-[11px]"
+                      className={cn(
+                        "shrink text-[10px] font-semibold leading-tight sm:text-[11px]",
+                        fullPairActionLabel
+                          ? "max-w-[min(100%,11rem)] whitespace-nowrap sm:max-w-[12rem]"
+                          : "max-w-[5rem] truncate sm:max-w-[6.5rem]",
+                      )}
                       style={{ color: accentColor }}
                     >
                       {actionShort}
