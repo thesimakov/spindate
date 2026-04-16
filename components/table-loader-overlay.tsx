@@ -13,6 +13,7 @@ const TABLE_LOADER_PROGRESS_STEPS: readonly { pct: number; at: number }[] = [
   { pct: 100, at: 2100 },
 ]
 const TABLE_LOADER_FAKE_MAX_BEFORE_READY = 94
+const TABLE_LOADER_STUCK_TIMEOUT_MS = 14_000
 
 const PARTICLE_SEEDS = Array.from({ length: 24 }, (_, i) => ({
   w: 4 + ((i * 7 + 3) % 6),
@@ -52,6 +53,7 @@ function TableLoaderOverlayInner({
 }: TableLoaderOverlayProps) {
   const [progress, setProgress] = useState(0)
   const [fadingOut, setFadingOut] = useState(false)
+  const [stuckTimedOut, setStuckTimedOut] = useState(false)
   const stepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const startedAtRef = useRef(Date.now())
   const quote = useMemo(() => getDailyLoveQuote(new Date()), [])
@@ -74,9 +76,19 @@ function TableLoaderOverlayInner({
     startedAtRef.current = Date.now()
     setProgress(0)
     setFadingOut(false)
+    setStuckTimedOut(false)
     scheduleStepTimers()
     return clearStepTimers
   }, [visible, scheduleStepTimers, clearStepTimers])
+
+  useEffect(() => {
+    if (!visible || fadingOut) return
+    const id = window.setTimeout(() => {
+      setStuckTimedOut(true)
+      setProgress((p) => Math.max(p, 96))
+    }, TABLE_LOADER_STUCK_TIMEOUT_MS)
+    return () => clearTimeout(id)
+  }, [visible, fadingOut])
 
   useEffect(() => {
     if (!visible || fadingOut) return
@@ -104,7 +116,12 @@ function TableLoaderOverlayInner({
       liveReady &&
       authorityReady &&
       seatConfirmed
-    if (!allReady) return
+    const failSafeReady =
+      stuckTimedOut &&
+      hasPlayers &&
+      hasCurrentUser &&
+      (liveReady || authorityReady || liveHumanCount > 0)
+    if (!allReady && !failSafeReady) return
 
     const elapsed = Date.now() - startedAtRef.current
     const remaining = TABLE_LOADER_MIN_VISIBLE_MS - elapsed
@@ -123,7 +140,7 @@ function TableLoaderOverlayInner({
       return () => clearTimeout(t)
     }
     startFade()
-  }, [visible, fadingOut, hasPlayers, hasCurrentUser, liveReady, authorityReady, seatConfirmed, onDone])
+  }, [visible, fadingOut, hasPlayers, hasCurrentUser, liveReady, authorityReady, seatConfirmed, liveHumanCount, onDone, stuckTimedOut])
 
   if (!visible && !fadingOut) return null
 
@@ -260,6 +277,11 @@ function TableLoaderOverlayInner({
                 : "Почти готово…"}{" "}
             {progress}%
           </span>
+          {stuckTimedOut && (
+            <span className="mt-1.5 block text-[10px] font-medium leading-snug text-amber-200/85 sm:mt-2 sm:text-[11px]">
+              Подключение заняло больше обычного. Продолжаем вход, чтобы стол не зависал на загрузке.
+            </span>
+          )}
           {/* Фиксированная высота второй строки — без скачка при появлении «Живых…» */}
           <span
             className={cn(

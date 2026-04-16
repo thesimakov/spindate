@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import dynamic from "next/dynamic"
 import { useGame } from "@/lib/game-context"
 import { initVkResilient, isVkMiniApp, subscribeVkViewportResize } from "@/lib/vk-bridge"
 import { useSocialRuntime } from "@/lib/social-runtime"
@@ -9,28 +10,28 @@ import { isUserBlocked, isUserBanned } from "@/lib/dev-registry"
 import { usePmNotifications, markChatRead } from "@/lib/use-pm-notifications"
 import { mergePeersForUnreadPoll } from "@/lib/merge-peers-for-pm"
 import { AppLoader } from "@/components/app-loader"
-import { RegistrationScreen } from "@/components/registration-screen"
-import { RoomLobbyScreen } from "@/components/room-lobby-screen"
-import { DailyStreakGateScreen } from "@/components/daily-streak-gate-screen"
-import { UiTourScreen } from "@/components/ui-tour-screen"
-import { GameRoom } from "@/components/game-room"
-import { ChatScreen } from "@/components/chat-screen"
-import { FavoritesScreen } from "@/components/favorites-screen"
-import { ShopScreen } from "@/components/shop-screen"
-import { ProfileScreen } from "@/components/profile-screen"
-import { UgadaikaScreen } from "@/components/ugadaika-screen"
-import { IntergameChatScreen } from "@/components/intergame-chat-screen"
-import { GameSidePanelShell } from "@/components/game-side-panel-shell"
-import { PlayerChatPanel } from "@/components/player-chat-panel"
 import { PmNotificationToasts } from "@/components/pm-notification-toast"
-import { RatingLeaderboardBody } from "@/components/rating-screen"
 import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
-import { PrivateInboxPanel } from "@/components/private-inbox-panel"
 import { MobileAppBlockedScreen } from "@/components/mobile-app-blocked-screen"
 import { useVkMiniAppPersistentHorizontalBanner } from "@/hooks/use-vk-overlay-banner"
 import { reportGameClientError } from "@/lib/report-game-client-error"
 
 const AUTO_ERROR_THROTTLE_MS = 25_000
+const RegistrationScreen = dynamic(() => import("@/components/registration-screen").then((m) => m.RegistrationScreen))
+const RoomLobbyScreen = dynamic(() => import("@/components/room-lobby-screen").then((m) => m.RoomLobbyScreen))
+const DailyStreakGateScreen = dynamic(() => import("@/components/daily-streak-gate-screen").then((m) => m.DailyStreakGateScreen))
+const UiTourScreen = dynamic(() => import("@/components/ui-tour-screen").then((m) => m.UiTourScreen))
+const GameRoom = dynamic(() => import("@/components/game-room").then((m) => m.GameRoom))
+const ChatScreen = dynamic(() => import("@/components/chat-screen").then((m) => m.ChatScreen))
+const FavoritesScreen = dynamic(() => import("@/components/favorites-screen").then((m) => m.FavoritesScreen))
+const ShopScreen = dynamic(() => import("@/components/shop-screen").then((m) => m.ShopScreen))
+const ProfileScreen = dynamic(() => import("@/components/profile-screen").then((m) => m.ProfileScreen))
+const UgadaikaScreen = dynamic(() => import("@/components/ugadaika-screen").then((m) => m.UgadaikaScreen))
+const IntergameChatScreen = dynamic(() => import("@/components/intergame-chat-screen").then((m) => m.IntergameChatScreen))
+const GameSidePanelShell = dynamic(() => import("@/components/game-side-panel-shell").then((m) => m.GameSidePanelShell))
+const PlayerChatPanel = dynamic(() => import("@/components/player-chat-panel").then((m) => m.PlayerChatPanel))
+const RatingLeaderboardBody = dynamic(() => import("@/components/rating-screen").then((m) => m.RatingLeaderboardBody))
+const PrivateInboxPanel = dynamic(() => import("@/components/private-inbox-panel").then((m) => m.PrivateInboxPanel))
 
 export function GameApp() {
   const { host, ready } = useSocialRuntime()

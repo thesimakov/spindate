@@ -45,7 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useGame, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
+import { useGameState, generateLogId, sortPair, pairsMatch, getPairGenderCombo, randomAvatarFrame } from "@/lib/game-context"
 import { filterOppositeGenderOthers } from "@/lib/pair-utils"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
@@ -59,9 +59,7 @@ import {
   publicUrl,
   resolveFrameCatalogAssetUrl,
 } from "@/lib/assets"
-import { Bottle } from "@/components/bottle"
 import { PlayerAvatar } from "@/components/player-avatar"
-import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
 import { TableDecorations } from "@/components/decorations"
 import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { ProfileReceivedGiftsSection } from "@/components/profile-received-gifts-section"
@@ -106,6 +104,8 @@ import { DEFAULT_GIFT_CATALOG_ROWS } from "@/lib/gift-catalog"
 import { useBottleCatalog } from "@/lib/use-bottle-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
 import { useGiftCatalog } from "@/lib/use-gift-catalog"
+import { GameBoardPlayers } from "@/components/game-board-players"
+import { BottleCenter } from "@/components/bottle-center"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -1099,7 +1099,7 @@ type GameRoomProps = {
 }
 
 export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
-  const { state } = useGame()
+  const state = useGameState()
   const { rows: bottleCatalogRows, mainBottleId } = useBottleCatalog()
   const { rows: frameCatalogRows } = useFrameCatalog()
   const { rows: giftCatalogRows, refresh: refreshGiftCatalog } = useGiftCatalog()
@@ -1252,6 +1252,22 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
     return m
   }, [frameCatalogRows])
+  const avatarFrameMetaByPlayerId = useMemo(() => {
+    const out: Record<number, { border?: string; shadow?: string; svgPath?: string }> = {}
+    for (const player of players) {
+      const playerFrameId = avatarFrames?.[player.id]
+      if (!playerFrameId) continue
+      const meta = frameMetaById.get(playerFrameId)
+        ?? (() => {
+          const row = frameCatalogRows.find((candidate) => candidate.id === playerFrameId)
+          return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
+        })()
+      if (meta) {
+        out[player.id] = meta
+      }
+    }
+    return out
+  }, [players, avatarFrames, frameMetaById, frameCatalogRows])
   const giftableFramesFree = useMemo(
     () =>
       frameCatalogSource
@@ -5407,234 +5423,44 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           )}
 
           {/* ---- PLAYERS around the circle ---- */}
-          {players.map((player, i) => {
-            const pos = positions[i]
-            const playerFrameId = avatarFrames?.[player.id]
-            const playerFrameMeta = playerFrameId
-              ? frameMetaById.get(playerFrameId)
-                ?? (() => {
-                  const row = frameCatalogRows.find((r) => r.id === playerFrameId)
-                  return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
-                })()
-              : undefined
-            const isAvatarMenuOpen = sidebarTargetPlayer?.id === player.id
-            const isClickableForPrediction =
-              predictionPhase && !predictionMade && !isSpinning && !showResult &&
-              player.id !== currentUser?.id
-            const bigGiftSequenceRaw = getBigGiftSequenceForPlayer(player.id)
-            const bigGiftSequence =
-              catalogGiftAvatarHold?.playerId === player.id
-                ? (() => {
-                    const idx = bigGiftSequenceRaw.lastIndexOf(catalogGiftAvatarHold.giftTypeId)
-                    if (idx === -1) return bigGiftSequenceRaw
-                    return [...bigGiftSequenceRaw.slice(0, idx), ...bigGiftSequenceRaw.slice(idx + 1)]
-                  })()
-                : bigGiftSequenceRaw
-            const hasRoseGiven = (rosesGiven ?? []).some((r) => r.toPlayerId === player.id)
-            const giftIcons = hasRoseGiven
-              ? [...getGiftsForPlayer(player.id), "rose" as const]
-              : getGiftsForPlayer(player.id)
-            const steamAvatarSize =
-              manyPlayersOnMobile ? 42 : isMobile ? 52 : 70
-            const steamBorder = steamAvatarSize <= 52 ? 3 : 4
-            const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
-            const avatarMenuOpenUpward = pos.y >= 50
-            const isRoomCreator =
-              roomCreatorPlayerId != null && player.id === roomCreatorPlayerId
-            return (
-              <div
-                key={player.id}
-                data-turn-arrow-player-id={player.id}
-                className={cn(
-                  "absolute -translate-x-1/2 -translate-y-1/2",
-                  isAvatarMenuOpen ? "z-50" : "z-10",
-                  isRoomCreator && "group",
-                )}
-                style={{
-                  left: `${pos.x}%`,
-                  top: `${pos.y}%`,
-                  cursor: isClickableForPrediction ? "pointer" : player.id !== currentUser?.id ? "pointer" : "default",
-                  filter: isClickableForPrediction && !predictionTarget?.id && !predictionTarget2?.id
-                    ? "drop-shadow(0 0 6px rgba(46, 204, 113, 0.4))"
-                    : "none",
-                  transition: "filter 0.3s ease",
-                }}
-                onClick={() => handlePlayerClick(player)}
-              >
-                <div className="relative inline-flex flex-col items-center">
-                  {isRoomCreator ? <CreatorTableHostAura steamOuterPx={steamOuterPx} /> : null}
-                  <PlayerAvatar
-                    player={player}
-                    tableRingLayout
-                    showStatusBadge
-                    compact={isMobile || manyPlayersOnMobile}
-                    size={manyPlayersOnMobile ? 42 : isMobile ? 52 : undefined}
-                    // Во время результата подсвечиваем только пару, а не крутящего
-                    isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
-                    isTarget={
-                      showResult &&
-                      (targetPlayer?.id === player.id || targetPlayer2?.id === player.id)
-                    }
-                    isPredictionTarget={
-                      predictionPhase && !isSpinning && !showResult &&
-                      (predictionTarget?.id === player.id || predictionTarget2?.id === player.id)
-                    }
-                    kissCount={getKissCountForPlayer(player.id)}
-                    giftIcons={giftIcons}
-                    bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
-                    giftDisplayById={giftDisplayById}
-                    frameId={playerFrameId}
-                    frameBorder={playerFrameMeta?.border}
-                    frameShadow={playerFrameMeta?.shadow}
-                    frameSvgPath={playerFrameMeta?.svgPath}
-                    inGame={playerInUgadaika != null && player.id === playerInUgadaika}
-                    showAsleep={
-                      (spinSkips?.[player.id] ?? 0) >= 3 || clientTabAway?.[player.id] === true
-                    }
-                  />
-                  {(() => {
-                    void steamFogTick
-                    const fog = avatarSteamFog[player.id]
-                    const nowFog = Date.now()
-                    if (!fog || fog.until <= nowFog) return null
-                    const timeLeft01 = Math.max(0, Math.min(1, (fog.until - nowFog) / 60_000))
-                    const wet = fog.level
-                    const blurPx = 1.2 + wet * (5 + 9 * timeLeft01)
-                    const gloss = 0.1 + wet * (0.22 + 0.2 * timeLeft01)
-                    const frost = 0.12 + wet * (0.28 + 0.25 * timeLeft01)
-                    return (
-                      <div
-                        className="pointer-events-none absolute z-[32] overflow-hidden rounded-full"
-                        style={{
-                          width: steamOuterPx,
-                          height: steamOuterPx,
-                          left: "50%",
-                          top: 0,
-                          transform: "translateX(-50%)",
-                          WebkitBackdropFilter: `blur(${blurPx}px) saturate(${1.05 + wet * 0.12})`,
-                          backdropFilter: `blur(${blurPx}px) saturate(${1.05 + wet * 0.12})`,
-                          background: `linear-gradient(200deg, rgba(255,255,255,${gloss}) 0%, rgba(186,230,253,${frost * 0.55}) 38%, rgba(148,163,184,${frost * 0.45}) 100%)`,
-                          opacity: Math.min(0.98, wet * (0.35 + 0.55 * timeLeft01)),
-                          boxShadow: `inset 0 0 ${14 + wet * 28}px rgba(255,255,255,${0.12 + wet * 0.2 * timeLeft01})`,
-                          mixBlendMode: "soft-light",
-                        }}
-                        aria-hidden
-                      />
-                    )
-                  })()}
-                  {steamPuffs
-                    .filter((p) => p.targetIdx === i)
-                    .map((p) => {
-                      const spreadR = steamOuterPx * 0.42
-                      const leftPx = p.spreadX * spreadR
-                      const topPx = steamOuterPx / 2 + p.spreadY * spreadR
-                      return (
-                        <div
-                          key={p.id}
-                          className="pointer-events-none absolute z-[35]"
-                          style={{
-                            left: `calc(50% + ${leftPx}px)`,
-                            top: topPx,
-                            opacity: 0,
-                            animation: `steamRise 1.4s ease-out forwards`,
-                            animationDelay: `${p.delayMs}ms`,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: steamOuterPx <= 56 ? "22px" : steamOuterPx <= 70 ? "26px" : "30px",
-                              color: "rgba(226, 232, 240, 0.9)",
-                              textShadow: "0 0 12px rgba(226,232,240,0.55)",
-                              filter: "blur(0.2px)",
-                            }}
-                          >
-                            {"💨"}
-                          </span>
-                        </div>
-                      )
-                    })}
-                </div>
-                {isAvatarMenuOpen && (
-                  <div
-                    className="absolute left-1/2 z-40 w-[min(92vw,184px)] -translate-x-1/2"
-                    style={
-                      avatarMenuOpenUpward
-                        ? { bottom: "100%", marginBottom: "0.5rem" }
-                        : { top: "100%", marginTop: "0.5rem" }
-                    }
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div
-                      className="relative rounded-2xl border p-2 pt-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.65),0_0_0_1px_rgba(56,189,248,0.12),0_0_28px_rgba(251,191,36,0.08)]"
-                      style={{
-                        background: "linear-gradient(165deg, rgba(22, 32, 52, 0.98) 0%, rgba(8, 15, 32, 0.99) 100%)",
-                        borderColor: "rgba(251, 191, 36, 0.28)",
-                        boxShadow:
-                          "0 12px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(56,189,248,0.1), inset 0 1px 0 rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      <button
-                        type="button"
-                        aria-label="Закрыть мини-меню"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSidebarTargetPlayer(null)
-                          setSidebarGiftMode(false)
-                        }}
-                        className="absolute -right-1 -top-2 flex h-6 w-6 items-center justify-center rounded-full text-[10px] ring-2 ring-slate-900/80 transition-all hover:brightness-110 hover:scale-105"
-                        style={{
-                          background: "linear-gradient(180deg, #ef4444 0%, #b91c1c 100%)",
-                          color: "#ffffff",
-                          border: "1px solid rgba(254, 202, 202, 0.95)",
-                          boxShadow: "0 4px 14px rgba(127, 29, 29, 0.7), inset 0 1px 0 rgba(255,255,255,0.35)",
-                        }}
-                      >
-                        <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-                      </button>
-                      <div className="flex flex-col gap-1.5 pt-0.5">
-                        {currentUser && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSidebarGiftMode(false)
-                              setSidebarTargetPlayer(null)
-                              setGiftCatalogDrawerPlayer(player)
-                            }}
-                            className="flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border border-slate-500/30 bg-slate-950/70 px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all hover:border-slate-400/35 hover:bg-slate-900/85 hover:brightness-110 active:scale-[0.98]"
-                          >
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-400/25 bg-rose-500/10 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.1)]">
-                              <Gift className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-                            </span>
-                            <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-white antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.65)] sm:text-xs">
-                              Подарить подарок
-                            </span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSidebarTargetPlayer(null)
-                            setSidebarGiftMode(false)
-                            dispatch({ type: "OPEN_PLAYER_MENU", player })
-                          }}
-                          className="flex min-h-[2.75rem] w-full items-center gap-2 rounded-xl border border-amber-400/35 bg-slate-950/70 px-2 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-amber-400/15 transition-all hover:border-amber-400/50 hover:bg-slate-900/85 hover:ring-amber-400/25 active:scale-[0.98]"
-                        >
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-400/40 bg-gradient-to-b from-amber-400/25 to-amber-600/15 text-amber-100 shadow-[0_0_14px_rgba(251,191,36,0.2)]">
-                            <User className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-                          </span>
-                          <span className="min-w-0 flex-1 text-[11px] font-extrabold leading-tight tracking-tight text-amber-50 antialiased [text-shadow:0_1px_3px_rgba(0,0,0,0.7),0_0_12px_rgba(251,191,36,0.15)] sm:text-xs">
-                            Профиль
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          <GameBoardPlayers
+            players={players}
+            positions={positions}
+            currentUser={currentUser}
+            currentTurnPlayer={currentTurnPlayer}
+            targetPlayer={targetPlayer}
+            targetPlayer2={targetPlayer2}
+            predictionTarget={predictionTarget}
+            predictionTarget2={predictionTarget2}
+            predictionPhase={predictionPhase}
+            predictionMade={predictionMade}
+            isSpinning={isSpinning}
+            showResult={showResult}
+            isMobile={isMobile}
+            manyPlayersOnMobile={manyPlayersOnMobile}
+            avatarFrames={avatarFrames as Record<string, string> | undefined}
+            avatarFrameMetaByPlayerId={avatarFrameMetaByPlayerId}
+            rosesGiven={rosesGiven}
+            spinSkips={spinSkips as Record<string, number> | undefined}
+            clientTabAway={clientTabAway}
+            playerInUgadaika={playerInUgadaika}
+            steamFogTick={steamFogTick}
+            avatarSteamFog={avatarSteamFog}
+            steamPuffs={steamPuffs}
+            sidebarTargetPlayer={sidebarTargetPlayer}
+            sidebarGiftMode={sidebarGiftMode}
+            dispatch={dispatch}
+            onPlayerClick={handlePlayerClick}
+            setSidebarTargetPlayer={setSidebarTargetPlayer}
+            setSidebarGiftMode={setSidebarGiftMode}
+            setGiftCatalogDrawerPlayer={setGiftCatalogDrawerPlayer}
+            getKissCountForPlayer={getKissCountForPlayer}
+            getGiftsForPlayer={getGiftsForPlayer}
+            getBigGiftSequenceForPlayer={getBigGiftSequenceForPlayer}
+            giftDisplayById={giftDisplayById}
+            roomCreatorPlayerId={roomCreatorPlayerId}
+            catalogGiftAvatarHold={catalogGiftAvatarHold}
+          />
 
           {/* ---- FLYING EMOJIS ---- */}
           {flyingEmojis.map((fe) => {
@@ -5667,23 +5493,29 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
           {/* ---- BOTTLE in the centre / pair-kiss choice card ---- */}
           {bottleShouldRender ? (
-            <div
-              ref={bottleMeasureRef}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20"
-            >
-              <div
-                style={isMobile ? { transform: "scale(1.4)" } : undefined}
-                className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
-              >
-                <Bottle
-                  angle={bottleAngle}
-                  isSpinning={isSpinning}
-                  skin={effectiveBottleSkin as any}
-                  skinImageUrl={bottleImageOnTable}
-                  isDrunk={isCurrentTurnDrunk}
-                  fortuneSegmentCount={players.length > 0 ? players.length : 8}
-                />
-              </div>
+            <div className="absolute inset-0 z-20">
+              <BottleCenter
+                measureRef={bottleMeasureRef}
+                bottleAngle={bottleAngle}
+                isSpinning={isSpinning}
+                bottleSkin={effectiveBottleSkin as any}
+                bottleImageUrl={bottleImageOnTable}
+                isDrunk={isCurrentTurnDrunk}
+                playerCount={players.length}
+                isMobile={isMobile}
+                isMyTurn={isMyTurn}
+                showResult={showResult}
+                pairKissCenterUi={pairKissCenterUi}
+                countdown={countdown}
+                turnTimer={turnTimer}
+                predictionPhase={predictionPhase}
+                predictionTimer={predictionTimer}
+                predictionMade={predictionMade}
+                predictionTarget={predictionTarget}
+                predictionTarget2={predictionTarget2}
+                casualMode={CASUAL_MODE}
+                onSpin={handleSpin}
+              />
             </div>
           ) : null}
           {!pairKissCenterUi && turnArrowVisible && turnArrowPosPx && (turnArrowAngleDegPx ?? turnArrowAngleDeg) != null && (
@@ -5899,107 +5731,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             </div>
           ) : null}
 
-          {/* ---- SPIN BUTTON in centre, over bottle ---- */}
-          {isMyTurn && !pairKissCenterUi && !isSpinning && !showResult && countdown === null && (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none">
-              <button
-                onClick={handleSpin}
-                className="pointer-events-auto flex items-center justify-center gap-2 rounded-full font-bold transition-all hover:brightness-110 hover:scale-105 active:scale-95 whitespace-nowrap shadow-lg spin-btn-pulse"
-                style={{
-                  minWidth: 78,
-                  minHeight: 78,
-                  padding: "14px 26px",
-                  fontSize: "18px",
-                  background: "linear-gradient(180deg, #22c55e 0%, #16a34a 42%, #15803d 100%)",
-                  backgroundColor: "#16a34a",
-                  color: "#fff",
-                  border: "3px solid #14532d",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 0 #14532d, 0 12px 28px rgba(0,0,0,0.55)",
-                  opacity: 1,
-                }}
-              >
-                <RotateCw className="h-6 w-6 shrink-0" strokeWidth={2.5} />
-                {"Крутить"}
-              </button>
-              {!isMobile && turnTimer !== null && (
-                <div
-                  className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2"
-                  aria-hidden
-                >
-                  <div
-                    className="flex min-w-[8.75rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1"
-                    style={{
-                      background: "rgba(15,23,42,0.9)",
-                      border: "1px solid rgba(248, 250, 252, 0.3)",
-                      boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
-                    }}
-                  >
-                    <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
-                    <span className="text-sm font-bold" style={{ color: turnTimer <= 5 ? "#f97373" : "#facc15" }}>
-                      {turnTimer}
-                    </span>
-                    <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ---- COUNTDOWN overlay ---- */}
-          {!pairKissCenterUi && countdown !== null && (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
-              <div
-                className="flex h-20 w-20 items-center justify-center rounded-full shadow-xl animate-in zoom-in duration-300"
-                style={{
-                  background: "radial-gradient(circle, #e8c06a 0%, #c4943a 100%)",
-                  boxShadow: "0 0 30px rgba(232, 192, 106, 0.5)",
-                }}
-              >
-                <span className="text-4xl font-black" style={{ color: "#0f172a" }}>{countdown}</span>
-              </div>
-            </div>
-          )}
-
-          {/* ---- PREDICTION TIMER OVERLAY on the board ---- */}
-          {!CASUAL_MODE && !pairKissCenterUi && predictionPhase && !isSpinning && !showResult && countdown === null && (
-            <div className="absolute left-1/2 top-[15%] -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 animate-in fade-in duration-300">
-              <div
-                className="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-lg"
-                style={{
-                  background: predictionTimer <= 3 ? "rgba(231, 76, 60, 0.9)" : "rgba(15, 23, 42, 0.85)",
-                  border: `1px solid ${predictionTimer <= 3 ? "#e74c3c" : "#2ecc71"}`,
-                  boxShadow: predictionTimer <= 3
-                    ? "0 0 16px rgba(231, 76, 60, 0.5)"
-                    : "0 0 12px rgba(46, 204, 113, 0.3)",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <Target className="h-4 w-4" style={{ color: predictionTimer <= 3 ? "#fff" : "#2ecc71" }} />
-                <span
-                  className="text-sm font-bold"
-                  style={{ color: predictionTimer <= 3 ? "#fff" : "#2ecc71" }}
-                >
-                  {"Угадай пару: "}{predictionTimer}{"с"}
-                </span>
-              </div>
-              {!predictionMade && !predictionTarget && (
-                <span
-                  className="text-[10px] font-medium"
-                  style={{ color: "#94a3b8", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
-                >
-                  {"Нажми на игрока"}
-                </span>
-              )}
-              {!predictionMade && predictionTarget && !predictionTarget2 && (
-                <span
-                  className="text-[10px] font-medium animate-pulse"
-                  style={{ color: "#2ecc71", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
-                >
-                  {"Выбери второго игрока"}
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
         </div>

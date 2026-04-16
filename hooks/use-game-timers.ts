@@ -7,8 +7,7 @@ import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 
 const TURN_MS = 15_000
 const RESULT_AUTO_ADVANCE_MS = 8000
-const RESULT_TICK_MS = 1000
-const TURN_TICK_MS = 250
+const TURN_TICK_MS = 500
 const STEAM_FOG_TICK_MS = 400
 const PREDICTION_DURATION = 10
 /** Небольшой запас только на тик/рендер: визуальный 0 = почти мгновенный автопасс. */
@@ -251,9 +250,7 @@ export function useGameTimers({
       startedAt: Date.now(),
     }
 
-    resultTimerRef.current = setInterval(() => {
-      // Drives re-render only for the result display
-    }, RESULT_TICK_MS)
+    resultTimerRef.current = null
 
     autoAdvanceRef.current = setTimeout(() => {
       if (!isRoundDriver()) return
@@ -423,8 +420,10 @@ export function useGameTimers({
   // --- Steam fog tick ---
   const [steamFogTick, setSteamFogTick] = useState(0)
   const [avatarSteamFog, setAvatarSteamFog] = useState<Record<string, AvatarSteamFog>>({})
+  const hasActiveSteamFog = Object.keys(avatarSteamFog).length > 0
 
   useEffect(() => {
+    if (!hasActiveSteamFog) return
     const id = window.setInterval(() => {
       setSteamFogTick((t) => t + 1)
       setAvatarSteamFog((prev) => {
@@ -441,7 +440,7 @@ export function useGameTimers({
       })
     }, STEAM_FOG_TICK_MS)
     return () => window.clearInterval(id)
-  }, [])
+  }, [hasActiveSteamFog])
 
   return {
     turnTimer,

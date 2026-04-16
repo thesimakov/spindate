@@ -13,6 +13,9 @@ export function applyTableAuthorityAction(
   snapshot: TableAuthorityPayload,
   action: GameAction,
 ): TableAuthorityPayload | null {
+  const predictions = snapshot.predictions ?? []
+  const bets = snapshot.bets ?? []
+  const pot = snapshot.pot ?? 0
   switch (action.type) {
     case "REQUEST_EXTRA_TURN":
       return { ...snapshot, extraTurnPlayerId: action.playerId }
@@ -135,6 +138,9 @@ export function applyTableAuthorityAction(
           targetPlayer2: null,
           resultAction: null,
           predictionPhase: false,
+          predictions: [],
+          bets: [],
+          pot: 0,
           extraTurnPlayerId: undefined,
           pairKissPhase: null,
         }
@@ -176,11 +182,45 @@ export function applyTableAuthorityAction(
         resultAction: null,
         bottleAngle: normAngle,
         predictionPhase: false,
+        predictions: [],
+        bets: [],
+        pot: 0,
         roundNumber: snapshot.roundNumber + 1,
         extraTurnPlayerId: undefined,
         pairKissPhase: null,
       }
     }
+    case "START_PREDICTION_PHASE":
+      return {
+        ...snapshot,
+        predictionPhase: true,
+        predictions: [],
+        bets: [],
+        pot: 0,
+      }
+    case "END_PREDICTION_PHASE":
+      return { ...snapshot, predictionPhase: false }
+    case "ADD_PREDICTION": {
+      const filtered = predictions.filter((prediction) => prediction.playerId !== action.prediction.playerId)
+      return { ...snapshot, predictions: [...filtered, action.prediction] }
+    }
+    case "CLEAR_PREDICTIONS":
+      return { ...snapshot, predictions: [] }
+    case "PLACE_BET": {
+      const filtered = bets.filter((bet) => bet.playerId !== action.bet.playerId)
+      const nextBets = [...filtered, action.bet]
+      return {
+        ...snapshot,
+        bets: nextBets,
+        pot: nextBets.reduce((sum, bet) => sum + bet.amount, 0),
+      }
+    }
+    case "CLEAR_BETS":
+      return { ...snapshot, bets: [], pot: 0 }
+    case "ADD_TO_POT":
+      return { ...snapshot, pot: pot + action.amount }
+    case "RESET_POT":
+      return { ...snapshot, pot: 0 }
     case "SET_AVATAR_FRAME": {
       const frames = { ...(snapshot.avatarFrames ?? {}) }
       if (action.frameId === "none") {
@@ -226,6 +266,10 @@ export function applyTableAuthorityAction(
         targetPlayer2: null,
         resultAction: null,
         isSpinning: false,
+        predictionPhase: false,
+        predictions: [],
+        bets: [],
+        pot: 0,
         spinStartedAtMs: null,
         pairKissPhase: null,
       }

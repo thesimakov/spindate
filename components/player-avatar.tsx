@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { memo, useEffect, useState } from "react"
 import type { Player } from "@/lib/game-types"
 import { assetUrl, FRAME_SVG, resolveFrameCatalogAssetUrl } from "@/lib/assets"
 
@@ -84,7 +84,7 @@ interface PlayerAvatarProps {
   showStatusBadge?: boolean
 }
 
-export function PlayerAvatar({
+function PlayerAvatarInner({
   player,
   isCurrentTurn = false,
   isTarget = false,
@@ -746,3 +746,5 @@ export function PlayerAvatar({
     </div>
   )
 }
+
+export const PlayerAvatar = memo(PlayerAvatarInner)

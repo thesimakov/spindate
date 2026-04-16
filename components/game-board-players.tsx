@@ -2,6 +2,7 @@
 
 import React from "react"
 import { X, Gift, User } from "lucide-react"
+import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
 import { PlayerAvatar } from "@/components/player-avatar"
 import type { Player, GameAction } from "@/lib/game-types"
 import type { AvatarSteamFog } from "@/hooks/use-game-timers"
@@ -55,6 +56,9 @@ interface GameBoardPlayersProps {
   getGiftsForPlayer: (id: number) => Array<"kiss" | "flowers" | "song" | "rose" | "diamond">
   getBigGiftSequenceForPlayer: (id: number) => string[]
   giftDisplayById?: Map<string, { emoji: string; img: string }>
+  roomCreatorPlayerId?: number | null
+  avatarFrameMetaByPlayerId?: Record<number, { border?: string; shadow?: string; svgPath?: string }>
+  catalogGiftAvatarHold?: { playerId: number; giftTypeId: string } | null
 }
 
 function GameBoardPlayersInner({
@@ -81,7 +85,7 @@ function GameBoardPlayersInner({
   avatarSteamFog,
   steamPuffs,
   sidebarTargetPlayer,
-  sidebarGiftMode,
+  sidebarGiftMode: _sidebarGiftMode,
   dispatch,
   onPlayerClick,
   setSidebarTargetPlayer,
@@ -91,6 +95,9 @@ function GameBoardPlayersInner({
   getGiftsForPlayer,
   getBigGiftSequenceForPlayer,
   giftDisplayById,
+  roomCreatorPlayerId,
+  avatarFrameMetaByPlayerId,
+  catalogGiftAvatarHold,
 }: GameBoardPlayersProps) {
   return (
     <>
@@ -98,10 +105,20 @@ function GameBoardPlayersInner({
         const pos = positions[i]
         if (!pos) return null
         const isAvatarMenuOpen = sidebarTargetPlayer?.id === player.id
+        const playerFrameId = avatarFrames?.[player.id]
+        const playerFrameMeta = avatarFrameMetaByPlayerId?.[player.id]
         const isClickableForPrediction =
           predictionPhase && !predictionMade && !isSpinning && !showResult &&
           player.id !== currentUser?.id
-        const bigGiftSequence = getBigGiftSequenceForPlayer(player.id)
+        const bigGiftSequenceRaw = getBigGiftSequenceForPlayer(player.id)
+        const bigGiftSequence =
+          catalogGiftAvatarHold?.playerId === player.id
+            ? (() => {
+                const idx = bigGiftSequenceRaw.lastIndexOf(catalogGiftAvatarHold.giftTypeId)
+                if (idx === -1) return bigGiftSequenceRaw
+                return [...bigGiftSequenceRaw.slice(0, idx), ...bigGiftSequenceRaw.slice(idx + 1)]
+              })()
+            : bigGiftSequenceRaw
         const hasRoseGiven = (rosesGiven ?? []).some((r) => r.toPlayerId === player.id)
         const giftIcons = hasRoseGiven
           ? [...getGiftsForPlayer(player.id), "rose" as const]
@@ -110,10 +127,12 @@ function GameBoardPlayersInner({
         const steamBorder = steamAvatarSize <= 52 ? 3 : 4
         const steamOuterPx = steamAvatarSize + steamBorder * 2 + 4
         const avatarMenuOpenUpward = pos.y >= 50
+        const isRoomCreator = roomCreatorPlayerId != null && player.id === roomCreatorPlayerId
         return (
           <div
             key={player.id}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 ${isAvatarMenuOpen ? "z-50" : "z-10"}`}
+            data-turn-arrow-player-id={player.id}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 ${isAvatarMenuOpen ? "z-50" : "z-10"} ${isRoomCreator ? "group" : ""}`}
             style={{
               left: `${pos.x}%`,
               top: `${pos.y}%`,
@@ -126,9 +145,11 @@ function GameBoardPlayersInner({
             onClick={() => onPlayerClick(player)}
           >
             <div className="relative inline-flex flex-col items-center">
+              {isRoomCreator ? <CreatorTableHostAura steamOuterPx={steamOuterPx} /> : null}
               <PlayerAvatar
                 player={player}
                 tableRingLayout
+                showStatusBadge
                 compact={isMobile || manyPlayersOnMobile}
                 size={manyPlayersOnMobile ? 42 : isMobile ? 52 : undefined}
                 isCurrentTurn={player.id === currentTurnPlayer?.id && !showResult}
@@ -144,7 +165,10 @@ function GameBoardPlayersInner({
                 giftIcons={giftIcons}
                 bigGiftSequence={bigGiftSequence.length > 0 ? bigGiftSequence : undefined}
                 giftDisplayById={giftDisplayById}
-                frameId={avatarFrames?.[player.id]}
+                frameId={playerFrameId}
+                frameBorder={playerFrameMeta?.border}
+                frameShadow={playerFrameMeta?.shadow}
+                frameSvgPath={playerFrameMeta?.svgPath}
                 inGame={playerInUgadaika != null && player.id === playerInUgadaika}
                 showAsleep={
                   (spinSkips?.[player.id] ?? 0) >= 3 || clientTabAway?.[player.id] === true

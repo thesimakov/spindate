@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "start:ws": "NODE_ENV=production tsx server/custom-server.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --import tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

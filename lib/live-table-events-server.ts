@@ -26,11 +26,26 @@ declare global {
   var __spindateTableEventsMemory: Map<number, TableEventsBucket> | undefined
 }
 
+const memoryEventsOpTail = new Map<number, Promise<unknown>>()
+
 function getMemoryStore(): Map<number, TableEventsBucket> {
   if (!globalThis.__spindateTableEventsMemory) {
     globalThis.__spindateTableEventsMemory = new Map<number, TableEventsBucket>()
   }
   return globalThis.__spindateTableEventsMemory
+}
+
+function runMemoryEventsOp<T>(tableId: number, op: () => Promise<T> | T): Promise<T> {
+  const prev = memoryEventsOpTail.get(tableId) ?? Promise.resolve()
+  const result = prev.then(() => op())
+  memoryEventsOpTail.set(
+    tableId,
+    result.then(
+      () => undefined,
+      () => undefined,
+    ),
+  )
+  return result
 }
 
 function eventsRedisKey(tableId: number): string {
@@ -75,6 +90,10 @@ function isActionAllowed(action: GameAction): boolean {
     case "RESET_ROUND":
     case "SET_BOTTLE_COOLDOWN_UNTIL":
     case "SET_CLIENT_TAB_AWAY":
+    case "START_PREDICTION_PHASE":
+    case "END_PREDICTION_PHASE":
+    case "ADD_PREDICTION":
+    case "PLACE_BET":
       return true
     default:
       return false
@@ -87,6 +106,18 @@ function senderMatchesActionSync(senderId: number, action: GameAction): boolean 
   }
   if (action.type === "SET_CLIENT_TAB_AWAY") {
     return senderId === action.playerId
+  }
+  if (action.type === "REQUEST_EXTRA_TURN") {
+    return senderId === action.playerId
+  }
+  if (action.type === "SET_AVATAR_FRAME") {
+    return senderId === action.playerId
+  }
+  if (action.type === "ADD_PREDICTION") {
+    return senderId === action.prediction.playerId
+  }
+  if (action.type === "PLACE_BET") {
+    return senderId === action.bet.playerId
   }
   if (action.type === "ADD_LOG") {
     const fp = action.entry?.fromPlayer
@@ -181,10 +212,13 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
       return { ok: false as const }
     }
   } else if (
+    args.action.type === "START_PREDICTION_PHASE" ||
+    args.action.type === "END_PREDICTION_PHASE" ||
     args.action.type === "START_COUNTDOWN" ||
     args.action.type === "TICK_COUNTDOWN" ||
     args.action.type === "START_SPIN" ||
-    args.action.type === "STOP_SPIN"
+    args.action.type === "STOP_SPIN" ||
+    args.action.type === "NEXT_TURN"
   ) {
     if (!(await senderCanDriveTurnLifecycleFromSnapshot(tableId, args.senderId))) {
       return { ok: false as const }
@@ -226,26 +260,28 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     return { ok: true as const, seq }
   }
 
-  const store = getMemoryStore()
-  cleanupMemory(store, now)
-  const bucket = store.get(tableId) ?? { seq: 0, updatedAt: now, events: [] }
-  bucket.seq += 1
-  bucket.updatedAt = now
-  bucket.events.push({
-    seq: bucket.seq,
-    senderId: args.senderId,
-    createdAt: now,
-    action: args.action,
+  return runMemoryEventsOp(tableId, async () => {
+    const store = getMemoryStore()
+    cleanupMemory(store, now)
+    const bucket = store.get(tableId) ?? { seq: 0, updatedAt: now, events: [] }
+    bucket.seq += 1
+    bucket.updatedAt = now
+    bucket.events.push({
+      seq: bucket.seq,
+      senderId: args.senderId,
+      createdAt: now,
+      action: args.action,
+    })
+    if (bucket.events.length > MAX_EVENTS_PER_TABLE) {
+      bucket.events = bucket.events.slice(-MAX_EVENTS_PER_TABLE)
+    }
+    store.set(tableId, bucket)
+    await ensureTableAuthority(tableId)
+    await applyAuthorityEvent(tableId, args.action)
+    scheduleVkNotificationForTableAction(args.action)
+    tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
+    return { ok: true as const, seq: bucket.seq }
   })
-  if (bucket.events.length > MAX_EVENTS_PER_TABLE) {
-    bucket.events = bucket.events.slice(-MAX_EVENTS_PER_TABLE)
-  }
-  store.set(tableId, bucket)
-  await ensureTableAuthority(tableId)
-  await applyAuthorityEvent(tableId, args.action)
-  scheduleVkNotificationForTableAction(args.action)
-  tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
-  return { ok: true as const, seq: bucket.seq }
 }
 
 export async function pullTableEvents(args: { tableId: number; sinceSeq: number }) {

@@ -51,14 +51,19 @@ const baseEnv = {
   NODE_ENV: "production",
   PORT: process.env.PORT || projectEnv.PORT || sharedEnv.PORT || "3002",
 }
+const useCustomServer = String(process.env.USE_CUSTOM_SERVER || projectEnv.USE_CUSTOM_SERVER || sharedEnv.USE_CUSTOM_SERVER || "").trim() === "1"
+const script = useCustomServer ? "node_modules/tsx/dist/cli.mjs" : "node"
+const args = useCustomServer
+  ? "server/custom-server.ts"
+  : "node_modules/next/dist/bin/next start"
 
 module.exports = {
   apps: [
     {
       name: "spindate",
       cwd: __dirname,
-      script: "node",
-      args: "node_modules/next/dist/bin/next start",
+      script,
+      args,
       instances: 1,
       exec_mode: "fork",
       kill_timeout: 5000,

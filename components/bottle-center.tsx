@@ -6,15 +6,19 @@ import { Bottle } from "@/components/bottle"
 import type { BottleSkin } from "@/lib/game-types"
 
 interface BottleCenterProps {
+  measureRef?: React.Ref<HTMLDivElement>
   bottleAngle: number
   isSpinning: boolean
   bottleSkin: BottleSkin
+  bottleImageUrl?: string
   isDrunk: boolean
   playerCount: number
   isMobile: boolean
   isMyTurn: boolean
   showResult: boolean
+  pairKissCenterUi?: boolean
   countdown: number | null
+  turnTimer?: number | null
   predictionPhase: boolean
   predictionTimer: number
   predictionMade: boolean
@@ -25,15 +29,19 @@ interface BottleCenterProps {
 }
 
 function BottleCenterInner({
+  measureRef,
   bottleAngle,
   isSpinning,
   bottleSkin,
+  bottleImageUrl,
   isDrunk,
   playerCount,
   isMobile,
   isMyTurn,
   showResult,
+  pairKissCenterUi = false,
   countdown,
+  turnTimer,
   predictionPhase,
   predictionTimer,
   predictionMade,
@@ -45,7 +53,7 @@ function BottleCenterInner({
   return (
     <>
       {/* Bottle */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+      <div ref={measureRef} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
         <div
           style={isMobile ? { transform: "scale(1.4)" } : undefined}
           className="drop-shadow-[0_0_22px_rgba(56,189,248,0.4)]"
@@ -54,6 +62,7 @@ function BottleCenterInner({
             angle={bottleAngle}
             isSpinning={isSpinning}
             skin={bottleSkin ?? "classic"}
+            skinImageUrl={bottleImageUrl}
             isDrunk={isDrunk}
             fortuneSegmentCount={playerCount > 0 ? playerCount : 8}
           />
@@ -61,7 +70,7 @@ function BottleCenterInner({
       </div>
 
       {/* Spin button */}
-      {isMyTurn && !isSpinning && !showResult && countdown === null && (
+      {isMyTurn && !pairKissCenterUi && !isSpinning && !showResult && countdown === null && (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none">
           <button
             onClick={onSpin}
@@ -82,11 +91,32 @@ function BottleCenterInner({
             <RotateCw className="h-6 w-6 shrink-0" strokeWidth={2.5} />
             {"Крутить"}
           </button>
+          {!isMobile && turnTimer !== null && (
+            <div
+              className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2"
+              aria-hidden
+            >
+              <div
+                className="flex min-w-[8.75rem] items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1"
+                style={{
+                  background: "rgba(15,23,42,0.9)",
+                  border: "1px solid rgba(248, 250, 252, 0.3)",
+                  boxShadow: "0 0 12px rgba(148, 163, 184, 0.6)",
+                }}
+              >
+                <span className="text-[11px]" style={{ color: "#e5e7eb" }}>{"Ваш ход"}</span>
+                <span className="text-sm font-bold" style={{ color: (turnTimer ?? 0) <= 5 ? "#f97373" : "#facc15" }}>
+                  {turnTimer}
+                </span>
+                <span className="text-[11px]" style={{ color: "#9ca3af" }}>{"сек"}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Countdown overlay */}
-      {countdown !== null && (
+      {!pairKissCenterUi && countdown !== null && (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
           <div
             className="flex h-20 w-20 items-center justify-center rounded-full shadow-xl animate-in zoom-in duration-300"
@@ -101,7 +131,7 @@ function BottleCenterInner({
       )}
 
       {/* Prediction timer overlay */}
-      {!casualMode && predictionPhase && !isSpinning && !showResult && countdown === null && (
+      {!casualMode && !pairKissCenterUi && predictionPhase && !isSpinning && !showResult && countdown === null && (
         <div className="absolute left-1/2 top-[15%] -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 animate-in fade-in duration-300">
           <div
             className="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-lg"

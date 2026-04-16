@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { publicUrl } from "@/lib/assets"
 import { apiFetch } from "@/lib/api-fetch"
-import { useGame } from "@/lib/game-context"
+import { useGameState } from "@/lib/game-context"
 import type { InlineToastType } from "@/hooks/use-inline-toast"
 import {
   buildVkGroupSubscribeRewardUrl,
@@ -30,7 +30,7 @@ type VkGroupNewsModalProps = {
 }
 
 export function VkGroupNewsModal({ open, onOpenChange, onNotify }: VkGroupNewsModalProps) {
-  const { state } = useGame()
+  const state = useGameState()
   const currentUser = state.currentUser
   const [busy, setBusy] = useState(false)
 

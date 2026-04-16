@@ -13,11 +13,26 @@ declare global {
   var __spindateLiveTablesMemory: LiveTablesState | undefined
 }
 
+const memoryLiveTablesOpTail = new Map<string, Promise<unknown>>()
+
 function getMemoryState(): LiveTablesState {
   if (!globalThis.__spindateLiveTablesMemory) {
     globalThis.__spindateLiveTablesMemory = createEmptyLiveTablesState()
   }
   return globalThis.__spindateLiveTablesMemory
+}
+
+function runMemoryLiveTablesOp<T>(key: string, op: () => Promise<T> | T): Promise<T> {
+  const prev = memoryLiveTablesOpTail.get(key) ?? Promise.resolve()
+  const result = prev.then(() => op())
+  memoryLiveTablesOpTail.set(
+    key,
+    result.then(
+      () => undefined,
+      () => undefined,
+    ),
+  )
+  return result
 }
 
 export async function getLiveTablesRawMemory(): Promise<string> {
@@ -30,7 +45,7 @@ export async function joinOrSyncLiveTableMemory(args: {
   requestedTableId?: number | null
   forceNew?: boolean
 }) {
-  return joinOrSyncLiveTableOnState(getMemoryState(), args)
+  return runMemoryLiveTablesOp("joinOrSync", () => joinOrSyncLiveTableOnState(getMemoryState(), args))
 }
 
 export async function joinSpecificRoomMemory(args: {
@@ -38,11 +53,11 @@ export async function joinSpecificRoomMemory(args: {
   roomId: number
   maxTableSize: number
 }) {
-  return joinSpecificRoomOnState(getMemoryState(), args)
+  return runMemoryLiveTablesOp(`room:${args.roomId}`, () => joinSpecificRoomOnState(getMemoryState(), args))
 }
 
 export async function leaveLiveTableMemory(userId: number) {
-  leaveLiveTableOnState(getMemoryState(), userId)
+  await runMemoryLiveTablesOp(`leave:${userId}`, () => leaveLiveTableOnState(getMemoryState(), userId))
 }
 
 export async function getTableInfoMemory(tableId: number) {

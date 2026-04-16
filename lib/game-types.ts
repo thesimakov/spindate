@@ -159,7 +159,14 @@ export interface TableAuthorityPayload {
   showResult: boolean
   resultAction: string | null
   roundNumber: number
+  /** Общая фаза прогнозов перед кручением. */
   predictionPhase: boolean
+  /** Прогнозы, синхронизированные между живыми клиентами за столом. */
+  predictions: Prediction[]
+  /** Ставки по парам, синхронизированные между живыми клиентами за столом. */
+  bets: Bet[]
+  /** Банк ставок текущего раунда. */
+  pot: number
   currentTurnDidSpin: boolean
   extraTurnPlayerId?: number
   /** Совпадает с GameState.playerInUgadaika — влияет на NEXT_TURN на клиенте */

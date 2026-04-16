@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useCallback, type CSSProperties } from "react"
 import { Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame } from "@/lib/game-context"
+import { useGameDispatch } from "@/lib/game-context"
 import { addToDevRegistry } from "@/lib/dev-registry"
 import {
   vkBridge,
@@ -27,7 +27,7 @@ import {
 } from "@/lib/ok-client"
 
 export function RegistrationScreen() {
-  const { dispatch } = useGame()
+  const dispatch = useGameDispatch()
   const { host: runtimeHost } = useSocialRuntime()
   const { layoutMobile: isMobile } = useGameLayoutMode()
   /** Узкая карточка по центру на всех размерах экрана */

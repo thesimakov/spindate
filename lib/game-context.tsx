@@ -124,6 +124,38 @@ const PROFILE_SHOW_VK_LS_KEY = (userId: number) => `spindate_profile_show_vk_v1_
 const PROFILE_CHAT_INVITE_LS_KEY = (userId: number) => `spindate_profile_chat_invite_v1_${userId}`
 const SOUNDS_ENABLED_KEY = "spindate_sounds_enabled"
 
+function mergePredictionsForSync(
+  local: GameState["predictions"],
+  remote: GameState["predictions"],
+  keepLocalOptimistic: boolean,
+): GameState["predictions"] {
+  if (!keepLocalOptimistic) return [...remote]
+  const byPlayerId = new Map<number, GameState["predictions"][number]>()
+  for (const prediction of remote) byPlayerId.set(prediction.playerId, prediction)
+  for (const prediction of local) {
+    if (!byPlayerId.has(prediction.playerId)) {
+      byPlayerId.set(prediction.playerId, prediction)
+    }
+  }
+  return Array.from(byPlayerId.values())
+}
+
+function mergeBetsForSync(
+  local: GameState["bets"],
+  remote: GameState["bets"],
+  keepLocalOptimistic: boolean,
+): GameState["bets"] {
+  if (!keepLocalOptimistic) return [...remote]
+  const byPlayerId = new Map<number, GameState["bets"][number]>()
+  for (const bet of remote) byPlayerId.set(bet.playerId, bet)
+  for (const bet of local) {
+    if (!byPlayerId.has(bet.playerId)) {
+      byPlayerId.set(bet.playerId, bet)
+    }
+  }
+  return Array.from(byPlayerId.values())
+}
+
 function parseAdmirersFromStorage(raw: string): Player[] {
   try {
     const data = JSON.parse(raw) as unknown
@@ -1103,7 +1135,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
 
     // ---- Prediction system ----
     case "START_PREDICTION_PHASE":
-      return { ...state, predictionPhase: true, predictions: [], bets: [] }
+      return { ...state, predictionPhase: true, predictions: [], bets: [], pot: 0 }
     case "END_PREDICTION_PHASE":
       return { ...state, predictionPhase: false }
     case "ADD_PREDICTION": {
@@ -1392,6 +1424,12 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         p.roundNumber === state.roundNumber &&
         p.currentTurnIndex === state.currentTurnIndex
       const keepLocal = isInitiator && inActivePhase && sameTurnAsServer
+      const predictionSyncWindow =
+        sameTurnAsServer &&
+        !state.isSpinning &&
+        !state.showResult &&
+        state.countdown === null &&
+        (state.predictionPhase || p.predictionPhase)
 
       const keepLocalCountdown = keepLocal && state.countdown !== null && (p.countdown === null || p.countdown >= state.countdown)
       /** Не держим локальный спин, если сервер уже сообщил isSpinning=false — иначе клиент может "залипнуть" в кручении. */
@@ -1399,6 +1437,21 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       /** Только инициатор крутит локально; иначе все должны брать bottleAngle с сервера — иначе рассинхрон. */
       const keepLocalAngle = keepLocalSpinState
       const keepLocalResult = keepLocal && state.showResult && !p.showResult
+      const mergedPredictions = mergePredictionsForSync(state.predictions, p.predictions ?? [], predictionSyncWindow)
+      const mergedBets = mergeBetsForSync(state.bets, p.bets ?? [], predictionSyncWindow)
+      const mergedPot = predictionSyncWindow
+        ? Math.max(
+            p.pot ?? 0,
+            state.pot,
+            mergedBets.reduce((sum, bet) => sum + bet.amount, 0),
+          )
+        : (p.pot ?? 0)
+      const syncedPredictionPhase =
+        keepLocalCountdown || keepLocalSpinState || keepLocalResult
+          ? state.predictionPhase
+          : predictionSyncWindow
+            ? (p.predictionPhase || state.predictionPhase)
+            : p.predictionPhase
       const localById = new Map(state.players.map((pl) => [pl.id, pl]))
       const mergedPlayers = p.players.map((pl) => {
         const prev = localById.get(pl.id)
@@ -1434,7 +1487,10 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
               ? state.pairKissPhase ?? null
               : null,
         roundNumber: p.roundNumber,
-        predictionPhase: p.predictionPhase,
+        predictionPhase: syncedPredictionPhase,
+        predictions: mergedPredictions,
+        bets: mergedBets,
+        pot: mergedPot,
         currentTurnDidSpin: p.currentTurnDidSpin,
         extraTurnPlayerId: p.extraTurnPlayerId,
         playerInUgadaika: p.playerInUgadaika ?? null,
@@ -1453,9 +1509,6 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         })(),
         admirers: syncAdmirers,
         clientTabAway: { ...(p.clientTabAway ?? {}) },
-        predictions: [],
-        bets: [],
-        pot: 0,
       }
     }
 
@@ -1468,10 +1521,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
   return protectEconomy(state, gameReducerCore(state, action), action)
 }
 
-const GameContext = createContext<{
-  state: GameState
-  dispatch: React.Dispatch<GameAction>
-} | null>(null)
+const GameStateContext = createContext<GameState | null>(null)
+const GameDispatchContext = createContext<React.Dispatch<GameAction> | null>(null)
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
@@ -1520,16 +1571,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
   ])
 
   return (
-    <GameContext.Provider value={{ state, dispatch }}>
-      {children}
-    </GameContext.Provider>
+    <GameDispatchContext.Provider value={dispatch}>
+      <GameStateContext.Provider value={state}>
+        {children}
+      </GameStateContext.Provider>
+    </GameDispatchContext.Provider>
   )
 }
 
 export function useGame() {
-  const context = useContext(GameContext)
-  if (!context) throw new Error("useGame must be used within GameProvider")
-  return context
+  const state = useGameState()
+  const dispatch = useGameDispatch()
+  return { state, dispatch }
+}
+
+export function useGameState() {
+  const state = useContext(GameStateContext)
+  if (!state) throw new Error("useGameState must be used within GameProvider")
+  return state
+}
+
+export function useGameDispatch() {
+  const dispatch = useContext(GameDispatchContext)
+  if (!dispatch) throw new Error("useGameDispatch must be used within GameProvider")
+  return dispatch
 }
 
 export function getBotResponse(): string {

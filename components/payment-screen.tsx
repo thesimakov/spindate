@@ -3,13 +3,13 @@
 import { useState } from "react"
 import { Coins, Shield, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useGame } from "@/lib/game-context"
+import { useGameDispatch } from "@/lib/game-context"
 import { useSocialRuntime } from "@/lib/social-runtime"
 import { showEmbeddedPaymentWall } from "@/lib/social-payments"
 
 export function PaymentScreen() {
   const { host: runtimeHost } = useSocialRuntime()
-  const { dispatch } = useGame()
+  const dispatch = useGameDispatch()
   const [loading, setLoading] = useState(false)
   const [connected, setConnected] = useState(false)
 

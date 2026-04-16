@@ -167,6 +167,9 @@ function computeEnsureAuthority(
     ...mergedCore,
     bottleSkin: mergedCore.bottleSkin ?? roomDefaults.bottleSkin ?? "classic",
     tableStyle: roomDefaults.tableStyle ?? prev.tableStyle ?? "classic_night",
+    predictions: mergedCore.predictions ?? prev.predictions ?? [],
+    bets: mergedCore.bets ?? prev.bets ?? [],
+    pot: mergedCore.pot ?? prev.pot ?? 0,
     revision: idsChanged ? prev.revision + 1 : prev.revision,
   }
 }

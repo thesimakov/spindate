@@ -31,6 +31,10 @@ function isTableSyncedAction(action: GameAction): boolean {
     case "RESET_ROUND":
     case "SET_BOTTLE_COOLDOWN_UNTIL":
     case "SET_CLIENT_TAB_AWAY":
+    case "START_PREDICTION_PHASE":
+    case "END_PREDICTION_PHASE":
+    case "ADD_PREDICTION":
+    case "PLACE_BET":
       return true
     default:
       return false
@@ -39,6 +43,9 @@ function isTableSyncedAction(action: GameAction): boolean {
 
 const LIVE_POLL_MS = 2500
 const AUTHORITY_POLL_MS = 650
+const LIVE_POLL_HIDDEN_MS = 6000
+const AUTHORITY_POLL_HIDDEN_MS = 5000
+const AUTHORITY_POLL_IDLE_MAX_MS = 2600
 const MAX_TABLE_SIZE = 10
 const TARGET_MALES = 5
 const TARGET_FEMALES = 5
@@ -132,9 +139,12 @@ export function useSyncEngine(): SyncEngineResult {
   const pendingSyncRef = useRef<TableAuthorityPayload | null>(null)
   const syncDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const liveSyncInFlightRef = useRef(false)
+  const pendingLiveSyncRef = useRef<{ mode: "join" | "sync"; forceNew: boolean } | null>(null)
   const authorityPollInFlightRef = useRef(false)
   /** Если запрос /table/state уже идёт — догоняющий poll запоминаем и выполняем сразу после. */
   const pendingAuthorityTableIdRef = useRef<number | null>(null)
+  const authorityStablePollCountRef = useRef(0)
+  const authorityPollMsRef = useRef(AUTHORITY_POLL_MS)
   const SYNC_DEBOUNCE_MS = 200
 
   const doApply = useCallback(
@@ -191,6 +201,9 @@ export function useSyncEngine(): SyncEngineResult {
       clearTimeout(loseSeatDebounceRef.current)
       loseSeatDebounceRef.current = null
     }
+    authorityStablePollCountRef.current = 0
+    authorityPollMsRef.current = AUTHORITY_POLL_MS
+    pendingLiveSyncRef.current = null
     setTableLiveReady(false)
     setTableAuthorityReady(false)
     setSeatConfirmed(false)
@@ -229,8 +242,19 @@ export function useSyncEngine(): SyncEngineResult {
             const data = await res.json().catch(() => null)
             if (res.ok && data?.ok && data.snapshot) {
               const snap = data.snapshot as TableAuthorityPayload
+              const changed = data.changed !== false
               if (snap.revision > lastAuthorityRevisionRef.current) {
                 applyAuthoritySnapshot(snap)
+              }
+              if (changed) {
+                authorityStablePollCountRef.current = 0
+                authorityPollMsRef.current = AUTHORITY_POLL_MS
+              } else {
+                authorityStablePollCountRef.current += 1
+                authorityPollMsRef.current = Math.min(
+                  AUTHORITY_POLL_IDLE_MAX_MS,
+                  AUTHORITY_POLL_MS + authorityStablePollCountRef.current * 250,
+                )
               }
               setTableAuthorityReady(true)
               return
@@ -243,6 +267,7 @@ export function useSyncEngine(): SyncEngineResult {
           }
         }
         // Не блокируем вход навсегла: следующий poll подтянет снимок.
+        authorityPollMsRef.current = Math.min(AUTHORITY_POLL_IDLE_MAX_MS, authorityPollMsRef.current + 400)
         setTableAuthorityReady(true)
       } finally {
         authorityPollInFlightRef.current = false
@@ -289,7 +314,14 @@ export function useSyncEngine(): SyncEngineResult {
   const syncLiveTable = useCallback(
     async (mode: "join" | "sync", forceNew = false) => {
       if (!currentUser) return null
-      if (liveSyncInFlightRef.current) return null
+      if (liveSyncInFlightRef.current) {
+        const prev = pendingLiveSyncRef.current
+        pendingLiveSyncRef.current = {
+          mode: prev?.mode === "join" || mode === "join" ? "join" : "sync",
+          forceNew: Boolean(prev?.forceNew || forceNew),
+        }
+        return null
+      }
       liveSyncInFlightRef.current = true
       const currentTableId = tableIdRef.current
       try {
@@ -390,6 +422,13 @@ export function useSyncEngine(): SyncEngineResult {
         return null
       } finally {
         liveSyncInFlightRef.current = false
+        const queued = pendingLiveSyncRef.current
+        pendingLiveSyncRef.current = null
+        if (queued) {
+          queueMicrotask(() => {
+            void syncLiveTable(queued.mode, queued.forceNew)
+          })
+        }
       }
     },
     [currentUser, composePlayersFromLive, dispatch, fetchTableAuthority, tableAuthorityReady],
@@ -404,6 +443,7 @@ export function useSyncEngine(): SyncEngineResult {
   useEffect(() => {
     if (!currentUser || tablePaused) return
     let cancelled = false
+    let timeoutId: number | null = null
 
     const tick = async () => {
       if (cancelled) return
@@ -414,10 +454,12 @@ export function useSyncEngine(): SyncEngineResult {
       } else {
         await syncLiveTable("sync")
       }
+      if (cancelled) return
+      const hidden = typeof document !== "undefined" && document.visibilityState !== "visible"
+      timeoutId = window.setTimeout(tick, hidden ? LIVE_POLL_HIDDEN_MS : LIVE_POLL_MS)
     }
 
     void tick()
-    const interval = setInterval(() => { void tick() }, LIVE_POLL_MS)
 
     const onFocus = () => { void tick() }
     const onVisibility = () => {
@@ -428,7 +470,7 @@ export function useSyncEngine(): SyncEngineResult {
 
     return () => {
       cancelled = true
-      clearInterval(interval)
+      if (timeoutId) clearTimeout(timeoutId)
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
@@ -447,14 +489,20 @@ export function useSyncEngine(): SyncEngineResult {
   useEffect(() => {
     if (!currentUser || tablePaused || !seatConfirmed) return
     let cancelled = false
+    let timeoutId: number | null = null
 
     const poll = async () => {
       if (cancelled) return
       await fetchTableAuthority(tableId)
+      if (cancelled) return
+      const hidden = typeof document !== "undefined" && document.visibilityState !== "visible"
+      const nextDelay = hidden
+        ? Math.max(authorityPollMsRef.current, AUTHORITY_POLL_HIDDEN_MS)
+        : authorityPollMsRef.current
+      timeoutId = window.setTimeout(poll, nextDelay)
     }
 
     void poll()
-    const interval = setInterval(() => { void poll() }, AUTHORITY_POLL_MS)
 
     const onFocus = () => { void poll() }
     const onVisibility = () => {
@@ -465,7 +513,7 @@ export function useSyncEngine(): SyncEngineResult {
 
     return () => {
       cancelled = true
-      clearInterval(interval)
+      if (timeoutId) clearTimeout(timeoutId)
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
     }
@@ -480,7 +528,7 @@ export function useSyncEngine(): SyncEngineResult {
     if (!currentUserId) return
     leaveSentRef.current = false
     const payload = JSON.stringify({ mode: "leave", userId: currentUserId })
-    const sendLeave = (reason: string) => {
+    const sendLeave = (_reason: string) => {
       if (leaveSentRef.current) {
         return
       }
