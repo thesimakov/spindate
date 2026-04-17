@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils"
 import { vkBridge } from "@/lib/vk-bridge"
 import { useSocialRuntime } from "@/lib/social-runtime"
 import { apiFetch } from "@/lib/api-fetch"
+import { userStatePutUrl } from "@/lib/persist-user-game-state"
 import { DEFAULT_FRAME_CATALOG_ROWS } from "@/lib/frame-catalog"
 import { DEFAULT_GIFT_CATALOG_ROWS, type GiftCatalogRow } from "@/lib/gift-catalog"
 import { useFrameCatalog } from "@/lib/use-frame-catalog"
@@ -620,10 +621,28 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       section: "free" as const,
     }
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     if (!canSaveName) return
-    dispatch({ type: "UPDATE_USER_NAME", playerId: currentUser.id, name: nameTrimmed })
-    showToast("Имя сохранено", "success")
+    const url = userStatePutUrl(currentUser)
+    if (!url) {
+      showToast("Не удалось сохранить имя", "error")
+      return
+    }
+    try {
+      const res = await apiFetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ displayName: nameTrimmed }),
+      })
+      if (!res.ok) {
+        throw new Error("save_name_failed")
+      }
+      dispatch({ type: "UPDATE_USER_NAME", playerId: currentUser.id, name: nameTrimmed })
+      showToast("Имя сохранено", "success")
+    } catch {
+      showToast("Не удалось сохранить имя", "error")
+    }
   }
 
   const saveStatus = async (nextStatus: string, successMessage = "Статус обновлен"): Promise<boolean> => {

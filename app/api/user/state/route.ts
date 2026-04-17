@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
-import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
+import { getGameUserIdFromRequest, type GameUserIdAuth } from "@/lib/user-request-auth"
 import type { UserVisualPrefs } from "@/lib/game-types"
 import { mergeVisualPrefsJson, parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 
@@ -8,6 +8,23 @@ type GameStateRow = {
   voice_balance: number
   inventory_json: string
   visual_prefs_json?: string
+}
+
+function resolveProfileUserId(db: ReturnType<typeof getDb>, auth: GameUserIdAuth): string | null {
+  if (auth.userId) return auth.userId
+  if (auth.vkUserId != null) {
+    const row = db.prepare(`SELECT id FROM users WHERE vk_user_id = ?`).get(auth.vkUserId) as
+      | { id: string }
+      | undefined
+    return row?.id ?? null
+  }
+  if (auth.okUserId != null) {
+    const row = db.prepare(`SELECT id FROM users WHERE ok_user_id = ?`).get(auth.okUserId) as
+      | { id: string }
+      | undefined
+    return row?.id ?? null
+  }
+  return null
 }
 
 export async function GET(req: Request) {
@@ -54,12 +71,12 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   const auth = getGameUserIdFromRequest(req)
-  const userId = auth?.userId ?? null
-  const vkUserId = auth?.vkUserId ?? null
-  const okUserId = auth?.okUserId ?? null
-  if (!userId && vkUserId == null && okUserId == null) {
+  if (!auth) {
     return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
   }
+  const userId = auth.userId
+  const vkUserId = auth.vkUserId
+  const okUserId = auth.okUserId
 
   const body = await req.json().catch(() => null)
   const voiceBalance = typeof body?.voiceBalance === "number" ? Math.max(0, body.voiceBalance) : undefined
@@ -75,6 +92,18 @@ export async function PUT(req: Request) {
     body?.visualPrefs != null && typeof body.visualPrefs === "object" && !Array.isArray(body.visualPrefs)
       ? (body.visualPrefs as Partial<UserVisualPrefs>)
       : undefined
+
+  let displayNameUpdate: string | undefined
+  if (body != null && "displayName" in body) {
+    if (typeof body.displayName !== "string") {
+      return NextResponse.json({ ok: false, error: "Некорректное имя" }, { status: 400 })
+    }
+    const dn = body.displayName.trim().slice(0, 16)
+    if (dn.length < 2) {
+      return NextResponse.json({ ok: false, error: "Имя: 2–16 символов" }, { status: 400 })
+    }
+    displayNameUpdate = dn
+  }
 
   const db = getDb()
   const now = Date.now()
@@ -145,6 +174,18 @@ export async function PUT(req: Request) {
        SET status = ?, updated_at = ?
        WHERE user_id = ?`,
     ).run(status, now, userId)
+  }
+
+  if (displayNameUpdate !== undefined) {
+    const profileUserId = resolveProfileUserId(db, auth)
+    if (!profileUserId) {
+      return NextResponse.json({ ok: false, error: "Профиль не найден" }, { status: 400 })
+    }
+    db.prepare(
+      `UPDATE player_profiles
+       SET display_name = ?, updated_at = ?
+       WHERE user_id = ?`,
+    ).run(displayNameUpdate, now, profileUserId)
   }
 
   return NextResponse.json({ ok: true })
