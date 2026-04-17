@@ -160,8 +160,7 @@ export function readVkIsRecommendedFromLocation(): boolean {
  */
 export const SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT = "spindate-vk-extra-hearts-notify-unlock"
 
-function notificationsEnabledFromVkPayload(payload: Record<string, unknown>): boolean | null {
-  const v = payload.vk_are_notifications_enabled
+function parseVkBooleanToggle(v: unknown): boolean | null {
   if (v === undefined || v === null) return null
   if (typeof v === "number") return v !== 0
   if (typeof v === "boolean") return v
@@ -178,27 +177,22 @@ function getVkLaunchParamsRecordFromBridgeRaw(raw: unknown): Record<string, unkn
   if (u) return u
   if (raw != null && typeof raw === "object") {
     const o = raw as Record<string, unknown>
-    if ("vk_are_notifications_enabled" in o) return o
+    if ("vk_user_id" in o || "vk_app_id" in o || "sign" in o) return o
     const d = o.data
-    if (d != null && typeof d === "object" && "vk_are_notifications_enabled" in (d as object)) {
+    if (d != null && typeof d === "object") {
       return d as Record<string, unknown>
     }
   }
   return null
 }
 
-/**
- * Включены ли уведомления от мини-приложения по параметру запуска ВК (`vk_are_notifications_enabled`).
- * Сначала читает URL, затем при необходимости — {@link VKWebAppGetLaunchParams}.
- */
-export async function readVkAreNotificationsEnabledFromVkLaunch(): Promise<boolean | null> {
-  if (typeof window === "undefined") return null
-  const fromUrl = readVkLaunchParamValue("vk_are_notifications_enabled")
-  if (fromUrl != null && fromUrl !== "") {
-    const s = fromUrl.trim().toLowerCase()
-    if (s === "0" || s === "false") return false
-    if (s === "1" || s === "true") return true
-  }
+function readVkBooleanLaunchParamFromLocation(paramName: string): boolean | null {
+  const fromUrl = readVkLaunchParamValue(paramName)
+  if (fromUrl == null || fromUrl === "") return null
+  return parseVkBooleanToggle(fromUrl)
+}
+
+async function readVkLaunchParamFromBridge(paramName: string): Promise<unknown | null> {
   const b = await getBridgeAsync()
   if (!b || !(await isVkRuntimeEnvironment())) return null
   const GET_LAUNCH_TIMEOUT_MS = 3000
@@ -210,10 +204,49 @@ export async function readVkAreNotificationsEnabledFromVkLaunch(): Promise<boole
     if (raw === "timeout") return null
     const payload = getVkLaunchParamsRecordFromBridgeRaw(raw)
     if (!payload) return null
-    return notificationsEnabledFromVkPayload(payload)
+    return payload[paramName] ?? null
   } catch {
     return null
   }
+}
+
+/**
+ * Включены ли уведомления от мини-приложения по параметру запуска ВК (`vk_are_notifications_enabled`).
+ * Сначала читает URL, затем при необходимости — {@link VKWebAppGetLaunchParams}.
+ */
+export async function readVkAreNotificationsEnabledFromVkLaunch(): Promise<boolean | null> {
+  if (typeof window === "undefined") return null
+  const fromLocation = readVkBooleanLaunchParamFromLocation("vk_are_notifications_enabled")
+  if (fromLocation != null) return fromLocation
+  return parseVkBooleanToggle(await readVkLaunchParamFromBridge("vk_are_notifications_enabled"))
+}
+
+/** Добавлено ли мини-приложение в избранное VK (`vk_is_favorite`). */
+export async function readVkIsFavoriteFromVkLaunch(): Promise<boolean | null> {
+  if (typeof window === "undefined") return null
+  const fromLocation = readVkBooleanLaunchParamFromLocation("vk_is_favorite")
+  if (fromLocation != null) return fromLocation
+  return parseVkBooleanToggle(await readVkLaunchParamFromBridge("vk_is_favorite"))
+}
+
+/** Роль пользователя в сообществе приложения (`vk_viewer_group_role`). */
+export async function readVkViewerGroupRoleFromVkLaunch(): Promise<string | null> {
+  if (typeof window === "undefined") return null
+  const fromLocation = readVkLaunchParamValue("vk_viewer_group_role")
+  if (fromLocation != null && fromLocation !== "") return fromLocation
+  const fromBridge = await readVkLaunchParamFromBridge("vk_viewer_group_role")
+  if (typeof fromBridge === "string" && fromBridge.trim() !== "") return fromBridge
+  return null
+}
+
+/** Состоит ли пользователь в сообществе приложения по `vk_viewer_group_role`. */
+export async function readVkIsCommunityMemberFromVkLaunch(): Promise<boolean | null> {
+  const role = await readVkViewerGroupRoleFromVkLaunch()
+  if (role == null) return null
+  const normalized = role.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === "none" || normalized === "not_member" || normalized === "0") return false
+  return true
 }
 
 /** Клиент VK Android — для {@link VKWebAppAddToHomeScreen} (ярлык только на Android). */
@@ -1420,6 +1453,11 @@ export const vkBridge = {
   requestVkExpand,
   requestVkAllowNotifications,
   requestVkDenyNotifications,
+  readVkAreNotificationsEnabledFromVkLaunch,
+  readVkIsFavoriteFromVkLaunch,
+  readVkViewerGroupRoleFromVkLaunch,
+  readVkIsCommunityMemberFromVkLaunch,
+  SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT,
   joinVkCommunityGroup,
   openVkUrl,
   showVkWallPostConfirm,

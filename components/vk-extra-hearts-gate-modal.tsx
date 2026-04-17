@@ -23,6 +23,8 @@ import {
 import {
   addVkAppToFavorites,
   initVkResilient,
+  readVkIsCommunityMemberFromVkLaunch,
+  readVkIsFavoriteFromVkLaunch,
   isVkRuntimeEnvironment,
   joinVkCommunityGroup,
   openVkUrl,
@@ -50,14 +52,36 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     setProgress(readVkExtraHeartsGateProgress(currentUser.id))
   }, [currentUser?.id])
 
-  const unlockNotifyRowIfNeeded = useCallback(async () => {
+  const unlockRowsIfNeeded = useCallback(async () => {
     if (!currentUser) return
     const p = readVkExtraHeartsGateProgress(currentUser.id)
-    if (!p.notify) return
     if (!(await isVkRuntimeEnvironment())) return
-    const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
-    if (enabled !== false) return
-    const next = { ...p, notify: false }
+    let changed = false
+    const next = { ...p }
+
+    if (p.notify) {
+      const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
+      if (enabled === false) {
+        next.notify = false
+        changed = true
+      }
+    }
+    if (p.fav) {
+      const favorite = await readVkIsFavoriteFromVkLaunch()
+      if (favorite === false) {
+        next.fav = false
+        changed = true
+      }
+    }
+    if (p.group) {
+      const member = await readVkIsCommunityMemberFromVkLaunch()
+      if (member === false) {
+        next.group = false
+        changed = true
+      }
+    }
+
+    if (!changed) return
     setProgress(next)
     writeVkExtraHeartsGateProgress(currentUser.id, next)
   }, [currentUser?.id])
@@ -77,13 +101,13 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
   useEffect(() => {
     if (!open || !currentUser) return
-    void unlockNotifyRowIfNeeded()
-  }, [open, currentUser?.id, unlockNotifyRowIfNeeded])
+    void unlockRowsIfNeeded()
+  }, [open, currentUser?.id, unlockRowsIfNeeded])
 
   useEffect(() => {
     if (!open || !currentUser) return
     const onRefocus = () => {
-      void unlockNotifyRowIfNeeded()
+      void unlockRowsIfNeeded()
     }
     window.addEventListener("focus", onRefocus)
     document.addEventListener("visibilitychange", onRefocus)
@@ -91,7 +115,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
       window.removeEventListener("focus", onRefocus)
       document.removeEventListener("visibilitychange", onRefocus)
     }
-  }, [open, currentUser?.id, unlockNotifyRowIfNeeded])
+  }, [open, currentUser?.id, unlockRowsIfNeeded])
 
   const completedCount = useMemo(
     () => (progress.fav ? 1 : 0) + (progress.group ? 1 : 0) + (progress.notify ? 1 : 0),

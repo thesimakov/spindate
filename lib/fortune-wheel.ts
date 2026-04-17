@@ -1,5 +1,5 @@
 /** Включить боковую панель «Колесо фортуны» и пункт в меню. */
-export const FORTUNE_WHEEL_ENABLED = true
+export const FORTUNE_WHEEL_ENABLED = false
 
 /** Стоимость одного спина за сердца (реклама — не чаще 1× в сутки, отдельно). */
 export const FORTUNE_WHEEL_SPIN_COST_HEARTS = 25
