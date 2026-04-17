@@ -46,6 +46,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
   const { toast, showToast } = useInlineToast(2200)
   const [rowBusy, setRowBusy] = useState<"fav" | "group" | "notify" | null>(null)
   const [progress, setProgress] = useState<VkExtraHeartsGateProgress>(emptyVkExtraHeartsGateProgress)
+  const [checkingStatuses, setCheckingStatuses] = useState(false)
 
   useEffect(() => {
     if (!currentUser) return
@@ -54,36 +55,47 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
   const unlockRowsIfNeeded = useCallback(async () => {
     if (!currentUser) return
+    const startedAt = Date.now()
+    setCheckingStatuses(true)
     const p = readVkExtraHeartsGateProgress(currentUser.id)
-    if (!(await isVkRuntimeEnvironment())) return
-    let changed = false
-    const next = { ...p }
+    try {
+      if (!(await isVkRuntimeEnvironment())) return
+      let changed = false
+      const next = { ...p }
 
-    if (p.notify) {
-      const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
-      if (enabled === false) {
-        next.notify = false
-        changed = true
+      if (p.notify) {
+        const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
+        if (enabled === false) {
+          next.notify = false
+          changed = true
+        }
       }
-    }
-    if (p.fav) {
-      const favorite = await readVkIsFavoriteFromVkLaunch()
-      if (favorite === false) {
-        next.fav = false
-        changed = true
+      if (p.fav) {
+        const favorite = await readVkIsFavoriteFromVkLaunch()
+        if (favorite === false) {
+          next.fav = false
+          changed = true
+        }
       }
-    }
-    if (p.group) {
-      const member = await readVkIsCommunityMemberFromVkLaunch()
-      if (member === false) {
-        next.group = false
-        changed = true
+      if (p.group) {
+        const member = await readVkIsCommunityMemberFromVkLaunch()
+        if (member === false) {
+          next.group = false
+          changed = true
+        }
       }
-    }
 
-    if (!changed) return
-    setProgress(next)
-    writeVkExtraHeartsGateProgress(currentUser.id, next)
+      if (!changed) return
+      setProgress(next)
+      writeVkExtraHeartsGateProgress(currentUser.id, next)
+    } finally {
+      const minVisibleMs = 250
+      const elapsed = Date.now() - startedAt
+      if (elapsed < minVisibleMs) {
+        await new Promise<void>((resolve) => setTimeout(resolve, minVisibleMs - elapsed))
+      }
+      setCheckingStatuses(false)
+    }
   }, [currentUser?.id])
 
   useEffect(() => {
@@ -239,6 +251,9 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                 Прогресс: {completedCount}/3
               </span>
             </div>
+            {checkingStatuses ? (
+              <p className="mt-2 text-center text-[12px] font-semibold text-slate-500">Проверка статусов...</p>
+            ) : null}
             <div className="mt-5 space-y-3">
               <TaskRow
                 label="Добавить игру в Избранное"
