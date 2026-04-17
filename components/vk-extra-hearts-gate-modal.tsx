@@ -15,7 +15,6 @@ import { persistUserGameState } from "@/lib/persist-user-game-state"
 import type { GameLogEntry } from "@/lib/game-types"
 import {
   emptyVkExtraHeartsGateProgress,
-  isVkExtraHeartsGateCompleted,
   readVkExtraHeartsGateProgress,
   VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION,
   type VkExtraHeartsGateAction,
@@ -50,16 +49,10 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     setProgress(readVkExtraHeartsGateProgress(currentUser.id))
   }, [currentUser?.id])
 
-  const allCompleted = useMemo(() => isVkExtraHeartsGateCompleted(progress), [progress])
   const completedCount = useMemo(
     () => (progress.fav ? 1 : 0) + (progress.group ? 1 : 0) + (progress.notify ? 1 : 0),
     [progress],
   )
-
-  useEffect(() => {
-    if (!open || !currentUser) return
-    if (allCompleted) onOpenChange(false)
-  }, [allCompleted, currentUser, onOpenChange, open])
 
   const grantRewardForAction = useCallback(async (
     action: VkExtraHeartsGateAction,
@@ -90,7 +83,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     })
 
     showToast(`Готово: +${VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION} ❤`, "success")
-    if (isVkExtraHeartsGateCompleted(nextProgress)) onOpenChange(false)
   }, [currentUser, dispatch, onOpenChange, progress, showToast, state.inventory, state.voiceBalance])
 
   const handleAddFavorites = useCallback(async () => {

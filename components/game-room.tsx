@@ -83,6 +83,7 @@ import { GameStatusTicker } from "@/components/game-status-ticker"
 import { TickerAnnouncementModal } from "@/components/ticker-announcement-modal"
 import { ContactUsModal } from "@/components/contact-us-modal"
 import { VkGroupNewsModal } from "@/components/vk-group-news-modal"
+import { VkExtraHeartsGateModal } from "@/components/vk-extra-hearts-gate-modal"
 import { isVkGroupBellAnimationOff, VK_GROUP_BELL_STORAGE_EVENT } from "@/lib/vk-group-news-bell"
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
@@ -1089,6 +1090,7 @@ const TABLE_STYLE_BACKGROUNDS: Record<
 
 /** Фон столешницы: дерево + брендинг (public/assets/game-table-surface.png). */
 const GAME_TABLE_SURFACE_URL = publicUrl("/assets/game-table-surface.png")
+const VK_EXTRA_HEARTS_SHOWN_SESSION_PREFIX = "spindate_vk_extra_hearts_gate_seen_v1_"
 /**
  * Режим nebula: лёгкий фиолетовый скрим поверх той же текстуры.
  * Базовый режим — только исходная композиция (без второго тёмного слоя поверх).
@@ -1442,6 +1444,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const [tickerAnnouncementOpen, setTickerAnnouncementOpen] = useState(false)
   const [contactUsOpen, setContactUsOpen] = useState(false)
   const [vkGroupNewsOpen, setVkGroupNewsOpen] = useState(false)
+  const [vkExtraHeartsOpen, setVkExtraHeartsOpen] = useState(false)
   const [vkBellIdle, setVkBellIdle] = useState(false)
   const [bankHeartPulseActive, setBankHeartPulseActive] = useState(false)
   const prevVoiceBalanceRef = useRef<number | null>(null)
@@ -1464,6 +1467,19 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       window.removeEventListener("storage", sync)
     }
   }, [])
+
+  useEffect(() => {
+    if (!currentUser || tableLoading) return
+    if (typeof window === "undefined") return
+    const key = `${VK_EXTRA_HEARTS_SHOWN_SESSION_PREFIX}${currentUser.id}`
+    try {
+      if (window.sessionStorage.getItem(key) === "1") return
+      window.sessionStorage.setItem(key, "1")
+    } catch {
+      // ignore storage errors; still show modal once for current mount
+    }
+    setVkExtraHeartsOpen(true)
+  }, [currentUser?.id, tableLoading])
 
   const isRoundDriver = useMemo(() => {
     if (!currentUser) return false
@@ -4361,6 +4377,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         }}
       />
       <VkGroupNewsModal open={vkGroupNewsOpen} onOpenChange={setVkGroupNewsOpen} onNotify={showToast} />
+      <VkExtraHeartsGateModal open={vkExtraHeartsOpen} onOpenChange={setVkExtraHeartsOpen} />
       <BankPassiveBurstOverlay burstKey={bankPassiveBurstKey} origin={bankPassiveBurstOrigin ?? undefined} />
       {tableHelloBurst != null && (
         <TableHelloScreenBurstLayer seed={tableHelloBurst.seed} burstKey={tableHelloBurst.key} />

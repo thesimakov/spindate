@@ -10,8 +10,6 @@ import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
 import { isUiTourDone, UI_TOUR_ENABLED } from "@/lib/ui-tour-storage"
 import { BetaWelcomeModal } from "@/components/beta-welcome-modal"
 import { readBetaWelcomeAcknowledged, writeBetaWelcomeAcknowledged } from "@/lib/beta-welcome-session"
-import { VkExtraHeartsGateModal } from "@/components/vk-extra-hearts-gate-modal"
-import { isVkExtraHeartsGateCompleted, readVkExtraHeartsGateProgress } from "@/lib/vk-extra-hearts-gate-constants"
 
 const WELCOME_GIFT_KEY = "spindate_welcome_gift_v1"
 
@@ -23,9 +21,6 @@ export function DailyStreakGateScreen() {
   const currentUser = state.currentUser
   const voiceBalance = state.voiceBalance ?? 0
   const inventory = state.inventory
-
-  /** После «Ежедневный бонус» — окно «Дополнительные сердечки» (VK mini app и вне VK). */
-  const [showVkExtraHeartsModal, setShowVkExtraHeartsModal] = useState(false)
 
   const [hydrated, setHydrated] = useState(false)
   /** Сдвиг после записи welcome в LS — чтобы welcomeComplete пересчитался (логин +150 ❤). */
@@ -134,10 +129,10 @@ export function DailyStreakGateScreen() {
 
   useEffect(() => {
     if (!currentUser || !hydrated || !betaWelcomeDone) return
-    if (dailyClaimedToday && !showVkExtraHeartsModal) {
+    if (dailyClaimedToday) {
       goLobby()
     }
-  }, [currentUser, hydrated, dailyClaimedToday, goLobby, betaWelcomeDone, showVkExtraHeartsModal])
+  }, [currentUser, hydrated, dailyClaimedToday, goLobby, betaWelcomeDone])
 
   useEffect(() => {
     if (!betaWelcomeDone) return
@@ -227,8 +222,6 @@ export function DailyStreakGateScreen() {
     setDailyClaimedToday(true)
     setShowWelcomeGift(false)
     setWelcomeClaimedForSession(true)
-    const extraHeartsDone = isVkExtraHeartsGateCompleted(readVkExtraHeartsGateProgress(currentUser.id))
-    setShowVkExtraHeartsModal(!extraHeartsDone)
   }, [
     dailyClaimedToday,
     dailyDay,
@@ -268,16 +261,8 @@ export function DailyStreakGateScreen() {
     )
   }
 
-  if (!hydrated || (dailyClaimedToday && !showVkExtraHeartsModal)) {
+  if (!hydrated || dailyClaimedToday) {
     return <AppLoader title="Загрузка…" subtitle="Почти готово" hint="Крути и знакомься" />
-  }
-
-  if (dailyClaimedToday && showVkExtraHeartsModal) {
-    return (
-      <div className="fixed inset-0 z-[40] bg-slate-950">
-        <VkExtraHeartsGateModal open onOpenChange={setShowVkExtraHeartsModal} />
-      </div>
-    )
   }
 
   return (
