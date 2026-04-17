@@ -1421,6 +1421,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   useEffect(() => {
     isSpinningRef.current = isSpinning
   }, [isSpinning])
+  /** Чуть дольше CSS transition бутылки (6s), чтобы finalize не опережал анимацию. */
+  const SPIN_RESOLVE_AFTER_MS = 6500
+  const SPIN_HANG_FAILSAFE_MS = 20_000
+
   const spinResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinSessionRef = useRef<string>("")
   const spinStartedTurnKeyRef = useRef<string>("")
@@ -2822,12 +2826,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       pot,
       tableId,
     }
-    spinResolveDeadlineRef.current = Date.now() + 6000
+    spinResolveDeadlineRef.current = Date.now() + SPIN_RESOLVE_AFTER_MS
     spinResolveTimeoutRef.current = setTimeout(() => {
       const meta = spinResolveMetaRef.current
       if (!meta || meta.spinSessionKey !== spinSessionKey) return
       finalizeSpinFromMeta(meta)
-    }, 6000)
+    }, SPIN_RESOLVE_AFTER_MS)
      
   }, [players, currentTurnPlayer, dispatch, predictions, bets, pot, bottleAngle, tableId, roundNumber, currentTurnIndex, isSpinning, showToast, finalizeSpinFromMeta])
 
@@ -2908,7 +2912,19 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
   }, [isSpinning, finalizeSpinFromMeta])
 
-  // Watchdog: если крутилка зависла >12 с — один координатор завершает спин и переводит в pair-kiss (fallback — NEXT_TURN).
+  /** Любой клиент: если meta так и не отработала (например не координатор), добить finalize после долгого спина. */
+  useEffect(() => {
+    if (!isSpinning) return
+    const id = window.setTimeout(() => {
+      if (!isSpinningRef.current) return
+      const meta = spinResolveMetaRef.current
+      if (!meta || spinSessionRef.current !== meta.spinSessionKey) return
+      finalizeSpinFromMeta(meta)
+    }, SPIN_HANG_FAILSAFE_MS)
+    return () => clearTimeout(id)
+  }, [isSpinning, tableId, roundNumber, currentTurnIndex, finalizeSpinFromMeta])
+
+  // Watchdog: если крутилка зависла >14 с — один координатор завершает спин и переводит в pair-kiss (fallback — NEXT_TURN).
   useEffect(() => {
     if (!isSpinning) return
     if (!currentUser || players.length === 0) return
@@ -2929,7 +2945,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         return
       }
       dispatch({ type: "NEXT_TURN" })
-    }, 12_000)
+    }, 14_000)
     return () => clearTimeout(watchdog)
   }, [isSpinning, dispatch, currentUser?.id, tablePlayerIdsKey, currentTurnPlayer, targetPlayer, tableId, roundNumber, currentTurnIndex])
 

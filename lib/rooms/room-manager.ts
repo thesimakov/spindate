@@ -1,7 +1,11 @@
 import type { LivePlayer } from "@/lib/live-tables-core"
 import type { Player } from "@/lib/game-types"
 import { joinSpecificRoom, leaveLiveTable, getTableInfo } from "@/lib/live-tables-server"
-import { ensureTableAuthority, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
+import {
+  ensureTableAuthority,
+  getTableAuthoritySnapshot,
+  type TableAuthorityEnsureOptions,
+} from "@/lib/table-authority-server"
 import { createPublicRoom, isRoomDisabledForJoin, loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { roomNameForDisplay } from "@/lib/rooms/room-names"
 import type { LobbyRoomRow, RoomMeta, RoomStatePayload } from "@/lib/rooms/types"
@@ -23,14 +27,18 @@ export type EnterRoomResult =
 export class RoomManager {
   constructor(private readonly queue: QueueManager) {}
 
-  private async tryJoinRoomId(live: LivePlayer, roomId: number): Promise<{ ok: boolean; tablesCount: number }> {
+  private async tryJoinRoomId(
+    live: LivePlayer,
+    roomId: number,
+    ensureOpts?: TableAuthorityEnsureOptions,
+  ): Promise<{ ok: boolean; tablesCount: number }> {
     const joined = await joinSpecificRoom({
       player: live,
       roomId,
       maxTableSize: ROOM_MAX_PLAYERS,
     })
     if (!joined.ok) return { ok: false, tablesCount: 0 }
-    await ensureTableAuthority(roomId)
+    await ensureTableAuthority(roomId, ensureOpts)
     return { ok: true, tablesCount: joined.tablesCount }
   }
 
@@ -107,7 +115,11 @@ export class RoomManager {
    * Вход в комнату: только в выбранную комнату.
    * При переполнении — очередь в эту же комнату, без редиректов на другие столы.
    */
-  async tryEnterRoom(player: Player, requestedRoomId: number): Promise<EnterRoomResult> {
+  async tryEnterRoom(
+    player: Player,
+    requestedRoomId: number,
+    opts?: TableAuthorityEnsureOptions,
+  ): Promise<EnterRoomResult> {
     const live = toLivePlayer({ ...player, isBot: false })
     const reg = await loadRoomRegistry()
     const requestedMeta = reg.rooms.find((r) => r.roomId === requestedRoomId)
@@ -121,7 +133,7 @@ export class RoomManager {
     }
 
     if (requestedMeta?.isUserRoom === true) {
-      const first = await this.tryJoinRoomId(live, requestedRoomId)
+      const first = await this.tryJoinRoomId(live, requestedRoomId, opts)
       if (first.ok) {
         await this.queue.remove(live.id)
         return { kind: "joined", roomId: requestedRoomId, tablesCount: first.tablesCount }
@@ -132,13 +144,13 @@ export class RoomManager {
     }
 
     const targetRoomId = await this.resolvePublicRoomJoinTarget(requestedRoomId, reg)
-    const joined = await this.tryJoinRoomId(live, targetRoomId)
+    const joined = await this.tryJoinRoomId(live, targetRoomId, opts)
     if (joined.ok) {
       await this.queue.remove(live.id)
       return { kind: "joined", roomId: targetRoomId, tablesCount: joined.tablesCount }
     }
     const fallbackCreated = await createPublicRoom()
-    const fallback = await this.tryJoinRoomId(live, fallbackCreated.roomId)
+    const fallback = await this.tryJoinRoomId(live, fallbackCreated.roomId, opts)
     if (fallback.ok) {
       await this.queue.remove(live.id)
       return { kind: "joined", roomId: fallbackCreated.roomId, tablesCount: fallback.tablesCount }

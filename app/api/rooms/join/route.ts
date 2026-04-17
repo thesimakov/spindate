@@ -46,6 +46,7 @@ export async function POST(req: Request) {
   if (!Number.isInteger(roomId) || roomId <= 0) {
     return NextResponse.json({ ok: false, error: "Некорректная комната" }, { status: 400, headers: NO_CACHE })
   }
+  const forceReshuffleBots = body?.forceReshuffleBots === true
   const regBeforeJoin = await loadRoomRegistry()
   if (!regBeforeJoin.rooms.some((r) => r.roomId === roomId)) {
     return NextResponse.json({ ok: false, error: "Комната не активна (TTL 24ч)" }, { status: 410, headers: NO_CACHE })
@@ -59,7 +60,11 @@ export async function POST(req: Request) {
   }
 
   const { rooms } = getRoomServices()
-  const result = await rooms.tryEnterRoom(player, roomId)
+  const result = await rooms.tryEnterRoom(
+    player,
+    roomId,
+    forceReshuffleBots ? { forceReshuffleBots: true } : undefined,
+  )
   if (result.kind === "disabled") {
     return NextResponse.json(
       { ok: false, error: "Стол отключён модератором" },

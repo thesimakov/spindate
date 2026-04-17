@@ -132,20 +132,37 @@ function stabilizeAuthoritySnapshot(
   return { snapshot: next, changed }
 }
 
+/** Опции только для ensureTableAuthority (не хранятся в снимке). */
+export type TableAuthorityEnsureOptions = {
+  /** Пересобрать набор ботов с нуля (лобби «Играть»). Не применяется во время спина/результата/отсчёта. */
+  forceReshuffleBots?: boolean
+}
+
 function computeEnsureAuthority(
   prev: TableAuthorityPayload | null,
   info: { livePlayers: Player[]; maxTableSize: number },
   tid: number,
   roomDefaults: { bottleSkin: TableAuthorityPayload["bottleSkin"]; tableStyle: TableAuthorityPayload["tableStyle"] },
+  options?: TableAuthorityEnsureOptions,
 ): TableAuthorityPayload | null {
   const anchor: Player = { ...info.livePlayers[0], isBot: false }
   const { males, females } = targetsForTable(info.maxTableSize)
   const bots = generateBots(220, anchor.gender)
 
+  const inActiveGameplay =
+    prev != null &&
+    (prev.isSpinning ||
+      prev.showResult ||
+      (prev.countdown != null && prev.countdown > 0) ||
+      (prev.pairKissPhase != null && !prev.pairKissPhase.resolved))
+  const useFreshBots =
+    options?.forceReshuffleBots === true && prev != null && !inActiveGameplay
+  const existingPlayers = useFreshBots ? [] : (prev?.players ?? [])
+
   const composed = composeTablePlayers({
     currentUser: anchor,
     livePlayers: info.livePlayers.map((p) => ({ ...p, isBot: false })),
-    existingPlayers: prev?.players ?? [],
+    existingPlayers,
     maxTableSize: info.maxTableSize,
     targetMales: males,
     targetFemales: females,
@@ -177,7 +194,10 @@ function computeEnsureAuthority(
 /**
  * Инициализация/обновление авторитетного состояния при изменении живых игроков.
  */
-export async function ensureTableAuthority(tableId: number): Promise<TableAuthorityPayload | null> {
+export async function ensureTableAuthority(
+  tableId: number,
+  ensureOptions?: TableAuthorityEnsureOptions,
+): Promise<TableAuthorityPayload | null> {
   const tid = Math.floor(tableId)
   if (!Number.isInteger(tid) || tid <= 0) return null
   const info = await getTableInfo(tid)
@@ -196,7 +216,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
     let out: TableAuthorityPayload | null = null
     await readModifyWriteKey(redis, key, (raw) => {
       const prev = raw ? (JSON.parse(raw) as TableAuthorityPayload) : null
-      const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
+      const next = computeEnsureAuthority(prev, info, tid, roomDefaults, ensureOptions)
       if (!next) {
         out = null
         return null
@@ -211,7 +231,7 @@ export async function ensureTableAuthority(tableId: number): Promise<TableAuthor
   return runMemoryAuthorityOp(tid, async () => {
     const store = getMemoryStore()
     const prev = store.get(tid) ?? null
-    const next = computeEnsureAuthority(prev, info, tid, roomDefaults)
+    const next = computeEnsureAuthority(prev, info, tid, roomDefaults, ensureOptions)
     if (!next) return null
     const stabilized = stabilizeAuthoritySnapshot(next, tid)
     const out = stabilized.changed ? { ...stabilized.snapshot, revision: next.revision + 1 } : stabilized.snapshot

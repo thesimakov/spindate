@@ -433,7 +433,7 @@ export function RoomLobbyScreen() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ roomId: waitingRoomId, user }),
+          body: JSON.stringify({ roomId: waitingRoomId, user, forceReshuffleBots: true }),
         })
         const data = await res.json().catch(() => null)
         if (cancelled) return
@@ -481,7 +481,7 @@ export function RoomLobbyScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ roomId, user }),
+        body: JSON.stringify({ roomId, user, forceReshuffleBots: true }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) {
