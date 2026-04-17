@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
-import { vkGroupsIsMember } from "@/lib/vk-groups-server"
+import { isVkGroupMembersListAccessDenied, vkGroupsIsMember } from "@/lib/vk-groups-server"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 import { VK_GROUP_SUBSCRIBE_BONUS_HEARTS } from "@/lib/vk-group-subscribe-constants"
 
@@ -56,6 +56,17 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "Сервер не настроен для проверки подписки", reason: memberCheck.reason },
         { status: 503, headers: NO_CACHE },
+      )
+    }
+    if (isVkGroupMembersListAccessDenied(memberCheck)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Серверная проверка ВК недоступна для этого сообщества",
+          reason: "vk_group_members_access_denied",
+          detail: memberCheck.reason,
+        },
+        { status: 200, headers: NO_CACHE },
       )
     }
     return NextResponse.json(

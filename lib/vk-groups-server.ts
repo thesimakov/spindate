@@ -19,6 +19,19 @@ export type VkGroupsIsMemberResult =
   | { ok: false; reason: string; vkError?: unknown }
 
 /**
+ * VK отклоняет groups.isMember сервисным ключом: нет права на список участников / настройки сообщества.
+ * Тогда проверку подписки нужно делать на клиенте (vk_viewer_group_role) или выдать приложению доступ в настройках ВК.
+ */
+export function isVkGroupMembersListAccessDenied(failed: Extract<VkGroupsIsMemberResult, { ok: false }>): boolean {
+  const msg = (failed.reason || "").toLowerCase()
+  if (msg.includes("access to group denied") || msg.includes("group members is denied")) return true
+  const vkErr = failed.vkError as { error_msg?: string } | undefined
+  const em = (vkErr?.error_msg ?? "").toLowerCase()
+  if (em.includes("access to group denied") || em.includes("group members is denied")) return true
+  return false
+}
+
+/**
  * Один запрос groups.isMember без ретраев — для массовых проверок в админке
  * (между вызовами нужна пауза, иначе VK error 6).
  */

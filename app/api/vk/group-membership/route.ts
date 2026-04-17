@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
-import { vkGroupsIsMember } from "@/lib/vk-groups-server"
+import { isVkGroupMembersListAccessDenied, vkGroupsIsMember } from "@/lib/vk-groups-server"
 
 const COMMUNITY_GROUP_ID = 236519647
 const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
@@ -44,6 +44,18 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "Сервер не настроен для проверки подписки", reason: memberCheck.reason },
         { status: 503, headers: NO_CACHE },
+      )
+    }
+    /** Не 502: клиент использует fallback (vk_viewer_group_role), иначе в Network красный статус без пользы. */
+    if (isVkGroupMembersListAccessDenied(memberCheck)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Серверная проверка ВК недоступна для этого сообщества",
+          reason: "vk_group_members_access_denied",
+          detail: memberCheck.reason,
+        },
+        { status: 200, headers: NO_CACHE },
       )
     }
     return NextResponse.json(
