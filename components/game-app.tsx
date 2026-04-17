@@ -20,7 +20,6 @@ const AUTO_ERROR_THROTTLE_MS = 25_000
 const RegistrationScreen = dynamic(() => import("@/components/registration-screen").then((m) => m.RegistrationScreen))
 const RoomLobbyScreen = dynamic(() => import("@/components/room-lobby-screen").then((m) => m.RoomLobbyScreen))
 const DailyStreakGateScreen = dynamic(() => import("@/components/daily-streak-gate-screen").then((m) => m.DailyStreakGateScreen))
-const UiTourScreen = dynamic(() => import("@/components/ui-tour-screen").then((m) => m.UiTourScreen))
 const GameRoom = dynamic(() => import("@/components/game-room").then((m) => m.GameRoom))
 const ChatScreen = dynamic(() => import("@/components/chat-screen").then((m) => m.ChatScreen))
 const FavoritesScreen = dynamic(() => import("@/components/favorites-screen").then((m) => m.FavoritesScreen))
@@ -210,8 +209,7 @@ export function GameApp() {
     if (
       (state.screen !== "game" &&
         state.screen !== "lobby" &&
-        state.screen !== "daily-streak" &&
-        state.screen !== "ui-tour") ||
+        state.screen !== "daily-streak") ||
       !state.currentUser
     ) {
       setBlockStatus(null)
@@ -262,7 +260,7 @@ export function GameApp() {
   }
 
   if (
-    (state.screen === "game" || state.screen === "ui-tour") &&
+    state.screen === "game" &&
     state.currentUser &&
     blockStatus
   ) {
@@ -312,8 +310,6 @@ export function GameApp() {
       return <RegistrationScreen />
     case "daily-streak":
       return <DailyStreakGateScreen />
-    case "ui-tour":
-      return <UiTourScreen />
     case "lobby":
       return <RoomLobbyScreen />
     case "game":

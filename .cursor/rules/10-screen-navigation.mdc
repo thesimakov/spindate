@@ -12,7 +12,6 @@ alwaysApply: false
 |--------|-----------|----------|
 | registration | RegistrationScreen | Вход / регистрация |
 | daily-streak | DailyStreakGateScreen | После входа: приветственный подарок / ежедневная серия |
-| ui-tour | UiTourScreen | Первый вход: пошаговое обучение интерфейсу, затем лобби |
 | lobby | RoomLobbyScreen | Выбор комнаты / создание стола |
 | game | GameRoom + панели | Основной стол |
 | chat | ChatScreen | Личный чат (legacy) |

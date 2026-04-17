@@ -7,7 +7,6 @@ import { computeNextStreakDay, getDailyStreakReward } from "@/lib/daily-streak-r
 import { AppLoader } from "@/components/app-loader"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
 import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
-import { isUiTourDone, UI_TOUR_ENABLED } from "@/lib/ui-tour-storage"
 import { BetaWelcomeModal } from "@/components/beta-welcome-modal"
 import { readBetaWelcomeAcknowledged, writeBetaWelcomeAcknowledged } from "@/lib/beta-welcome-session"
 
@@ -114,12 +113,8 @@ export function DailyStreakGateScreen() {
   }, [currentUser, dailyBonusTodayKey, dailyBonusYesterdayKey, welcomeClaimedForSession, welcomeLsBump])
 
   const goLobby = useCallback(() => {
-    if (UI_TOUR_ENABLED && currentUser && !isUiTourDone(currentUser.id)) {
-      dispatch({ type: "SET_SCREEN", screen: "ui-tour" })
-    } else {
-      dispatch({ type: "SET_SCREEN", screen: "lobby" })
-    }
-  }, [currentUser, dispatch])
+    dispatch({ type: "SET_SCREEN", screen: "lobby" })
+  }, [dispatch])
 
   useEffect(() => {
     if (!currentUser) {
