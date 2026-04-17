@@ -1882,7 +1882,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         shareBusy={giftAchievementShareBusy}
         onClose={() => {
           // #region agent log
-          fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+          process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
             body: JSON.stringify({

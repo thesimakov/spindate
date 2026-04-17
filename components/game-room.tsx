@@ -3255,13 +3255,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (coordinatorId == null || currentUser.id !== coordinatorId) return
     if (pairKissAdvanceRef.current === key) return
     // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Scheduling NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,choiceA:pairKissPhase.choiceA,choiceB:pairKissPhase.choiceB,outcome:pairKissPhase.outcome,delayMs:PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS,coordinatorId,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
+    process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Scheduling NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,choiceA:pairKissPhase.choiceA,choiceB:pairKissPhase.choiceB,outcome:pairKissPhase.outcome,delayMs:PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS,coordinatorId,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     const t = window.setTimeout(() => {
       if (pairKissAdvanceRef.current === key) return
       pairKissAdvanceRef.current = key
       // #region agent log
-      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Dispatching NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,outcome:pairKissPhase.outcome,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
+      process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Dispatching NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,outcome:pairKissPhase.outcome,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       dispatch({ type: "NEXT_TURN" })
     }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
@@ -3490,7 +3490,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       imgSrcRaw?: string,
     ) => {
       // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
         body: JSON.stringify({
@@ -3513,7 +3513,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       const surface = tableSurfaceRef.current
       if (!buttonEl || !surface) {
         // #region agent log
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
           body: JSON.stringify({
@@ -3533,7 +3533,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       const to = avatarWrap?.getBoundingClientRect()
       if (!to || from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) {
         // #region agent log
-        fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+        process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
           body: JSON.stringify({
@@ -3566,7 +3566,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         { id, recipientPlayerId, giftTypeId, emoji, imgSrc, startX, startY, endX, endY },
       ])
       // #region agent log
-      fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+      process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
         body: JSON.stringify({
@@ -3828,18 +3828,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         prev.roundKey !== pairKissPhase.roundKey || prev.resolved !== pairKissPhase.resolved
       if (shouldLogSnapshot) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase snapshot',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,resolved:pairKissPhase.resolved,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
+        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase snapshot',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,resolved:pairKissPhase.resolved,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
       }
       if (!pairKissCenterUi && prev.uiHiddenLoggedForRoundKey !== pairKissPhase.roundKey) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H7',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase exists but center UI hidden',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,playerCount:players.length,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
+        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H7',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase exists but center UI hidden',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,playerCount:players.length,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
         prev.uiHiddenLoggedForRoundKey = pairKissPhase.roundKey
       }
       if (showMobileEmotionStrip && prev.stripOverlapLoggedForRoundKey !== pairKissPhase.roundKey) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H8',location:'components/game-room.tsx:pair-kiss-transition',message:'Emotion strip visible while pair kiss phase active',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null,showResult},timestamp:Date.now()})}).catch(()=>{});
+        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H8',location:'components/game-room.tsx:pair-kiss-transition',message:'Emotion strip visible while pair kiss phase active',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null,showResult},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
         prev.stripOverlapLoggedForRoundKey = pairKissPhase.roundKey
       }
@@ -3850,7 +3850,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
     if (showResult && prev.dropCandidateRoundKey) {
       // #region agent log
-      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase dropped while result is active',data:{roundNumber,currentTurnIndex,droppedRoundKey:prev.dropCandidateRoundKey,showResult,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null},timestamp:Date.now()})}).catch(()=>{});
+      process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase dropped while result is active',data:{roundNumber,currentTurnIndex,droppedRoundKey:prev.dropCandidateRoundKey,showResult,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       prev.dropCandidateRoundKey = null
     }
@@ -4316,7 +4316,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         shareBusy={giftAchievementShareBusy}
         onClose={() => {
           // #region agent log
-          fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
+          process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
             body: JSON.stringify({

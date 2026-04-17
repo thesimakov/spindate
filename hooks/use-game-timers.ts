@@ -245,7 +245,7 @@ export function useGameTimers({
       return
     }
     // #region agent log
-    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H1',location:'hooks/use-game-timers.ts:243',message:'Scheduling result auto-advance',data:{showResult,tableLoading,pairKissCenterUi,roundNumber,currentTurnIndex},timestamp:Date.now()})}).catch(()=>{});
+    process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H1',location:'hooks/use-game-timers.ts:243',message:'Scheduling result auto-advance',data:{showResult,tableLoading,pairKissCenterUi,roundNumber,currentTurnIndex},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
 
     resultGuardRef.current = {
@@ -257,7 +257,7 @@ export function useGameTimers({
 
     autoAdvanceRef.current = setTimeout(() => {
       // #region agent log
-      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H1',location:'hooks/use-game-timers.ts:258',message:'Result auto-advance fired',data:{showResult:showResultRef.current,pairKissCenterUi:pairKissCenterUiRef.current,roundNumber,currentTurnIndex,isRoundDriver:isRoundDriver()},timestamp:Date.now()})}).catch(()=>{});
+      process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H1',location:'hooks/use-game-timers.ts:258',message:'Result auto-advance fired',data:{showResult:showResultRef.current,pairKissCenterUi:pairKissCenterUiRef.current,roundNumber,currentTurnIndex,isRoundDriver:isRoundDriver()},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       if (!isRoundDriver()) return
       dispatch({ type: "NEXT_TURN" })

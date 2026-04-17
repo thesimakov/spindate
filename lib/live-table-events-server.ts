@@ -71,7 +71,7 @@ function cleanupMemory(store: Map<number, TableEventsBucket>, now: number) {
 
 function emitDebugLog(message: string, data: Record<string, unknown>) {
   // #region agent log
-  fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H12',location:'lib/live-table-events-server.ts:pushTableEvent',message,data,timestamp:Date.now()})}).catch(()=>{});
+  process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H12',location:'lib/live-table-events-server.ts:pushTableEvent',message,data,timestamp:Date.now()})}).catch(()=>{});
   // #endregion
 }
 

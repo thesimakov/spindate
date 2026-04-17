@@ -820,7 +820,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
     case "NEXT_TURN": {
       if (state.pairKissPhase) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'lib/game-context.tsx:NEXT_TURN',message:'Reducer NEXT_TURN with existing pair kiss phase',data:{roundNumber:state.roundNumber,currentTurnIndex:state.currentTurnIndex,showResult:state.showResult,pairRoundKey:state.pairKissPhase.roundKey,choiceA:state.pairKissPhase.choiceA,choiceB:state.pairKissPhase.choiceB,resolved:state.pairKissPhase.resolved,outcome:state.pairKissPhase.outcome ?? null},timestamp:Date.now()})}).catch(()=>{});
+        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'lib/game-context.tsx:NEXT_TURN',message:'Reducer NEXT_TURN with existing pair kiss phase',data:{roundNumber:state.roundNumber,currentTurnIndex:state.currentTurnIndex,showResult:state.showResult,pairRoundKey:state.pairKissPhase.roundKey,choiceA:state.pairKissPhase.choiceA,choiceB:state.pairKissPhase.choiceB,resolved:state.pairKissPhase.resolved,outcome:state.pairKissPhase.outcome ?? null},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
       }
       if (state.players.length === 0) {
@@ -1452,7 +1452,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         p.showResult
       if (keepLocalPairKiss && localPairKissPhase) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H2_FIX',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Keeping local unresolved pair kiss until server catches up',data:{localRoundKey:localPairKissPhase.roundKey,sameTurnAsServer,showResultLocal:state.showResult,showResultServer:p.showResult},timestamp:Date.now()})}).catch(()=>{});
+        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H2_FIX',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Keeping local unresolved pair kiss until server catches up',data:{localRoundKey:localPairKissPhase.roundKey,sameTurnAsServer,showResultLocal:state.showResult,showResultServer:p.showResult},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
       }
       if (
@@ -1463,7 +1463,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         !keepLocalPairKiss
       ) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H2',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Sync drops unresolved pair kiss phase',data:{localRoundKey:state.pairKissPhase.roundKey,localResolved:state.pairKissPhase.resolved,serverHasPairKiss:!!p.pairKissPhase,keepLocalResult,showResultLocal:state.showResult,showResultServer:p.showResult,sameTurnAsServer,roundNumberLocal:state.roundNumber,roundNumberServer:p.roundNumber,currentTurnIndexLocal:state.currentTurnIndex,currentTurnIndexServer:p.currentTurnIndex},timestamp:Date.now()})}).catch(()=>{});
+        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H2',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Sync drops unresolved pair kiss phase',data:{localRoundKey:state.pairKissPhase.roundKey,localResolved:state.pairKissPhase.resolved,serverHasPairKiss:!!p.pairKissPhase,keepLocalResult,showResultLocal:state.showResult,showResultServer:p.showResult,sameTurnAsServer,roundNumberLocal:state.roundNumber,roundNumberServer:p.roundNumber,currentTurnIndexLocal:state.currentTurnIndex,currentTurnIndexServer:p.currentTurnIndex},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
       }
       const mergedPredictions = mergePredictionsForSync(state.predictions, p.predictions ?? [], predictionSyncWindow)
