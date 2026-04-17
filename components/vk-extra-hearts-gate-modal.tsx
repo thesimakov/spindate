@@ -46,7 +46,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
   const { toast, showToast } = useInlineToast(2200)
   const [rowBusy, setRowBusy] = useState<"fav" | "group" | "notify" | null>(null)
   const [progress, setProgress] = useState<VkExtraHeartsGateProgress>(emptyVkExtraHeartsGateProgress)
-  const [checkingStatuses, setCheckingStatuses] = useState(false)
   const [groupMembership, setGroupMembership] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -99,54 +98,43 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
   const unlockRowsIfNeeded = useCallback(async () => {
     if (!currentUser) return
-    const startedAt = Date.now()
-    setCheckingStatuses(true)
     const p = readVkExtraHeartsGateProgress(currentUser.id)
-    try {
-      let changed = false
-      const next = { ...p }
+    let changed = false
+    const next = { ...p }
 
-      const groupCheck = await checkVkGroupMembership()
-      setGroupMembership(groupCheck.member)
-      if (p.group && groupCheck.member === false) {
-        next.group = false
+    const groupCheck = await checkVkGroupMembership()
+    setGroupMembership(groupCheck.member)
+    if (p.group && groupCheck.member === false) {
+      next.group = false
+      changed = true
+    }
+
+    const runtime = await isVkRuntimeEnvironment()
+    if (!runtime) {
+      if (changed) {
+        setProgress(next)
+        writeVkExtraHeartsGateProgress(currentUser.id, next)
+      }
+      return
+    }
+
+    if (p.notify) {
+      const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
+      if (enabled === false) {
+        next.notify = false
         changed = true
       }
-
-      const runtime = await isVkRuntimeEnvironment()
-      if (!runtime) {
-        if (changed) {
-          setProgress(next)
-          writeVkExtraHeartsGateProgress(currentUser.id, next)
-        }
-        return
-      }
-
-      if (p.notify) {
-        const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
-        if (enabled === false) {
-          next.notify = false
-          changed = true
-        }
-      }
-      if (p.fav) {
-        const favorite = await readVkIsFavoriteFromVkLaunch()
-        if (favorite === false) {
-          next.fav = false
-          changed = true
-        }
-      }
-      if (!changed) return
-      setProgress(next)
-      writeVkExtraHeartsGateProgress(currentUser.id, next)
-    } finally {
-      const minVisibleMs = 250
-      const elapsed = Date.now() - startedAt
-      if (elapsed < minVisibleMs) {
-        await new Promise<void>((resolve) => setTimeout(resolve, minVisibleMs - elapsed))
-      }
-      setCheckingStatuses(false)
     }
+    if (p.fav) {
+      const favorite = await readVkIsFavoriteFromVkLaunch()
+      if (favorite === false) {
+        next.fav = false
+        changed = true
+      }
+    }
+    if (!changed) return
+    setProgress(next)
+    writeVkExtraHeartsGateProgress(currentUser.id, next)
   }, [currentUser?.id, checkVkGroupMembership])
 
   useEffect(() => {
@@ -324,9 +312,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                 Прогресс: {completedCount}/3
               </span>
             </div>
-            {checkingStatuses ? (
-              <p className="mt-2 text-center text-[12px] font-semibold text-slate-500">Проверка статусов...</p>
-            ) : null}
             <div className="mt-5 space-y-3">
               <TaskRow
                 label="Добавить игру в Избранное"
@@ -342,17 +327,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                 busy={rowBusy === "group"}
                 done={groupTaskDone}
                 disabled={groupTaskDone || (rowBusy !== null && rowBusy !== "group")}
-                statusText={
-                  groupNeedsResubscribe
-                    ? "Статус: не подписан"
-                    : groupTaskDone
-                      ? "Награда получена"
-                      : groupMembership === true
-                      ? "Статус: подписан, можно забрать награду"
-                      : groupMembership === false
-                        ? "Статус: не подписан"
-                        : undefined
-                }
                 onClick={() => void handleJoinGroup()}
               />
               <TaskRow
