@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic"
 
 const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
 const VK_COMMUNITY_GROUP_ID = 236519647
-const VK_MEMBERSHIP_CHECK_LIMIT = 120
+/** Не больше одного groups.isMember в ~333 мс, иначе VK отвечает error 6. */
+const VK_MEMBERSHIP_CHECK_LIMIT = 80
+const VK_MEMBERSHIP_DELAY_MS = 350
 
 export async function GET(req: Request) {
   const denied = requireAdmin(req)
@@ -168,7 +170,11 @@ export async function GET(req: Request) {
     ).slice(0, VK_MEMBERSHIP_CHECK_LIMIT)
     const vkMembershipById = new Map<number, boolean | null>()
     let vkMembershipCheckError: string | null = null
-    for (const vkUserId of uniqueVkIds) {
+    for (let i = 0; i < uniqueVkIds.length; i++) {
+      const vkUserId = uniqueVkIds[i]!
+      if (i > 0) {
+        await new Promise<void>((r) => setTimeout(r, VK_MEMBERSHIP_DELAY_MS))
+      }
       const check = await vkGroupsIsMember({ groupId: VK_COMMUNITY_GROUP_ID, userId: vkUserId })
       if (!check.ok) {
         vkMembershipById.set(vkUserId, null)

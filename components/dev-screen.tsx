@@ -16,6 +16,13 @@ import { AdminTablesContent } from "@/components/admin-tables-content"
 import { AdminGameErrorsContent } from "@/components/admin-game-errors-content"
 import { AdminLobbyAnnouncementContent } from "@/components/admin-lobby-announcement-content"
 
+function formatVkGroupCheckError(err: string | null | undefined): string {
+  if (!err) return ""
+  if (err === "rate_limit") return "лимит запросов VK — подождите и обновите страницу"
+  if (err === "missing_service_token") return "нет VK_SERVICE_ACCESS_TOKEN на сервере"
+  return err
+}
+
 const ADMIN_SESSION_KEY = "admin_lemnity_ok"
 const ADMIN_TOKEN_KEY = "admin_lemnity_token"
 const ADMIN_LOGIN = "admin"
@@ -402,7 +409,9 @@ export function DevScreen() {
                             <p className="mt-1 text-[10px] leading-tight text-amber-300/90">бонус выдан</p>
                           ) : null}
                           {u.vkGroupCheckError ? (
-                            <p className="mt-1 text-[10px] leading-tight text-slate-400">err: {u.vkGroupCheckError}</p>
+                            <p className="mt-1 text-[10px] leading-tight text-slate-400">
+                              {formatVkGroupCheckError(u.vkGroupCheckError)}
+                            </p>
                           ) : null}
                         </td>
                         <td className="px-3 py-2.5 text-slate-300">{u.age ?? "—"}</td>

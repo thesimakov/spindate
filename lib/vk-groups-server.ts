@@ -2,20 +2,23 @@
 
 const VK_API_VERSION = "5.199"
 
+/** VK error 6 — слишком много запросов в секунду. */
+const VK_ERR_TOO_MANY_PER_SECOND = 6
+
 function getServiceToken(): string | undefined {
   const t = process.env.VK_SERVICE_ACCESS_TOKEN?.trim()
   return t || undefined
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export type VkGroupsIsMemberResult =
   | { ok: true; member: boolean; raw?: unknown }
   | { ok: false; reason: string; vkError?: unknown }
 
-/**
- * Проверка подписки пользователя на сообщество (сервисный ключ приложения).
- * @see https://dev.vk.com/method/groups.isMember
- */
-export async function vkGroupsIsMember(args: {
+async function groupsIsMemberOnce(args: {
   groupId: number
   userId: number
 }): Promise<VkGroupsIsMemberResult> {
@@ -43,6 +46,10 @@ export async function vkGroupsIsMember(args: {
     } | null
     if (!json) return { ok: false, reason: "invalid_json" }
     if (json.error) {
+      const code = json.error.error_code
+      if (code === VK_ERR_TOO_MANY_PER_SECOND) {
+        return { ok: false, reason: "rate_limit", vkError: json.error }
+      }
       return { ok: false, reason: json.error.error_msg ?? "vk_api_error", vkError: json.error }
     }
     const r = json.response
@@ -53,4 +60,24 @@ export async function vkGroupsIsMember(args: {
   } catch {
     return { ok: false, reason: "fetch_failed" }
   }
+}
+
+/**
+ * Проверка подписки пользователя на сообщество (сервисный ключ приложения).
+ * При лимите VK (error 6) делает несколько повторов с паузой.
+ * @see https://dev.vk.com/method/groups.isMember
+ */
+export async function vkGroupsIsMember(args: {
+  groupId: number
+  userId: number
+}): Promise<VkGroupsIsMemberResult> {
+  const maxAttempts = 5
+  const backoffMs = [0, 800, 1600, 2400, 4000]
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await sleep(backoffMs[attempt] ?? 1000)
+    const result = await groupsIsMemberOnce(args)
+    if (result.ok) return result
+    if (result.reason !== "rate_limit") return result
+  }
+  return { ok: false, reason: "rate_limit" }
 }
