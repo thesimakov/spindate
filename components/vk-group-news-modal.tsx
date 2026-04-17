@@ -58,7 +58,7 @@ export function VkGroupNewsModal({ open, onOpenChange, onNotify }: VkGroupNewsMo
         }
       }
       onNotify?.(
-        "Подписка одним нажатием доступна в мини-приложении ВК. В обычном браузере вступите в сообщество вручную (ссылка в профиле или vk.com/lemnitygame).",
+        "Подписка одним нажатием доступна в мини-приложении ВК. В обычном браузере вступите в сообщество вручную (ссылка в профиле или vk.com/spinndate).",
         "info",
       )
     } finally {
