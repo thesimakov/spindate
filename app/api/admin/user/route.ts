@@ -14,6 +14,7 @@ type Action =
   | "delete_forever"
   | "clear_block"
   | "clear_ban"
+  | "send_vk_group_request"
 
 export async function POST(req: Request) {
   const denied = requireAdmin(req)
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
     hasDbUser = Boolean(row?.id)
   }
 
-  if (!hasDbUser && action !== "delete_forever") {
+  if (!hasDbUser && action !== "delete_forever" && !(action === "send_vk_group_request" && vkUserId != null && vkUserId > 0)) {
     return NextResponse.json(
       { ok: false, error: "user_not_found_for_action" },
       { status: 404, headers: NO_CACHE },
@@ -121,6 +122,34 @@ export async function POST(req: Request) {
            updated_at = excluded.updated_at`,
       ).run(vkUserId, now)
     }
+  } else if (action === "send_vk_group_request") {
+    db.prepare(
+      `CREATE TABLE IF NOT EXISTS admin_player_requests (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         kind TEXT NOT NULL,
+         target_user_id TEXT,
+         target_vk_user_id INTEGER,
+         payload_json TEXT NOT NULL DEFAULT '{}',
+         created_at INTEGER NOT NULL,
+         consumed_at INTEGER,
+         consumed_by_user_id TEXT,
+         consumed_by_vk_user_id INTEGER
+       )`,
+    ).run()
+
+    const targetUserId = hasDbUser ? userId : null
+    const targetVkUserId = vkUserId != null && vkUserId > 0 ? vkUserId : null
+    if (!targetUserId && targetVkUserId == null) {
+      return NextResponse.json(
+        { ok: false, error: "request_target_not_found" },
+        { status: 400, headers: NO_CACHE },
+      )
+    }
+    db.prepare(
+      `INSERT INTO admin_player_requests (
+         kind, target_user_id, target_vk_user_id, payload_json, created_at
+       ) VALUES (?, ?, ?, ?, ?)`,
+    ).run("open_vk_group_news_modal", targetUserId, targetVkUserId, "{}", now)
   }
 
   return NextResponse.json({ ok: true }, { headers: NO_CACHE })

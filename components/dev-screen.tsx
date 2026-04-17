@@ -37,6 +37,9 @@ export function DevScreen() {
     isDbUser?: boolean
     username: string
     vkUserId?: number
+    vkGroupMember?: boolean | null
+    vkGroupBonusClaimed?: boolean
+    vkGroupCheckError?: string | null
     displayName: string
     age?: number
     voiceBalance: number
@@ -336,6 +339,7 @@ export function DevScreen() {
                     <th className="px-3 py-3 font-semibold text-slate-300">ID</th>
                     <th className="px-3 py-3 font-semibold text-slate-300">Имя</th>
                     <th className="px-3 py-3 font-semibold text-slate-300">VK имя</th>
+                    <th className="px-3 py-3 font-semibold text-slate-300">Подписка VK</th>
                     <th className="px-3 py-3 font-semibold text-slate-300">Возраст</th>
                     <th className="px-3 py-3 font-semibold text-slate-300">❤</th>
                     <th className="px-3 py-3 font-semibold text-slate-300">Live</th>
@@ -346,7 +350,7 @@ export function DevScreen() {
                 <tbody>
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-3 py-8 text-center text-slate-400">
+                      <td colSpan={10} className="px-3 py-8 text-center text-slate-400">
                         Пока ни один пользователь не заходил. Регистрации появятся здесь после входа.
                       </td>
                     </tr>
@@ -378,6 +382,29 @@ export function DevScreen() {
                             "—"
                           )}
                         </td>
+                        <td className="px-3 py-2.5 text-slate-300">
+                          {!u.vkUserId ? (
+                            "—"
+                          ) : u.vkGroupMember === true ? (
+                            <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-200">
+                              подписан
+                            </span>
+                          ) : u.vkGroupMember === false ? (
+                            <span className="rounded bg-rose-500/15 px-2 py-0.5 text-xs text-rose-200">
+                              не подписан
+                            </span>
+                          ) : (
+                            <span className="rounded bg-slate-500/20 px-2 py-0.5 text-xs text-slate-300">
+                              не проверено
+                            </span>
+                          )}
+                          {u.vkGroupBonusClaimed ? (
+                            <p className="mt-1 text-[10px] leading-tight text-amber-300/90">бонус выдан</p>
+                          ) : null}
+                          {u.vkGroupCheckError ? (
+                            <p className="mt-1 text-[10px] leading-tight text-slate-400">err: {u.vkGroupCheckError}</p>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-2.5 text-slate-300">{u.age ?? "—"}</td>
                         <td className="px-3 py-2.5 text-slate-300 tabular-nums">{u.voiceBalance}</td>
                         <td className="px-3 py-2.5 text-slate-300">
@@ -404,6 +431,15 @@ export function DevScreen() {
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void doAdminAction(u, "send_vk_group_request")}
+                              disabled={busyUserId === u.userId || !u.vkUserId}
+                              className="rounded border border-sky-500/50 bg-sky-500/20 px-2 py-1 text-xs font-medium text-sky-100 hover:bg-sky-500/30 disabled:opacity-50"
+                              title={!u.vkUserId ? "Доступно только VK-пользователям" : "Принудительно открыть окно подписки"}
+                            >
+                              Отправить запрос
+                            </button>
                             {!isDeleted && (
                               <>
                                 <button

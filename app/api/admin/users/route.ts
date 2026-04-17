@@ -7,10 +7,13 @@ import { deserializeLiveTablesState } from "@/lib/live-tables-core"
 import { getLiveTablesRawMemory } from "@/lib/live-tables-memory"
 import { getLiveTablesRawRedis } from "@/lib/live-tables-redis"
 import { getTableAuthoritySnapshot } from "@/lib/table-authority-server"
+import { vkGroupsIsMember } from "@/lib/vk-groups-server"
 
 export const dynamic = "force-dynamic"
 
 const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
+const VK_COMMUNITY_GROUP_ID = 236519647
+const VK_MEMBERSHIP_CHECK_LIMIT = 120
 
 export async function GET(req: Request) {
   const denied = requireAdmin(req)
@@ -19,11 +22,18 @@ export async function GET(req: Request) {
   try {
     const db = getDb()
     const userCols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>
+    const userGameStateCols = db.prepare(`PRAGMA table_info(user_game_state)`).all() as Array<{ name: string }>
+    const vkUserGameStateCols = db.prepare(`PRAGMA table_info(vk_user_game_state)`).all() as Array<{ name: string }>
     const hasVkUserId = userCols.some((c) => c.name === "vk_user_id")
+    const hasUserVkGroupClaimed = userGameStateCols.some((c) => c.name === "vk_group_bonus_claimed")
+    const hasVkStateVkGroupClaimed = vkUserGameStateCols.some((c) => c.name === "vk_group_bonus_claimed")
     const vkUserIdSelect = hasVkUserId ? "u.vk_user_id" : "NULL AS vk_user_id"
+    const userVkGroupClaimedSelect = hasUserVkGroupClaimed
+      ? "COALESCE(s.vk_group_bonus_claimed, 0) AS vk_group_bonus_claimed"
+      : "0 AS vk_group_bonus_claimed"
     const rows = db.prepare(
       `SELECT u.id as user_id, u.username, ${vkUserIdSelect}, p.display_name, p.avatar_url, p.gender, p.age, p.purpose,
-              s.voice_balance
+              s.voice_balance, ${userVkGroupClaimedSelect}
        FROM users u
        LEFT JOIN player_profiles p ON p.user_id = u.id
        LEFT JOIN user_game_state s ON s.user_id = u.id
@@ -39,6 +49,7 @@ export async function GET(req: Request) {
       age: number | null
       purpose: string | null
       voice_balance: number | null
+      vk_group_bonus_claimed: number | null
     }>
 
     // live presence snapshot
@@ -70,6 +81,7 @@ export async function GET(req: Request) {
         age: r.age ?? undefined,
         purpose: r.purpose ?? undefined,
         voiceBalance: r.voice_balance ?? 0,
+        vkGroupBonusClaimed: Boolean(r.vk_group_bonus_claimed),
         flags,
         live,
       }
@@ -83,12 +95,15 @@ export async function GET(req: Request) {
 
     // Добавить VK-пользователей, которые есть только в vk_user_game_state
     // (например, вход в dev-режиме без серверной VK-сессии).
+    const vkStateVkGroupClaimedSelect = hasVkStateVkGroupClaimed
+      ? "COALESCE(vk_group_bonus_claimed, 0) AS vk_group_bonus_claimed"
+      : "0 AS vk_group_bonus_claimed"
     const vkStateRows = db.prepare(
-      `SELECT vk_user_id, voice_balance, updated_at
+      `SELECT vk_user_id, voice_balance, updated_at, ${vkStateVkGroupClaimedSelect}
        FROM vk_user_game_state
        ORDER BY updated_at DESC
        LIMIT 500`,
-    ).all() as Array<{ vk_user_id: number; voice_balance: number; updated_at: number }>
+    ).all() as Array<{ vk_user_id: number; voice_balance: number; updated_at: number; vk_group_bonus_claimed: number }>
     for (const r of vkStateRows) {
       const key = `vk:${r.vk_user_id}`
       if (knownKeys.has(key)) continue
@@ -104,6 +119,7 @@ export async function GET(req: Request) {
         age: undefined,
         purpose: undefined,
         voiceBalance: r.voice_balance ?? 0,
+        vkGroupBonusClaimed: Boolean(r.vk_group_bonus_claimed),
         flags: null,
         live: liveByUserKey.get(key) ?? null,
       })
@@ -136,9 +152,31 @@ export async function GET(req: Request) {
         age: undefined,
         purpose: undefined,
         voiceBalance: 0,
+        vkGroupBonusClaimed: false,
         flags: resolvedFlags,
         live,
       })
+    }
+
+    // Проверка фактической подписки на VK-группу (по VK API) для первых N VK-пользователей.
+    const uniqueVkIds = Array.from(
+      new Set(
+        out
+          .map((u) => (typeof u.vkUserId === "number" && Number.isInteger(u.vkUserId) && u.vkUserId > 0 ? u.vkUserId : null))
+          .filter((v): v is number => v != null),
+      ),
+    ).slice(0, VK_MEMBERSHIP_CHECK_LIMIT)
+    const vkMembershipById = new Map<number, boolean | null>()
+    let vkMembershipCheckError: string | null = null
+    for (const vkUserId of uniqueVkIds) {
+      const check = await vkGroupsIsMember({ groupId: VK_COMMUNITY_GROUP_ID, userId: vkUserId })
+      if (!check.ok) {
+        vkMembershipById.set(vkUserId, null)
+        if (!vkMembershipCheckError) vkMembershipCheckError = check.reason
+        if (check.reason === "missing_service_token") break
+        continue
+      }
+      vkMembershipById.set(vkUserId, check.member)
     }
 
     // Stats by live table (lightweight: counts from gameLog)
@@ -168,7 +206,16 @@ export async function GET(req: Request) {
       }
     })
 
-    return NextResponse.json({ ok: true, users: usersWithStats }, { headers: NO_CACHE })
+    const usersWithVkStatus = usersWithStats.map((u) => ({
+      ...u,
+      vkGroupMember:
+        typeof u.vkUserId === "number" && Number.isInteger(u.vkUserId) && u.vkUserId > 0
+          ? (vkMembershipById.get(u.vkUserId) ?? null)
+          : null,
+      vkGroupCheckError: vkMembershipCheckError,
+    }))
+
+    return NextResponse.json({ ok: true, users: usersWithVkStatus }, { headers: NO_CACHE })
   } catch (e) {
     const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     return NextResponse.json({ ok: false, error: msg }, { status: 500, headers: NO_CACHE })

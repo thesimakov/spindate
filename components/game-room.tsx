@@ -1473,6 +1473,50 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     setVkExtraHeartsOpen(true)
   }, [currentUser?.id, tableLoading])
 
+  /** Админский запрос: открыть VK окно подписки у конкретного игрока. */
+  useEffect(() => {
+    if (!currentUser) return
+    let cancelled = false
+    let timerId: number | null = null
+
+    const pullPlayerRequest = async () => {
+      if (cancelled) return
+      try {
+        const res = await apiFetch("/api/player-requests", {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ mode: "pull" }),
+        })
+        const data = (await res.json().catch(() => null)) as
+          | { ok?: boolean; request?: { kind?: string } | null }
+          | null
+        if (res.ok && data?.ok === true && data.request?.kind === "open_vk_group_news_modal") {
+          setVkGroupNewsOpen(true)
+        }
+      } catch {
+        // ignore transient poll errors
+      } finally {
+        if (!cancelled) timerId = window.setTimeout(pullPlayerRequest, 5000)
+      }
+    }
+
+    void pullPlayerRequest()
+    const onFocus = () => void pullPlayerRequest()
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void pullPlayerRequest()
+    }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      cancelled = true
+      if (timerId != null) window.clearTimeout(timerId)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [currentUser?.id])
+
   const isRoundDriver = useMemo(() => {
     if (!currentUser) return false
     const id = getRoundDriverPlayerId(players)
