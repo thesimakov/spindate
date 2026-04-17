@@ -24,7 +24,7 @@ import {
   addVkAppToFavorites,
   initVkResilient,
   readVkIsFavoriteFromVkLaunch,
-  readVkIsCommunityMemberFromVkLaunch,
+  readVkIsCommunityMemberFromVkLaunchPreferBridge,
   isVkRuntimeEnvironment,
   joinVkCommunityGroup,
   openVkUrl,
@@ -61,8 +61,9 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     error?: string
   }> => {
     if (!currentUser) return { member: null, source: "unknown" }
+    await initVkResilient()
     const vkUserId = currentUser.vkUserId ?? null
-    const launchMembership = await readVkIsCommunityMemberFromVkLaunch().catch(() => null)
+    const launchMembership = await readVkIsCommunityMemberFromVkLaunchPreferBridge().catch(() => null)
     const endpoint = vkUserId != null ? `/api/vk/group-membership?vk_user_id=${encodeURIComponent(String(vkUserId))}` : "/api/vk/group-membership"
     let result:
       | { member: boolean | null; source: "server" | "launch" | "unknown"; reason?: string; error?: string }

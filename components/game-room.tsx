@@ -1503,7 +1503,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const pullPlayerRequest = async () => {
       if (cancelled) return
       try {
-        const res = await apiFetch("/api/player-requests", {
+        const vkId = currentUser.vkUserId ?? (typeof currentUser.id === "number" ? currentUser.id : null)
+        const qs = vkId != null ? `?vk_user_id=${encodeURIComponent(String(vkId))}` : ""
+        const res = await apiFetch(`/api/player-requests${qs}`, {
           method: "POST",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },

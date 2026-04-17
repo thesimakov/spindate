@@ -249,6 +249,27 @@ export async function readVkIsCommunityMemberFromVkLaunch(): Promise<boolean | n
   return true
 }
 
+/**
+ * Роль в сообществе: сначала {@link VKWebAppGetLaunchParams} (актуально после вступления/выхода из группы),
+ * иначе параметры из URL первого запуска.
+ */
+export async function readVkViewerGroupRoleFromVkLaunchPreferBridge(): Promise<string | null> {
+  if (typeof window === "undefined") return null
+  const fromBridge = await readVkLaunchParamFromBridge("vk_viewer_group_role")
+  if (typeof fromBridge === "string" && fromBridge.trim() !== "") return fromBridge
+  return readVkLaunchParamValue("vk_viewer_group_role")
+}
+
+/** Как {@link readVkIsCommunityMemberFromVkLaunch}, но с приоритетом свежих launch params из bridge. */
+export async function readVkIsCommunityMemberFromVkLaunchPreferBridge(): Promise<boolean | null> {
+  const role = await readVkViewerGroupRoleFromVkLaunchPreferBridge()
+  if (role == null) return null
+  const normalized = role.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === "none" || normalized === "not_member" || normalized === "0") return false
+  return true
+}
+
 /** Клиент VK Android — для {@link VKWebAppAddToHomeScreen} (ярлык только на Android). */
 export function isVkAndroidClientFromLocation(): boolean {
   const p = readVkLaunchParamValue("vk_platform")
@@ -1457,7 +1478,9 @@ export const vkBridge = {
   readVkAreNotificationsEnabledFromVkLaunch,
   readVkIsFavoriteFromVkLaunch,
   readVkViewerGroupRoleFromVkLaunch,
+  readVkViewerGroupRoleFromVkLaunchPreferBridge,
   readVkIsCommunityMemberFromVkLaunch,
+  readVkIsCommunityMemberFromVkLaunchPreferBridge,
   SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT,
   joinVkCommunityGroup,
   openVkUrl,
