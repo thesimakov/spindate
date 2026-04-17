@@ -61,9 +61,15 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     error?: string
   }> => {
     if (!currentUser) return { member: null, source: "unknown" }
+    const vkUserId = currentUser.vkUserId ?? null
     const launchMembership = await readVkIsCommunityMemberFromVkLaunch().catch(() => null)
+    const endpoint = vkUserId != null ? `/api/vk/group-membership?vk_user_id=${encodeURIComponent(String(vkUserId))}` : "/api/vk/group-membership"
+    let result:
+      | { member: boolean | null; source: "server" | "launch" | "unknown"; reason?: string; error?: string }
+      | null = null
     try {
-      const res = await fetch("/api/vk/group-membership", {
+      // Для VK-пользователей явно передаём vk_user_id: в mini app cookie-сессия может отсутствовать.
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -74,19 +80,21 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
         | { ok?: boolean; isMember?: boolean; reason?: string; error?: string }
         | null
       if (res.ok && data?.ok === true && typeof data.isMember === "boolean") {
-        return { member: data.isMember, source: "server" }
+        result = { member: data.isMember, source: "server" }
+      } else if (typeof launchMembership === "boolean") {
+        result = { member: launchMembership, source: "launch", reason: data?.reason }
+      } else {
+        result = { member: null, source: "unknown", reason: data?.reason, error: data?.error }
       }
-      if (typeof launchMembership === "boolean") {
-        return { member: launchMembership, source: "launch", reason: data?.reason }
-      }
-      return { member: null, source: "unknown", reason: data?.reason, error: data?.error }
     } catch {
       if (typeof launchMembership === "boolean") {
-        return { member: launchMembership, source: "launch", reason: "fetch_failed" }
+        result = { member: launchMembership, source: "launch", reason: "fetch_failed" }
+      } else {
+        result = { member: null, source: "unknown", reason: "fetch_failed", error: "Сервер не отвечает" }
       }
-      return { member: null, source: "unknown", reason: "fetch_failed", error: "Сервер не отвечает" }
     }
-  }, [currentUser?.id])
+    return result
+  }, [currentUser?.id, currentUser?.vkUserId])
 
   const unlockRowsIfNeeded = useCallback(async () => {
     if (!currentUser) return
@@ -99,7 +107,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
       const groupCheck = await checkVkGroupMembership()
       setGroupMembership(groupCheck.member)
-      if (p.group && groupCheck.member !== true) {
+      if (p.group && groupCheck.member === false) {
         next.group = false
         changed = true
       }
@@ -138,7 +146,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
       }
       setCheckingStatuses(false)
     }
-  }, [currentUser?.id])
+  }, [currentUser?.id, checkVkGroupMembership])
 
   useEffect(() => {
     if (!currentUser) return
@@ -231,7 +239,8 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
         return
       }
       await initVkResilient()
-      if (await isVkRuntimeEnvironment()) {
+      const runtime = await isVkRuntimeEnvironment()
+      if (runtime) {
         const { ok } = await joinVkCommunityGroup()
         if (!ok) {
           showToast("Не удалось открыть окно ВК", "info")
