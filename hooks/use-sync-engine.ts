@@ -64,7 +64,7 @@ export interface SyncEngineResult {
 
 export function useSyncEngine(): SyncEngineResult {
   const { state, dispatch: rawDispatch } = useGame()
-  const { currentUser, tableId, players, tablePaused } = state
+  const { currentUser, tableId, players, tablePaused, isSpinning, showResult, countdown, currentTurnIndex, roundNumber } = state
 
   const remoteActionRef = useRef(false)
   const playersRef = useRef(players)
@@ -367,6 +367,19 @@ export function useSyncEngine(): SyncEngineResult {
         const nextPlayers = composePlayersFromLive(livePlayers)
         const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
         const tableActuallyChanged = nextTableId !== currentTableId
+        const prevPlayerIds = playersRef.current.map((p) => p.id).join(",")
+        const nextPlayerIds = nextPlayers.map((p) => p.id).join(",")
+        const activePhase = isSpinning || showResult || countdown !== null
+        if (activePhase && prevPlayerIds !== nextPlayerIds) {
+          // #region agent log
+          fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H10',location:'hooks/use-sync-engine.ts:syncLiveTable',message:'Live players changed during active phase',data:{tableId:currentTableId,roundNumber,currentTurnIndex,isSpinning,showResult,countdown,prevPlayerIds,nextPlayerIds,livePlayersCount:livePlayers.length,tableActuallyChanged},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
+        if (!tableActuallyChanged && prevPlayerIds === nextPlayerIds) {
+          // #region agent log
+          fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H10',location:'hooks/use-sync-engine.ts:syncLiveTable',message:'SET_PLAYERS candidate without player-id changes',data:{tableId:currentTableId,roundNumber,currentTurnIndex,isSpinning,showResult,countdown,playerIds:nextPlayerIds,livePlayersCount:livePlayers.length},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
         const createdByUserId =
           typeof data.createdByUserId === "number" && Number.isFinite(data.createdByUserId)
             ? data.createdByUserId

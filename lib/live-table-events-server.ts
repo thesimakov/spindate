@@ -69,6 +69,12 @@ function cleanupMemory(store: Map<number, TableEventsBucket>, now: number) {
   }
 }
 
+function emitDebugLog(message: string, data: Record<string, unknown>) {
+  // #region agent log
+  fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H12',location:'lib/live-table-events-server.ts:pushTableEvent',message,data,timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+}
+
 function isActionAllowed(action: GameAction): boolean {
   switch (action.type) {
     case "START_COUNTDOWN":
@@ -201,14 +207,35 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   if (!isActionAllowed(args.action)) return { ok: false as const }
   if (args.action.type === "ADD_LOG" && args.action.entry?.fromPlayer?.isBot) {
     if (!(await senderMatchesAddLogBotFromSnapshot(tableId, args.senderId, args.action))) {
+      emitDebugLog("Rejected ADD_LOG from bot sender mismatch", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+      })
       return { ok: false as const }
     }
   } else if (args.action.type === "SET_PAIR_KISS_CHOICE") {
     if (!(await senderMatchesPairKissChoiceFromSnapshot(tableId, args.senderId, args.action))) {
+      emitDebugLog("Rejected SET_PAIR_KISS_CHOICE by snapshot rules", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        playerId: args.action.playerId,
+      })
       return { ok: false as const }
     }
   } else if (args.action.type === "BEGIN_PAIR_KISS_PHASE") {
     if (!(await senderCanDriveTurnLifecycleFromSnapshot(tableId, args.senderId))) {
+      const snap = await getTableAuthoritySnapshot(tableId)
+      emitDebugLog("Rejected BEGIN_PAIR_KISS_PHASE by turn lifecycle rules", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        currentTurnIndex: snap?.currentTurnIndex ?? null,
+        turnPlayerId: snap?.players[snap.currentTurnIndex]?.id ?? null,
+        turnPlayerIsBot: snap?.players[snap.currentTurnIndex]?.isBot ?? null,
+        roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
+      })
       return { ok: false as const }
     }
   } else if (
@@ -221,13 +248,39 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     args.action.type === "NEXT_TURN"
   ) {
     if (!(await senderCanDriveTurnLifecycleFromSnapshot(tableId, args.senderId))) {
+      const snap = await getTableAuthoritySnapshot(tableId)
+      emitDebugLog("Rejected turn lifecycle action by snapshot rules", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        currentTurnIndex: snap?.currentTurnIndex ?? null,
+        turnPlayerId: snap?.players[snap.currentTurnIndex]?.id ?? null,
+        turnPlayerIsBot: snap?.players[snap.currentTurnIndex]?.isBot ?? null,
+        roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
+        playersCount: snap?.players.length ?? null,
+      })
       return { ok: false as const }
     }
   } else if (args.action.type === "FINALIZE_PAIR_KISS") {
     if (!(await senderCanFinalizePairKissFromSnapshot(tableId, args.senderId))) {
+      const snap = await getTableAuthoritySnapshot(tableId)
+      emitDebugLog("Rejected FINALIZE_PAIR_KISS by snapshot rules", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        pairRoundKey: snap?.pairKissPhase?.roundKey ?? null,
+        pairResolved: snap?.pairKissPhase?.resolved ?? null,
+        pairDeadlineMs: snap?.pairKissPhase?.deadlineMs ?? null,
+        roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
+      })
       return { ok: false as const }
     }
   } else if (!senderMatchesActionSync(args.senderId, args.action)) {
+    emitDebugLog("Rejected generic action sender mismatch", {
+      tableId,
+      senderId: args.senderId,
+      actionType: args.action.type,
+    })
     return { ok: false as const }
   }
 
