@@ -183,7 +183,8 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     () => (progress.fav ? 1 : 0) + (progress.group ? 1 : 0) + (progress.notify ? 1 : 0),
     [progress],
   )
-  const groupTaskDone = progress.group && groupMembership !== false
+  const groupNeedsResubscribe = progress.group && groupMembership !== true
+  const groupTaskDone = progress.group && !groupNeedsResubscribe
 
   const grantRewardForAction = useCallback(async (
     action: VkExtraHeartsGateAction,
@@ -340,9 +341,11 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                 done={groupTaskDone}
                 disabled={groupTaskDone || (rowBusy !== null && rowBusy !== "group")}
                 statusText={
-                  groupTaskDone
-                    ? "Награда получена"
-                    : groupMembership === true
+                  groupNeedsResubscribe
+                    ? "Статус: не подписан"
+                    : groupTaskDone
+                      ? "Награда получена"
+                      : groupMembership === true
                       ? "Статус: подписан, можно забрать награду"
                       : groupMembership === false
                         ? "Статус: не подписан"
