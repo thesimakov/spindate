@@ -7,15 +7,20 @@ import { deserializeLiveTablesState } from "@/lib/live-tables-core"
 import { getLiveTablesRawMemory } from "@/lib/live-tables-memory"
 import { getLiveTablesRawRedis } from "@/lib/live-tables-redis"
 import { getTableAuthoritySnapshot } from "@/lib/table-authority-server"
-import { vkGroupsIsMember } from "@/lib/vk-groups-server"
+import { vkGroupsIsMemberOnce } from "@/lib/vk-groups-server"
+
+/** Лимит времени на ответ (прокси/Vercel часто рвут длинные GET). */
+export const maxDuration = 60
 
 export const dynamic = "force-dynamic"
 
 const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
 const VK_COMMUNITY_GROUP_ID = 236519647
-/** Не больше одного groups.isMember в ~333 мс, иначе VK отвечает error 6. */
-const VK_MEMBERSHIP_CHECK_LIMIT = 80
-const VK_MEMBERSHIP_DELAY_MS = 350
+/** Массовая проверка: одна попытка на id + пауза; не больше N за запрос. */
+const VK_MEMBERSHIP_CHECK_LIMIT = 20
+const VK_MEMBERSHIP_DELAY_MS = 300
+/** Не тратить на VK больше этого — иначе «слетает» список из‑за таймаута. */
+const VK_MEMBERSHIP_BUDGET_MS = 10_000
 
 export async function GET(req: Request) {
   const denied = requireAdmin(req)
@@ -160,31 +165,6 @@ export async function GET(req: Request) {
       })
     }
 
-    // Проверка фактической подписки на VK-группу (по VK API) для первых N VK-пользователей.
-    const uniqueVkIds = Array.from(
-      new Set(
-        out
-          .map((u) => (typeof u.vkUserId === "number" && Number.isInteger(u.vkUserId) && u.vkUserId > 0 ? u.vkUserId : null))
-          .filter((v): v is number => v != null),
-      ),
-    ).slice(0, VK_MEMBERSHIP_CHECK_LIMIT)
-    const vkMembershipById = new Map<number, boolean | null>()
-    let vkMembershipCheckError: string | null = null
-    for (let i = 0; i < uniqueVkIds.length; i++) {
-      const vkUserId = uniqueVkIds[i]!
-      if (i > 0) {
-        await new Promise<void>((r) => setTimeout(r, VK_MEMBERSHIP_DELAY_MS))
-      }
-      const check = await vkGroupsIsMember({ groupId: VK_COMMUNITY_GROUP_ID, userId: vkUserId })
-      if (!check.ok) {
-        vkMembershipById.set(vkUserId, null)
-        if (!vkMembershipCheckError) vkMembershipCheckError = check.reason
-        if (check.reason === "missing_service_token") break
-        continue
-      }
-      vkMembershipById.set(vkUserId, check.member)
-    }
-
     // Stats by live table (lightweight: counts from gameLog)
     const tables = new Map<number, Awaited<ReturnType<typeof getTableAuthoritySnapshot>>>()
     for (const u of out) {
@@ -211,6 +191,42 @@ export async function GET(req: Request) {
         },
       }
     })
+
+    // Подписка VK: после сборки списка, короткий бюджет времени (без ретраев — иначе таймаут всего GET).
+    const uniqueVkIds = Array.from(
+      new Set(
+        out
+          .map((u) => (typeof u.vkUserId === "number" && Number.isInteger(u.vkUserId) && u.vkUserId > 0 ? u.vkUserId : null))
+          .filter((v): v is number => v != null),
+      ),
+    ).slice(0, VK_MEMBERSHIP_CHECK_LIMIT)
+
+    const vkMembershipById = new Map<number, boolean | null>()
+    let vkMembershipCheckError: string | null = null
+    const vkDeadline = Date.now() + VK_MEMBERSHIP_BUDGET_MS
+    try {
+      for (let i = 0; i < uniqueVkIds.length; i++) {
+        if (Date.now() > vkDeadline) {
+          if (!vkMembershipCheckError) vkMembershipCheckError = "vk_check_budget"
+          break
+        }
+        const vkUserId = uniqueVkIds[i]!
+        if (i > 0) {
+          await new Promise<void>((r) => setTimeout(r, VK_MEMBERSHIP_DELAY_MS))
+        }
+        if (Date.now() > vkDeadline) break
+        const check = await vkGroupsIsMemberOnce({ groupId: VK_COMMUNITY_GROUP_ID, userId: vkUserId })
+        if (!check.ok) {
+          vkMembershipById.set(vkUserId, null)
+          if (!vkMembershipCheckError) vkMembershipCheckError = check.reason
+          if (check.reason === "missing_service_token") break
+          continue
+        }
+        vkMembershipById.set(vkUserId, check.member)
+      }
+    } catch {
+      if (!vkMembershipCheckError) vkMembershipCheckError = "vk_check_failed"
+    }
 
     const usersWithVkStatus = usersWithStats.map((u) => ({
       ...u,

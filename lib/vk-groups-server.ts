@@ -18,7 +18,11 @@ export type VkGroupsIsMemberResult =
   | { ok: true; member: boolean; raw?: unknown }
   | { ok: false; reason: string; vkError?: unknown }
 
-async function groupsIsMemberOnce(args: {
+/**
+ * Один запрос groups.isMember без ретраев — для массовых проверок в админке
+ * (между вызовами нужна пауза, иначе VK error 6).
+ */
+export async function vkGroupsIsMemberOnce(args: {
   groupId: number
   userId: number
 }): Promise<VkGroupsIsMemberResult> {
@@ -75,7 +79,7 @@ export async function vkGroupsIsMember(args: {
   const backoffMs = [0, 800, 1600, 2400, 4000]
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) await sleep(backoffMs[attempt] ?? 1000)
-    const result = await groupsIsMemberOnce(args)
+    const result = await vkGroupsIsMemberOnce(args)
     if (result.ok) return result
     if (result.reason !== "rate_limit") return result
   }

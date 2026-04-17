@@ -20,6 +20,8 @@ function formatVkGroupCheckError(err: string | null | undefined): string {
   if (!err) return ""
   if (err === "rate_limit") return "лимит запросов VK — подождите и обновите страницу"
   if (err === "missing_service_token") return "нет VK_SERVICE_ACCESS_TOKEN на сервере"
+  if (err === "vk_check_budget") return "проверка VK обрезана по времени — статус частичный"
+  if (err === "vk_check_failed") return "ошибка проверки VK"
   return err
 }
 
