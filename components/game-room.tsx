@@ -1090,7 +1090,6 @@ const TABLE_STYLE_BACKGROUNDS: Record<
 
 /** Фон столешницы: дерево + брендинг (public/assets/game-table-surface.png). */
 const GAME_TABLE_SURFACE_URL = publicUrl("/assets/game-table-surface.png")
-const VK_EXTRA_HEARTS_SHOWN_SESSION_PREFIX = "spindate_vk_extra_hearts_gate_seen_v1_"
 /**
  * Режим nebula: лёгкий фиолетовый скрим поверх той же текстуры.
  * Базовый режим — только исходная композиция (без второго тёмного слоя поверх).
@@ -1468,16 +1467,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
   }, [])
 
+  /** Окно «Дополнительные сердечки» при каждом завершении загрузки стола (вход за стол). */
   useEffect(() => {
     if (!currentUser || tableLoading) return
-    if (typeof window === "undefined") return
-    const key = `${VK_EXTRA_HEARTS_SHOWN_SESSION_PREFIX}${currentUser.id}`
-    try {
-      if (window.sessionStorage.getItem(key) === "1") return
-      window.sessionStorage.setItem(key, "1")
-    } catch {
-      // ignore storage errors; still show modal once for current mount
-    }
     setVkExtraHeartsOpen(true)
   }, [currentUser?.id, tableLoading])
 
