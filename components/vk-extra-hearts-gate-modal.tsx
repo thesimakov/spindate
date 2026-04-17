@@ -56,10 +56,11 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
   const checkVkGroupMembership = useCallback(async (): Promise<{
     member: boolean | null
+    source: "server" | "launch" | "unknown"
     reason?: string
     error?: string
   }> => {
-    if (!currentUser) return { member: null }
+    if (!currentUser) return { member: null, source: "unknown" }
     const launchMembership = await readVkIsCommunityMemberFromVkLaunch().catch(() => null)
     try {
       const res = await fetch("/api/vk/group-membership", {
@@ -73,17 +74,17 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
         | { ok?: boolean; isMember?: boolean; reason?: string; error?: string }
         | null
       if (res.ok && data?.ok === true && typeof data.isMember === "boolean") {
-        return { member: data.isMember }
+        return { member: data.isMember, source: "server" }
       }
       if (typeof launchMembership === "boolean") {
-        return { member: launchMembership, reason: data?.reason }
+        return { member: launchMembership, source: "launch", reason: data?.reason }
       }
-      return { member: null, reason: data?.reason, error: data?.error }
+      return { member: null, source: "unknown", reason: data?.reason, error: data?.error }
     } catch {
       if (typeof launchMembership === "boolean") {
-        return { member: launchMembership, reason: "fetch_failed" }
+        return { member: launchMembership, source: "launch", reason: "fetch_failed" }
       }
-      return { member: null, reason: "fetch_failed", error: "Сервер не отвечает" }
+      return { member: null, source: "unknown", reason: "fetch_failed", error: "Сервер не отвечает" }
     }
   }, [currentUser?.id])
 
@@ -224,7 +225,8 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     try {
       const freshCheck = await checkVkGroupMembership()
       setGroupMembership(freshCheck.member)
-      if (freshCheck.member === true) {
+      /** Автозачёт только при серверном подтверждении подписки. launch fallback может быть устаревшим. */
+      if (freshCheck.member === true && freshCheck.source === "server") {
         await grantRewardForAction("group", "Вступить в группу игры")
         return
       }
