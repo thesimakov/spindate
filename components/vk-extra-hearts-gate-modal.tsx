@@ -24,6 +24,7 @@ import {
   addVkAppToFavorites,
   initVkResilient,
   readVkIsFavoriteFromVkLaunch,
+  readVkIsCommunityMemberFromVkLaunch,
   isVkRuntimeEnvironment,
   joinVkCommunityGroup,
   openVkUrl,
@@ -60,6 +61,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     error?: string
   }> => {
     if (!currentUser) return { member: null }
+    const launchMembership = await readVkIsCommunityMemberFromVkLaunch().catch(() => null)
     try {
       const res = await fetch("/api/vk/group-membership", {
         method: "POST",
@@ -74,8 +76,14 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
       if (res.ok && data?.ok === true && typeof data.isMember === "boolean") {
         return { member: data.isMember }
       }
+      if (typeof launchMembership === "boolean") {
+        return { member: launchMembership, reason: data?.reason }
+      }
       return { member: null, reason: data?.reason, error: data?.error }
     } catch {
+      if (typeof launchMembership === "boolean") {
+        return { member: launchMembership, reason: "fetch_failed" }
+      }
       return { member: null, reason: "fetch_failed", error: "Сервер не отвечает" }
     }
   }, [currentUser?.id])
