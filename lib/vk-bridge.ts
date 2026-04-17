@@ -1179,8 +1179,9 @@ export async function joinVkCommunityGroup(): Promise<{ ok: boolean }> {
   try {
     const raw = await b.send("VKWebAppJoinGroup", { group_id: VK_COMMUNITY_GROUP_ID })
     const data = raw as { result?: boolean } | null
-    if (data && typeof data === "object" && data.result === false) return { ok: false }
-    return { ok: true }
+    /** Успех только при явном result=true; cancel/close/невалидный ответ считаем неуспехом. */
+    if (data && typeof data === "object" && data.result === true) return { ok: true }
+    return { ok: false }
   } catch (e) {
     console.warn("[VK] VKWebAppJoinGroup", e)
     return { ok: false }

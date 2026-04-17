@@ -48,7 +48,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
   const [progress, setProgress] = useState<VkExtraHeartsGateProgress>(emptyVkExtraHeartsGateProgress)
   const [checkingStatuses, setCheckingStatuses] = useState(false)
   const [groupMembership, setGroupMembership] = useState<boolean | null>(null)
-  const [groupStatusError, setGroupStatusError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!currentUser) return
@@ -88,18 +87,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     }
   }, [currentUser?.id])
 
-  const waitForVkGroupMembership = useCallback(async (attempts: number, delayMs: number): Promise<boolean | null> => {
-    for (let i = 0; i < attempts; i++) {
-      if (i > 0) {
-        await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-      }
-      const result = await checkVkGroupMembership()
-      if (result.member === true) return true
-      if (result.member === false) return false
-    }
-    return null
-  }, [checkVkGroupMembership])
-
   const unlockRowsIfNeeded = useCallback(async () => {
     if (!currentUser) return
     const startedAt = Date.now()
@@ -111,7 +98,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
       const groupCheck = await checkVkGroupMembership()
       setGroupMembership(groupCheck.member)
-      setGroupStatusError(groupCheck.reason ?? null)
       if (p.group && groupCheck.member !== true) {
         next.group = false
         changed = true
@@ -238,7 +224,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     try {
       const freshCheck = await checkVkGroupMembership()
       setGroupMembership(freshCheck.member)
-      setGroupStatusError(freshCheck.reason ?? null)
       if (freshCheck.member === true) {
         await grantRewardForAction("group", "Вступить в группу игры")
         return
@@ -250,15 +235,9 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
           showToast("Не удалось открыть окно ВК", "info")
           return
         }
-        const verified = await waitForVkGroupMembership(5, 1200)
-        if (verified === true) {
-          setGroupMembership(true)
-          setGroupStatusError(null)
-          await grantRewardForAction("group", "Вступить в группу игры")
-          return
-        }
-        setGroupMembership(verified)
-        showToast("Подписка пока не подтверждена. Вернитесь в игру через пару секунд, статус обновится.", "info")
+        /** Успех VKWebAppJoinGroup: серверный API и launch params часто не обновляются сразу — начисляем по факту bridge. */
+        setGroupMembership(true)
+        await grantRewardForAction("group", "Вступить в группу игры")
       } else {
         const opened = await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
         if (!opened) {
@@ -270,7 +249,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     } finally {
       setRowBusy(null)
     }
-  }, [checkVkGroupMembership, grantRewardForAction, progress.group, showToast, waitForVkGroupMembership])
+  }, [checkVkGroupMembership, grantRewardForAction, progress.group, showToast])
 
   const handleAllowNotifications = useCallback(async () => {
     if (progress.notify) return
@@ -347,9 +326,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                       ? "Статус: подписан, можно забрать награду"
                       : groupMembership === false
                         ? "Статус: не подписан"
-                        : groupStatusError
-                          ? "Статус: не удалось проверить"
-                          : undefined
+                        : undefined
                 }
                 onClick={() => void handleJoinGroup()}
               />
