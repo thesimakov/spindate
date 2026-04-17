@@ -11,6 +11,7 @@ import { loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
 import { resolveEffectiveTableStyle } from "@/lib/table-style-global-server"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
+import { SERVER_SPIN_STUCK_MS } from "@/lib/spin-timing"
 
 declare global {
   var __spindateTableAuthorityMemory: Map<number, TableAuthorityPayload> | undefined
@@ -51,8 +52,6 @@ function targetsForTable(maxTableSize: number): { males: number; females: number
   return maxTableSize <= 6 ? { males: 3, females: 3 } : { males: 5, females: 5 }
 }
 
-const SPIN_STUCK_MS = 16_000
-
 /**
  * Server-side watchdog: если спин завис, аккуратно переводим стол на следующий ход.
  * Это защищает комнату от вечного состояния «Крутится...».
@@ -74,7 +73,7 @@ function stabilizeAuthoritySnapshot(
     if (started <= 0) {
       next = { ...next, spinStartedAtMs: nowMs }
       changed = true
-    } else if (nowMs - started >= SPIN_STUCK_MS) {
+    } else if (nowMs - started >= SERVER_SPIN_STUCK_MS) {
       const spinner = next.targetPlayer2
       const target = next.targetPlayer
       const canOpenPairKiss = spinner != null && target != null
@@ -244,23 +243,20 @@ export async function getTableAuthoritySnapshot(tableId: number): Promise<TableA
   const tid = Math.floor(tableId)
   const redis = getRedis()
   if (redis) {
-    let out: TableAuthorityPayload | null = null
-    await readModifyWriteKey(redis, authorityRedisKey(tid), (raw) => {
-      if (!raw) {
-        out = null
-        return null
+    const key = authorityRedisKey(tid)
+    const raw = await redis.get(key)
+    if (!raw) return null
+    try {
+      const snap = JSON.parse(raw) as TableAuthorityPayload
+      const stabilized = stabilizeAuthoritySnapshot(snap, tid)
+      const out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
+      if (stabilized.changed) {
+        void redis.set(key, JSON.stringify(out))
       }
-      try {
-        const snap = JSON.parse(raw) as TableAuthorityPayload
-        const stabilized = stabilizeAuthoritySnapshot(snap, tid)
-        out = stabilized.changed ? { ...stabilized.snapshot, revision: snap.revision + 1 } : stabilized.snapshot
-        return JSON.stringify(out)
-      } catch {
-        out = null
-        return null
-      }
-    })
-    return out
+      return out
+    } catch {
+      return null
+    }
   }
   return runMemoryAuthorityOp(tid, async () => {
     const snap = getMemoryStore().get(tid) ?? null

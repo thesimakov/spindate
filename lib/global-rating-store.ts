@@ -61,32 +61,52 @@ export function queryGlobalLeaderboard(input: {
 }): LeaderboardRow[] {
   const db = getDb()
   const cat = input.category
-  const top = db
-    .prepare(
-      `SELECT actor_key, SUM(weight) AS score
+  const rows = db.prepare(
+    `WITH top AS (
+       SELECT actor_key, SUM(weight) AS score
        FROM global_rating_events
        WHERE category = ? AND created_at >= ? AND created_at < ?
        GROUP BY actor_key
        ORDER BY score DESC
-       LIMIT ?`,
-    )
-    .all(cat, input.startMs, input.endMs, input.limit) as Array<{ actor_key: string; score: number }>
+       LIMIT ?
+     ),
+     latest_meta AS (
+       SELECT actor_key, display_name, avatar_url
+       FROM (
+         SELECT
+           actor_key,
+           display_name,
+           avatar_url,
+           ROW_NUMBER() OVER (PARTITION BY actor_key ORDER BY created_at DESC) AS rn
+         FROM global_rating_events
+         WHERE category = ? AND created_at >= ? AND created_at < ?
+       )
+       WHERE rn = 1
+     )
+     SELECT
+       top.actor_key,
+       top.score,
+       COALESCE(latest_meta.display_name, '') AS display_name,
+       COALESCE(latest_meta.avatar_url, '') AS avatar_url
+     FROM top
+     LEFT JOIN latest_meta ON latest_meta.actor_key = top.actor_key
+     ORDER BY top.score DESC`,
+  ).all(
+    cat,
+    input.startMs,
+    input.endMs,
+    input.limit,
+    cat,
+    input.startMs,
+    input.endMs,
+  ) as Array<{ actor_key: string; score: number; display_name: string; avatar_url: string }>
 
-  const metaStmt = db.prepare(
-    `SELECT display_name, avatar_url FROM global_rating_events
-     WHERE actor_key = ? AND category = ? AND created_at >= ? AND created_at < ?
-     ORDER BY created_at DESC LIMIT 1`,
-  )
-
-  return top.map((r, i) => {
-    const m = metaStmt.get(r.actor_key, cat, input.startMs, input.endMs) as
-      | { display_name: string; avatar_url: string }
-      | undefined
+  return rows.map((r, i) => {
     return {
       rank: i + 1,
       actorKey: r.actor_key,
-      name: m?.display_name?.trim() || "—",
-      avatar: (m?.avatar_url ?? "").trim(),
+      name: r.display_name.trim() || "—",
+      avatar: r.avatar_url.trim(),
       score: r.score,
     }
   })

@@ -106,30 +106,57 @@ export function DevScreen() {
 
   const getAdminToken = () => (typeof window !== "undefined" ? window.sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "" : "")
 
+  const loadUsers = useCallback(async (includeVkMembership: boolean) => {
+    const token = getAdminToken()
+    const params = new URLSearchParams()
+    if (token) params.set("admin_token", token)
+    if (includeVkMembership) params.set("includeVkMembership", "1")
+    const query = params.toString()
+    const url = query ? `/api/admin/users?${query}` : "/api/admin/users"
+    const res = await apiFetch(url, {
+      method: "GET",
+      headers: { "X-Admin-Token": token },
+      cache: "no-store",
+      credentials: "include",
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.ok || !Array.isArray(data.users)) {
+      throw new Error(`Сервер не отдал список пользователей: ${res.status} ${(data?.error as string) ?? ""}`.trim())
+    }
+    return data.users as Array<{
+      userId: string
+      isDbUser?: boolean
+      username: string
+      vkUserId?: number
+      vkGroupMember?: boolean | null
+      vkGroupBonusClaimed?: boolean
+      vkGroupCheckError?: string | null
+      displayName: string
+      age?: number
+      voiceBalance: number
+      flags?: { blockedUntil: number | null; bannedUntil: number | null; deleted: boolean } | null
+      live?: { tableId: number; updatedAt: number; playerId: number } | null
+      stats?: { totalActions: number; counts: Record<string, number> } | null
+    }>
+  }, [])
+
   const refresh = useCallback(async () => {
     setServerError("")
     try {
-      const token = getAdminToken()
-      const url = token ? `/api/admin/users?admin_token=${encodeURIComponent(token)}` : "/api/admin/users"
-      const res = await apiFetch(url, {
-        method: "GET",
-        // иногда прокси режут кастомные headers — дублируем токен в query
-        headers: { "X-Admin-Token": token },
-        cache: "no-store",
-        credentials: "include",
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.ok || !Array.isArray(data.users)) {
-        setServerError(
-          `Сервер не отдал список пользователей: ${res.status} ${(data?.error as string) ?? ""}`.trim(),
-        )
-        return
-      }
-      setUsers(data.users)
+      const fastUsers = await loadUsers(false)
+      setUsers(fastUsers)
+      void (async () => {
+        try {
+          const enrichedUsers = await loadUsers(true)
+          setUsers(enrichedUsers)
+        } catch {
+          // Оставляем быстрый список, даже если VK-обогащение не удалось.
+        }
+      })()
     } catch {
       setServerError("Ошибка сети при запросе списка пользователей")
     }
-  }, [])
+  }, [loadUsers])
 
   useEffect(() => {
     if (authenticated) {

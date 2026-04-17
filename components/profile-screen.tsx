@@ -647,19 +647,23 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
   const saveStatus = async (nextStatus: string, successMessage = "Статус обновлен"): Promise<boolean> => {
     const normalized = nextStatus.trim().slice(0, 15)
+    const prevStatus = currentUser.status ?? ""
     dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: normalized })
     setStatus(normalized)
     try {
-      await apiFetch("/api/user/state", {
+      const res = await apiFetch("/api/user/state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ status: normalized }),
       })
+      if (!res.ok) throw new Error("save_status_failed")
       showToast(successMessage, "success")
       return true
     } catch {
-      showToast("Статус обновлен локально", "info")
+      dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: prevStatus })
+      setStatus(prevStatus)
+      showToast("Не удалось сохранить статус", "error")
       return false
     }
   }
@@ -686,17 +690,22 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
 
   const handleClearStatus = async () => {
     if (!currentUser.status && !statusTrimmed) return
+    const prevStatus = currentUser.status ?? ""
     setStatus("")
     dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: "" })
     try {
-      await apiFetch("/api/user/state", {
+      const res = await apiFetch("/api/user/state", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ status: "" }),
       })
+      if (!res.ok) throw new Error("clear_status_failed")
     } catch {
-      // ignore network failure: local state already cleared
+      setStatus(prevStatus)
+      dispatch({ type: "UPDATE_USER_STATUS", playerId: currentUser.id, status: prevStatus })
+      showToast("Не удалось очистить статус на сервере", "error")
+      return
     }
     showToast("Статус удален", "success")
   }
@@ -1900,21 +1909,6 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         description="Ура! Ты выполнил(а) достижение за подарки и получил(а) награду."
         shareBusy={giftAchievementShareBusy}
         onClose={() => {
-          // #region agent log
-          process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-            body: JSON.stringify({
-              sessionId: "b06cc0",
-              runId: "pre-fix",
-              hypothesisId: "H4",
-              location: "profile-screen.tsx:GiftAchievementModal:parentOnClose",
-              message: "Parent onClose called",
-              timestamp: Date.now(),
-              data: { giftAchievementOpen, giftAchievementShareBusy },
-            }),
-          }).catch(() => {})
-          // #endregion
           setGiftAchievementOpen(false)
         }}
         onShare={() => void handleShareGiftAchievement()}

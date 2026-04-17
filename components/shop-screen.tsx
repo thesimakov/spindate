@@ -251,7 +251,11 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       // ignore
     }
 
-    await persistUserGameState(currentUser, nextVoice, inventory)
+    const persisted = await persistUserGameState(currentUser, nextVoice, inventory)
+    if (!persisted) {
+      showToast("Не удалось сохранить награду на сервере. Повторите попытку.", "error")
+      return
+    }
     setShopDailyClaimedToday(true)
   }, [
     currentUser,

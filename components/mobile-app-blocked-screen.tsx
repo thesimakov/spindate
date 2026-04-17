@@ -13,7 +13,11 @@ import {
   openVkUrl,
   VK_COMMUNITY_PUBLIC_URL,
 } from "@/lib/vk-bridge"
-import { buildVkGroupSubscribeRewardUrl, markVkGroupBellAnimationOff } from "@/lib/vk-group-news-bell"
+import {
+  buildVkGroupSubscribeRewardUrl,
+  markVkGroupBellAnimationOff,
+  resetVkGroupBellAnimationState,
+} from "@/lib/vk-group-news-bell"
 import { VK_GROUP_SUBSCRIBE_BONUS_HEARTS } from "@/lib/vk-group-subscribe-constants"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -59,6 +63,8 @@ export function MobileAppBlockedScreen() {
     }
     if (!data || data.ok !== true) {
       if (data?.isMember === false) {
+        setSubscribeSuccess("none")
+        resetVkGroupBellAnimationState()
         setHint(
           "Подписка пока не засчиталась. Оформите вступление в сообщество и нажмите кнопку ещё раз через несколько секунд.",
         )
@@ -70,8 +76,7 @@ export function MobileAppBlockedScreen() {
         errStr.includes("Не удалось проверить подписку") ||
         errStr.includes("проверить подписку")
       if (verifyFailed) {
-        setHint("Вы уже подписаны. Следите за новостями.")
-        markVkGroupBellAnimationOff()
+        setHint("Не удалось проверить подписку прямо сейчас. Попробуйте снова через несколько секунд.")
         awaitingClaimRef.current = false
         return "none"
       }
@@ -164,7 +169,7 @@ export function MobileAppBlockedScreen() {
 
         <Button
           type="button"
-          disabled={busy || showSuccess}
+          disabled={busy}
           onClick={() => void handleSubscribeAndBonus()}
           className={cn(
             "mt-6 h-12 w-full rounded-2xl border border-cyan-400/40",
@@ -177,7 +182,7 @@ export function MobileAppBlockedScreen() {
           {busy && !showSuccess ? (
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
           ) : showSuccess ? (
-            "Вы подписались"
+            "Проверить подписку снова"
           ) : (
             <>
               <Heart className="mr-2 h-4 w-4 shrink-0 fill-white/20" aria-hidden />

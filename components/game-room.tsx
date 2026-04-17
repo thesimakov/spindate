@@ -118,6 +118,11 @@ import {
 } from "@/lib/gift-progress-shared"
 import { recordGiftProgress } from "@/lib/gift-progress-client"
 import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
+import {
+  SPIN_HANG_FAILSAFE_MS,
+  SPIN_RESOLVE_AFTER_MS,
+  SPIN_RESOLVE_GRACE_MS,
+} from "@/lib/spin-timing"
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -1421,9 +1426,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   useEffect(() => {
     isSpinningRef.current = isSpinning
   }, [isSpinning])
-  /** Чуть дольше CSS transition бутылки (6s), чтобы finalize не опережал анимацию. */
-  const SPIN_RESOLVE_AFTER_MS = 6500
-  const SPIN_HANG_FAILSAFE_MS = 20_000
 
   const spinResolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const spinSessionRef = useRef<string>("")
@@ -1440,6 +1442,21 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     pot: number
     tableId: number
   } | null>(null)
+  const resetSpinResolveState = useCallback((reason: string) => {
+    if (process.env.NODE_ENV === "development" && spinSessionRef.current) {
+      console.debug("[spin] reset resolve state", {
+        reason,
+        spinSession: spinSessionRef.current,
+      })
+    }
+    spinSessionRef.current = ""
+    spinResolveDeadlineRef.current = null
+    spinResolveMetaRef.current = null
+    if (spinResolveTimeoutRef.current) {
+      clearTimeout(spinResolveTimeoutRef.current)
+      spinResolveTimeoutRef.current = null
+    }
+  }, [])
   const pendingNextKissAnnouncementRoundKeyRef = useRef<string | null>(null)
   const playedNextKissAnnouncementRoundKeyRef = useRef<string | null>(null)
 
@@ -2362,14 +2379,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       idA: meta.spinner.id,
       idB: meta.target.id,
     })
-    spinResolveDeadlineRef.current = null
-    spinSessionRef.current = ""
-    spinResolveMetaRef.current = null
-    if (spinResolveTimeoutRef.current) {
-      clearTimeout(spinResolveTimeoutRef.current)
-      spinResolveTimeoutRef.current = null
-    }
-  }, [currentUser, dispatch])
+    resetSpinResolveState("finalized")
+  }, [currentUser, dispatch, resetSpinResolveState])
 
   const {
     turnTimer,
@@ -2807,6 +2818,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const spinSessionKey = `${tableId}:${roundNumber}:${currentTurnIndex}:${spinner.id}`
     spinStartedTurnKeyRef.current = turnKey
     spinSessionRef.current = spinSessionKey
+    if (process.env.NODE_ENV === "development") {
+      console.debug("[spin] start", {
+        spinSessionKey,
+        spinnerId: spinner.id,
+        targetId: target.id,
+        tableId,
+        roundNumber,
+        currentTurnIndex,
+      })
+    }
 
     dispatch({ type: "END_PREDICTION_PHASE" })
     dispatch({ type: "START_SPIN", angle: totalAngle, target: target, target2: spinner })
@@ -2847,9 +2868,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       countdown === null &&
       meta != null &&
       deadline != null &&
-      Date.now() <= deadline + 2500
+      Date.now() <= deadline + SPIN_RESOLVE_GRACE_MS
     ) {
-      const ms = Math.max(0, deadline + 2500 - Date.now() + 20)
+      const ms = Math.max(0, deadline + SPIN_RESOLVE_GRACE_MS - Date.now() + 20)
       const t = window.setTimeout(() => {
         if (isSpinningRef.current) return
         const m = spinResolveMetaRef.current
@@ -2874,14 +2895,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       return
     }
 
-    spinSessionRef.current = ""
-    spinResolveDeadlineRef.current = null
-    spinResolveMetaRef.current = null
-    if (spinResolveTimeoutRef.current) {
-      clearTimeout(spinResolveTimeoutRef.current)
-      spinResolveTimeoutRef.current = null
-    }
-  }, [isSpinning, roundNumber, currentTurnIndex, showResult, countdown, finalizeSpinFromMeta])
+    resetSpinResolveState("spin_stopped_without_meta")
+  }, [isSpinning, roundNumber, currentTurnIndex, showResult, countdown, finalizeSpinFromMeta, resetSpinResolveState])
 
   useEffect(() => {
     spinStartedTurnKeyRef.current = ""
@@ -2919,6 +2934,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       if (!isSpinningRef.current) return
       const meta = spinResolveMetaRef.current
       if (!meta || spinSessionRef.current !== meta.spinSessionKey) return
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[spin] failsafe finalize", {
+          spinSessionKey: meta.spinSessionKey,
+          tableId: meta.tableId,
+        })
+      }
       finalizeSpinFromMeta(meta)
     }, SPIN_HANG_FAILSAFE_MS)
     return () => clearTimeout(id)
@@ -2933,6 +2954,14 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const coordinatorId = Math.min(...humanIds)
     if (currentUser.id !== coordinatorId) return
     const watchdog = setTimeout(() => {
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[spin] coordinator watchdog fired", {
+          coordinatorId,
+          tableId,
+          roundNumber,
+          currentTurnIndex,
+        })
+      }
       dispatch({ type: "STOP_SPIN", action: "skip" })
       if (currentTurnPlayer && targetPlayer) {
         dispatch({
@@ -3322,15 +3351,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const key = pairKissPhase.roundKey
     if (coordinatorId == null || currentUser.id !== coordinatorId) return
     if (pairKissAdvanceRef.current === key) return
-    // #region agent log
-    process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Scheduling NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,choiceA:pairKissPhase.choiceA,choiceB:pairKissPhase.choiceB,outcome:pairKissPhase.outcome,delayMs:PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS,coordinatorId,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const t = window.setTimeout(() => {
       if (pairKissAdvanceRef.current === key) return
       pairKissAdvanceRef.current = key
-      // #region agent log
-      process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Dispatching NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,outcome:pairKissPhase.outcome,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       dispatch({ type: "NEXT_TURN" })
     }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
     return () => clearTimeout(t)
@@ -3557,69 +3580,15 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       emoji?: string,
       imgSrcRaw?: string,
     ) => {
-      // #region agent log
-      process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-        body: JSON.stringify({
-          sessionId: "b06cc0",
-          location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:entry",
-          message: "gift fly trigger called",
-          data: {
-            buttonKey,
-            recipientPlayerId,
-            giftTypeId,
-            refKeysSample: Object.keys(giftCatalogButtonRefs.current).slice(0, 12),
-            hasButtonForKey: Boolean(giftCatalogButtonRefs.current[buttonKey]),
-          },
-          timestamp: Date.now(),
-          hypothesisId: "H1",
-        }),
-      }).catch(() => {})
-      // #endregion
       const buttonEl = giftCatalogButtonRefs.current[buttonKey]
       const surface = tableSurfaceRef.current
       if (!buttonEl || !surface) {
-        // #region agent log
-        process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-          body: JSON.stringify({
-            sessionId: "b06cc0",
-            location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:early",
-            message: "gift fly aborted: missing button or surface",
-            data: { hasButtonEl: Boolean(buttonEl), hasSurface: Boolean(surface) },
-            timestamp: Date.now(),
-            hypothesisId: "H1-H2",
-          }),
-        }).catch(() => {})
-        // #endregion
         return
       }
       const avatarWrap = surface.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${recipientPlayerId}"]`)
       const from = buttonEl.getBoundingClientRect()
       const to = avatarWrap?.getBoundingClientRect()
       if (!to || from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) {
-        // #region agent log
-        process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-          body: JSON.stringify({
-            sessionId: "b06cc0",
-            location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:early",
-            message: "gift fly aborted: bad avatar or rects",
-            data: {
-              hasAvatarWrap: Boolean(avatarWrap),
-              fromW: from.width,
-              fromH: from.height,
-              toW: to?.width,
-              toH: to?.height,
-            },
-            timestamp: Date.now(),
-            hypothesisId: "H3-H4",
-          }),
-        }).catch(() => {})
-        // #endregion
         return
       }
       const id = `gift_fly_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -3633,20 +3602,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         ...prev.slice(-7),
         { id, recipientPlayerId, giftTypeId, emoji, imgSrc, startX, startY, endX, endY },
       ])
-      // #region agent log
-      process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-        body: JSON.stringify({
-          sessionId: "b06cc0",
-          location: "game-room.tsx:triggerGiftCatalogFlyToAvatar:success",
-          message: "gift fly fx queued",
-          data: { id, buttonKey, recipientPlayerId },
-          timestamp: Date.now(),
-          hypothesisId: "H1-ok",
-        }),
-      }).catch(() => {})
-      // #endregion
     },
     [],
   )
@@ -3890,25 +3845,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   useEffect(() => {
     const prev = pairKissDebugPrevRef.current
     if (pairKissPhase) {
-      const hasPlayerA = players.some((p) => p.id === pairKissPhase.idA)
-      const hasPlayerB = players.some((p) => p.id === pairKissPhase.idB)
-      const shouldLogSnapshot =
-        prev.roundKey !== pairKissPhase.roundKey || prev.resolved !== pairKissPhase.resolved
-      if (shouldLogSnapshot) {
-        // #region agent log
-        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase snapshot',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,resolved:pairKissPhase.resolved,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-      }
       if (!pairKissCenterUi && prev.uiHiddenLoggedForRoundKey !== pairKissPhase.roundKey) {
-        // #region agent log
-        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H7',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase exists but center UI hidden',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,playerCount:players.length,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         prev.uiHiddenLoggedForRoundKey = pairKissPhase.roundKey
       }
       if (showMobileEmotionStrip && prev.stripOverlapLoggedForRoundKey !== pairKissPhase.roundKey) {
-        // #region agent log
-        process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H8',location:'components/game-room.tsx:pair-kiss-transition',message:'Emotion strip visible while pair kiss phase active',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null,showResult},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         prev.stripOverlapLoggedForRoundKey = pairKissPhase.roundKey
       }
       prev.roundKey = pairKissPhase.roundKey
@@ -3917,9 +3857,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       return
     }
     if (showResult && prev.dropCandidateRoundKey) {
-      // #region agent log
-      process.env.NODE_ENV === 'development' && fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase dropped while result is active',data:{roundNumber,currentTurnIndex,droppedRoundKey:prev.dropCandidateRoundKey,showResult,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       prev.dropCandidateRoundKey = null
     }
     if (!showResult) {
@@ -4383,21 +4320,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         description="Ура! Ты выполнил(а) достижение за подарки и получил(а) награду."
         shareBusy={giftAchievementShareBusy}
         onClose={() => {
-          // #region agent log
-          process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-            body: JSON.stringify({
-              sessionId: "b06cc0",
-              runId: "pre-fix",
-              hypothesisId: "H4",
-              location: "game-room.tsx:GiftAchievementModal:parentOnClose",
-              message: "Parent onClose called",
-              timestamp: Date.now(),
-              data: { giftAchievementOpen, giftAchievementShareBusy },
-            }),
-          }).catch(() => {})
-          // #endregion
           setGiftAchievementOpen(false)
         }}
         onShare={() => void handleShareGiftAchievement()}

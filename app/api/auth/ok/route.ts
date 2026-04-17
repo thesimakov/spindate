@@ -6,8 +6,8 @@ import { parseOkApplicationKey, parseOkLoggedUserId, verifyOkLaunchParams } from
 import { clearDeletedSanction, getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 
-const VALID_GENDERS = ["male", "female"] as const
 const VALID_PURPOSES = ["relationships", "communication", "love"] as const
+type ValidGender = "male" | "female"
 
 function getOkApplicationSecret(): string {
   return (process.env.OK_APPLICATION_SECRET ?? "").trim()
@@ -127,7 +127,7 @@ export async function POST(req: Request) {
     .get(okUserId) as { id: string; username: string } | undefined
 
   if (!userRow) {
-    const gender: (typeof VALID_GENDERS)[number] = "male"
+    const gender: ValidGender = "male"
     const ageNum = 25
 
     const userId = newId()

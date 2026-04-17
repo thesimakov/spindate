@@ -41,3 +41,13 @@ export function markVkGroupBellAnimationOff(): void {
     /* ignore */
   }
 }
+
+export function resetVkGroupBellAnimationState(): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+    window.dispatchEvent(new Event(VK_GROUP_BELL_STORAGE_EVENT))
+  } catch {
+    /* ignore */
+  }
+}

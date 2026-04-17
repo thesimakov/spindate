@@ -92,6 +92,8 @@ function migrate(database: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_game_state_updated_at ON user_game_state(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_vk_user_game_state_updated_at ON vk_user_game_state(updated_at);
     CREATE INDEX IF NOT EXISTS idx_ok_user_game_state_updated_at ON ok_user_game_state(updated_at);
 
@@ -414,6 +416,24 @@ function migrate(database: Database.Database) {
       payload_json TEXT NOT NULL DEFAULT '{}'
     );
     CREATE INDEX IF NOT EXISTS idx_game_client_errors_created ON game_client_errors(created_at);
+  `)
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS admin_player_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      target_user_id TEXT,
+      target_vk_user_id INTEGER,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      consumed_at INTEGER,
+      consumed_by_user_id TEXT,
+      consumed_by_vk_user_id INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_player_requests_target_user
+      ON admin_player_requests(target_user_id, consumed_at, id);
+    CREATE INDEX IF NOT EXISTS idx_admin_player_requests_target_vk_user
+      ON admin_player_requests(target_vk_user_id, consumed_at, id);
   `)
 
   const now = Date.now()

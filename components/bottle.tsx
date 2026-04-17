@@ -3,6 +3,7 @@
 import { memo, useState, useEffect, useRef } from "react"
 import { assetUrl, BOTTLE_IMAGES } from "@/lib/assets"
 import { FortuneWheelStatic, FortuneWheelArrow } from "@/components/fortune-wheel-bottle-visual"
+import { BOTTLE_SPIN_ANIMATION_MS, BOTTLE_STUCK_KICK_AFTER_MS } from "@/lib/spin-timing"
 
 interface BottleProps {
   angle: number
@@ -36,8 +37,6 @@ interface BottleProps {
 }
 
 type BottleSkinWithImage = Exclude<NonNullable<BottleProps["skin"]>, "fortune_wheel">
-
-const BOTTLE_STUCK_KICK_AFTER_MS = 2_000
 
 export const Bottle = memo(function Bottle({
   angle,
@@ -128,7 +127,7 @@ export const Bottle = memo(function Bottle({
   }, [isSpinning, angle])
 
   const spinTransition = isSpinning
-    ? "transform 6s cubic-bezier(0.17, 0.67, 0.12, 0.99)"
+    ? `transform ${BOTTLE_SPIN_ANIMATION_MS}ms cubic-bezier(0.17, 0.67, 0.12, 0.99)`
     : wasSpinning
       ? "transform 0.8s ease-out"
       : "none"

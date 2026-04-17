@@ -21,19 +21,6 @@ export async function POST(req: Request) {
   }
 
   const db = getDb()
-  db.prepare(
-    `CREATE TABLE IF NOT EXISTS admin_player_requests (
-       id INTEGER PRIMARY KEY AUTOINCREMENT,
-       kind TEXT NOT NULL,
-       target_user_id TEXT,
-       target_vk_user_id INTEGER,
-       payload_json TEXT NOT NULL DEFAULT '{}',
-       created_at INTEGER NOT NULL,
-       consumed_at INTEGER,
-       consumed_by_user_id TEXT,
-       consumed_by_vk_user_id INTEGER
-     )`,
-  ).run()
 
   const row = db.prepare(
     `SELECT id, kind, payload_json

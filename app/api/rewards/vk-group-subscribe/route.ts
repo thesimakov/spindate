@@ -7,6 +7,7 @@ import { VK_GROUP_SUBSCRIBE_BONUS_HEARTS } from "@/lib/vk-group-subscribe-consta
 
 const COMMUNITY_GROUP_ID = 236519647
 const BONUS_HEARTS = VK_GROUP_SUBSCRIBE_BONUS_HEARTS
+const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
 
 function parseInventoryJson(raw: string | undefined): unknown[] {
   if (!raw) return []
@@ -21,13 +22,13 @@ function parseInventoryJson(raw: string | undefined): unknown[] {
 export async function POST(req: Request) {
   const auth = getGameUserIdFromRequest(req)
   if (!auth) {
-    return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
+    return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401, headers: NO_CACHE })
   }
 
   if (auth.okUserId != null) {
     return NextResponse.json(
       { ok: false, error: "Бонус доступен только аккаунтам ВКонтакте" },
-      { status: 400 },
+      { status: 400, headers: NO_CACHE },
     )
   }
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
   if (vkUserId == null) {
     return NextResponse.json(
       { ok: false, error: "Бонус доступен только аккаунтам ВКонтакте" },
-      { status: 400 },
+      { status: 400, headers: NO_CACHE },
     )
   }
 
@@ -54,21 +55,24 @@ export async function POST(req: Request) {
     if (memberCheck.reason === "missing_service_token") {
       return NextResponse.json(
         { ok: false, error: "Сервер не настроен для проверки подписки", reason: memberCheck.reason },
-        { status: 503 },
+        { status: 503, headers: NO_CACHE },
       )
     }
     return NextResponse.json(
       { ok: false, error: "Не удалось проверить подписку", reason: memberCheck.reason },
-      { status: 502 },
+      { status: 502, headers: NO_CACHE },
     )
   }
 
   if (!memberCheck.member) {
-    return NextResponse.json({
-      ok: false,
-      isMember: false,
-      error: "Вы ещё не подписаны на сообщество",
-    })
+    return NextResponse.json(
+      {
+        ok: false,
+        isMember: false,
+        error: "Вы ещё не подписаны на сообщество",
+      },
+      { headers: NO_CACHE },
+    )
   }
 
   const now = Date.now()
@@ -111,12 +115,15 @@ export async function POST(req: Request) {
       .get(auth.userId) as { voice_balance: number; vk_group_bonus_claimed: number } | undefined
 
     if (row && row.vk_group_bonus_claimed) {
-      return NextResponse.json({
-        ok: true,
-        alreadyClaimed: true,
-        isMember: true,
-        ...userPayload(auth.userId),
-      })
+      return NextResponse.json(
+        {
+          ok: true,
+          alreadyClaimed: true,
+          isMember: true,
+          ...userPayload(auth.userId),
+        },
+        { headers: NO_CACHE },
+      )
     }
 
     if (!row) {
@@ -124,12 +131,15 @@ export async function POST(req: Request) {
         `INSERT INTO user_game_state (user_id, voice_balance, inventory_json, updated_at, vk_group_bonus_claimed)
          VALUES (?, ?, '[]', ?, 1)`,
       ).run(auth.userId, BONUS_HEARTS, now)
-      return NextResponse.json({
-        ok: true,
-        isMember: true,
-        granted: true,
-        ...userPayload(auth.userId),
-      })
+      return NextResponse.json(
+        {
+          ok: true,
+          isMember: true,
+          granted: true,
+          ...userPayload(auth.userId),
+        },
+        { headers: NO_CACHE },
+      )
     }
 
     const balance = (row.voice_balance ?? 0) + BONUS_HEARTS
@@ -139,7 +149,10 @@ export async function POST(req: Request) {
        WHERE user_id = ?`,
     ).run(balance, now, auth.userId)
 
-    return NextResponse.json({ ok: true, isMember: true, granted: true, ...userPayload(auth.userId) })
+    return NextResponse.json(
+      { ok: true, isMember: true, granted: true, ...userPayload(auth.userId) },
+      { headers: NO_CACHE },
+    )
   }
 
   const rowVk = db
@@ -147,12 +160,15 @@ export async function POST(req: Request) {
     .get(vkUserId) as { voice_balance: number; vk_group_bonus_claimed: number } | undefined
 
   if (rowVk && rowVk.vk_group_bonus_claimed) {
-    return NextResponse.json({
-      ok: true,
-      alreadyClaimed: true,
-      isMember: true,
-      ...vkPayload(vkUserId),
-    })
+    return NextResponse.json(
+      {
+        ok: true,
+        alreadyClaimed: true,
+        isMember: true,
+        ...vkPayload(vkUserId),
+      },
+      { headers: NO_CACHE },
+    )
   }
 
   if (!rowVk) {
@@ -160,12 +176,15 @@ export async function POST(req: Request) {
       `INSERT INTO vk_user_game_state (vk_user_id, voice_balance, inventory_json, updated_at, vk_group_bonus_claimed)
        VALUES (?, ?, '[]', ?, 1)`,
     ).run(vkUserId, BONUS_HEARTS, now)
-    return NextResponse.json({
-      ok: true,
-      isMember: true,
-      granted: true,
-      ...vkPayload(vkUserId),
-    })
+    return NextResponse.json(
+      {
+        ok: true,
+        isMember: true,
+        granted: true,
+        ...vkPayload(vkUserId),
+      },
+      { headers: NO_CACHE },
+    )
   }
 
   const balanceVk = (rowVk.voice_balance ?? 0) + BONUS_HEARTS
@@ -175,5 +194,8 @@ export async function POST(req: Request) {
      WHERE vk_user_id = ?`,
   ).run(balanceVk, now, vkUserId)
 
-  return NextResponse.json({ ok: true, isMember: true, granted: true, ...vkPayload(vkUserId) })
+  return NextResponse.json(
+    { ok: true, isMember: true, granted: true, ...vkPayload(vkUserId) },
+    { headers: NO_CACHE },
+  )
 }

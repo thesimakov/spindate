@@ -87,7 +87,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
       }
       const result = await checkVkGroupMembership()
       if (result.member === true) return true
-      if (result.member === false && i === attempts - 1) return false
+      if (result.member === false) return false
     }
     return null
   }, [checkVkGroupMembership])
@@ -104,7 +104,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
       const groupCheck = await checkVkGroupMembership()
       setGroupMembership(groupCheck.member)
       setGroupStatusError(groupCheck.reason ?? null)
-      if (p.group && groupCheck.member === false) {
+      if (p.group && groupCheck.member !== true) {
         next.group = false
         changed = true
       }
@@ -183,7 +183,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
   const grantRewardForAction = useCallback(async (
     action: VkExtraHeartsGateAction,
-    actionTitle: string,
+    _actionTitle: string,
   ) => {
     if (!currentUser) return
     if (progress[action]) return
@@ -195,9 +195,10 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     const nextVoice = state.voiceBalance + VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION
     dispatch({ type: "PAY_VOICES", amount: -VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION })
 
-    void persistUserGameState(currentUser, nextVoice, state.inventory).catch(() => {
+    const persisted = await persistUserGameState(currentUser, nextVoice, state.inventory)
+    if (!persisted) {
       showToast("Награда начислена, но сервер пока недоступен. Синхронизируем позже.", "info")
-    })
+    }
 
     showToast(`Готово: +${VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION} ❤`, "success")
   }, [currentUser, dispatch, progress, showToast, state.inventory, state.voiceBalance])
@@ -227,7 +228,10 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     if (progress.group) return
     setRowBusy("group")
     try {
-      if (groupMembership === true) {
+      const freshCheck = await checkVkGroupMembership()
+      setGroupMembership(freshCheck.member)
+      setGroupStatusError(freshCheck.reason ?? null)
+      if (freshCheck.member === true) {
         await grantRewardForAction("group", "Вступить в группу игры")
         return
       }
@@ -258,7 +262,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     } finally {
       setRowBusy(null)
     }
-  }, [grantRewardForAction, groupMembership, progress.group, showToast, waitForVkGroupMembership])
+  }, [checkVkGroupMembership, grantRewardForAction, progress.group, showToast, waitForVkGroupMembership])
 
   const handleAllowNotifications = useCallback(async () => {
     if (progress.notify) return

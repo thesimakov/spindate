@@ -60,7 +60,6 @@ export function LobbySpotlightModal({
 
         {showImage ? (
           <div className="mb-5 flex justify-center" aria-hidden>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageUrl!.trim()}
               alt=""

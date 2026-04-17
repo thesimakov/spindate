@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/admin-auth"
 import { getDb } from "@/lib/db"
-import { getAdminFlagsForUserId } from "@/lib/admin-flags"
 import { getRedis } from "@/lib/redis"
 import { deserializeLiveTablesState } from "@/lib/live-tables-core"
 import { getLiveTablesRawMemory } from "@/lib/live-tables-memory"
@@ -21,12 +20,14 @@ const VK_MEMBERSHIP_CHECK_LIMIT = 20
 const VK_MEMBERSHIP_DELAY_MS = 300
 /** Не тратить на VK больше этого — иначе «слетает» список из‑за таймаута. */
 const VK_MEMBERSHIP_BUDGET_MS = 10_000
+const VK_MEMBERSHIP_QUERY_PARAM = "includeVkMembership"
 
 export async function GET(req: Request) {
   const denied = requireAdmin(req)
   if (denied) return denied
 
   try {
+    const includeVkMembership = new URL(req.url).searchParams.get(VK_MEMBERSHIP_QUERY_PARAM) === "1"
     const db = getDb()
     const userCols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>
     const userGameStateCols = db.prepare(`PRAGMA table_info(user_game_state)`).all() as Array<{ name: string }>
@@ -59,6 +60,31 @@ export async function GET(req: Request) {
       vk_group_bonus_claimed: number | null
     }>
 
+    const flagsByUserId = new Map<
+      string,
+      { blockedUntil: number | null; bannedUntil: number | null; deleted: boolean }
+    >()
+    if (rows.length > 0) {
+      const flagPlaceholders = rows.map(() => "?").join(",")
+      const rawFlags = db.prepare(
+        `SELECT user_id, blocked_until, banned_until, deleted
+         FROM user_admin_flags
+         WHERE user_id IN (${flagPlaceholders})`,
+      ).all(...rows.map((r) => r.user_id)) as Array<{
+        user_id: string
+        blocked_until: number | null
+        banned_until: number | null
+        deleted: number
+      }>
+      for (const f of rawFlags) {
+        flagsByUserId.set(f.user_id, {
+          blockedUntil: typeof f.blocked_until === "number" ? f.blocked_until : null,
+          bannedUntil: typeof f.banned_until === "number" ? f.banned_until : null,
+          deleted: Boolean(f.deleted),
+        })
+      }
+    }
+
     // live presence snapshot
     const liveByUserKey = new Map<string, { tableId: number; updatedAt: number; playerId: number }>()
     const redis = getRedis()
@@ -74,7 +100,6 @@ export async function GET(req: Request) {
     }
 
     const out = rows.map((r) => {
-      const flags = getAdminFlagsForUserId(r.user_id)
       const key = r.vk_user_id != null ? `vk:${r.vk_user_id}` : `u:${r.user_id}`
       const live = liveByUserKey.get(key) ?? null
       return {
@@ -89,7 +114,7 @@ export async function GET(req: Request) {
         purpose: r.purpose ?? undefined,
         voiceBalance: r.voice_balance ?? 0,
         vkGroupBonusClaimed: Boolean(r.vk_group_bonus_claimed),
-        flags,
+        flags: flagsByUserId.get(r.user_id) ?? null,
         live,
       }
     })
@@ -132,17 +157,57 @@ export async function GET(req: Request) {
       })
     }
 
+    const unresolvedLiveVkIds: number[] = []
+    for (const key of liveByUserKey.keys()) {
+      if (knownKeys.has(key)) continue
+      if (!key.startsWith("vk:")) continue
+      const vkFromKey = Number(key.slice(3))
+      if (Number.isFinite(vkFromKey) && vkFromKey > 0) unresolvedLiveVkIds.push(vkFromKey)
+    }
+    const linkedUsersByVkId = new Map<number, { id: string; username: string }>()
+    if (unresolvedLiveVkIds.length > 0) {
+      const uniqueVkIds = Array.from(new Set(unresolvedLiveVkIds))
+      const vkPlaceholders = uniqueVkIds.map(() => "?").join(",")
+      const linkedRows = db.prepare(
+        `SELECT id, username, vk_user_id
+         FROM users
+         WHERE vk_user_id IN (${vkPlaceholders})`,
+      ).all(...uniqueVkIds) as Array<{ id: string; username: string; vk_user_id: number | null }>
+      for (const linked of linkedRows) {
+        if (typeof linked.vk_user_id === "number" && Number.isInteger(linked.vk_user_id) && linked.vk_user_id > 0) {
+          linkedUsersByVkId.set(linked.vk_user_id, { id: linked.id, username: linked.username })
+        }
+      }
+      const linkedUserIds = linkedRows.map((l) => l.id)
+      if (linkedUserIds.length > 0) {
+        const linkedFlagPlaceholders = linkedUserIds.map(() => "?").join(",")
+        const linkedFlags = db.prepare(
+          `SELECT user_id, blocked_until, banned_until, deleted
+           FROM user_admin_flags
+           WHERE user_id IN (${linkedFlagPlaceholders})`,
+        ).all(...linkedUserIds) as Array<{
+          user_id: string
+          blocked_until: number | null
+          banned_until: number | null
+          deleted: number
+        }>
+        for (const f of linkedFlags) {
+          flagsByUserId.set(f.user_id, {
+            blockedUntil: typeof f.blocked_until === "number" ? f.blocked_until : null,
+            bannedUntil: typeof f.banned_until === "number" ? f.banned_until : null,
+            deleted: Boolean(f.deleted),
+          })
+        }
+      }
+    }
+
     for (const [key, live] of liveByUserKey.entries()) {
       if (knownKeys.has(key)) continue
       const vkFromKey = key.startsWith("vk:") ? Number(key.slice(3)) : null
       const linkedDbUser =
-        vkFromKey != null && Number.isFinite(vkFromKey)
-          ? (db
-              .prepare(`SELECT id, username FROM users WHERE vk_user_id = ? LIMIT 1`)
-              .get(vkFromKey) as { id: string; username: string } | undefined)
-          : undefined
+        vkFromKey != null && Number.isFinite(vkFromKey) ? linkedUsersByVkId.get(vkFromKey) : undefined
       const resolvedUserId = linkedDbUser?.id ?? `live:${key}`
-      const resolvedFlags = linkedDbUser?.id ? getAdminFlagsForUserId(linkedDbUser.id) : null
+      const resolvedFlags = linkedDbUser?.id ? (flagsByUserId.get(linkedDbUser.id) ?? null) : null
       out.push({
         userId: resolvedUserId,
         // Если user в live присутствии появился раньше, чем в выборке rows, но в users уже есть запись — модерировать можно.
@@ -166,12 +231,17 @@ export async function GET(req: Request) {
     }
 
     // Stats by live table (lightweight: counts from gameLog)
-    const tables = new Map<number, Awaited<ReturnType<typeof getTableAuthoritySnapshot>>>()
-    for (const u of out) {
-      if (u.live?.tableId != null && !tables.has(u.live.tableId)) {
-        tables.set(u.live.tableId, await getTableAuthoritySnapshot(u.live.tableId))
-      }
-    }
+    const liveTableIds = Array.from(
+      new Set(
+        out
+          .map((u) => u.live?.tableId ?? null)
+          .filter((tableId): tableId is number => typeof tableId === "number" && Number.isInteger(tableId) && tableId > 0),
+      ),
+    )
+    const tableSnapshots = await Promise.all(
+      liveTableIds.map(async (liveTableId) => [liveTableId, await getTableAuthoritySnapshot(liveTableId)] as const),
+    )
+    const tables = new Map<number, Awaited<ReturnType<typeof getTableAuthoritySnapshot>>>(tableSnapshots)
     const usersWithStats = out.map((u) => {
       const snap = u.live?.tableId != null ? tables.get(u.live.tableId) ?? null : null
       if (!snap || !u.live?.playerId) return { ...u, stats: null as null }
@@ -192,7 +262,8 @@ export async function GET(req: Request) {
       }
     })
 
-    // Подписка VK: после сборки списка, короткий бюджет времени (без ретраев — иначе таймаут всего GET).
+    // Подписка VK: выполняется только по запросу с includeVkMembership=1,
+    // чтобы список пользователей появлялся сразу.
     const uniqueVkIds = Array.from(
       new Set(
         out
@@ -203,29 +274,31 @@ export async function GET(req: Request) {
 
     const vkMembershipById = new Map<number, boolean | null>()
     let vkMembershipCheckError: string | null = null
-    const vkDeadline = Date.now() + VK_MEMBERSHIP_BUDGET_MS
-    try {
-      for (let i = 0; i < uniqueVkIds.length; i++) {
-        if (Date.now() > vkDeadline) {
-          if (!vkMembershipCheckError) vkMembershipCheckError = "vk_check_budget"
-          break
+    if (includeVkMembership) {
+      const vkDeadline = Date.now() + VK_MEMBERSHIP_BUDGET_MS
+      try {
+        for (let i = 0; i < uniqueVkIds.length; i++) {
+          if (Date.now() > vkDeadline) {
+            if (!vkMembershipCheckError) vkMembershipCheckError = "vk_check_budget"
+            break
+          }
+          const vkUserId = uniqueVkIds[i]!
+          if (i > 0) {
+            await new Promise<void>((r) => setTimeout(r, VK_MEMBERSHIP_DELAY_MS))
+          }
+          if (Date.now() > vkDeadline) break
+          const check = await vkGroupsIsMemberOnce({ groupId: VK_COMMUNITY_GROUP_ID, userId: vkUserId })
+          if (!check.ok) {
+            vkMembershipById.set(vkUserId, null)
+            if (!vkMembershipCheckError) vkMembershipCheckError = check.reason
+            if (check.reason === "missing_service_token") break
+            continue
+          }
+          vkMembershipById.set(vkUserId, check.member)
         }
-        const vkUserId = uniqueVkIds[i]!
-        if (i > 0) {
-          await new Promise<void>((r) => setTimeout(r, VK_MEMBERSHIP_DELAY_MS))
-        }
-        if (Date.now() > vkDeadline) break
-        const check = await vkGroupsIsMemberOnce({ groupId: VK_COMMUNITY_GROUP_ID, userId: vkUserId })
-        if (!check.ok) {
-          vkMembershipById.set(vkUserId, null)
-          if (!vkMembershipCheckError) vkMembershipCheckError = check.reason
-          if (check.reason === "missing_service_token") break
-          continue
-        }
-        vkMembershipById.set(vkUserId, check.member)
+      } catch {
+        if (!vkMembershipCheckError) vkMembershipCheckError = "vk_check_failed"
       }
-    } catch {
-      if (!vkMembershipCheckError) vkMembershipCheckError = "vk_check_failed"
     }
 
     const usersWithVkStatus = usersWithStats.map((u) => ({

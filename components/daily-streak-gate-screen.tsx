@@ -217,7 +217,10 @@ export function DailyStreakGateScreen() {
       // ignore
     }
 
-    await persistUserGameState(currentUser, nextVoice, nextInventory)
+    const persisted = await persistUserGameState(currentUser, nextVoice, nextInventory)
+    if (!persisted) {
+      return
+    }
 
     setDailyClaimedToday(true)
     setShowWelcomeGift(false)

@@ -4,17 +4,18 @@ import { getGameUserIdFromRequest } from "@/lib/user-request-auth"
 import { vkGroupsIsMember } from "@/lib/vk-groups-server"
 
 const COMMUNITY_GROUP_ID = 236519647
+const NO_CACHE = { "Cache-Control": "no-store, no-cache, must-revalidate" }
 
 export async function POST(req: Request) {
   const auth = getGameUserIdFromRequest(req)
   if (!auth) {
-    return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 })
+    return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401, headers: NO_CACHE })
   }
 
   if (auth.okUserId != null) {
     return NextResponse.json(
       { ok: false, error: "Проверка доступна только аккаунтам ВКонтакте" },
-      { status: 400 },
+      { status: 400, headers: NO_CACHE },
     )
   }
 
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
   if (vkUserId == null) {
     return NextResponse.json(
       { ok: false, error: "VK аккаунт не привязан" },
-      { status: 400 },
+      { status: 400, headers: NO_CACHE },
     )
   }
 
@@ -42,14 +43,14 @@ export async function POST(req: Request) {
     if (memberCheck.reason === "missing_service_token") {
       return NextResponse.json(
         { ok: false, error: "Сервер не настроен для проверки подписки", reason: memberCheck.reason },
-        { status: 503 },
+        { status: 503, headers: NO_CACHE },
       )
     }
     return NextResponse.json(
       { ok: false, error: "Не удалось проверить подписку", reason: memberCheck.reason },
-      { status: 502 },
+      { status: 502, headers: NO_CACHE },
     )
   }
 
-  return NextResponse.json({ ok: true, isMember: memberCheck.member })
+  return NextResponse.json({ ok: true, isMember: memberCheck.member }, { headers: NO_CACHE })
 }

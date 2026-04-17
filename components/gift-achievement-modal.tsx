@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -28,44 +27,7 @@ export function GiftAchievementModal({
 }: GiftAchievementModalProps) {
   if (!open) return null
 
-  const hasLoggedRef = useRef(false)
-  useEffect(() => {
-    if (!open) return
-    if (hasLoggedRef.current) return
-    hasLoggedRef.current = true
-    // #region agent log
-    process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-      body: JSON.stringify({
-        sessionId: "b06cc0",
-        runId: "pre-fix",
-        hypothesisId: "H1",
-        location: "gift-achievement-modal.tsx:render",
-        message: "GiftAchievementModal render for closeability",
-        timestamp: Date.now(),
-        data: { open, shareBusy, recipientGender },
-      }),
-    }).catch(() => {})
-    // #endregion
-  }, [open, shareBusy, recipientGender])
-
   const handleClose = () => {
-    // #region agent log
-    process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-      body: JSON.stringify({
-        sessionId: "b06cc0",
-        runId: "pre-fix",
-        hypothesisId: "H2",
-        location: "gift-achievement-modal.tsx:handleClose",
-        message: "GiftAchievementModal close handler invoked",
-        timestamp: Date.now(),
-        data: { open, shareBusy, recipientGender },
-      }),
-    }).catch(() => {})
-    // #endregion
     onClose()
   }
 
@@ -80,21 +42,6 @@ export function GiftAchievementModal({
       aria-labelledby="gift-achievement-title"
       onClick={(e) => {
         if (e.target === e.currentTarget && !shareBusy) {
-          // #region agent log
-          process.env.NODE_ENV === "development" && fetch("http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "b06cc0" },
-            body: JSON.stringify({
-              sessionId: "b06cc0",
-              runId: "pre-fix",
-              hypothesisId: "H3",
-              location: "gift-achievement-modal.tsx:overlayClick",
-              message: "Overlay click on background triggers close",
-              timestamp: Date.now(),
-              data: { shareBusy },
-            }),
-          }).catch(() => {})
-          // #endregion
           handleClose()
         }
       }}
@@ -121,7 +68,6 @@ export function GiftAchievementModal({
           <p className="mt-2 text-[15px] font-medium leading-relaxed text-slate-700">{description}</p>
 
           <div className="mt-5 flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageUrl}
               alt={achievementTitle}

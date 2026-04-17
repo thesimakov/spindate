@@ -217,7 +217,6 @@ export function AdminLobbyAnnouncementContent({ token }: AdminLobbyAnnouncementC
             <p className="mb-2 text-[11px] font-medium text-slate-400">Картинка</p>
             {row.imageUrl ? (
               <div className="mb-2 flex flex-wrap items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={row.imageUrl}
                   alt=""

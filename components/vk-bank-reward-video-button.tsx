@@ -49,19 +49,8 @@ export function VkBankRewardVideoButton({
   const vipActive =
     !!currentUser?.isVip && (currentUser.vipUntilTs == null || currentUser.vipUntilTs > Date.now())
   const [busy, setBusy] = useState(false)
-  const [vkEnv, setVkEnv] = useState(false)
   const [gateOpen, setGateOpen] = useState(false)
   const [gateSecondsLeft, setGateSecondsLeft] = useState(REWARD_GATE_SECONDS)
-
-  useEffect(() => {
-    let cancelled = false
-    void isVkRuntimeEnvironment().then((ok) => {
-      if (!cancelled && ok) setVkEnv(true)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     if (!REWARD_GATE_ENABLED || !gateOpen) return
