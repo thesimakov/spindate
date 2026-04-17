@@ -183,7 +183,8 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     () => (progress.fav ? 1 : 0) + (progress.group ? 1 : 0) + (progress.notify ? 1 : 0),
     [progress],
   )
-  const groupNeedsResubscribe = progress.group && groupMembership !== true
+  /** Только явное «не подписан»; `null` (не удалось проверить) не считаем отпиской — иначе кнопка мигает после опроса API. */
+  const groupNeedsResubscribe = progress.group && groupMembership === false
   const groupTaskDone = progress.group && !groupNeedsResubscribe
 
   const grantRewardForAction = useCallback(async (
