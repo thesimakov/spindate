@@ -154,6 +154,68 @@ export function readVkIsRecommendedFromLocation(): boolean {
   return v === "1" || v === "true"
 }
 
+/**
+ * Событие: пользователь отключил уведомления от мини-приложения (см. {@link requestVkDenyNotifications}).
+ * Окно «Бесплатные сердечки» сбрасывает шаг «Подписаться на сообщения», чтобы кнопка снова стала активной.
+ */
+export const SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT = "spindate-vk-extra-hearts-notify-unlock"
+
+function notificationsEnabledFromVkPayload(payload: Record<string, unknown>): boolean | null {
+  const v = payload.vk_are_notifications_enabled
+  if (v === undefined || v === null) return null
+  if (typeof v === "number") return v !== 0
+  if (typeof v === "boolean") return v
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase()
+    if (s === "0" || s === "false") return false
+    if (s === "1" || s === "true") return true
+  }
+  return null
+}
+
+function getVkLaunchParamsRecordFromBridgeRaw(raw: unknown): Record<string, unknown> | null {
+  const u = unwrapVkLaunchParamsPayload(raw)
+  if (u) return u
+  if (raw != null && typeof raw === "object") {
+    const o = raw as Record<string, unknown>
+    if ("vk_are_notifications_enabled" in o) return o
+    const d = o.data
+    if (d != null && typeof d === "object" && "vk_are_notifications_enabled" in (d as object)) {
+      return d as Record<string, unknown>
+    }
+  }
+  return null
+}
+
+/**
+ * Включены ли уведомления от мини-приложения по параметру запуска ВК (`vk_are_notifications_enabled`).
+ * Сначала читает URL, затем при необходимости — {@link VKWebAppGetLaunchParams}.
+ */
+export async function readVkAreNotificationsEnabledFromVkLaunch(): Promise<boolean | null> {
+  if (typeof window === "undefined") return null
+  const fromUrl = readVkLaunchParamValue("vk_are_notifications_enabled")
+  if (fromUrl != null && fromUrl !== "") {
+    const s = fromUrl.trim().toLowerCase()
+    if (s === "0" || s === "false") return false
+    if (s === "1" || s === "true") return true
+  }
+  const b = await getBridgeAsync()
+  if (!b || !(await isVkRuntimeEnvironment())) return null
+  const GET_LAUNCH_TIMEOUT_MS = 3000
+  try {
+    const raw = await Promise.race([
+      b.send("VKWebAppGetLaunchParams", {}),
+      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), GET_LAUNCH_TIMEOUT_MS)),
+    ])
+    if (raw === "timeout") return null
+    const payload = getVkLaunchParamsRecordFromBridgeRaw(raw)
+    if (!payload) return null
+    return notificationsEnabledFromVkPayload(payload)
+  } catch {
+    return null
+  }
+}
+
 /** Клиент VK Android — для {@link VKWebAppAddToHomeScreen} (ярлык только на Android). */
 export function isVkAndroidClientFromLocation(): boolean {
   const p = readVkLaunchParamValue("vk_platform")
@@ -908,6 +970,9 @@ export async function requestVkDenyNotifications(): Promise<{ ok: boolean }> {
   if (!b || !(await isVkRuntimeEnvironment())) return { ok: false }
   try {
     await b.send("VKWebAppDenyNotifications", {})
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT))
+    }
     return { ok: true }
   } catch {
     return { ok: false }

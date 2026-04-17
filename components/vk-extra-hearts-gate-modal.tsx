@@ -10,9 +10,8 @@ import {
 } from "@/components/ui/dialog"
 import { InlineToast } from "@/components/ui/inline-toast"
 import { useInlineToast } from "@/hooks/use-inline-toast"
-import { useGame, generateLogId } from "@/lib/game-context"
+import { useGame } from "@/lib/game-context"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
-import type { GameLogEntry } from "@/lib/game-types"
 import {
   emptyVkExtraHeartsGateProgress,
   readVkExtraHeartsGateProgress,
@@ -27,7 +26,9 @@ import {
   isVkRuntimeEnvironment,
   joinVkCommunityGroup,
   openVkUrl,
+  readVkAreNotificationsEnabledFromVkLaunch,
   requestVkAllowNotifications,
+  SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT,
   VK_COMMUNITY_PUBLIC_URL,
 } from "@/lib/vk-bridge"
 import { cn } from "@/lib/utils"
@@ -49,6 +50,49 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     setProgress(readVkExtraHeartsGateProgress(currentUser.id))
   }, [currentUser?.id])
 
+  const unlockNotifyRowIfNeeded = useCallback(async () => {
+    if (!currentUser) return
+    const p = readVkExtraHeartsGateProgress(currentUser.id)
+    if (!p.notify) return
+    if (!(await isVkRuntimeEnvironment())) return
+    const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
+    if (enabled !== false) return
+    const next = { ...p, notify: false }
+    setProgress(next)
+    writeVkExtraHeartsGateProgress(currentUser.id, next)
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (!currentUser) return
+    const onUnlockFromDeny = () => {
+      const p = readVkExtraHeartsGateProgress(currentUser.id)
+      if (!p.notify) return
+      const next = { ...p, notify: false }
+      setProgress(next)
+      writeVkExtraHeartsGateProgress(currentUser.id, next)
+    }
+    window.addEventListener(SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT, onUnlockFromDeny)
+    return () => window.removeEventListener(SPINDATE_VK_EXTRA_HEARTS_NOTIFY_UNLOCK_EVENT, onUnlockFromDeny)
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (!open || !currentUser) return
+    void unlockNotifyRowIfNeeded()
+  }, [open, currentUser?.id, unlockNotifyRowIfNeeded])
+
+  useEffect(() => {
+    if (!open || !currentUser) return
+    const onRefocus = () => {
+      void unlockNotifyRowIfNeeded()
+    }
+    window.addEventListener("focus", onRefocus)
+    document.addEventListener("visibilitychange", onRefocus)
+    return () => {
+      window.removeEventListener("focus", onRefocus)
+      document.removeEventListener("visibilitychange", onRefocus)
+    }
+  }, [open, currentUser?.id, unlockNotifyRowIfNeeded])
+
   const completedCount = useMemo(
     () => (progress.fav ? 1 : 0) + (progress.group ? 1 : 0) + (progress.notify ? 1 : 0),
     [progress],
@@ -67,23 +111,13 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
 
     const nextVoice = state.voiceBalance + VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION
     dispatch({ type: "PAY_VOICES", amount: -VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION })
-    dispatch({
-      type: "ADD_LOG",
-      entry: {
-        id: generateLogId(),
-        type: "system",
-        fromPlayer: currentUser,
-        text: `${currentUser.name} получил(а) +${VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION} сердец за «${actionTitle}»`,
-        timestamp: Date.now(),
-      } satisfies GameLogEntry,
-    })
 
     void persistUserGameState(currentUser, nextVoice, state.inventory).catch(() => {
       showToast("Награда начислена, но сервер пока недоступен. Синхронизируем позже.", "info")
     })
 
     showToast(`Готово: +${VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION} ❤`, "success")
-  }, [currentUser, dispatch, onOpenChange, progress, showToast, state.inventory, state.voiceBalance])
+  }, [currentUser, dispatch, progress, showToast, state.inventory, state.voiceBalance])
 
   const handleAddFavorites = useCallback(async () => {
     if (progress.fav) return
