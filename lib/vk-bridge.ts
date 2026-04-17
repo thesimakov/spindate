@@ -258,7 +258,7 @@ export function isVkAndroidClientFromLocation(): boolean {
 
 /** Сообщество Lemnity (бонус за подписку, экран «мобильная версия»). */
 export const VK_COMMUNITY_GROUP_ID = 236519647
-export const VK_COMMUNITY_PUBLIC_URL = "https://vk.com/spinndate"
+export const VK_COMMUNITY_PUBLIC_URL = "https://vk.com/spinngame"
 
 function serializeVkLaunchParamsFromBridge(data: Record<string, unknown>): string {
   const vkPairs: { key: string; value: string }[] = []

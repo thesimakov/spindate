@@ -183,6 +183,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     () => (progress.fav ? 1 : 0) + (progress.group ? 1 : 0) + (progress.notify ? 1 : 0),
     [progress],
   )
+  const groupTaskDone = progress.group && groupMembership !== false
 
   const grantRewardForAction = useCallback(async (
     action: VkExtraHeartsGateAction,
@@ -228,7 +229,7 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
   }, [grantRewardForAction, progress.fav, showToast])
 
   const handleJoinGroup = useCallback(async () => {
-    if (progress.group) return
+    if (groupTaskDone) return
     setRowBusy("group")
     try {
       const freshCheck = await checkVkGroupMembership()
@@ -260,7 +261,15 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     } finally {
       setRowBusy(null)
     }
-  }, [checkVkGroupMembership, grantRewardForAction, progress.group, showToast])
+  }, [checkVkGroupMembership, grantRewardForAction, groupTaskDone, showToast])
+
+  useEffect(() => {
+    if (!open || !currentUser) return
+    const intervalId = window.setInterval(() => {
+      void unlockRowsIfNeeded()
+    }, 15000)
+    return () => window.clearInterval(intervalId)
+  }, [open, currentUser?.id, unlockRowsIfNeeded])
 
   const handleAllowNotifications = useCallback(async () => {
     if (progress.notify) return
@@ -328,10 +337,10 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                 label={groupMembership === true && !progress.group ? "Группа игры" : "Вступить в группу игры"}
                 actionLabel={groupMembership === true && !progress.group ? `Забрать +${VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION}❤` : "Вступить"}
                 busy={rowBusy === "group"}
-                done={progress.group}
-                disabled={progress.group || (rowBusy !== null && rowBusy !== "group")}
+                done={groupTaskDone}
+                disabled={groupTaskDone || (rowBusy !== null && rowBusy !== "group")}
                 statusText={
-                  progress.group
+                  groupTaskDone
                     ? "Награда получена"
                     : groupMembership === true
                       ? "Статус: подписан, можно забрать награду"
