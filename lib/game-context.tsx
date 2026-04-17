@@ -1442,16 +1442,17 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       /** Только инициатор крутит локально; иначе все должны брать bottleAngle с сервера — иначе рассинхрон. */
       const keepLocalAngle = keepLocalSpinState
       const keepLocalResult = keepLocal && state.showResult && !p.showResult
+      const localPairKissPhase = state.pairKissPhase ?? null
       const keepLocalPairKiss =
-        state.pairKissPhase != null &&
-        !state.pairKissPhase.resolved &&
+        localPairKissPhase != null &&
+        !localPairKissPhase.resolved &&
         p.pairKissPhase == null &&
         sameTurnAsServer &&
         state.showResult &&
         p.showResult
-      if (keepLocalPairKiss) {
+      if (keepLocalPairKiss && localPairKissPhase) {
         // #region agent log
-        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H2_FIX',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Keeping local unresolved pair kiss until server catches up',data:{localRoundKey:state.pairKissPhase.roundKey,sameTurnAsServer,showResultLocal:state.showResult,showResultServer:p.showResult},timestamp:Date.now()})}).catch(()=>{});
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H2_FIX',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Keeping local unresolved pair kiss until server catches up',data:{localRoundKey:localPairKissPhase.roundKey,sameTurnAsServer,showResultLocal:state.showResult,showResultServer:p.showResult},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
       }
       if (
