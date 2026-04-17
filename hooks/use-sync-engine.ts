@@ -49,6 +49,25 @@ const AUTHORITY_POLL_IDLE_MAX_MS = 2600
 const MAX_TABLE_SIZE = 10
 const TARGET_MALES = 5
 const TARGET_FEMALES = 5
+const RECENT_BOT_MEMORY_SIZE = 80
+
+function shufflePlayers(list: Player[]): Player[] {
+  const bots = [...list]
+  for (let i = bots.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const t = bots[i]!
+    bots[i] = bots[j]!
+    bots[j] = t
+  }
+  return bots
+}
+
+function buildShuffledBotPool(userGender: Player["gender"], recentBotIds: Set<number>): Player[] {
+  const bots = generateBots(220, userGender)
+  const fresh = bots.filter((b) => !recentBotIds.has(b.id))
+  const recent = bots.filter((b) => recentBotIds.has(b.id))
+  return [...shufflePlayers(fresh), ...shufflePlayers(recent)]
+}
 
 export interface SyncEngineResult {
   dispatch: (action: GameAction) => void
@@ -69,6 +88,12 @@ export function useSyncEngine(): SyncEngineResult {
   const remoteActionRef = useRef(false)
   const playersRef = useRef(players)
   useEffect(() => { playersRef.current = players }, [players])
+  const botPoolRef = useRef<Player[]>([])
+  const recentBotIdsRef = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    botPoolRef.current = []
+    recentBotIdsRef.current = new Set()
+  }, [currentUser?.id])
 
   const lastAuthorityRevisionRef = useRef(0)
 
@@ -288,17 +313,23 @@ export function useSyncEngine(): SyncEngineResult {
   }, [fetchTableAuthority])
 
   const composePlayersFromLive = useCallback(
-    (livePlayers: Player[]) => {
+    (
+      livePlayers: Player[],
+      options?: { reuseExistingBots?: boolean },
+    ) => {
       if (!currentUser) return playersRef.current
-      const bots = generateBots(220, currentUser.gender)
+      const reuseExistingBots = options?.reuseExistingBots !== false
+      if (!reuseExistingBots || botPoolRef.current.length === 0) {
+        botPoolRef.current = buildShuffledBotPool(currentUser.gender, recentBotIdsRef.current)
+      }
       return composeTablePlayers({
         currentUser: { ...currentUser, isBot: false },
         livePlayers: livePlayers.map((p) => ({ ...p, isBot: false })),
-        existingPlayers: playersRef.current,
+        existingPlayers: reuseExistingBots ? playersRef.current : [],
         maxTableSize: MAX_TABLE_SIZE,
         targetMales: TARGET_MALES,
         targetFemales: TARGET_FEMALES,
-        botPool: bots,
+        botPool: botPoolRef.current,
       })
     },
     [currentUser],
@@ -364,9 +395,19 @@ export function useSyncEngine(): SyncEngineResult {
         setSeatConfirmed(true)
         seatConfirmedRef.current = true
         setLiveHumanCount(livePlayers.length)
-        const nextPlayers = composePlayersFromLive(livePlayers)
         const nextTableId = typeof data.tableId === "number" ? data.tableId : currentTableId
         const tableActuallyChanged = nextTableId !== currentTableId
+        const shouldReshuffleBots = tableActuallyChanged || forceNew || mode === "join"
+        const nextPlayers = composePlayersFromLive(livePlayers, {
+          reuseExistingBots: !shouldReshuffleBots,
+        })
+        if (shouldReshuffleBots) {
+          const chosenBotIds = nextPlayers.filter((p) => p.isBot).map((p) => p.id)
+          if (chosenBotIds.length > 0) {
+            const merged = [...chosenBotIds, ...Array.from(recentBotIdsRef.current)]
+            recentBotIdsRef.current = new Set(merged.slice(0, RECENT_BOT_MEMORY_SIZE))
+          }
+        }
         const prevPlayerIds = playersRef.current.map((p) => p.id).join(",")
         const nextPlayerIds = nextPlayers.map((p) => p.id).join(",")
         const activePhase = isSpinning || showResult || countdown !== null
