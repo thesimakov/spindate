@@ -818,6 +818,11 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       }
     }
     case "NEXT_TURN": {
+      if (state.pairKissPhase) {
+        // #region agent log
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'lib/game-context.tsx:NEXT_TURN',message:'Reducer NEXT_TURN with existing pair kiss phase',data:{roundNumber:state.roundNumber,currentTurnIndex:state.currentTurnIndex,showResult:state.showResult,pairRoundKey:state.pairKissPhase.roundKey,choiceA:state.pairKissPhase.choiceA,choiceB:state.pairKissPhase.choiceB,resolved:state.pairKissPhase.resolved,outcome:state.pairKissPhase.outcome ?? null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
       if (state.players.length === 0) {
         return {
           ...state,
@@ -1437,6 +1442,29 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       /** Только инициатор крутит локально; иначе все должны брать bottleAngle с сервера — иначе рассинхрон. */
       const keepLocalAngle = keepLocalSpinState
       const keepLocalResult = keepLocal && state.showResult && !p.showResult
+      const keepLocalPairKiss =
+        state.pairKissPhase != null &&
+        !state.pairKissPhase.resolved &&
+        p.pairKissPhase == null &&
+        sameTurnAsServer &&
+        state.showResult &&
+        p.showResult
+      if (keepLocalPairKiss) {
+        // #region agent log
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H2_FIX',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Keeping local unresolved pair kiss until server catches up',data:{localRoundKey:state.pairKissPhase.roundKey,sameTurnAsServer,showResultLocal:state.showResult,showResultServer:p.showResult},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
+      if (
+        state.pairKissPhase &&
+        !state.pairKissPhase.resolved &&
+        p.pairKissPhase == null &&
+        !keepLocalResult &&
+        !keepLocalPairKiss
+      ) {
+        // #region agent log
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'pre-fix',hypothesisId:'H2',location:'lib/game-context.tsx:SYNC_TABLE_AUTHORITY',message:'Sync drops unresolved pair kiss phase',data:{localRoundKey:state.pairKissPhase.roundKey,localResolved:state.pairKissPhase.resolved,serverHasPairKiss:!!p.pairKissPhase,keepLocalResult,showResultLocal:state.showResult,showResultServer:p.showResult,sameTurnAsServer,roundNumberLocal:state.roundNumber,roundNumberServer:p.roundNumber,currentTurnIndexLocal:state.currentTurnIndex,currentTurnIndexServer:p.currentTurnIndex},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
       const mergedPredictions = mergePredictionsForSync(state.predictions, p.predictions ?? [], predictionSyncWindow)
       const mergedBets = mergeBetsForSync(state.bets, p.bets ?? [], predictionSyncWindow)
       const mergedPot = predictionSyncWindow
@@ -1483,7 +1511,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         pairKissPhase:
           p.pairKissPhase != null
             ? p.pairKissPhase
-            : keepLocalResult
+            : (keepLocalResult || keepLocalPairKiss)
               ? state.pairKissPhase ?? null
               : null,
         roundNumber: p.roundNumber,

@@ -3254,9 +3254,15 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     const key = pairKissPhase.roundKey
     if (coordinatorId == null || currentUser.id !== coordinatorId) return
     if (pairKissAdvanceRef.current === key) return
+    // #region agent log
+    fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Scheduling NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,choiceA:pairKissPhase.choiceA,choiceB:pairKissPhase.choiceB,outcome:pairKissPhase.outcome,delayMs:PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS,coordinatorId,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const t = window.setTimeout(() => {
       if (pairKissAdvanceRef.current === key) return
       pairKissAdvanceRef.current = key
+      // #region agent log
+      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H9',location:'components/game-room.tsx:pair-kiss-advance',message:'Dispatching NEXT_TURN after resolved pair kiss',data:{roundNumber,currentTurnIndex,roundKey:key,resolved:pairKissPhase.resolved,outcome:pairKissPhase.outcome,currentUserId:currentUser.id},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       dispatch({ type: "NEXT_TURN" })
     }, PAIR_KISS_NEXT_TURN_AFTER_RESOLVED_MS)
     return () => clearTimeout(t)
@@ -3798,6 +3804,75 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
 
   const showMobileEmotionStrip =
     isMobile && Boolean(sidebarGiftMode && sidebarTargetPlayer)
+
+  const pairKissDebugPrevRef = useRef<{
+    roundKey: string | null
+    resolved: boolean
+    dropCandidateRoundKey: string | null
+    uiHiddenLoggedForRoundKey: string | null
+    stripOverlapLoggedForRoundKey: string | null
+  }>({
+    roundKey: null,
+    resolved: false,
+    dropCandidateRoundKey: null,
+    uiHiddenLoggedForRoundKey: null,
+    stripOverlapLoggedForRoundKey: null,
+  })
+
+  useEffect(() => {
+    const prev = pairKissDebugPrevRef.current
+    if (pairKissPhase) {
+      const hasPlayerA = players.some((p) => p.id === pairKissPhase.idA)
+      const hasPlayerB = players.some((p) => p.id === pairKissPhase.idB)
+      const shouldLogSnapshot =
+        prev.roundKey !== pairKissPhase.roundKey || prev.resolved !== pairKissPhase.resolved
+      if (shouldLogSnapshot) {
+        // #region agent log
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase snapshot',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,resolved:pairKissPhase.resolved,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
+      if (!pairKissCenterUi && prev.uiHiddenLoggedForRoundKey !== pairKissPhase.roundKey) {
+        // #region agent log
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H7',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase exists but center UI hidden',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,hasPlayerA,hasPlayerB,showResult,playerCount:players.length,idA:pairKissPhase.idA,idB:pairKissPhase.idB},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        prev.uiHiddenLoggedForRoundKey = pairKissPhase.roundKey
+      }
+      if (showMobileEmotionStrip && prev.stripOverlapLoggedForRoundKey !== pairKissPhase.roundKey) {
+        // #region agent log
+        fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H8',location:'components/game-room.tsx:pair-kiss-transition',message:'Emotion strip visible while pair kiss phase active',data:{roundNumber,currentTurnIndex,roundKey:pairKissPhase.roundKey,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null,showResult},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        prev.stripOverlapLoggedForRoundKey = pairKissPhase.roundKey
+      }
+      prev.roundKey = pairKissPhase.roundKey
+      prev.resolved = pairKissPhase.resolved
+      prev.dropCandidateRoundKey = pairKissPhase.roundKey
+      return
+    }
+    if (showResult && prev.dropCandidateRoundKey) {
+      // #region agent log
+      fetch('http://127.0.0.1:7715/ingest/dea135a8-847a-49d0-810c-947ce095950e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'822343'},body:JSON.stringify({sessionId:'822343',runId:'post-fix',hypothesisId:'H6',location:'components/game-room.tsx:pair-kiss-transition',message:'Pair kiss phase dropped while result is active',data:{roundNumber,currentTurnIndex,droppedRoundKey:prev.dropCandidateRoundKey,showResult,pairKissCenterUi,showMobileEmotionStrip,sidebarGiftMode,sidebarTargetPlayerId:sidebarTargetPlayer?.id ?? null,currentUserId:currentUser?.id ?? null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      prev.dropCandidateRoundKey = null
+    }
+    if (!showResult) {
+      prev.roundKey = null
+      prev.resolved = false
+      prev.dropCandidateRoundKey = null
+      prev.uiHiddenLoggedForRoundKey = null
+      prev.stripOverlapLoggedForRoundKey = null
+    }
+  }, [
+    pairKissPhase,
+    players,
+    roundNumber,
+    currentTurnIndex,
+    showResult,
+    pairKissCenterUi,
+    showMobileEmotionStrip,
+    sidebarGiftMode,
+    sidebarTargetPlayer?.id,
+    currentUser?.id,
+  ])
 
   const todayStart = useMemo(() => {
     const d = new Date(now)
@@ -8240,11 +8315,36 @@ function PairFeedStripRow({
   giftDisplayById: ReadonlyMap<string, GiftChatDisplayMeta>
 }) {
   const mutual = tryMutualReciprocalPairStrip(segments)
+  const visualSegments = useMemo(() => {
+    if (segments.length <= 1) return segments
+    const out: { entry: GameLogEntry; count: number }[] = []
+    for (const segment of segments) {
+      const prev = out[out.length - 1]
+      if (!prev) {
+        out.push(segment)
+        continue
+      }
+      const prevHint = pairChatCentralObjectHint(prev.entry, giftDisplayById)
+      const currentHint = pairChatCentralObjectHint(segment.entry, giftDisplayById)
+      const prevImg = giftDisplayById.get(String(prev.entry.type))?.img?.trim() ?? ""
+      const currentImg = giftDisplayById.get(String(segment.entry.type))?.img?.trim() ?? ""
+      const sameVisualToken =
+        prev.entry.type === segment.entry.type &&
+        prevHint === currentHint &&
+        prevImg === currentImg
+      if (sameVisualToken) {
+        prev.count += segment.count
+      } else {
+        out.push(segment)
+      }
+    }
+    return out
+  }, [segments, giftDisplayById])
 
   const labelForA11y = mutual
     ? [
         `${mutual.playerA.name} и ${mutual.playerB.name}, взаимно`,
-        ...segments.map(({ entry, count }) => {
+        ...visualSegments.map(({ entry, count }) => {
           const label =
             logEventActionShortLabel(entry, giftDisplayById) ??
             logEventEmotionEmoji(entry, giftDisplayById) ??
@@ -8255,7 +8355,7 @@ function PairFeedStripRow({
     : [
         left.name,
         right.name,
-        ...segments.map(({ entry, count }) => {
+        ...visualSegments.map(({ entry, count }) => {
           const label =
             logEventActionShortLabel(entry, giftDisplayById) ??
             logEventEmotionEmoji(entry, giftDisplayById) ??
@@ -8310,7 +8410,7 @@ function PairFeedStripRow({
           )}
         >
           <div className="inline-flex min-h-7 w-max min-w-0 flex-nowrap items-center gap-x-1.5 px-1.5">
-            {segments.map(({ entry, count }, i) => (
+            {visualSegments.map(({ entry, count }, i) => (
               <Fragment key={entry.id}>
                 {i > 0 ? (
                   <span
