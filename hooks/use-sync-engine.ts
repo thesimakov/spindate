@@ -122,6 +122,14 @@ export function useSyncEngine(): SyncEngineResult {
     if (!seatConfirmedRef.current) {
       return
     }
+    const pullAuthoritySoon = () => {
+      const pull = fetchTableAuthorityRef.current
+      if (pull) {
+        window.setTimeout(() => {
+          void pull(tid)
+        }, 120)
+      }
+    }
     try {
       const res = await apiFetch("/api/table/events", {
         method: "POST",
@@ -136,15 +144,13 @@ export function useSyncEngine(): SyncEngineResult {
         }),
       })
       if (res.ok) {
-        const pull = fetchTableAuthorityRef.current
-        if (pull) {
-          window.setTimeout(() => {
-            void pull(tid)
-          }, 120)
-        }
+        pullAuthoritySoon()
+      } else {
+        // Сервер отклонил событие или снимок не изменился — подтянуть авторитет сразу, иначе локальный спин/ход может «залипнуть».
+        pullAuthoritySoon()
       }
     } catch {
-      // state will converge on next authority poll
+      pullAuthoritySoon()
     }
   }, [])
 

@@ -1,7 +1,7 @@
 import type { GameAction } from "@/lib/game-types"
 import { tryInsertGlobalRatingFromAddLog } from "@/lib/global-rating-store"
 import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
-import { applyAuthorityEvent, ensureTableAuthority, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
+import { applyAuthorityEvent, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import { scheduleVkNotificationForTableAction } from "@/lib/vk-app-notifications-server"
@@ -284,6 +284,16 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     return { ok: false as const }
   }
 
+  const applied = await applyAuthorityEvent(tableId, args.action)
+  if (!applied) {
+    emitDebugLog("applyAuthorityEvent rejected (no snapshot change)", {
+      tableId,
+      senderId: args.senderId,
+      actionType: args.action.type,
+    })
+    return { ok: false as const }
+  }
+
   const redis = getRedis()
   if (redis) {
     let seq = 0
@@ -306,8 +316,6 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
       seq = bucket.seq
       return JSON.stringify(bucket)
     })
-    await ensureTableAuthority(tableId)
-    await applyAuthorityEvent(tableId, args.action)
     scheduleVkNotificationForTableAction(args.action)
     tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
     return { ok: true as const, seq }
@@ -329,8 +337,6 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
       bucket.events = bucket.events.slice(-MAX_EVENTS_PER_TABLE)
     }
     store.set(tableId, bucket)
-    await ensureTableAuthority(tableId)
-    await applyAuthorityEvent(tableId, args.action)
     scheduleVkNotificationForTableAction(args.action)
     tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
     return { ok: true as const, seq: bucket.seq }
