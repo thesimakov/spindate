@@ -38,7 +38,6 @@ interface BottleProps {
 type BottleSkinWithImage = Exclude<NonNullable<BottleProps["skin"]>, "fortune_wheel">
 
 const BOTTLE_STUCK_KICK_AFTER_MS = 2_000
-const BOTTLE_STUCK_KICK_DURATION_MS = 280
 
 export const Bottle = memo(function Bottle({
   angle,
@@ -50,7 +49,6 @@ export const Bottle = memo(function Bottle({
 }: BottleProps) {
   const [imgError, setImgError] = useState(false)
   const [renderAngle, setRenderAngle] = useState(angle)
-  const [stuckKickActive, setStuckKickActive] = useState(false)
   const prevAngleRef = useRef(angle)
 
   const skinToImg: Record<BottleSkinWithImage, string> = {
@@ -112,21 +110,20 @@ export const Bottle = memo(function Bottle({
   }, [isSpinning, wasSpinning])
 
   useEffect(() => {
-    if (!isSpinning) {
-      setStuckKickActive(false)
-      return
-    }
+    if (!isSpinning) return
 
-    let clearKickTimer: ReturnType<typeof setTimeout> | null = null
+    let rafId: number | null = null
     const kickTimer = setTimeout(() => {
-      setStuckKickActive(true)
-      clearKickTimer = setTimeout(() => setStuckKickActive(false), BOTTLE_STUCK_KICK_DURATION_MS)
+      // Принудительно перезапускаем rotation transition, если спин визуально залип.
+      setRenderAngle((prev) => prev - 0.01)
+      rafId = window.requestAnimationFrame(() => {
+        setRenderAngle(angle)
+      })
     }, BOTTLE_STUCK_KICK_AFTER_MS)
 
     return () => {
       clearTimeout(kickTimer)
-      if (clearKickTimer) clearTimeout(clearKickTimer)
-      setStuckKickActive(false)
+      if (rafId != null) window.cancelAnimationFrame(rafId)
     }
   }, [isSpinning, angle])
 
@@ -138,21 +135,14 @@ export const Bottle = memo(function Bottle({
   const bottleShadow = isSpinning
     ? "drop-shadow(0 0 12px rgba(74, 154, 53, 0.6))"
     : "drop-shadow(0 4px 6px rgba(0,0,0,0.4))"
-  const wrapperAnimation = isDrunk
-    ? stuckKickActive
-      ? "bottleDrunk 0.6s ease-in-out infinite alternate, bottleStuckKick 0.28s ease-in-out 1"
-      : "bottleDrunk 0.6s ease-in-out infinite alternate"
-    : stuckKickActive
-      ? "bottleStuckKick 0.28s ease-in-out 1"
-      : undefined
 
   return (
     <div
       className={`relative flex items-center justify-center ${!isSpinning && !isDrunk ? "bottle-idle-float" : ""}`}
       style={
-        wrapperAnimation
+        isDrunk
           ? {
-              animation: wrapperAnimation,
+              animation: "bottleDrunk 0.6s ease-in-out infinite alternate",
             }
           : undefined
       }
@@ -366,14 +356,6 @@ export const Bottle = memo(function Bottle({
           }}
         />
       )}
-      <style jsx>{`
-        @keyframes bottleStuckKick {
-          0% { transform: translate3d(0, 0, 0); }
-          25% { transform: translate3d(-10px, 0, 0); }
-          55% { transform: translate3d(12px, 0, 0); }
-          100% { transform: translate3d(0, 0, 0); }
-        }
-      `}</style>
     </div>
   )
 })

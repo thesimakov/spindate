@@ -23,7 +23,6 @@ import {
 import {
   addVkAppToFavorites,
   initVkResilient,
-  readVkIsCommunityMemberFromVkLaunch,
   readVkIsFavoriteFromVkLaunch,
   isVkRuntimeEnvironment,
   joinVkCommunityGroup,
@@ -47,11 +46,51 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
   const [rowBusy, setRowBusy] = useState<"fav" | "group" | "notify" | null>(null)
   const [progress, setProgress] = useState<VkExtraHeartsGateProgress>(emptyVkExtraHeartsGateProgress)
   const [checkingStatuses, setCheckingStatuses] = useState(false)
+  const [groupMembership, setGroupMembership] = useState<boolean | null>(null)
+  const [groupStatusError, setGroupStatusError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!currentUser) return
     setProgress(readVkExtraHeartsGateProgress(currentUser.id))
   }, [currentUser?.id])
+
+  const checkVkGroupMembership = useCallback(async (): Promise<{
+    member: boolean | null
+    reason?: string
+    error?: string
+  }> => {
+    if (!currentUser) return { member: null }
+    try {
+      const res = await fetch("/api/vk/group-membership", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({}),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { ok?: boolean; isMember?: boolean; reason?: string; error?: string }
+        | null
+      if (res.ok && data?.ok === true && typeof data.isMember === "boolean") {
+        return { member: data.isMember }
+      }
+      return { member: null, reason: data?.reason, error: data?.error }
+    } catch {
+      return { member: null, reason: "fetch_failed", error: "Сервер не отвечает" }
+    }
+  }, [currentUser?.id])
+
+  const waitForVkGroupMembership = useCallback(async (attempts: number, delayMs: number): Promise<boolean | null> => {
+    for (let i = 0; i < attempts; i++) {
+      if (i > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+      }
+      const result = await checkVkGroupMembership()
+      if (result.member === true) return true
+      if (result.member === false && i === attempts - 1) return false
+    }
+    return null
+  }, [checkVkGroupMembership])
 
   const unlockRowsIfNeeded = useCallback(async () => {
     if (!currentUser) return
@@ -59,9 +98,25 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     setCheckingStatuses(true)
     const p = readVkExtraHeartsGateProgress(currentUser.id)
     try {
-      if (!(await isVkRuntimeEnvironment())) return
       let changed = false
       const next = { ...p }
+
+      const groupCheck = await checkVkGroupMembership()
+      setGroupMembership(groupCheck.member)
+      setGroupStatusError(groupCheck.reason ?? null)
+      if (p.group && groupCheck.member === false) {
+        next.group = false
+        changed = true
+      }
+
+      const runtime = await isVkRuntimeEnvironment()
+      if (!runtime) {
+        if (changed) {
+          setProgress(next)
+          writeVkExtraHeartsGateProgress(currentUser.id, next)
+        }
+        return
+      }
 
       if (p.notify) {
         const enabled = await readVkAreNotificationsEnabledFromVkLaunch()
@@ -77,14 +132,6 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
           changed = true
         }
       }
-      if (p.group) {
-        const member = await readVkIsCommunityMemberFromVkLaunch()
-        if (member === false) {
-          next.group = false
-          changed = true
-        }
-      }
-
       if (!changed) return
       setProgress(next)
       writeVkExtraHeartsGateProgress(currentUser.id, next)
@@ -180,6 +227,10 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
     if (progress.group) return
     setRowBusy("group")
     try {
+      if (groupMembership === true) {
+        await grantRewardForAction("group", "Вступить в группу игры")
+        return
+      }
       await initVkResilient()
       if (await isVkRuntimeEnvironment()) {
         const { ok } = await joinVkCommunityGroup()
@@ -187,19 +238,27 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
           showToast("Не удалось открыть окно ВК", "info")
           return
         }
-        await grantRewardForAction("group", "Вступить в группу игры")
+        const verified = await waitForVkGroupMembership(5, 1200)
+        if (verified === true) {
+          setGroupMembership(true)
+          setGroupStatusError(null)
+          await grantRewardForAction("group", "Вступить в группу игры")
+          return
+        }
+        setGroupMembership(verified)
+        showToast("Подписка пока не подтверждена. Вернитесь в игру через пару секунд, статус обновится.", "info")
       } else {
         const opened = await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
         if (!opened) {
           showToast("Не удалось открыть ссылку", "info")
           return
         }
-        await grantRewardForAction("group", "Вступить в группу игры")
+        showToast("После вступления вернитесь в игру. Мы автоматически проверим статус подписки.", "info")
       }
     } finally {
       setRowBusy(null)
     }
-  }, [grantRewardForAction, progress.group, showToast])
+  }, [grantRewardForAction, groupMembership, progress.group, showToast, waitForVkGroupMembership])
 
   const handleAllowNotifications = useCallback(async () => {
     if (progress.notify) return
@@ -264,11 +323,22 @@ export function VkExtraHeartsGateModal({ open, onOpenChange }: VkExtraHeartsGate
                 onClick={() => void handleAddFavorites()}
               />
               <TaskRow
-                label="Вступить в группу игры"
-                actionLabel="Вступить"
+                label={groupMembership === true && !progress.group ? "Группа игры" : "Вступить в группу игры"}
+                actionLabel={groupMembership === true && !progress.group ? `Забрать +${VK_EXTRA_HEARTS_GATE_BONUS_PER_ACTION}❤` : "Вступить"}
                 busy={rowBusy === "group"}
                 done={progress.group}
                 disabled={progress.group || (rowBusy !== null && rowBusy !== "group")}
+                statusText={
+                  progress.group
+                    ? "Награда получена"
+                    : groupMembership === true
+                      ? "Статус: подписан, можно забрать награду"
+                      : groupMembership === false
+                        ? "Статус: не подписан"
+                        : groupStatusError
+                          ? "Статус: не удалось проверить"
+                          : undefined
+                }
                 onClick={() => void handleJoinGroup()}
               />
               <TaskRow
@@ -294,6 +364,7 @@ function TaskRow({
   busy,
   disabled,
   done,
+  statusText,
 }: {
   label: string
   actionLabel: string
@@ -301,10 +372,14 @@ function TaskRow({
   busy: boolean
   disabled: boolean
   done: boolean
+  statusText?: string
 }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 shadow-sm">
-      <span className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-slate-800">{label}</span>
+      <div className="min-w-0 flex-1">
+        <span className="block text-[14px] font-semibold leading-snug text-slate-800">{label}</span>
+        {statusText ? <span className="mt-1 block text-[11px] font-medium leading-snug text-slate-500">{statusText}</span> : null}
+      </div>
       <button
         type="button"
         disabled={disabled || busy}
