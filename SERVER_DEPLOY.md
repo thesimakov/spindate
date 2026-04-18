@@ -61,14 +61,27 @@ pm2 restart spindate
 
 Это **отдельный** сервис (Express + Prisma), не основной Next.js. Папка **`reference/spin-game-stack`** должна быть в репозитории; если на сервере её нет — сделай **`git pull`** с ветки, где она уже закоммичена (или скопируй каталог с машины разработчика).
 
+**PostgreSQL** должен быть установлен, сервис запущен, база и пользователь созданы. В `.env.example` по умолчанию `localhost:5432` и БД `spin_game`. Пример на Ubuntu:
+
+```bash
+sudo apt install -y postgresql postgresql-contrib
+sudo -u postgres psql -c "CREATE DATABASE spin_game;"
+# при необходимости пользователя и пароль — задайте DATABASE_URL в reference/spin-game-stack/.env
+sudo systemctl enable --now postgresql
+```
+
 Из **корня** репозитория:
 
 ```bash
 npm run spin-game:install
 cp reference/spin-game-stack/.env.example reference/spin-game-stack/.env
-# задать DATABASE_URL в reference/spin-game-stack/.env
+# задать DATABASE_URL в reference/spin-game-stack/.env (хост, порт, имя БД, логин/пароль)
 npm run spin-game:migrate
 npm run spin-game:seed
 ```
+
+Если **`P1001 Can't reach database`** — Postgres не слушает `localhost:5432` или неверный URL; исправьте и повторите `npm run spin-game:migrate`.
+
+Если миграция ещё не проходила, а нужен только сгенерированный клиент: `npm run spin-game:generate` (после `npm run spin-game:install` скрипт `postinstall` в подпроекте уже выполняет `prisma generate`).
 
 Первая миграция уже с именем `init` в скрипте `db:migrate:init`. Основное приложение spindate по умолчанию использует **SQLite**; Prisma здесь только для этого эталонного стека.

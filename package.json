@@ -13,6 +13,7 @@
     "test": "node --import tsx --test tests/**/*.test.ts",
     "worker": "tsx server/background-worker.ts",
     "spin-game:install": "npm install --prefix reference/spin-game-stack",
+    "spin-game:generate": "npm run db:generate --prefix reference/spin-game-stack",
     "spin-game:migrate": "npm run db:migrate:init --prefix reference/spin-game-stack",
     "spin-game:seed": "npm run db:seed --prefix reference/spin-game-stack"
   },
