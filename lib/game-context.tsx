@@ -1434,9 +1434,10 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       )
       const isInitiator = isMyTurnDirect || isBotTurnAndDriver
       const inActivePhase = state.countdown !== null || state.isSpinning || state.showResult
+      /** Индекс хода совпадает с сервером недостаточно: при разном порядке players[] тот же индекс — разные люди. */
       const sameTurnAsServer =
         p.roundNumber === state.roundNumber &&
-        p.currentTurnIndex === state.currentTurnIndex
+        state.players[state.currentTurnIndex]?.id === p.players[p.currentTurnIndex]?.id
       const keepLocal = isInitiator && inActivePhase && sameTurnAsServer
       const predictionSyncWindow =
         sameTurnAsServer &&
