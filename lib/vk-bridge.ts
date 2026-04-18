@@ -571,6 +571,28 @@ function vkPayResultOk(res: unknown): boolean {
   return false
 }
 
+function vkPayResultState(res: unknown): "ok" | "cancel" | "fail" | "unknown" {
+  if (vkPayResultOk(res)) return "ok"
+  if (!res || typeof res !== "object") return "unknown"
+
+  const top = res as { status?: unknown; state?: unknown; result?: unknown; success?: unknown; error_type?: unknown }
+  const nested = top.result && typeof top.result === "object" ? (top.result as { status?: unknown; state?: unknown; success?: unknown; error_type?: unknown }) : null
+  const candidates = [top.status, top.state, nested?.status, nested?.state, top.error_type, nested?.error_type]
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.toLowerCase())
+
+  if (candidates.some((v) => v === "success" || v === "ok" || v === "paid" || v === "chargeable")) {
+    return "ok"
+  }
+  if (candidates.some((v) => v.includes("cancel") || v.includes("decline"))) {
+    return "cancel"
+  }
+  if (candidates.some((v) => v.includes("fail") || v.includes("error"))) {
+    return "fail"
+  }
+  return "unknown"
+}
+
 /**
  * Оплата голосами VK: сначала {@link https://dev.vk.com/bridge/VKWebAppShowOrderBox виртуальный товар},
  * затем при необходимости — {@link https://dev.vk.com/bridge/VKWebAppOpenPayForm pay-to-service} с подписью `/api/payment/sign` (как в rps-vk-game).
@@ -603,16 +625,27 @@ export async function showPaymentWall(
   }
 
   if (itemId) {
-    try {
-      const appIdForOrder = getVkAppId()
+    const tryShowOrderBox = async (withAppId: boolean): Promise<"ok" | "cancel" | "fail" | "unknown"> => {
       const orderBoxParams: Record<string, unknown> = {
         type: "item",
         item: itemId,
       }
-      if (appIdForOrder) orderBoxParams.app_id = appIdForOrder
+      if (withAppId) {
+        const appIdForOrder = getVkAppId()
+        if (appIdForOrder) orderBoxParams.app_id = appIdForOrder
+      }
       const result = await b.send("VKWebAppShowOrderBox", orderBoxParams)
-      if (vkPayResultOk(result)) return true
-      if (typeof result === "boolean" && result) return true
+      return vkPayResultState(result)
+    }
+    try {
+      const primary = await tryShowOrderBox(true)
+      if (primary === "ok") return true
+      if (primary === "cancel") return false
+
+      // В части клиентов VK app_id в payload может ломать вызов, даже если item корректный.
+      const retryNoAppId = await tryShowOrderBox(false)
+      if (retryNoAppId === "ok") return true
+      if (retryNoAppId === "cancel") return false
     } catch (e) {
       console.warn("[VK] VKWebAppShowOrderBox", e)
     }
@@ -664,7 +697,8 @@ export async function showPaymentWall(
     } as never)
 
     if (typeof payFormResult === "boolean") return payFormResult
-    return vkPayResultOk(payFormResult)
+    const payState = vkPayResultState(payFormResult)
+    return payState === "ok"
   } catch (e) {
     console.warn("[VK] VKWebAppOpenPayForm", e)
     return false

@@ -47,12 +47,6 @@ export function TechnicalMaintenanceScreen() {
           />
         </div>
 
-        <div className="mb-3 w-full max-w-md sm:mx-auto">
-          <div className="tech-maintenance-marquee w-full">
-            <div className="tech-maintenance-marquee__track">скоро тут будет музыка</div>
-          </div>
-        </div>
-
         <p className="text-base font-semibold leading-snug text-white">
           У нас техническое обновление бутылочки. Скоро все заработает. Будь в курсе событий.
         </p>

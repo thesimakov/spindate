@@ -87,7 +87,7 @@ export interface SyncEngineResult {
 
 export function useSyncEngine(): SyncEngineResult {
   const { state, dispatch: rawDispatch } = useGame()
-  const { currentUser, tableId, players, tablePaused, isSpinning, showResult, countdown } = state
+  const { currentUser, tableId, players, tablePaused, isSpinning, showResult, countdown, avatarFrames } = state
   const emitSeatSyncLog = useCallback((event: string, data?: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== "development") return
     console.debug("[seat-sync]", { event, ...(data ?? {}) })
@@ -128,6 +128,7 @@ export function useSyncEngine(): SyncEngineResult {
   useEffect(() => {
     pushChainRef.current = Promise.resolve()
   }, [tableId])
+  const frameResyncKeyRef = useRef<string>("")
 
   const pushTableAction = useCallback((action: GameAction) => {
     pushChainRef.current = pushChainRef.current
@@ -272,6 +273,7 @@ export function useSyncEngine(): SyncEngineResult {
     setTableAuthorityReady(false)
     setSeatConfirmed(false)
     setLiveHumanCount(0)
+    frameResyncKeyRef.current = ""
   }, [currentUser?.id])
 
   useEffect(() => {
@@ -282,8 +284,38 @@ export function useSyncEngine(): SyncEngineResult {
       }
       setSeatConfirmed(false)
       setTableLiveReady(false)
+      frameResyncKeyRef.current = ""
     }
   }, [tablePaused])
+
+  /**
+   * После join/refresh повторно публикуем текущую рамку игрока в authority.
+   * Иначе при пересборке живого стола (например, тех-режим/refresh) таблица может
+   * временно потерять avatarFrames и другие игроки не увидят рамку, хотя она куплена/сохранена.
+   */
+  useEffect(() => {
+    if (!currentUser || tablePaused || !seatConfirmed || !tableAuthorityReady) return
+    const frameId = avatarFrames?.[currentUser.id]
+    if (!frameId || frameId === "none") return
+    const syncKey = `${tableId}:${currentUser.id}:${frameId}`
+    if (frameResyncKeyRef.current === syncKey) return
+    frameResyncKeyRef.current = syncKey
+    pushTableAction({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId })
+    emitSeatSyncLog("resync_avatar_frame_after_join", {
+      tableId,
+      userId: currentUser.id,
+      frameId,
+    })
+  }, [
+    currentUser?.id,
+    tableId,
+    tablePaused,
+    seatConfirmed,
+    tableAuthorityReady,
+    avatarFrames,
+    pushTableAction,
+    emitSeatSyncLog,
+  ])
 
   const fetchTableAuthority = useCallback(
     async (tid: number) => {
