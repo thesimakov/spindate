@@ -41,17 +41,21 @@ function parseDotEnvFile(filePath) {
 
 const sharedEnvPath = path.join(__dirname, "..", "..", "shared", ".env.local")
 const sharedEnv = parseDotEnvFile(sharedEnvPath)
-/** Переменные из корня приложения (VK, Telegram и т.д.) — иначе PM2 их не видит, только Next при старте. */
-const projectEnvPath = path.join(__dirname, ".env.local")
-const projectEnv = parseDotEnvFile(projectEnvPath)
+/** Корень приложения: .env затем .env.local (локальные переопределяют). Часто секреты кладут только в .env — без merge PM2 их не видит. */
+const projectEnvPath = path.join(__dirname, ".env")
+const projectEnvDot = parseDotEnvFile(projectEnvPath)
+const projectEnvPathLocal = path.join(__dirname, ".env.local")
+const projectEnvLocal = parseDotEnvFile(projectEnvPathLocal)
+const projectMerged = { ...projectEnvDot, ...projectEnvLocal }
 
 const baseEnv = {
   ...sharedEnv,
-  ...projectEnv,
+  ...projectEnvDot,
+  ...projectEnvLocal,
   NODE_ENV: "production",
-  PORT: process.env.PORT || projectEnv.PORT || sharedEnv.PORT || "3002",
+  PORT: process.env.PORT || projectMerged.PORT || sharedEnv.PORT || "3002",
 }
-const useCustomServer = String(process.env.USE_CUSTOM_SERVER || projectEnv.USE_CUSTOM_SERVER || sharedEnv.USE_CUSTOM_SERVER || "").trim() === "1"
+const useCustomServer = String(process.env.USE_CUSTOM_SERVER || projectMerged.USE_CUSTOM_SERVER || sharedEnv.USE_CUSTOM_SERVER || "").trim() === "1"
 const script = useCustomServer ? "node_modules/tsx/dist/cli.mjs" : "node"
 const args = useCustomServer
   ? "server/custom-server.ts"
