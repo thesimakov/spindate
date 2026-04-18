@@ -28,14 +28,20 @@ reference/spin-game-stack/
 
 ## Запуск
 
-1. PostgreSQL и Redis локально.
-2. `cp .env.example .env` и выставить `DATABASE_URL`.
-3. `npm install`
-4. `npx prisma migrate dev --name init`
-5. `npx prisma db seed`
+**Все команды выполняйте из каталога `reference/spin-game-stack`, не из корня `spindate`.** В корне репозитория нет Prisma — только Next.js.
+
+1. PostgreSQL и Redis.
+2. `cd reference/spin-game-stack && cp .env.example .env` и выставить `DATABASE_URL`.
+3. `npm install` — подтянет локальный `prisma` (версия из `package.json`, сейчас 6.x).
+4. `npm run db:migrate:init` (или `npx prisma migrate dev --name init` — после `npm install` `npx` возьмёт локальный CLI, без скачивания Prisma 7).
+5. `npm run db:seed`
 6. `npm run dev`
 
 Сервер: `http://localhost:4000`, Socket.io на том же origin (путь по умолчанию `/socket.io`).
+
+### Если `npx prisma` просит установить prisma@7 и отменяет команду
+
+Вы запускали команду **из корня** `/var/www/spindate` или без `npm install` в `reference/spin-game-stack`. Сначала `cd reference/spin-game-stack`, затем `npm install`, затем снова migrate/seed. Не смешивайте две команды в одной строке без `&&`.
 
 ## Аутентификация
 
