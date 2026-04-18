@@ -466,6 +466,24 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
       }
     }
 
+    // После оплаты (или триала) сразу синхронизируем live-стол: иначе ensure на /api/table/events
+    // может не увидеть игрока и вернуть 400 на SET_AVATAR_FRAME / ADD_LOG.
+    try {
+      await apiFetch("/api/table/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          mode: "sync",
+          user: currentUser,
+          tableId,
+          maxTableSize: 10,
+        }),
+      })
+    } catch {
+      // ignore
+    }
+
     const base = vipUntilTs && vipUntilTs > Date.now() ? vipUntilTs : Date.now()
     const until = base + days * 24 * 60 * 60 * 1000
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true, vipUntilTs: until })

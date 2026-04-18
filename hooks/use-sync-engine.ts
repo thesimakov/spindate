@@ -43,9 +43,13 @@ function isTableSyncedAction(action: GameAction): boolean {
 
 const LIVE_POLL_MS = 3000
 const AUTHORITY_POLL_MS = 800
+/** Опрос ленты /api/table/events (pull), чтобы подтянуть рамки/лог и пр. без ожидания «медленного» authority-poll. */
+const TABLE_EVENTS_POLL_MS = 650
 const LIVE_POLL_HIDDEN_MS = 6000
 const AUTHORITY_POLL_HIDDEN_MS = 5000
 const AUTHORITY_POLL_IDLE_MAX_MS = 3200
+/** Первый pull с sinceSeq выше любого seq — только currentSeq, без скачивания истории событий. */
+const TABLE_EVENTS_INIT_SINCE_SEQ = 0x7fffffff
 const MAX_TABLE_SIZE = 10
 const TARGET_MALES = 5
 const TARGET_FEMALES = 5
@@ -115,43 +119,54 @@ export function useSyncEngine(): SyncEngineResult {
   /** Заполняется после объявления fetchTableAuthority — для догонки снимка после успешного push. */
   const fetchTableAuthorityRef = useRef<((tid: number) => Promise<void>) | null>(null)
 
-  const pushTableAction = useCallback(async (action: GameAction) => {
-    const current = syncMetaRef.current
-    const tid = Math.floor(Number(current.tableId))
-    if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
-    if (!seatConfirmedRef.current) {
-      return
-    }
-    const pullAuthoritySoon = () => {
-      const pull = fetchTableAuthorityRef.current
-      if (pull) {
-        window.setTimeout(() => {
-          void pull(tid)
-        }, 120)
-      }
-    }
-    try {
-      const res = await apiFetch("/api/table/events", {
-        method: "POST",
-        cache: "no-store" as RequestCache,
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          mode: "push",
-          tableId: tid,
-          senderId: current.userId,
-          action,
-        }),
+  /** Очередь push: два параллельных applyAuthorityEvent на одном столе могут гоняться в Redis RMW — сериализуем. */
+  const pushChainRef = useRef(Promise.resolve())
+  useEffect(() => {
+    pushChainRef.current = Promise.resolve()
+  }, [tableId])
+
+  const pushTableAction = useCallback((action: GameAction) => {
+    pushChainRef.current = pushChainRef.current
+      .catch(() => {})
+      .then(async () => {
+        const current = syncMetaRef.current
+        const tid = Math.floor(Number(current.tableId))
+        if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
+        if (!seatConfirmedRef.current) {
+          return
+        }
+        const pullAuthoritySoon = () => {
+          const pull = fetchTableAuthorityRef.current
+          if (pull) {
+            window.setTimeout(() => {
+              void pull(tid)
+            }, 120)
+          }
+        }
+        try {
+          const res = await apiFetch("/api/table/events", {
+            method: "POST",
+            cache: "no-store" as RequestCache,
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              mode: "push",
+              tableId: tid,
+              senderId: current.userId,
+              action,
+            }),
+          })
+          if (res.ok) {
+            pullAuthoritySoon()
+          } else {
+            // Сервер отклонил событие или снимок не изменился — подтянуть авторитет сразу, иначе локальный спин/ход может «залипнуть».
+            pullAuthoritySoon()
+          }
+        } catch {
+          pullAuthoritySoon()
+        }
       })
-      if (res.ok) {
-        pullAuthoritySoon()
-      } else {
-        // Сервер отклонил событие или снимок не изменился — подтянуть авторитет сразу, иначе локальный спин/ход может «залипнуть».
-        pullAuthoritySoon()
-      }
-    } catch {
-      pullAuthoritySoon()
-    }
+    void pushChainRef.current
   }, [])
 
   const dispatch = useCallback((action: GameAction) => {
@@ -571,6 +586,73 @@ export function useSyncEngine(): SyncEngineResult {
       document.removeEventListener("visibilitychange", onVisibility)
     }
   }, [currentUser, tableId, fetchTableAuthority, tablePaused, seatConfirmed])
+
+  /** Курсор по ленте событий стола (seq ≠ revision authority). */
+  const tableEventsCursorRef = useRef<{ seq: number; initialized: boolean }>({ seq: 0, initialized: false })
+  useEffect(() => {
+    tableEventsCursorRef.current = { seq: 0, initialized: false }
+  }, [tableId])
+
+  // Лента событий: при новых записях подтягиваем authority — иначе при «тихом» столе поллинг state разгоняется до нескольких секунд и рамки/лог подарков отстают.
+  useEffect(() => {
+    if (!currentUser || tablePaused || !seatConfirmed) return
+    let cancelled = false
+    let timeoutId: number | null = null
+
+    const pollTableEvents = async () => {
+      if (cancelled) return
+      const tid = Math.floor(Number(tableIdRef.current))
+      if (!Number.isInteger(tid) || tid <= 0) return
+      const cur = tableEventsCursorRef.current
+      try {
+        const sinceSeq = cur.initialized ? cur.seq : TABLE_EVENTS_INIT_SINCE_SEQ
+        const res = await apiFetch("/api/table/events", {
+          method: "POST",
+          cache: "no-store" as RequestCache,
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ tableId: tid, sinceSeq }),
+        })
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean
+          currentSeq?: number
+          events?: unknown[]
+        } | null
+        if (!res.ok || !data?.ok || typeof data.currentSeq !== "number") return
+
+        if (!cur.initialized) {
+          tableEventsCursorRef.current = { seq: data.currentSeq, initialized: true }
+          return
+        }
+
+        tableEventsCursorRef.current = { seq: data.currentSeq, initialized: true }
+        if (Array.isArray(data.events) && data.events.length > 0) {
+          const pull = fetchTableAuthorityRef.current
+          if (pull) void pull(tid)
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const scheduleNext = () => {
+      if (cancelled) return
+      timeoutId = window.setTimeout(() => {
+        void pollTableEvents().finally(() => {
+          if (!cancelled) scheduleNext()
+        })
+      }, TABLE_EVENTS_POLL_MS)
+    }
+
+    void pollTableEvents().finally(() => {
+      if (!cancelled) scheduleNext()
+    })
+
+    return () => {
+      cancelled = true
+      if (timeoutId != null) window.clearTimeout(timeoutId)
+    }
+  }, [currentUser, tableId, tablePaused, seatConfirmed])
 
   // Send leave on tab close / navigation away / VK WebView close.
   // beforeunload + pagehide cover desktop browsers, mobile Safari, and VK WebView.

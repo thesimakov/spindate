@@ -296,7 +296,8 @@ export async function getTableAuthoritySnapshot(tableId: number): Promise<TableA
  */
 export async function applyAuthorityEvent(tableId: number, action: GameAction): Promise<TableAuthorityPayload | null> {
   const tid = Math.floor(tableId)
-  await ensureTableAuthority(tid)
+  /** Снимок после ensure: если GET в RMW ещё пуст (редкая гонка), подставляем его вместо raw. */
+  const ensured = await ensureTableAuthority(tid)
 
   const redis = getRedis()
   const key = authorityRedisKey(tid)
@@ -304,8 +305,9 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
   if (redis) {
     let out: TableAuthorityPayload | null = null
     await readModifyWriteKey(redis, key, (raw) => {
-      if (!raw) return raw
-      const snap = JSON.parse(raw) as TableAuthorityPayload
+      let snap: TableAuthorityPayload | null = raw ? (JSON.parse(raw) as TableAuthorityPayload) : null
+      if (!snap && ensured) snap = ensured
+      if (!snap) return raw
       const applied = applyTableAuthorityAction(snap, action)
       if (!applied) return raw
       let next: TableAuthorityPayload = { ...applied, revision: snap.revision + 1 }
@@ -321,7 +323,8 @@ export async function applyAuthorityEvent(tableId: number, action: GameAction): 
 
   return runMemoryAuthorityOp(tid, async () => {
     const store = getMemoryStore()
-    const snap = store.get(tid)
+    let snap = store.get(tid) ?? null
+    if (!snap && ensured) snap = ensured
     if (!snap) return null
     const applied = applyTableAuthorityAction(snap, action)
     if (!applied) return null
