@@ -4,6 +4,7 @@ import React from "react"
 import { CreatorTableHostAura } from "@/components/creator-table-host-aura"
 import { PlayerAvatar } from "@/components/player-avatar"
 import type { Player } from "@/lib/game-types"
+import { STARS_MONTH_FRAME_ID } from "@/lib/popularity-frames"
 import type { AvatarSteamFog } from "@/hooks/use-game-timers"
 
 interface SteamPuff {
@@ -52,6 +53,8 @@ interface GameBoardPlayersProps {
   roomCreatorPlayerId?: number | null
   avatarFrameMetaByPlayerId?: Record<number, { border?: string; shadow?: string; svgPath?: string }>
   catalogGiftAvatarHold?: { playerId: number; giftTypeId: string } | null
+  /** Топ популярности месяца — рамка «звёзды» для этого игрока (обычно текущий пользователь). */
+  monthlyTopFramePlayerId?: number | null
 }
 
 function GameBoardPlayersInner({
@@ -85,13 +88,17 @@ function GameBoardPlayersInner({
   roomCreatorPlayerId,
   avatarFrameMetaByPlayerId,
   catalogGiftAvatarHold,
+  monthlyTopFramePlayerId,
 }: GameBoardPlayersProps) {
   return (
     <>
       {players.map((player, i) => {
         const pos = positions[i]
         if (!pos) return null
-        const playerFrameId = avatarFrames?.[player.id]
+        const playerFrameId =
+          monthlyTopFramePlayerId != null && player.id === monthlyTopFramePlayerId
+            ? STARS_MONTH_FRAME_ID
+            : avatarFrames?.[player.id]
         const playerFrameMeta = avatarFrameMetaByPlayerId?.[player.id]
         const isClickableForPrediction =
           predictionPhase && !predictionMade && !isSpinning && !showResult &&

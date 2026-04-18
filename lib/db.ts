@@ -235,6 +235,19 @@ function migrate(database: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_player_gift_progress_actor_created ON player_gift_progress_events(actor_key, created_at);
     CREATE INDEX IF NOT EXISTS idx_player_gift_progress_recipient_created ON player_gift_progress_events(recipient_actor_key, created_at);
+
+    CREATE TABLE IF NOT EXISTS popularity_events (
+      dedupe_id TEXT PRIMARY KEY,
+      table_id INTEGER NOT NULL,
+      actor_key TEXT NOT NULL,
+      weight INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      month_key TEXT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_popularity_events_month ON popularity_events(month_key);
+    CREATE INDEX IF NOT EXISTS idx_popularity_events_actor_month ON popularity_events(actor_key, month_key);
   `)
 
   const achievementPostCols = database.prepare(`PRAGMA table_info(achievement_post_templates)`).all() as { name: string }[]

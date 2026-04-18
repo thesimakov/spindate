@@ -10,6 +10,7 @@ import {
   type InventoryItem,
   type GameLogEntry,
   type EmotionUseTodayBucket,
+  type PopularityStats,
 } from "./game-types"
 import {
   DEFAULT_GIFT_CATALOG_ROWS,
@@ -115,6 +116,7 @@ const initialState: GameState = {
   gameSidePanel: null,
   chatPanelPlayer: null,
   pairKissPhase: null,
+  popularityStats: null,
 }
 
 const ADMIRERS_LS_KEY = (userId: number) => `spindate_admirers_v1_${userId}`
@@ -482,6 +484,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         currentUser: null,
         players: [],
+        popularityStats: null,
         tableId: (() => {
           if (typeof window !== "undefined") {
             try {
@@ -1360,6 +1363,9 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       return { ...state, players: updatedPlayers, currentUser: updatedUser }
     }
 
+    case "SET_POPULARITY_STATS":
+      return { ...state, popularityStats: action.stats }
+
     // ---- Bottle skin ----
     case "SET_BOTTLE_SKIN":
       try {
@@ -1560,6 +1566,36 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // ignore
     }
   }, [])
+
+  useEffect(() => {
+    const user = state.currentUser
+    if (!user || typeof window === "undefined") return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/popularity/me", { credentials: "include", cache: "no-store" })
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean
+        } & Partial<PopularityStats>
+        if (cancelled || !res.ok || !data?.ok) return
+        const stats: PopularityStats = {
+          monthKey: typeof data.monthKey === "string" ? data.monthKey : "",
+          ratingTotal: typeof data.ratingTotal === "number" ? data.ratingTotal : 0,
+          popularityMonth: typeof data.popularityMonth === "number" ? data.popularityMonth : 0,
+          popularityLifetime: typeof data.popularityLifetime === "number" ? data.popularityLifetime : 0,
+          level: typeof data.level === "number" ? data.level : 1,
+          monthRank: typeof data.monthRank === "number" ? data.monthRank : null,
+          monthlyTopFrame: Boolean(data.monthlyTopFrame),
+        }
+        dispatch({ type: "SET_POPULARITY_STATS", stats })
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [state.currentUser?.id])
 
   useEffect(() => {
     const user = state.currentUser

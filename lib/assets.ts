@@ -142,6 +142,7 @@ export const FRAME_SVG = {
   mir: "/assets/ram-mir.svg",
   vesna: "/assets/ram-vesna.svg",
   vip_01: "/assets/vip-01.svg",
+  stars_month_01: "/assets/stars-month-01.svg",
 } as const
 
 /** Остальные картинки (фон, декор) — все в assets */

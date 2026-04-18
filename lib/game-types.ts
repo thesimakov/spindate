@@ -426,6 +426,28 @@ export interface GameState {
   gameSidePanel: GameSidePanelId | null
   /** Игрок, с которым открыт боковой чат (panel = "player-chat") */
   chatPanelPlayer: Player | null
+  /**
+   * Рейтинг / популярность / уровень с сервера (см. /api/popularity/me).
+   * Рамка топа месяца применяется к текущему пользователю при monthlyTopFrame.
+   */
+  popularityStats?: PopularityStats | null
+}
+
+/** Очки рейтинга (исходящая активность), популярности (входящая), уровень и место в топе месяца. */
+export type PopularityStats = {
+  monthKey: string
+  /** Сумма весов глобального рейтинга (подарки, поцелуи как даритель и т.д.) */
+  ratingTotal: number
+  /** Популярность за текущий календарный месяц (входящие события) */
+  popularityMonth: number
+  /** Популярность за всё время */
+  popularityLifetime: number
+  /** Уровень 1..99 от popularityLifetime */
+  level: number
+  /** Место в топе популярности месяца или null */
+  monthRank: number | null
+  /** Топ-20 месяца — показывать рамку «звёзды месяца» */
+  monthlyTopFrame: boolean
 }
 
 export type GameAction =
@@ -548,3 +570,5 @@ export type GameAction =
   | { type: "OPEN_SIDE_CHAT"; player: Player }
   /** Подтянуть состояние стола с сервера (не отправляется на сервер) */
   | { type: "SYNC_TABLE_AUTHORITY"; payload: TableAuthorityPayload }
+  /** Снимок популярности с /api/popularity/me */
+  | { type: "SET_POPULARITY_STATS"; stats: PopularityStats | null }

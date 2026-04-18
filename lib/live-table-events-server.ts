@@ -1,5 +1,6 @@
 import type { GameAction, TableAuthorityPayload } from "@/lib/game-types"
 import { tryInsertGlobalRatingFromAddLog } from "@/lib/global-rating-store"
+import { tryInsertPopularityFromAddLog } from "@/lib/popularity-store"
 import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 import { applyAuthorityEvent, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
 import { getRedis } from "@/lib/redis"
@@ -449,6 +450,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     })
     scheduleVkNotificationForTableAction(args.action)
     tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
+    tryInsertPopularityFromAddLog({ tableId, action: args.action, createdAtMs: now })
     return { ok: true as const, seq, turnKey: turnCtx.turnKey as string | null }
   }
 
@@ -470,6 +472,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     store.set(tableId, bucket)
     scheduleVkNotificationForTableAction(args.action)
     tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
+    tryInsertPopularityFromAddLog({ tableId, action: args.action, createdAtMs: now })
     return { ok: true as const, seq: bucket.seq, turnKey: turnCtx.turnKey as string | null }
   })
 }

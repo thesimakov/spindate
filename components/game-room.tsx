@@ -88,6 +88,7 @@ import { isVkGroupBellAnimationOff, VK_GROUP_BELL_STORAGE_EVENT } from "@/lib/vk
 import { VkBankRewardVideoButton } from "@/components/vk-bank-reward-video-button"
 import { useFortuneWheel } from "@/hooks/use-fortune-wheel"
 import { FORTUNE_WHEEL_ENABLED } from "@/lib/fortune-wheel"
+import { STARS_MONTH_FRAME_ID } from "@/lib/popularity-frames"
 import {
   PAIR_ACTIONS,
   type PairAction,
@@ -1179,6 +1180,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     gameSidePanel,
     admirers,
     pairKissPhase,
+    popularityStats,
   } = state
   const [pairKissClock, setPairKissClock] = useState(() => Date.now())
   const [nextKissAnnouncementUntilMs, setNextKissAnnouncementUntilMs] = useState<number | null>(null)
@@ -5899,6 +5901,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             giftDisplayById={giftDisplayById}
             roomCreatorPlayerId={roomCreatorPlayerId}
             catalogGiftAvatarHold={catalogGiftAvatarHold}
+            monthlyTopFramePlayerId={
+              popularityStats?.monthlyTopFrame && currentUser ? currentUser.id : null
+            }
           />
 
           {/* ---- FLYING EMOJIS ---- */}
@@ -6860,12 +6865,24 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     aria-hidden
                   />
                   {(() => {
-                    const menuFrameId = avatarFrames?.[playerMenuTarget.id] || "none"
-                    const menuFrameMeta = frameMetaById.get(menuFrameId)
-                      ?? (() => {
-                        const row = frameCatalogRows.find((r) => r.id === menuFrameId)
-                        return row ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined } : undefined
-                      })()
+                    const menuFrameId =
+                      playerMenuTarget.id === currentUser?.id && popularityStats?.monthlyTopFrame
+                        ? STARS_MONTH_FRAME_ID
+                        : avatarFrames?.[playerMenuTarget.id] || "none"
+                    const menuFrameMeta =
+                      menuFrameId === STARS_MONTH_FRAME_ID
+                        ? {
+                            border: "2px solid transparent",
+                            shadow: "none",
+                            svgPath: "stars-month-01.svg",
+                          }
+                        : frameMetaById.get(menuFrameId) ??
+                          (() => {
+                            const row = frameCatalogRows.find((r) => r.id === menuFrameId)
+                            return row
+                              ? { border: row.border, shadow: row.shadow, svgPath: row.svgPath || undefined }
+                              : undefined
+                          })()
                     return (
                   <div
                     ref={playerMenuAvatarRef}

@@ -51,6 +51,7 @@ import {
 } from "@/lib/gift-progress-shared"
 import { fetchGiftProgressStats, recordGiftProgress } from "@/lib/gift-progress-client"
 import { getVkMiniAppPageUrl } from "@/lib/game-invite-copy"
+import { POPULARITY_TOP_MONTH_STATUS, STARS_MONTH_FRAME_ID } from "@/lib/popularity-frames"
 
 const CLAIMED_ACHIEVEMENT_STORAGE_PREFIX = "spindate_achievement_status_claimed_v1_"
 const FOCUS_CHAT_INVITE_SETTING_KEY = "spindate_focus_chat_invite_setting_v1"
@@ -142,6 +143,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     soundsEnabled,
     admirers,
     ugadaikaRoundsWon,
+    popularityStats,
   } = state
 
   /** Рамка на столе: через sync-dispatch из game-room (сервер + остальные игроки), иначе только локально. */
@@ -154,6 +156,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   }
 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
+  const profileAvatarFrameId = popularityStats?.monthlyTopFrame ? STARS_MONTH_FRAME_ID : currentFrameId
   const PROFILE_FRAMES = useMemo(() => {
     const source = frameCatalogRows.length > 0 ? frameCatalogRows : DEFAULT_FRAME_CATALOG_ROWS
     const mapped = source
@@ -376,6 +379,9 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const [limitedGiftTargetId, setLimitedGiftTargetId] = useState<number | null>(null)
   const [giftBuyBusyId, setGiftBuyBusyId] = useState<string | null>(null)
   const [showFramesModal, setShowFramesModal] = useState(false)
+  const [popularityLeaderboard, setPopularityLeaderboard] = useState<
+    Array<{ rank: number; name: string; avatar: string; score: number }>
+  >([])
   const [profileDailyLevel, setProfileDailyLevel] = useState(1)
   const [profileTab, setProfileTab] = useState<"profile" | "achievements" | "gifts">("profile")
   const [showReceivedOnly, setShowReceivedOnly] = useState(false)
@@ -415,6 +421,31 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
       cancelled = true
     }
   }, [currentUser])
+
+  useEffect(() => {
+    if (!currentUser || profileTab !== "profile") return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/popularity/leaderboard?limit=20", {
+          credentials: "include",
+          cache: "no-store",
+        })
+        const data = (await res.json().catch(() => null)) as {
+          ok?: boolean
+          rows?: Array<{ rank: number; name: string; avatar: string; score: number }>
+        }
+        if (!cancelled && res.ok && data?.ok && Array.isArray(data.rows)) {
+          setPopularityLeaderboard(data.rows)
+        }
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser?.id, profileTab])
 
   const giftSpent = giftProgressStats?.heartsSpent ?? localGiftSpent
 
@@ -631,19 +662,32 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
     }, 2600)
   }
 
-  const displayFrameId = frameHoverPreviewId ?? currentFrameId
+  const displayFrameId =
+    frameHoverPreviewId ??
+    (popularityStats?.monthlyTopFrame ? STARS_MONTH_FRAME_ID : currentFrameId)
   const previewFrameMeta =
-    PROFILE_FRAMES.find((x) => x.id === displayFrameId) ??
-    PROFILE_FRAMES[0] ?? {
-      id: "none",
-      label: "Без рамки",
-      border: "2px solid #475569",
-      shadow: "none",
-      animationClass: undefined,
-      svgPath: undefined,
-      cost: 0,
-      section: "free" as const,
-    }
+    displayFrameId === STARS_MONTH_FRAME_ID
+      ? {
+          id: STARS_MONTH_FRAME_ID,
+          label: POPULARITY_TOP_MONTH_STATUS,
+          border: "2px solid transparent",
+          shadow: "none",
+          animationClass: undefined,
+          svgPath: "stars-month-01.svg",
+          cost: 0,
+          section: "free" as const,
+        }
+      : PROFILE_FRAMES.find((x) => x.id === displayFrameId) ??
+        PROFILE_FRAMES[0] ?? {
+          id: "none",
+          label: "Без рамки",
+          border: "2px solid #475569",
+          shadow: "none",
+          animationClass: undefined,
+          svgPath: undefined,
+          cost: 0,
+          section: "free" as const,
+        }
 
   const handleSaveName = async () => {
     if (!canSaveName) return
@@ -1111,7 +1155,28 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                     </div>
                   </>
                 )}
-                <PlayerAvatar player={currentUser} frameId={currentFrameId} size={88} hideNameLabel />
+                <PlayerAvatar player={currentUser} frameId={profileAvatarFrameId} size={88} hideNameLabel />
+                {popularityStats?.monthlyTopFrame && (
+                  <div
+                    className="absolute z-[26] flex max-w-[5.5rem] items-center justify-center rounded-lg px-1.5 py-0.5"
+                    style={{
+                      background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                      color: "#f8fafc",
+                      border: "1px solid rgba(199,210,254,0.5)",
+                      top: -4,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                      textAlign: "center",
+                      boxShadow: "0 2px 10px rgba(99,102,241,0.45)",
+                    }}
+                    title={POPULARITY_TOP_MONTH_STATUS}
+                  >
+                    Топ месяца
+                  </div>
+                )}
                 {isVip && (
                   <div
                     className="absolute z-[26] flex items-center justify-center rounded-full"
@@ -1229,6 +1294,63 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className={`${sectionCardClass} space-y-3`}>
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Популярность</p>
+          <p className="text-[14px] font-medium leading-relaxed text-slate-600">
+            Рейтинг — активность в игре (подарки, поцелуи и т.д.). Популярность — отклик других игроков на вас. Уровень
+            растёт с суммарной популярностью.
+          </p>
+          {popularityStats ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Рейтинг</p>
+                <p className="text-lg font-black tabular-nums text-slate-900">{popularityStats.ratingTotal}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Популярность</p>
+                <p className="text-lg font-black tabular-nums text-slate-900">{popularityStats.popularityLifetime}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Уровень</p>
+                <p className="text-lg font-black tabular-nums text-slate-900">{popularityStats.level}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Месяц</p>
+                <p className="text-lg font-black tabular-nums text-slate-900">{popularityStats.popularityMonth}</p>
+                {popularityStats.monthRank != null && (
+                  <p className="text-[12px] font-semibold text-violet-600">место {popularityStats.monthRank}</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[15px] font-medium text-slate-600">Загрузка…</p>
+          )}
+          <div>
+            <p className="mb-2 text-[14px] font-extrabold text-slate-800">Самые желанные за месяц</p>
+            {popularityLeaderboard.length === 0 ? (
+              <p className="text-[14px] text-slate-600">Пока нет данных — играйте за столом.</p>
+            ) : (
+              <ol className="max-h-52 space-y-1.5 overflow-y-auto pr-1">
+                {popularityLeaderboard.map((row) => (
+                  <li
+                    key={`${row.rank}-${row.name}`}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-2 py-1.5"
+                  >
+                    <span className="w-6 text-center text-[13px] font-black text-violet-600">{row.rank}</span>
+                    {row.avatar ? (
+                      <img src={row.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-slate-200" />
+                    ) : (
+                      <div className="h-8 w-8 shrink-0 rounded-full bg-slate-200" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-slate-900">{row.name}</span>
+                    <span className="shrink-0 text-[13px] font-bold tabular-nums text-slate-600">{row.score}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
         </div>
 

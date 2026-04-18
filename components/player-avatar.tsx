@@ -44,6 +44,7 @@ const FRAME_STYLES: Record<string, { border: string; boxShadow: string }> = {
   mir: { border: "2px solid transparent", boxShadow: "none" },
   vesna: { border: "2px solid transparent", boxShadow: "none" },
   vip_01: { border: "2px solid transparent", boxShadow: "none" },
+  stars_month_01: { border: "2px solid transparent", boxShadow: "none" },
 }
 
 const FRAME_SVG_IDS = Object.keys(FRAME_SVG) as (keyof typeof FRAME_SVG)[]
