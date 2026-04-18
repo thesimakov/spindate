@@ -7,7 +7,9 @@
  *  PM2 reload (graceful restart) подхватывает новый код из cwd.
  *  Данные (Redis, SQLite) живут вне releases/ и не теряются.
  *
- *  Общие секреты: ../../shared/.env.local относительно каталога релиза (releases/…).
+ *  Общие секреты: один или оба файла (поздний в списке перекрывает ранний):
+ *  - ../shared/.env.local — типично /var/www/shared при приложении в /var/www/spindate
+ *  - ../../shared/.env.local — при каталоге релиза releases/…/current (два уровня вверх до корня деплоя)
  *  PM2 подмешивает их в env процесса — видно в `pm2 env 0`, Next тоже их видит. */
 const fs = require("node:fs")
 const path = require("node:path")
@@ -39,8 +41,14 @@ function parseDotEnvFile(filePath) {
   return out
 }
 
-const sharedEnvPath = path.join(__dirname, "..", "..", "shared", ".env.local")
-const sharedEnv = parseDotEnvFile(sharedEnvPath)
+const sharedEnvPaths = [
+  path.join(__dirname, "..", "..", "shared", ".env.local"),
+  path.join(__dirname, "..", "shared", ".env.local"),
+]
+let sharedEnv = {}
+for (const p of sharedEnvPaths) {
+  sharedEnv = { ...sharedEnv, ...parseDotEnvFile(p) }
+}
 /** Корень приложения: .env затем .env.local (локальные переопределяют). Часто секреты кладут только в .env — без merge PM2 их не видит. */
 const projectEnvPath = path.join(__dirname, ".env")
 const projectEnvDot = parseDotEnvFile(projectEnvPath)
