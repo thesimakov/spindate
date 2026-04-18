@@ -1689,16 +1689,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     }
   }, [gameSidePanel, dispatch])
 
-  // Рандомный бот периодически меняет себе рамку
+  // Рандомный бот периодически меняет себе рамку; в authority пушит только ведущий раунда (см. live-table-events-server).
   useEffect(() => {
     const bots = players.filter((p): p is Player => !!p.isBot)
-    if (bots.length === 0) return
+    if (bots.length === 0 || !currentUser) return
+    const roundDriverId = getRoundDriverPlayerId(players)
+    if (roundDriverId == null || roundDriverId !== currentUser.id) return
     const interval = setInterval(() => {
       const bot = bots[Math.floor(Math.random() * bots.length)]
       if (bot) dispatch({ type: "SET_AVATAR_FRAME", playerId: bot.id, frameId: randomAvatarFrame() })
     }, 20000)
     return () => clearInterval(interval)
-  }, [players, dispatch])
+  }, [players, dispatch, currentUser])
 
   // Background music
   const MUSIC_SRC = "/music/you-know-why.mp3"

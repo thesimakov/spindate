@@ -5,6 +5,7 @@ import { useGame, generateBots } from "@/lib/game-context"
 import { apiFetch } from "@/lib/api-fetch"
 import { appPath } from "@/lib/app-path"
 import { composeTablePlayers } from "@/lib/table-composition"
+import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 import { registerTableSyncDispatch } from "@/lib/table-sync-registry"
 import { generateLogId } from "@/lib/ids"
 import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
@@ -93,8 +94,12 @@ export function useSyncEngine(): SyncEngineResult {
     syncMetaRef.current = { tableId, userId: currentUser?.id ?? null }
   }, [tableId, currentUser?.id])
 
+  const frameResyncKeyRef = useRef<string>("")
+  const botFramesBootstrapKeyRef = useRef<string>("")
+
   useEffect(() => {
     lastAuthorityRevisionRef.current = 0
+    botFramesBootstrapKeyRef.current = ""
   }, [tableId])
 
   useEffect(() => {
@@ -114,7 +119,6 @@ export function useSyncEngine(): SyncEngineResult {
   useEffect(() => {
     pushChainRef.current = Promise.resolve()
   }, [tableId])
-  const frameResyncKeyRef = useRef<string>("")
 
   const pushTableAction = useCallback((action: GameAction) => {
     pushChainRef.current = pushChainRef.current
@@ -274,6 +278,7 @@ export function useSyncEngine(): SyncEngineResult {
     setSeatConfirmed(false)
     setLiveHumanCount(0)
     frameResyncKeyRef.current = ""
+    botFramesBootstrapKeyRef.current = ""
   }, [currentUser?.id])
 
   useEffect(() => {
@@ -285,6 +290,7 @@ export function useSyncEngine(): SyncEngineResult {
       setSeatConfirmed(false)
       setTableLiveReady(false)
       frameResyncKeyRef.current = ""
+      botFramesBootstrapKeyRef.current = ""
     }
   }, [tablePaused])
 
@@ -312,6 +318,44 @@ export function useSyncEngine(): SyncEngineResult {
     tablePaused,
     seatConfirmed,
     tableAuthorityReady,
+    avatarFrames,
+    pushTableAction,
+    emitSeatSyncLog,
+  ])
+
+  /**
+   * Ведущий раунда публикует рамки ботов в authority — подключившийся игрок видит те же рамки, что и остальные.
+   */
+  useEffect(() => {
+    if (!currentUser || tablePaused || !seatConfirmed || !tableAuthorityReady) return
+    const roundDriverId = getRoundDriverPlayerId(players)
+    if (roundDriverId == null || roundDriverId !== currentUser.id) return
+    const bots = players.filter((p) => p.isBot)
+    if (bots.length === 0) return
+    const sig = bots
+      .map((b) => `${b.id}:${avatarFrames?.[b.id] ?? ""}`)
+      .sort()
+      .join("|")
+    const bootstrapKey = `${tableId}:${sig}`
+    if (botFramesBootstrapKeyRef.current === bootstrapKey) return
+    botFramesBootstrapKeyRef.current = bootstrapKey
+    for (const b of bots) {
+      const frameId = avatarFrames?.[b.id]
+      if (!frameId || frameId === "none") continue
+      pushTableAction({ type: "SET_AVATAR_FRAME", playerId: b.id, frameId })
+    }
+    emitSeatSyncLog("bootstrap_bot_avatar_frames", {
+      tableId,
+      roundDriverId: currentUser.id,
+      botCount: bots.length,
+    })
+  }, [
+    currentUser?.id,
+    tableId,
+    tablePaused,
+    seatConfirmed,
+    tableAuthorityReady,
+    players,
     avatarFrames,
     pushTableAction,
     emitSeatSyncLog,

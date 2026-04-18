@@ -186,7 +186,10 @@ async function senderMatchesPairKissChoiceFromSnapshot(
   return !!targetPlayer?.isBot
 }
 
-/** Рамку можно менять себе и дарить другому игроку этого же стола. */
+/**
+ * Рамку можно менять себе и дарить другому живому игроку.
+ * Рамки ботов выставляет ведущий раунда — так снимок стола в authority совпадает у всех, кто зашёл позже.
+ */
 async function senderCanSetAvatarFrameFromSnapshot(
   tableId: number,
   senderId: number,
@@ -198,7 +201,12 @@ async function senderCanSetAvatarFrameFromSnapshot(
   const senderInTable = snap.players.some((p) => p.id === senderId)
   if (!senderInTable) return false
   const targetPlayer = snap.players.find((p) => p.id === action.playerId)
-  return !!targetPlayer && !targetPlayer.isBot
+  if (!targetPlayer) return false
+  if (!targetPlayer.isBot) {
+    return true
+  }
+  const roundDriverId = getRoundDriverPlayerId(snap.players)
+  return roundDriverId != null && senderId === roundDriverId
 }
 
 /** FINALIZE_PAIR_KISS: round-driver или любой игрок после дедлайна/двух ответов. */
