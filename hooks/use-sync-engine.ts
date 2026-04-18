@@ -472,8 +472,16 @@ export function useSyncEngine(): SyncEngineResult {
             roomCreatorPlayerId: createdByUserId,
           })
           lastAuthorityRevisionRef.current = 0
-        } else {
+        } else if (!tableAuthorityReady) {
+          // До первого authority-снимка показываем локально собранный стол.
+          // После готовности authority не перетираем состав локальной композицией live-sync,
+          // иначе у разных клиентов кратковременно расходится порядок/боты.
           dispatch({ type: "SET_PLAYERS", players: nextPlayers })
+        } else {
+          emitSeatSyncLog("skip_set_players_authority_ready", {
+            tableId: nextTableId,
+            livePlayersCount: livePlayers.length,
+          })
         }
         if (typeof data.tablesCount === "number") {
           dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount })

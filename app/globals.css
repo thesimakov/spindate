@@ -54,6 +54,35 @@
   --btn-blue: #1ea5ff;
 }
 
+@keyframes tech-maintenance-marquee {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.tech-maintenance-marquee {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  background: rgba(8, 47, 73, 0.48);
+  height: 1.25rem;
+}
+
+.tech-maintenance-marquee__track {
+  position: absolute;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.25rem;
+  color: rgba(186, 230, 253, 0.98);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  animation: tech-maintenance-marquee 8s linear infinite;
+}
+
 .dark {
   --background: #0f172a;
   --foreground: oklch(0.95 0.01 80);
