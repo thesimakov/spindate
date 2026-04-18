@@ -187,6 +187,12 @@ function migrate(database: Database.Database) {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS maintenance_mode (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      enabled INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS achievement_post_templates (
       achievement_key TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -528,6 +534,14 @@ function migrate(database: Database.Database) {
     .prepare(
       `INSERT INTO table_style_global (id, enabled, style_id, updated_at)
        VALUES (1, 0, 'classic_night', ?)
+       ON CONFLICT(id) DO NOTHING`,
+    )
+    .run(now)
+
+  database
+    .prepare(
+      `INSERT INTO maintenance_mode (id, enabled, updated_at)
+       VALUES (1, 0, ?)
        ON CONFLICT(id) DO NOTHING`,
     )
     .run(now)

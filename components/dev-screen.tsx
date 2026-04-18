@@ -15,6 +15,7 @@ import { AdminRankingsEventsContent } from "@/components/admin-rankings-events-c
 import { AdminTablesContent } from "@/components/admin-tables-content"
 import { AdminGameErrorsContent } from "@/components/admin-game-errors-content"
 import { AdminLobbyAnnouncementContent } from "@/components/admin-lobby-announcement-content"
+import { AdminMaintenanceContent } from "@/components/admin-maintenance-content"
 
 function formatVkGroupCheckError(err: string | null | undefined): string {
   if (!err) return ""
@@ -311,6 +312,8 @@ export function DevScreen() {
             {serverError}
           </div>
         )}
+
+        <AdminMaintenanceContent token={getAdminToken()} />
 
         <div className="mb-4 flex items-center gap-2">
           <button

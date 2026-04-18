@@ -13,8 +13,10 @@ import { AppLoader } from "@/components/app-loader"
 import { PmNotificationToasts } from "@/components/pm-notification-toast"
 import { ZeroBalanceDialog } from "@/components/zero-balance-dialog"
 import { MobileAppBlockedScreen } from "@/components/mobile-app-blocked-screen"
+import { TechnicalMaintenanceScreen } from "@/components/technical-maintenance-screen"
 import { useVkMiniAppPersistentHorizontalBanner } from "@/hooks/use-vk-overlay-banner"
 import { reportGameClientError } from "@/lib/report-game-client-error"
+import { apiFetch } from "@/lib/api-fetch"
 
 const AUTO_ERROR_THROTTLE_MS = 25_000
 const RegistrationScreen = dynamic(() => import("@/components/registration-screen").then((m) => m.RegistrationScreen))
@@ -113,6 +115,7 @@ export function GameApp() {
     }
   }, [])
   const [blockStatus, setBlockStatus] = useState<"blocked" | { until: number } | null>(null)
+  const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false)
   const [layoutDebugEnabled, setLayoutDebugEnabled] = useState(false)
   const [layoutDebugSnapshot, setLayoutDebugSnapshot] = useState<Record<string, string | number | boolean | null> | null>(null)
 
@@ -229,6 +232,47 @@ export function GameApp() {
   }, [state.screen, state.currentUser?.id])
 
   useEffect(() => {
+    let cancelled = false
+    let timer: number | null = null
+
+    const poll = async () => {
+      try {
+        const res = await apiFetch("/api/maintenance-mode", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        })
+        const data = (await res.json().catch(() => null)) as { ok?: boolean; enabled?: boolean } | null
+        if (!cancelled && res.ok && data?.ok === true) {
+          setMaintenanceModeEnabled(data.enabled === true)
+        }
+      } catch {
+        // ignore temporary network errors
+      } finally {
+        if (!cancelled) {
+          const hidden = typeof document !== "undefined" && document.visibilityState !== "visible"
+          timer = window.setTimeout(poll, hidden ? 10_000 : 5_000)
+        }
+      }
+    }
+
+    void poll()
+
+    const onFocus = () => { void poll() }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll()
+    }
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      cancelled = true
+      if (timer != null) window.clearTimeout(timer)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof document === "undefined") return
     const root = document.documentElement
     const enabled = state.tableStyle === "light_day"
@@ -244,6 +288,9 @@ export function GameApp() {
   const showLayoutDebugOverlay = layoutDebugEnabled && !!layoutDebugSnapshot
 
   const mobileAppBlocked = process.env.NEXT_PUBLIC_MOBILE_APP_BLOCKED !== "0"
+  if (maintenanceModeEnabled) {
+    return <TechnicalMaintenanceScreen />
+  }
   if (mobileAppBlocked && !layoutDebugEnabled) {
     if (!deviceClassResolved) {
       return (
