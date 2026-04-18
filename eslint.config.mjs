@@ -12,6 +12,7 @@ export default [
       "node_modules/**",
       "out/**",
       "public/**",
+      "reference/**",
     ],
   },
   js.configs.recommended,
