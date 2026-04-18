@@ -156,7 +156,7 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
   const currentFrameId = (avatarFrames ?? {})[currentUser?.id ?? 0] ?? "none"
   const PROFILE_FRAMES = useMemo(() => {
     const source = frameCatalogRows.length > 0 ? frameCatalogRows : DEFAULT_FRAME_CATALOG_ROWS
-    return source
+    const mapped = source
       .filter((row) => row.published && !row.deleted)
       .map((row) => ({
         id: row.id,
@@ -168,9 +168,33 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
         cost: row.cost,
         section: row.section,
       }))
+    if (!mapped.some((r) => r.id === "vip_01")) {
+      const vipRow = DEFAULT_FRAME_CATALOG_ROWS.find((r) => r.id === "vip_01" && r.published && !r.deleted)
+      if (vipRow) {
+        mapped.push({
+          id: vipRow.id,
+          label: vipRow.name,
+          border: vipRow.border,
+          shadow: vipRow.shadow,
+          animationClass: vipRow.animationClass || undefined,
+          svgPath: vipRow.svgPath || undefined,
+          cost: vipRow.cost,
+          section: vipRow.section,
+        })
+      }
+    }
+    return mapped
   }, [frameCatalogRows])
   const FREE_FRAMES = PROFILE_FRAMES.filter((row) => row.section === "free")
-  const PREMIUM_FRAMES = PROFILE_FRAMES.filter((row) => row.section !== "free")
+  const PAID_FRAMES = PROFILE_FRAMES.filter((row) => row.section === "paid")
+  const VIP_FRAMES = useMemo(() => {
+    if (!currentUser) return []
+    const myPlayer = players.find((p) => p.id === currentUser.id)
+    const isVipActive =
+      !!myPlayer?.isVip && (myPlayer.vipUntilTs == null || myPlayer.vipUntilTs > Date.now())
+    if (!isVipActive) return []
+    return PROFILE_FRAMES.filter((row) => row.section === "vip")
+  }, [PROFILE_FRAMES, currentUser, players])
 
   const rosesBalance = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,
@@ -2031,16 +2055,67 @@ export function ProfileScreen({ variant = "page", onClose }: ProfileScreenProps 
               })}
             </div>
 
+            {VIP_FRAMES.length > 0 && (
+              <>
+                <p className="relative mb-3 flex items-center gap-2 text-[15px] font-black tracking-tight text-violet-200">
+                  <span>VIP</span>
+                  <span className="text-[13px] font-semibold text-violet-300/90">пока активна подписка</span>
+                </p>
+                <div className="relative grid grid-cols-3 gap-3 mb-6">
+                  {VIP_FRAMES.map((f) => {
+                    const isSelected = currentFrameId === f.id
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onPointerEnter={() => setFrameHoverPreviewId(f.id)}
+                        onClick={() => {
+                          if (!currentUser) return
+                          dispatchAvatarFrameSynced(f.id)
+                          setShowFramesModal(false)
+                          showToast("Рамка применена", "success")
+                        }}
+                        className={`flex flex-col items-center gap-2 rounded-2xl py-3 px-2 transition-all duration-200 hover:scale-105 hover:shadow-lg ${
+                          isSelected ? "frame-pick-card-premium--active" : "frame-pick-card-premium--idle"
+                        }`}
+                      >
+                        <div
+                          className={`relative h-14 w-14 flex-shrink-0 rounded-full overflow-hidden ring-2 ring-violet-400/40 ${
+                            isSelected ? "frame-pick-preview--pulse" : ""
+                          }`}
+                        >
+                          <div
+                            className="h-full w-full rounded-full bg-slate-800"
+                            style={{ border: f.border, boxShadow: f.shadow, padding: 2 }}
+                          />
+                          {f.svgPath && (
+                            <img
+                              src={resolveFrameCatalogAssetUrl(f.svgPath)}
+                              alt=""
+                              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+                              aria-hidden
+                            />
+                          )}
+                        </div>
+                        <span className="text-[15px] font-semibold text-slate-200 leading-tight text-center">{f.label}</span>
+                        <span className="text-[13px] font-semibold text-violet-200/90">с VIP</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
             <p className="relative mb-3 flex items-center gap-2 text-[15px] font-black tracking-tight text-amber-300">
               <span>Премиум</span>
               <span className="text-[15px] font-black text-rose-200/95">
-                {PREMIUM_FRAMES.length > 0
-                  ? `${Math.min(...PREMIUM_FRAMES.map((f) => f.cost))} ❤ и выше`
+                {PAID_FRAMES.length > 0
+                  ? `${Math.min(...PAID_FRAMES.map((f) => f.cost))} ❤ и выше`
                   : "цены из каталога"}
               </span>
             </p>
             <div className="relative grid grid-cols-3 gap-3">
-              {PREMIUM_FRAMES.map((f) => {
+              {PAID_FRAMES.map((f) => {
                 const canAfford = (voiceBalance ?? 0) >= f.cost
                 const isSelected = currentFrameId === f.id
                 return (

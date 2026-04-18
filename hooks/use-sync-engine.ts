@@ -205,7 +205,8 @@ export function useSyncEngine(): SyncEngineResult {
   const pendingAuthorityTableIdRef = useRef<number | null>(null)
   const authorityStablePollCountRef = useRef(0)
   const authorityPollMsRef = useRef(AUTHORITY_POLL_MS)
-  const SYNC_DEBOUNCE_MS = 200
+  /** Было 200; 400 мс снижало рендеры, 320 мс — компромисс отзывчивость/нагрузка. */
+  const SYNC_DEBOUNCE_MS = 320
 
   const doApply = useCallback(
     (payload: TableAuthorityPayload) => {

@@ -14,6 +14,8 @@ export type FrameCatalogId =
   | "malif"
   | "mir"
   | "vesna"
+  /** Рамка из комплекта VIP; в профиле показывается при активном VIP. */
+  | "vip_01"
 
 export type FrameCatalogSection = "free" | "paid" | "vip"
 
@@ -116,6 +118,17 @@ export const DEFAULT_FRAME_CATALOG_ROWS: FrameCatalogRow[] = [
     shadow: "0 0 12px rgba(186, 230, 253, 0.5)",
     animationClass: "frame-preview-anim-snow",
     svgPath: "",
+    cost: 0,
+    published: true,
+  },
+  {
+    id: "vip_01",
+    section: "vip",
+    name: "VIP",
+    border: "2px solid transparent",
+    shadow: "none",
+    animationClass: "",
+    svgPath: "vip-01.svg",
     cost: 0,
     published: true,
   },
