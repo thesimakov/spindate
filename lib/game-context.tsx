@@ -1555,6 +1555,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!user) return
     if (currentFrameSig !== VIP_AUTO_FRAME_ID) return
 
+    // Источник правды по VIP может прийти чуть позже после перезапуска/деплоя:
+    // не снимаем авто-рамку, пока статус ещё не определён.
+    const syncedSelf = state.players.find((p) => p.id === user.id)
+    const vipSource = syncedSelf ?? user
+    const hasVipSignal = typeof vipSource.isVip === "boolean" || typeof vipSource.vipUntilTs === "number"
+    if (!hasVipSignal) return
+
     const clearVipFrameIfStillAuto = () => {
       const action = { type: "SET_AVATAR_FRAME" as const, playerId: user.id, frameId: "none" }
       const sync = getTableSyncDispatch()
@@ -1566,14 +1573,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
 
     const now = Date.now()
-    const vipStillActive = user.isVip && (user.vipUntilTs == null || user.vipUntilTs > now)
+    const vipStillActive = Boolean(vipSource.isVip) && (vipSource.vipUntilTs == null || vipSource.vipUntilTs > now)
     if (!vipStillActive) {
       clearVipFrameIfStillAuto()
       return
     }
-    if (user.vipUntilTs == null) return
+    if (vipSource.vipUntilTs == null) return
 
-    const delay = user.vipUntilTs - now + 250
+    const delay = vipSource.vipUntilTs - now + 250
     if (delay <= 0) {
       clearVipFrameIfStillAuto()
       return
@@ -1583,7 +1590,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       clearVipFrameIfStillAuto()
     }, delay)
     return () => window.clearTimeout(timer)
-  }, [state.currentUser?.id, state.currentUser?.isVip, state.currentUser?.vipUntilTs, currentFrameSig, dispatch])
+  }, [
+    state.currentUser?.id,
+    state.currentUser?.isVip,
+    state.currentUser?.vipUntilTs,
+    state.players,
+    currentFrameSig,
+    dispatch,
+  ])
 
   // Экономика + визуальные настройки: сразу на сервер (debounce 400ms), чтобы смена ВК/ОК/логина подтягивала тот же вид.
   useEffect(() => {
