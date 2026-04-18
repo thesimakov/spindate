@@ -17,6 +17,8 @@ import { GameSidePanelShell } from "@/components/game-side-panel-shell"
 import { persistUserGameState } from "@/lib/persist-user-game-state"
 import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import type { GameLogEntry, InventoryItem } from "@/lib/game-types"
+import { getTableSyncDispatch } from "@/lib/table-sync-registry"
+import { VIP_AUTO_FRAME_ID } from "@/lib/vip-avatar-frame"
 
 type ShopScreenProps = {
   variant?: "page" | "panel"
@@ -36,7 +38,7 @@ function vkVotesWordRu(n: number): string {
 export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) {
   const { host: runtimeHost } = useSocialRuntime()
   const { state, dispatch } = useGame()
-  const { currentUser, voiceBalance, players, inventory, tableId } = state
+  const { currentUser, voiceBalance, players, inventory, tableId, tablePaused } = state
   const { toast, showToast } = useInlineToast(1700)
   const rosesCount = inventory.filter((i) => i.type === "rose").length
   const [exchangeTab, setExchangeTab] = useState<
@@ -268,6 +270,19 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     inventory,
   ])
 
+  const dispatchAvatarFrameSynced = useCallback((frameId: string) => {
+    if (!currentUser) return
+    const action = { type: "SET_AVATAR_FRAME" as const, playerId: currentUser.id, frameId }
+    if (!tablePaused) {
+      const sync = getTableSyncDispatch()
+      if (sync) {
+        sync(action)
+        return
+      }
+    }
+    dispatch(action)
+  }, [currentUser?.id, tablePaused, dispatch])
+
   const runLiveKeepAlive = async (user: typeof currentUser, ms: number) => {
     if (!user) return () => {}
     let cancelled = false
@@ -454,6 +469,7 @@ export function ShopScreen({ variant = "page", onClose }: ShopScreenProps = {}) 
     const base = vipUntilTs && vipUntilTs > Date.now() ? vipUntilTs : Date.now()
     const until = base + days * 24 * 60 * 60 * 1000
     dispatch({ type: "SET_VIP_STATUS", playerId: currentUser.id, isVip: true, vipUntilTs: until })
+    dispatchAvatarFrameSynced(VIP_AUTO_FRAME_ID)
     dispatch({
       type: "ADD_LOG",
       entry: {

@@ -25,6 +25,8 @@ import { buildVisualPrefsPayload } from "@/lib/user-visual-prefs"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
 import { trimRoomChatMessages } from "@/lib/room-chat-retention"
 import { mergeGameLogsForSync } from "@/lib/table-authority-merge"
+import { getTableSyncDispatch } from "@/lib/table-sync-registry"
+import { VIP_AUTO_FRAME_ID } from "@/lib/vip-avatar-frame"
 import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 
 /** Идентификаторы рамок аватарки (для ботов и профиля) */
@@ -1547,6 +1549,41 @@ export function GameProvider({ children }: { children: ReactNode }) {
       // ignore
     }
   }, [])
+
+  useEffect(() => {
+    const user = state.currentUser
+    if (!user) return
+    if (currentFrameSig !== VIP_AUTO_FRAME_ID) return
+
+    const clearVipFrameIfStillAuto = () => {
+      const action = { type: "SET_AVATAR_FRAME" as const, playerId: user.id, frameId: "none" }
+      const sync = getTableSyncDispatch()
+      if (sync) {
+        sync(action)
+      } else {
+        dispatch(action)
+      }
+    }
+
+    const now = Date.now()
+    const vipStillActive = user.isVip && (user.vipUntilTs == null || user.vipUntilTs > now)
+    if (!vipStillActive) {
+      clearVipFrameIfStillAuto()
+      return
+    }
+    if (user.vipUntilTs == null) return
+
+    const delay = user.vipUntilTs - now + 250
+    if (delay <= 0) {
+      clearVipFrameIfStillAuto()
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      clearVipFrameIfStillAuto()
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [state.currentUser?.id, state.currentUser?.isVip, state.currentUser?.vipUntilTs, currentFrameSig, dispatch])
 
   // Экономика + визуальные настройки: сразу на сервер (debounce 400ms), чтобы смена ВК/ОК/логина подтягивала тот же вид.
   useEffect(() => {
