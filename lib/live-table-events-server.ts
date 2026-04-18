@@ -164,6 +164,21 @@ async function senderMatchesPairKissChoiceFromSnapshot(
   return !!targetPlayer?.isBot
 }
 
+/** Рамку можно менять себе и дарить другому игроку этого же стола. */
+async function senderCanSetAvatarFrameFromSnapshot(
+  tableId: number,
+  senderId: number,
+  action: Extract<GameAction, { type: "SET_AVATAR_FRAME" }>,
+): Promise<boolean> {
+  if (senderId === action.playerId) return true
+  const snap = await getTableAuthoritySnapshot(tableId)
+  if (!snap) return false
+  const senderInTable = snap.players.some((p) => p.id === senderId)
+  if (!senderInTable) return false
+  const targetPlayer = snap.players.find((p) => p.id === action.playerId)
+  return !!targetPlayer && !targetPlayer.isBot
+}
+
 /** FINALIZE_PAIR_KISS: round-driver или любой игрок после дедлайна/двух ответов. */
 async function senderCanFinalizePairKissFromSnapshot(
   tableId: number,
@@ -234,6 +249,19 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
         turnPlayerId: snap?.players[snap.currentTurnIndex]?.id ?? null,
         turnPlayerIsBot: snap?.players[snap.currentTurnIndex]?.isBot ?? null,
         roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
+      })
+      return { ok: false as const }
+    }
+  } else if (args.action.type === "SET_AVATAR_FRAME") {
+    if (!(await senderCanSetAvatarFrameFromSnapshot(tableId, args.senderId, args.action))) {
+      const snap = await getTableAuthoritySnapshot(tableId)
+      emitDebugLog("Rejected SET_AVATAR_FRAME by snapshot rules", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        playerId: args.action.playerId,
+        senderInTable: snap?.players.some((p) => p.id === args.senderId) ?? null,
+        targetInTable: snap?.players.some((p) => p.id === args.action.playerId) ?? null,
       })
       return { ok: false as const }
     }
