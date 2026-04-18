@@ -129,10 +129,12 @@ export function applyTableAuthorityAction(
       }
     }
     case "NEXT_TURN": {
+      const now = Date.now()
       if (snapshot.players.length === 0) {
         return {
           ...snapshot,
           currentTurnIndex: 0,
+          turnStartedAtMs: now,
           showResult: false,
           targetPlayer: null,
           targetPlayer2: null,
@@ -174,6 +176,7 @@ export function applyTableAuthorityAction(
         spinSkips: nextSpinSkips,
         currentTurnDidSpin: false,
         currentTurnIndex: nextIndex,
+        turnStartedAtMs: now,
         showResult: false,
         isSpinning: false,
         spinStartedAtMs: null,
@@ -261,6 +264,7 @@ export function applyTableAuthorityAction(
     case "RESET_ROUND":
       return {
         ...snapshot,
+        turnStartedAtMs: Date.now(),
         showResult: false,
         targetPlayer: null,
         targetPlayer2: null,

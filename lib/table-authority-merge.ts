@@ -36,6 +36,9 @@ export function mergeLivePlayersIntoAuthority(
     const idx = nextPlayers.findIndex((p) => p.id === current.id)
     nextIndex = idx !== -1 ? idx : 0
   }
+  const prevTurnPlayerId = snapshot.players[snapshot.currentTurnIndex]?.id ?? null
+  const nextTurnPlayerId = nextPlayers[nextIndex]?.id ?? null
+  const turnChanged = prevTurnPlayerId !== nextTurnPlayerId
 
   const nextTarget = snapshot.targetPlayer
     ? nextPlayers.find((p) => p.id === snapshot.targetPlayer!.id) ?? null
@@ -48,6 +51,7 @@ export function mergeLivePlayersIntoAuthority(
     ...snapshot,
     players: nextPlayers,
     currentTurnIndex: nextPlayers.length === 0 ? 0 : Math.min(nextIndex, nextPlayers.length - 1),
+    turnStartedAtMs: turnChanged ? Date.now() : snapshot.turnStartedAtMs ?? Date.now(),
     targetPlayer: nextTarget,
     targetPlayer2: nextTarget2,
   }

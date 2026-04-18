@@ -5,3 +5,5 @@ export const SPIN_RESOLVE_AFTER_MS = BOTTLE_SPIN_ANIMATION_MS + 500
 export const SPIN_RESOLVE_GRACE_MS = 2_500
 export const SPIN_HANG_FAILSAFE_MS = 20_000
 export const SERVER_SPIN_STUCK_MS = 16_000
+/** Если бот-ход не продвинулся ни в спин, ни в результат — сервер принудительно переводит ход дальше. */
+export const SERVER_BOT_TURN_STUCK_MS = 12_000

@@ -11,7 +11,7 @@ import { loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
 import { resolveEffectiveTableStyle } from "@/lib/table-style-global-server"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
-import { SERVER_SPIN_STUCK_MS } from "@/lib/spin-timing"
+import { SERVER_BOT_TURN_STUCK_MS, SERVER_SPIN_STUCK_MS } from "@/lib/spin-timing"
 
 declare global {
   var __spindateTableAuthorityMemory: Map<number, TableAuthorityPayload> | undefined
@@ -63,6 +63,14 @@ function stabilizeAuthoritySnapshot(
 ): { snapshot: TableAuthorityPayload; changed: boolean } {
   let next = snapshot
   let changed = false
+  const turnStartedAtMs =
+    typeof next.turnStartedAtMs === "number" && Number.isFinite(next.turnStartedAtMs)
+      ? next.turnStartedAtMs
+      : 0
+  if (turnStartedAtMs <= 0) {
+    next = { ...next, turnStartedAtMs: nowMs }
+    changed = true
+  }
 
   if (next.isSpinning) {
     const started =
@@ -120,6 +128,21 @@ function stabilizeAuthoritySnapshot(
   } else if (next.spinStartedAtMs != null) {
     next = { ...next, spinStartedAtMs: null }
     changed = true
+  }
+
+  const turnPlayer = next.players[next.currentTurnIndex]
+  const phaseActive = next.showResult || next.isSpinning || next.pairKissPhase != null
+  const turnAgeMs = nowMs - (next.turnStartedAtMs ?? nowMs)
+  if (
+    turnPlayer?.isBot &&
+    !phaseActive &&
+    turnAgeMs >= SERVER_BOT_TURN_STUCK_MS
+  ) {
+    const recovered = applyTableAuthorityAction(next, { type: "NEXT_TURN" })
+    if (recovered) {
+      next = recovered
+      changed = true
+    }
   }
 
   const bottleLease = authoritySnapshotExpiredBottleLease(next, nowMs)

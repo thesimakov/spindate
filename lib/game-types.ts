@@ -140,6 +140,8 @@ export interface TableAuthorityPayload {
   revision: number
   players: Player[]
   currentTurnIndex: number
+  /** Когда начался текущий ход; серверный watchdog использует это, чтобы не допустить вечный бот-ход. */
+  turnStartedAtMs?: number | null
   isSpinning: boolean
   /** Когда сервер зафиксировал START_SPIN; используется watchdog для восстановления зависшего вращения. */
   spinStartedAtMs?: number | null

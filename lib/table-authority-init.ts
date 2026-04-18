@@ -92,6 +92,7 @@ export function buildInitialAuthoritySnapshot(
     revision: 0,
     players: nextPlayers,
     currentTurnIndex: spinnerIdx,
+    turnStartedAtMs: now,
     spinSkips,
     currentTurnDidSpin: false,
     isSpinning: false,
