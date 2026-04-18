@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   initVkResilient,
-  isVkMiniApp,
+  isVkRuntimeEnvironment,
   joinVkCommunityGroup,
   openVkUrl,
   VK_COMMUNITY_PUBLIC_URL,
@@ -19,12 +19,22 @@ export function TechnicalMaintenanceScreen() {
     setBusy(true)
     try {
       await initVkResilient()
-      if (isVkMiniApp()) {
-        await joinVkCommunityGroup()
+      /** Как в vk-extra-hearts-gate-modal: подписка — VKWebAppJoinGroup внутри клиента VK, не только по vk_* в URL. */
+      const runtime = await isVkRuntimeEnvironment()
+      if (runtime) {
+        const { ok } = await joinVkCommunityGroup()
+        if (!ok) {
+          await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
+        }
+        return
       }
       await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
     } catch {
-      // ignore: button should remain harmless if VK API temporarily fails
+      try {
+        await openVkUrl(VK_COMMUNITY_PUBLIC_URL)
+      } catch {
+        // ignore
+      }
     } finally {
       setBusy(false)
     }
