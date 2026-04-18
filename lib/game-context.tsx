@@ -66,6 +66,7 @@ const initialState: GameState = {
     return Math.floor(Math.random() * 9999) + 1
   })(),
   roomCreatorPlayerId: null,
+  authorityRevision: 0,
   gameLog: [],
   // Prediction & Betting
   predictions: [],
@@ -709,6 +710,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         }
         return {
         ...state,
+        authorityRevision: tableChanged ? 0 : (state.authorityRevision ?? 0),
         players: nextPlayers,
         tableId: action.tableId,
         roomCreatorPlayerId: nextRoomCreator,
@@ -1480,6 +1482,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
 
       return {
         ...state,
+        authorityRevision: p.revision,
         players: mergedPlayers,
         currentTurnIndex: p.currentTurnIndex,
         turnStartedAtMs:

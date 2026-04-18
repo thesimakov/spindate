@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { BottleSkin, InventoryItem, Player } from "@/lib/game-types"
+import type { BottleSkin, InventoryItem, Player, TableAuthorityPayload } from "@/lib/game-types"
 import { buildRestoreGameStateAction } from "@/lib/user-visual-prefs"
 import { useGameLayoutMode } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
@@ -384,16 +384,38 @@ export function RoomLobbyScreen() {
       const maxTableSize = isDesktopUser ? 10 : 6
       const targetMales = isDesktopUser ? 5 : 3
       const targetFemales = isDesktopUser ? 5 : 3
-      const allBots = generateBots(220, player.gender)
-      const finalPlayers = composeTablePlayers({
-        currentUser: { ...player, isBot: false },
-        livePlayers: data.livePlayers.map((p) => ({ ...p, isBot: false })),
-        existingPlayers: [],
-        maxTableSize,
-        targetMales,
-        targetFemales,
-        botPool: allBots,
-      }).sort(() => Math.random() - 0.5)
+
+      let authoritySnapshot: TableAuthorityPayload | null = null
+      try {
+        const st = await apiFetch("/api/table/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            tableId: data.roomId,
+            sinceRevision: 0,
+            forceReshuffleBots: true,
+          }),
+        })
+        const stData = await st.json().catch(() => null)
+        if (st.ok && stData?.snapshot && Array.isArray(stData.snapshot.players) && stData.snapshot.players.length > 0) {
+          authoritySnapshot = stData.snapshot as TableAuthorityPayload
+        }
+      } catch {
+        // fallback ниже
+      }
+
+      const finalPlayers =
+        authoritySnapshot?.players ??
+        composeTablePlayers({
+          currentUser: { ...player, isBot: false },
+          livePlayers: data.livePlayers.map((p) => ({ ...p, isBot: false })),
+          existingPlayers: [],
+          maxTableSize,
+          targetMales,
+          targetFemales,
+          botPool: generateBots(220, player.gender),
+        }).sort(() => Math.random() - 0.5)
 
       dispatch({
         type: "SET_TABLE",
@@ -401,23 +423,12 @@ export function RoomLobbyScreen() {
         tableId: data.roomId,
         roomCreatorPlayerId:
           typeof data.createdByUserId === "number" ? data.createdByUserId : null,
-        bottleSkin: data.bottleSkin,
-        tableStyle: data.tableStyle,
+        bottleSkin: data.bottleSkin ?? authoritySnapshot?.bottleSkin,
+        tableStyle: data.tableStyle ?? authoritySnapshot?.tableStyle,
       })
       dispatch({ type: "SET_TABLES_COUNT", tablesCount: data.tablesCount ?? 1 })
-      try {
-        const st = await apiFetch("/api/table/state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ tableId: data.roomId, sinceRevision: 0 }),
-        })
-        const stData = await st.json().catch(() => null)
-        if (st.ok && stData?.snapshot) {
-          dispatch({ type: "SYNC_TABLE_AUTHORITY", payload: stData.snapshot })
-        }
-      } catch {
-        // ignore
+      if (authoritySnapshot) {
+        dispatch({ type: "SYNC_TABLE_AUTHORITY", payload: authoritySnapshot })
       }
       dispatch({ type: "SET_SCREEN", screen: "game" })
     },

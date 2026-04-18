@@ -1,5 +1,17 @@
 import type { Gender, Player } from "@/lib/game-types"
 
+/** Перемешивание копии массива (разнообразие выбора из пула ботов). */
+function shuffleArray<T>(items: T[]): T[] {
+  const a = [...items]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const t = a[i]!
+    a[i] = a[j]!
+    a[j] = t
+  }
+  return a
+}
+
 type ComposeArgs = {
   currentUser: Player
   livePlayers: Player[]
@@ -77,7 +89,8 @@ export function composeTablePlayers({
   const selectedBotIds = new Set<number>()
   const existingBots = existingPlayers.filter((p) => !!p.isBot && !liveIds.has(p.id))
   const freshBots = botPool.filter((p) => !!p.isBot && !liveIds.has(p.id))
-  const botCandidates = [...existingBots, ...freshBots]
+  // Свежий пул каждый раз в случайном порядке — иначе всегда берутся «первые» из generateBots.
+  const botCandidates = [...existingBots, ...shuffleArray(freshBots)]
 
   const selectedByGender = [
     ...pickBotsByGender(botCandidates, selectedBotIds, "male", needMalesFromBots),

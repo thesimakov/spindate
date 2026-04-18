@@ -15,7 +15,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Некорректный tableId" }, { status: 400, headers: NO_CACHE })
   }
 
-  await ensureTableAuthority(tableId)
+  const forceReshuffleBots = body?.forceReshuffleBots === true
+  await ensureTableAuthority(
+    tableId,
+    forceReshuffleBots ? { forceReshuffleBots: true } : undefined,
+  )
   const snapshot = await getTableAuthoritySnapshot(tableId)
   if (!snapshot) {
     return NextResponse.json({ ok: false, error: "Стол не найден" }, { status: 404, headers: NO_CACHE })

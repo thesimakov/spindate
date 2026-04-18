@@ -57,7 +57,17 @@ export interface SyncEngineResult {
 
 export function useSyncEngine(): SyncEngineResult {
   const { state, dispatch: rawDispatch } = useGame()
-  const { currentUser, tableId, players, tablePaused, isSpinning, showResult, countdown, avatarFrames } = state
+  const {
+    currentUser,
+    tableId,
+    players,
+    tablePaused,
+    isSpinning,
+    showResult,
+    countdown,
+    avatarFrames,
+    authorityRevision,
+  } = state
   const emitSeatSyncLog = useCallback((event: string, data?: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== "development") return
     console.debug("[seat-sync]", { event, ...(data ?? {}) })
@@ -86,6 +96,12 @@ export function useSyncEngine(): SyncEngineResult {
   useEffect(() => {
     lastAuthorityRevisionRef.current = 0
   }, [tableId])
+
+  useEffect(() => {
+    if (typeof authorityRevision === "number" && authorityRevision > 0) {
+      lastAuthorityRevisionRef.current = Math.max(lastAuthorityRevisionRef.current, authorityRevision)
+    }
+  }, [authorityRevision])
 
   /** Обновляется ниже из seatConfirmed — пушим события только после подтверждённого места за live-столом. */
   const seatConfirmedRef = useRef(false)

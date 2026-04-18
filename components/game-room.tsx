@@ -1349,6 +1349,35 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       ),
     [giftCatalogSource],
   )
+  const giftCatalogTabSections = useMemo(
+    () =>
+      [
+        {
+          id: "free" as const,
+          key: "free" as const,
+          label: "Бесплатные",
+          gifts: giftCatalogFree,
+          emptyHint: "Скоро добавим подарки",
+          accent: "sky" as const,
+        },
+        {
+          id: "vip" as const,
+          key: "hearts" as const,
+          label: "Вип",
+          gifts: giftCatalogHearts,
+          accent: "amber" as const,
+        },
+        {
+          id: "deluxe" as const,
+          key: "premium_roses" as const,
+          label: "Делюкс",
+          gifts: giftCatalogPremiumRoses,
+          emptyHint: "Скоро добавим подарки за розы",
+          accent: "rose" as const,
+        },
+      ] as const,
+    [giftCatalogFree, giftCatalogHearts, giftCatalogPremiumRoses],
+  )
   const roseInventoryCount = useMemo(
     () => inventory.filter((i) => i.type === "rose").length,
     [inventory],
@@ -1774,7 +1803,13 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   /** Массовый выбор: мужчины и женщины включаются независимо (можно оба сразу). */
   const [giftBatchMaleOn, setGiftBatchMaleOn] = useState(false)
   const [giftBatchFemaleOn, setGiftBatchFemaleOn] = useState(false)
+  const [giftCatalogSectionTab, setGiftCatalogSectionTab] = useState<"free" | "vip" | "deluxe">("free")
   const [giftCatalogRecipientIds, setGiftCatalogRecipientIds] = useState<number[]>([])
+  const giftCatalogActiveSection = useMemo(
+    () =>
+      giftCatalogTabSections.find((s) => s.id === giftCatalogSectionTab) ?? giftCatalogTabSections[0],
+    [giftCatalogTabSections, giftCatalogSectionTab],
+  )
   const [careOfferOpen, setCareOfferOpen] = useState(false)
   const [lastSidebarCombo, setLastSidebarCombo] = useState<PairGenderCombo | null>(null)
   const [emotionPurchaseOpen, setEmotionPurchaseOpen] = useState(false)
@@ -1864,6 +1899,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       setGiftBatchMaleOn(false)
       setGiftBatchFemaleOn(false)
       setGiftCatalogRecipientIds([])
+      setGiftCatalogSectionTab("free")
       return
     }
     setGiftBatchPickerOpen(false)
@@ -3766,11 +3802,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       return
     }
 
-    // Обычный клик по аватарке: мини-меню + сразу режим «подарить эмоцию» по паре текущий игрок ↔ цель (MM/MF/FF).
-    const nextTarget = sidebarTargetPlayer?.id === player.id ? null : player
-    setSidebarTargetPlayer(nextTarget)
-    setSidebarGiftMode(nextTarget !== null)
-    setGiftCatalogDrawerPlayer(null)
+    // Обычный клик по аватарке: сразу открыть каталог подарков
+    // и одновременно активировать панель эмоций для выбранного игрока.
+    setSidebarTargetPlayer(player)
+    setSidebarGiftMode(true)
+    setGiftCatalogDrawerPlayer(player)
+    dispatch({ type: "CLOSE_PLAYER_MENU" })
   }
 
   /* ---- extra spin (pay voices) ---- */
@@ -5810,13 +5847,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             steamFogTick={steamFogTick}
             avatarSteamFog={avatarSteamFog}
             steamPuffs={steamPuffs}
-            sidebarTargetPlayer={sidebarTargetPlayer}
-            sidebarGiftMode={sidebarGiftMode}
-            dispatch={dispatch}
             onPlayerClick={handlePlayerClick}
-            setSidebarTargetPlayer={setSidebarTargetPlayer}
-            setSidebarGiftMode={setSidebarGiftMode}
-            setGiftCatalogDrawerPlayer={setGiftCatalogDrawerPlayer}
             getKissCountForPlayer={getKissCountForPlayer}
             getGiftsForPlayer={getGiftsForPlayer}
             getBigGiftSequenceForPlayer={getBigGiftSequenceForPlayer}
@@ -7399,15 +7430,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               : `Подарки для ${giftCatalogDrawerPlayer.name}`
           }
           subtitle="оплата сердечками или розами — по каталогу"
-          allowBackgroundInteraction
           onClose={() => {
             setGiftCatalogDrawerPlayer(null)
+            setSidebarTargetPlayer(null)
+            setSidebarGiftMode(false)
             setGiftBatchPickerOpen(false)
             setGiftBatchMaleOn(false)
             setGiftBatchFemaleOn(false)
             setGiftCatalogRecipientIds([])
+            setGiftCatalogSectionTab("free")
           }}
           variant="material"
+          allowBackgroundInteraction
           overlayClassName="bg-transparent backdrop-blur-none"
           panelClassName="!border-amber-500/25 !bg-[linear-gradient(165deg,rgba(30,41,59,0.98)_0%,rgba(15,23,42,0.98)_50%,rgba(30,41,59,0.98)_100%)] !shadow-[-24px_0_60px_rgba(0,0,0,0.55)]"
           headerRight={
@@ -7420,7 +7454,41 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,rgba(251,191,36,0.06)_0%,transparent_50%)]" aria-hidden />
           <div className="relative z-[1] flex min-h-0 min-w-0 w-full flex-1 flex-col">
-                <div className="mb-3 space-y-2.5">
+                <div className="mb-3 flex min-w-0 items-center gap-3 rounded-2xl border border-amber-500/20 bg-slate-900/65 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <div className="shrink-0 overflow-hidden rounded-full ring-1 ring-white/12">
+                    <PlayerAvatar player={giftCatalogDrawerPlayer} size={44} hideNameLabel />
+                  </div>
+                  <p className="min-w-0 flex-1 truncate text-[15px] font-bold leading-tight text-slate-100">
+                    {giftCatalogDrawerPlayer.name}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dispatch({ type: "OPEN_PLAYER_MENU", player: giftCatalogDrawerPlayer })
+                      setGiftCatalogDrawerPlayer(null)
+                      setSidebarTargetPlayer(null)
+                      setSidebarGiftMode(false)
+                      setGiftBatchPickerOpen(false)
+                      setGiftBatchMaleOn(false)
+                      setGiftBatchFemaleOn(false)
+                      setGiftCatalogRecipientIds([])
+                      setGiftCatalogSectionTab("free")
+                    }}
+                    className="shrink-0 rounded-xl border border-slate-500/55 bg-slate-800/90 px-3 py-1.5 text-[12px] font-extrabold text-slate-100 transition hover:border-amber-400/40 hover:bg-slate-800"
+                  >
+                    Профиль
+                  </button>
+                </div>
+                <div
+                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-amber-500/15"
+                  style={{
+                    background:
+                      "linear-gradient(165deg, rgba(30,41,59,0.55) 0%, rgba(15,23,42,0.92) 45%, rgba(15,23,42,0.98) 100%)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(251,191,36,0.06)",
+                  }}
+                >
+                  <div className="shrink-0 space-y-2.5 px-3 pt-3 sm:px-4 sm:pt-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Выбери получателей</p>
@@ -7544,75 +7612,37 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                     </div>
                   </div>
                 </div>
-                <div
-                  className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[1.35rem] border border-amber-500/15 p-3 sm:p-4"
-                  style={{
-                    background:
-                      "linear-gradient(165deg, rgba(30,41,59,0.55) 0%, rgba(15,23,42,0.92) 45%, rgba(15,23,42,0.98) 100%)",
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(251,191,36,0.06)",
-                  }}
-                >
-                  <div className="player-menu-gifts-scroll min-h-0 flex-1 space-y-6 overflow-y-auto overflow-x-hidden py-1">
-                    {(
-                      [
-                        {
-                          key: "free",
-                          title: "Бесплатные",
-                          gifts: giftCatalogFree,
-                          emptyHint: "Скоро добавим подарки",
-                          accent: "sky" as const,
-                        },
-                        {
-                          key: "hearts",
-                          title: "Доступно / VIP",
-                          gifts: giftCatalogHearts,
-                          accent: "amber" as const,
-                        },
-                        {
-                          key: "premium_roses",
-                          title: "Премиум подарки",
-                          gifts: giftCatalogPremiumRoses,
-                          emptyHint: "Скоро добавим подарки за розы",
-                          accent: "rose" as const,
-                        },
-                      ] as const
-                    ).map((section) => (
-                      <div key={section.key}>
-                        <div className="mb-3 flex items-center gap-2.5">
-                          <span
-                            className={`h-9 w-1 shrink-0 rounded-full shadow-lg ${
-                              section.accent === "sky"
-                                ? "bg-gradient-to-b from-sky-400 to-cyan-500 shadow-sky-500/25"
-                                : section.accent === "rose"
-                                  ? "bg-gradient-to-b from-rose-400 to-fuchsia-600 shadow-rose-500/30"
-                                  : "bg-gradient-to-b from-amber-300 to-amber-600 shadow-amber-500/30"
-                            }`}
-                            aria-hidden
-                          />
-                          <h3
-                            className={`text-[11px] font-bold uppercase tracking-[0.22em] sm:text-xs ${
-                              section.accent === "sky"
-                                ? "text-sky-300/95"
-                                : section.accent === "rose"
-                                  ? "text-rose-200/95"
-                                  : "text-amber-300/95"
+                  <div className="shrink-0 border-t border-white/[0.06] px-3 pb-2 pt-2 sm:px-4">
+                    <div
+                      className="flex w-full gap-1 rounded-2xl border border-white/10 bg-slate-950/35 p-1 ring-1 ring-white/[0.06]"
+                      role="tablist"
+                      aria-label="Категории подарков"
+                    >
+                      {giftCatalogTabSections.map((tab) => {
+                        const selected = giftCatalogSectionTab === tab.id
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            onClick={() => setGiftCatalogSectionTab(tab.id)}
+                            className={`min-w-0 flex-1 rounded-xl px-2 py-2 text-center text-[12px] font-extrabold leading-tight transition ${
+                              selected
+                                ? "bg-gradient-to-b from-amber-500/25 to-slate-900/80 text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-amber-400/25"
+                                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                             }`}
                           >
-                            {section.title}
-                          </h3>
-                          <span
-                            className={`h-px min-w-[1.5rem] flex-1 bg-gradient-to-r opacity-60 ${
-                              section.accent === "sky"
-                                ? "from-sky-500/40 to-transparent"
-                                : section.accent === "rose"
-                                  ? "from-rose-500/45 to-transparent"
-                                  : "from-amber-500/40 to-transparent"
-                            }`}
-                            aria-hidden
-                          />
-                        </div>
-                        {section.gifts.length === 0 ? (
+                            {tab.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div className="player-menu-gifts-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
+                    {(() => {
+                      const section = giftCatalogActiveSection
+                      return section.gifts.length === 0 ? (
                           <div className="relative overflow-hidden rounded-2xl border border-dashed border-sky-500/20 bg-gradient-to-br from-slate-800/50 via-slate-900/30 to-slate-800/40 px-4 py-9 text-center">
                             <div
                               className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_30%,rgba(56,189,248,0.12),transparent_65%)]"
@@ -7813,9 +7843,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                               )
                             })}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        )
+                    })()}
                   </div>
                 </div>
               </div>

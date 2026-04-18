@@ -169,7 +169,7 @@ function stabilizeAuthoritySnapshot(
 
 /** Опции только для ensureTableAuthority (не хранятся в снимке). */
 export type TableAuthorityEnsureOptions = {
-  /** Пересобрать набор ботов с нуля (лобби «Играть»). Не применяется во время спина/результата/отсчёта. */
+  /** Пересобрать набор ботов с нуля (лобби / table/state с флагом). Игнорирует прежний состав ботов в Redis. */
   forceReshuffleBots?: boolean
 }
 
@@ -184,14 +184,8 @@ function computeEnsureAuthority(
   const { males, females } = targetsForTable(info.maxTableSize)
   const bots = generateBots(220, anchor.gender)
 
-  const inActiveGameplay =
-    prev != null &&
-    (prev.isSpinning ||
-      prev.showResult ||
-      (prev.countdown != null && prev.countdown > 0) ||
-      (prev.pairKissPhase != null && !prev.pairKissPhase.resolved))
-  const useFreshBots =
-    options?.forceReshuffleBots === true && prev != null && !inActiveGameplay
+  /** При forceReshuffleBots всегда пустой existing — иначе Redis держит «первых» ботов 1000… даже после входа из лобби. */
+  const useFreshBots = options?.forceReshuffleBots === true && prev != null
   const existingPlayers = useFreshBots ? [] : (prev?.players ?? [])
 
   const composed = composeTablePlayers({

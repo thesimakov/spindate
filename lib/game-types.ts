@@ -348,6 +348,8 @@ export interface GameState {
   tableId: number
   /** id игрока-создателя пользовательской комнаты (совпадает с createdByUserId в реестре); null — нет или обычная комната */
   roomCreatorPlayerId?: number | null
+  /** Ревизия серверного снимка стола (для выравнивания poll authority на клиенте). */
+  authorityRevision?: number
   gameLog: GameLogEntry[]
   // Prediction & Betting
   predictions: Prediction[]

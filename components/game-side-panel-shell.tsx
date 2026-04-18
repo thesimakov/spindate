@@ -21,6 +21,11 @@ type GameSidePanelShellProps = {
   closeButtonClassName?: string
   overlayClassName?: string
   allowBackgroundInteraction?: boolean
+  /**
+   * full — невидимый слой на весь экран (клик закрывает).
+   * leftOfPanel — только область слева от панели (ширина как у max-w-md), справа под панель клики не перехватываются.
+   */
+  overlayHitArea?: "full" | "leftOfPanel"
 }
 
 export function GameSidePanelShell({
@@ -37,6 +42,7 @@ export function GameSidePanelShell({
   closeButtonClassName,
   overlayClassName,
   allowBackgroundInteraction = false,
+  overlayHitArea = "full",
 }: GameSidePanelShellProps) {
   const isMaterial = variant === "material"
   const basePanel =
@@ -78,7 +84,9 @@ export function GameSidePanelShell({
         <button
           type="button"
           className={cn(
-            "side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]",
+            overlayHitArea === "leftOfPanel"
+              ? "side-panel-overlay-fade-in fixed inset-y-0 left-0 z-[55] w-[calc(100%-min(100vw,28rem))] max-w-none bg-black/55 backdrop-blur-[1px]"
+              : "side-panel-overlay-fade-in fixed inset-0 z-[55] bg-black/55 backdrop-blur-[1px]",
             overlayClassName,
           )}
           onClick={onClose}
