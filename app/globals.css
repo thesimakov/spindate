@@ -83,6 +83,18 @@
   animation: tech-maintenance-marquee 8s linear infinite;
 }
 
+/* Компактная бегущая строка (виджет над столом в GameRoom) */
+.tech-maintenance-marquee--compact {
+  height: 1rem;
+  border-color: rgba(125, 211, 252, 0.35);
+}
+
+.tech-maintenance-marquee--compact .tech-maintenance-marquee__track {
+  font-size: 8px;
+  line-height: 1rem;
+  animation-duration: 10s;
+}
+
 .dark {
   --background: #0f172a;
   --foreground: oklch(0.95 0.01 80);

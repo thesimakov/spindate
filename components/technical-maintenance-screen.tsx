@@ -31,22 +31,28 @@ export function TechnicalMaintenanceScreen() {
   }
 
   return (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center bg-[#0a0f18] px-4 py-8 text-slate-100">
-      <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-slate-950/90 p-6 shadow-[0_24px_64px_rgba(0,0,0,0.65)]">
-        <div className="absolute right-4 top-4 flex w-24 flex-col items-end gap-1">
-          <img
-            src="/assets/sound.svg"
-            alt="Пластинка"
-            className="h-14 w-14 animate-spin rounded-full [animation-duration:8s]"
-          />
-          <div className="tech-maintenance-marquee w-full">
-            <div className="tech-maintenance-marquee__track">скоро тут будет музыка</div>
-          </div>
-        </div>
+    <div className="fixed inset-0 z-[250] flex items-center justify-center overflow-y-auto bg-[#0a0f18] px-3 py-6 text-slate-100 sm:px-4 sm:py-8">
+      <div className="relative my-auto w-full max-w-3xl rounded-3xl border border-white/10 bg-slate-950/90 p-4 shadow-[0_24px_64px_rgba(0,0,0,0.65)] sm:p-6">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-400/35 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200">
           <Wrench className="h-4 w-4" aria-hidden />
           ТЕХ работы
         </div>
+
+        <div className="mb-4 w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+          <img
+            src="/assets/maintenance-kruti-znakomsya.png"
+            alt="Крути и Знакомься — идут технические работы"
+            className="mx-auto block h-auto w-full max-h-[min(62vh,620px)] object-contain object-center"
+            draggable={false}
+          />
+        </div>
+
+        <div className="mb-3 w-full max-w-md sm:mx-auto">
+          <div className="tech-maintenance-marquee w-full">
+            <div className="tech-maintenance-marquee__track">скоро тут будет музыка</div>
+          </div>
+        </div>
+
         <p className="text-base font-semibold leading-snug text-white">
           У нас техническое обновление бутылочки. Скоро все заработает. Будь в курсе событий.
         </p>

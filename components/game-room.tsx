@@ -1025,6 +1025,9 @@ function renderActionIcon(action: PairAction): React.ReactNode {
 // а прогнозы и ставки скрываем, чтобы не перегружать игрока.
 const CASUAL_MODE = true
 
+/** Временно: виджет «музыка» (пластинка + бегущая строка) над столом на ПК. */
+const GAME_ROOM_MUSIC_WIDGET_ENABLED = false
+
 /** Длительность таймера «Поцелуются?» (голосование Да/Нет). */
 const PAIR_KISS_VOTE_DURATION_MS = 10_000
 
@@ -5489,7 +5492,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           className={cn(
             "flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center",
             isMobile ? "items-stretch gap-1.5" : "items-center",
-            isPcLayout && "mx-auto max-h-full justify-between overflow-y-auto overflow-x-visible px-2 pt-0 lg:px-3",
+            isPcLayout &&
+              "mx-auto max-h-full justify-between overflow-y-auto overflow-x-visible px-2 pt-0 lg:px-3",
           )}
         >
         {/* max-md: полоса 70px под навбаром — эмоции по центру; стол начинается сразу под полосой */}
@@ -5678,6 +5682,22 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   : "0 24px 50px rgba(0,0,0,0.88), 0 0 55px rgba(56,189,248,0.1)",
           }}
         >
+          {GAME_ROOM_MUSIC_WIDGET_ENABLED && isPcLayout && (
+            <div
+              className="pointer-events-none absolute left-2 top-2 z-[39] flex flex-col items-center gap-1 rounded-2xl border border-cyan-400/40 bg-slate-950/82 px-2 py-1.5 shadow-[0_8px_26px_rgba(0,0,0,0.48)] backdrop-blur-[3px] sm:left-3 sm:top-3"
+              aria-hidden
+            >
+              <img
+                src="/assets/sound.svg"
+                alt=""
+                className="h-11 w-11 animate-spin rounded-full opacity-95 shadow-[0_4px_14px_rgba(0,0,0,0.45)] [animation-duration:8s] sm:h-12 sm:w-12"
+                draggable={false}
+              />
+              <div className="tech-maintenance-marquee tech-maintenance-marquee--compact w-[6.25rem]">
+                <div className="tech-maintenance-marquee__track">Скоро тут будет музыка</div>
+              </div>
+            </div>
+          )}
           {/* Лёгкое внутреннее затемнение по краям, чтобы игроки читались поверх стола */}
           <div
             className={`pointer-events-none absolute rounded-[20px] sm:rounded-[26px] ${isMobile ? "inset-2" : "inset-3"}`}
