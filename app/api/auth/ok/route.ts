@@ -5,6 +5,7 @@ import { newId, newSessionToken, setSessionCookie, sha256Base64 } from "@/lib/au
 import { parseOkApplicationKey, parseOkLoggedUserId, verifyOkLaunchParams } from "@/lib/ok-launch-params"
 import { clearDeletedSanction, getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
+import { invalidateProfileCache } from "@/lib/profile-cache"
 
 const VALID_PURPOSES = ["relationships", "communication", "love"] as const
 type ValidGender = "male" | "female"
@@ -185,6 +186,7 @@ export async function POST(req: Request) {
       db.prepare(
         `UPDATE player_profiles SET display_name = ?, avatar_url = ?, updated_at = ? WHERE user_id = ?`,
       ).run(nextName, nextAvatar || "", now, userRow.id)
+      await invalidateProfileCache(userRow.id)
     }
   }
 

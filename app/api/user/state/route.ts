@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db"
 import { getGameUserIdFromRequest, type GameUserIdAuth } from "@/lib/user-request-auth"
 import type { UserVisualPrefs } from "@/lib/game-types"
 import { mergeVisualPrefsJson, parseVisualPrefsJson } from "@/lib/user-visual-prefs"
+import { invalidateProfileCache } from "@/lib/profile-cache"
 
 type GameStateRow = {
   voice_balance: number
@@ -174,6 +175,7 @@ export async function PUT(req: Request) {
        SET status = ?, updated_at = ?
        WHERE user_id = ?`,
     ).run(status, now, userId)
+    await invalidateProfileCache(userId)
   }
 
   if (displayNameUpdate !== undefined) {
@@ -186,6 +188,7 @@ export async function PUT(req: Request) {
        SET display_name = ?, updated_at = ?
        WHERE user_id = ?`,
     ).run(displayNameUpdate, now, profileUserId)
+    await invalidateProfileCache(profileUserId)
   }
 
   return NextResponse.json({ ok: true })

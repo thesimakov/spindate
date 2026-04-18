@@ -99,6 +99,8 @@ NEXT_PUBLIC_APP_URL=https://ваш-домен.ru
 # КРИТИЧНО для сохранности данных между релизами:
 # вынести SQLite в отдельную папку вне кода
 SPINDATE_DATA_DIR=/var/spindate-data
+# КРИТИЧНО при 2+ инстансах API: общий Redis (синк столов, кеш профилей, rate-limit)
+# REDIS_URL=redis://:password@127.0.0.1:6379/0
 # Опционально, если используете VK Mini App:
 # NEXT_PUBLIC_VK_APP_ID=12345678
 ```
@@ -214,6 +216,8 @@ systemctl reload nginx
 ```
 
 После этого открывайте в браузере: `http://ваш-домен.ru` или `http://ВАШ_IP`.
+
+При росте нагрузки добавьте перед origin **Cloudflare** (или аналог): SSL, кеш статики, WAF, rate limit по IP. На NGINX — зоны `limit_req` и отдельные `upstream` для API и WebSocket; для нескольких realtime-процессов — **sticky** (`ip_hash`) или Redis Pub/Sub (см. [SCALING.md](./SCALING.md), [nginx-scale-example.conf](./nginx-scale-example.conf)).
 
 ---
 

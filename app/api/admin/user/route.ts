@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin-auth"
 import { getDb } from "@/lib/db"
 import { upsertAdminFlags } from "@/lib/admin-flags"
 import { leaveLiveTable } from "@/lib/live-tables-server"
+import { invalidateProfileCache } from "@/lib/profile-cache"
 
 export const dynamic = "force-dynamic"
 
@@ -105,6 +106,8 @@ export async function POST(req: Request) {
              updated_at = ?
          WHERE user_id = ?`,
       ).run(now, userId)
+
+      await invalidateProfileCache(userId)
 
       // Удалить активные сессии (чтобы сразу «вылетело» при следующих запросах)
       db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId)

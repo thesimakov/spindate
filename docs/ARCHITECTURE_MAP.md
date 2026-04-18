@@ -6,7 +6,7 @@
 - **Sync API:** `app/api/table/live/route.ts`, `app/api/table/state/route.ts`, `app/api/table/events/route.ts`
 - **Authority ядро:** `lib/table-authority-server.ts`, `lib/table-authority-apply.ts`, `lib/table-authority-merge.ts`
 - **Live presence/events:** `lib/live-tables-server.ts`, `lib/live-table-events-server.ts`
-- **Infra:** `lib/redis.ts`, `lib/redis-rmw.ts`
+- **Infra:** `lib/redis.ts`, `lib/redis-rmw.ts`, `lib/rate-limit-redis.ts`, `lib/profile-cache.ts`, `lib/ws-room-redis.ts`, `lib/jobs/*` (BullMQ)
 
 ## Поток данных
 

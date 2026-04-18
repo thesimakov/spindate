@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { getSessionTokenFromRequest, sha256Base64 } from "@/lib/auth/session"
-import { getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
+import { buildAuthMePayloadForUserId } from "@/lib/auth-me-payload"
+import { getCachedAuthMeSuccess } from "@/lib/profile-cache"
 
 export async function GET(req: Request) {
   const token = getSessionTokenFromRequest(req)
@@ -24,72 +25,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "Сессия истекла" }, { status: 401 })
   }
 
-  const userRow = db
-    .prepare(`SELECT id, username, vk_user_id, ok_user_id FROM users WHERE id = ?`)
-    .get(session.user_id) as {
-      id: string
-      username: string
-      vk_user_id: number | null
-      ok_user_id: number | null
-    } | undefined
+  const payload = await getCachedAuthMeSuccess(session.user_id, () =>
+    buildAuthMePayloadForUserId(db, session.user_id),
+  )
 
-  if (!userRow) {
-    return NextResponse.json({ ok: false, error: "Пользователь не найден" }, { status: 401 })
+  if (!payload.ok) {
+    return NextResponse.json({ ok: false, error: payload.error }, { status: payload.status })
   }
 
-  const flags = getAdminFlagsForUserId(userRow.id)
-  const r = isRestricted(flags)
-  // «Удалён администратором» — не блокируем: профиль и прогресс сброшены, игрок заходит как с чистого листа.
-  if (r.blocked) return NextResponse.json({ ok: false, error: "Вы заблокированы" }, { status: 403 })
-  if (r.banned) return NextResponse.json({ ok: false, error: "Вы временно забанены" }, { status: 403 })
-
-  const profile = db
-    .prepare(
-      `SELECT display_name, avatar_url, status, gender, age, purpose, city, zodiac, interests FROM player_profiles WHERE user_id = ?`,
-    )
-    .get(session.user_id) as
-    | {
-        display_name: string
-        avatar_url: string
-        status: string
-        gender: string
-        age: number
-        purpose: string
-        city: string
-        zodiac: string
-        interests: string
-      }
-    | undefined
-
-  const displayName = (profile?.display_name?.trim() || userRow.username) as string
-  const avatarUrl =
-    profile?.avatar_url ||
-    `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(userRow.username)}`
-  const gender = profile?.gender ?? "male"
-  const age = profile?.age ?? 25
-  const purpose = profile?.purpose ?? "communication"
-  const status = profile?.status ?? ""
-
-  const authProvider =
-    userRow.vk_user_id != null ? "vk" : userRow.ok_user_id != null ? "ok" : "login"
-
-  return NextResponse.json({
-    ok: true,
-    authProvider,
-    user: {
-      id: userRow.id,
-      username: userRow.username,
-      displayName,
-      avatarUrl,
-      gender,
-      age,
-      purpose,
-      status,
-      ...(userRow.vk_user_id != null ? { vkUserId: userRow.vk_user_id } : {}),
-      ...(userRow.ok_user_id != null ? { okUserId: userRow.ok_user_id } : {}),
-      ...(profile?.city ? { city: profile.city } : {}),
-      ...(profile?.zodiac ? { zodiac: profile.zodiac } : {}),
-      ...(profile?.interests ? { interests: profile.interests } : {}),
-    },
-  })
+  return NextResponse.json(payload)
 }

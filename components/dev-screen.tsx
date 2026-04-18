@@ -16,6 +16,7 @@ import { AdminTablesContent } from "@/components/admin-tables-content"
 import { AdminGameErrorsContent } from "@/components/admin-game-errors-content"
 import { AdminLobbyAnnouncementContent } from "@/components/admin-lobby-announcement-content"
 import { AdminMaintenanceContent } from "@/components/admin-maintenance-content"
+import { SpinGameDevPanel } from "@/components/spin-game-dev-panel"
 
 function formatVkGroupCheckError(err: string | null | undefined): string {
   if (!err) return ""
@@ -312,6 +313,8 @@ export function DevScreen() {
             {serverError}
           </div>
         )}
+
+        <SpinGameDevPanel />
 
         <AdminMaintenanceContent token={getAdminToken()} />
 

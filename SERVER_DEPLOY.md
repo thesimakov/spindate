@@ -6,6 +6,7 @@
 
 - Node.js 20+
 - Папка **public/** (в т.ч. **public/assets/** с картинками) должна быть на сервере
+- При **нескольких инстансах** Next/API: общий **Redis** — `REDIS_URL` в окружении (см. [docs/REDIS_MULTI_INSTANCE.md](./docs/REDIS_MULTI_INSTANCE.md), [docs/SCALING.md](./docs/SCALING.md))
 
 ## 2. Установка и первый запуск
 
@@ -25,6 +26,8 @@ pm2 startup
 ## 3. Nginx и HTTPS
 
 Пример конфига: [docs/DEPLOY_FROM_SCRATCH.md](./docs/DEPLOY_FROM_SCRATCH.md#8-nginx-как-обратный-прокси). Перепривязка домена к новому серверу: [docs/DOMAIN_NEW_SERVER.md](./docs/DOMAIN_NEW_SERVER.md).
+
+Масштабирование (несколько upstream, SSL, `limit_req`, sticky для WebSocket): [docs/SCALING.md](./docs/SCALING.md), фрагмент [docs/nginx-scale-example.conf](./docs/nginx-scale-example.conf).
 
 ## 4. Картинки (бутылочки, рамки, эмоции)
 

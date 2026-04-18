@@ -6,6 +6,7 @@ import { parseVkAppIdFromLaunchSearch, parseVkUserIdFromLaunchSearch, verifyVkLa
 import { clearDeletedSanction, getAdminFlagsForUserId, isRestricted } from "@/lib/admin-flags"
 import { parseVisualPrefsJson } from "@/lib/user-visual-prefs"
 import { parseAgeFromVkBdate, parseZodiacFromVkBdate, vkGenderFromSex } from "@/lib/vk-profile-fields"
+import { invalidateProfileCache } from "@/lib/profile-cache"
 
 const VALID_GENDERS = ["male", "female"] as const
 const VALID_PURPOSES = ["relationships", "communication", "love"] as const
@@ -241,6 +242,7 @@ export async function POST(req: Request) {
         `UPDATE player_profiles SET display_name = ?, avatar_url = ?, gender = ?, age = ?, city = ?, zodiac = ?, interests = ?, updated_at = ?
          WHERE user_id = ?`,
       ).run(nextName, nextAvatar || "", nextGender, nextAge, nextCity, nextZodiac, nextInterests, now, userRow.id)
+      await invalidateProfileCache(userRow.id)
     }
   }
 

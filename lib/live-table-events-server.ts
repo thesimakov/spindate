@@ -6,6 +6,7 @@ import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import { scheduleVkNotificationForTableAction } from "@/lib/vk-app-notifications-server"
 import { isTableSyncedAction } from "@/lib/sync-invariants"
+import { rateLimitTableAction, rateLimitTableChat } from "@/lib/rate-limit-redis"
 
 type TableEvent = {
   seq: number
@@ -261,6 +262,15 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     })
     return { ok: false as const, reason: "sender_not_in_table" as const }
   }
+
+  if (args.action.type === "SEND_GENERAL_CHAT") {
+    const rl = await rateLimitTableChat(args.senderId)
+    if (!rl.ok) return { ok: false as const, reason: "rate_limited" as const }
+  } else if (isTableSyncedAction(args.action)) {
+    const rl = await rateLimitTableAction(args.senderId, args.action.type)
+    if (!rl.ok) return { ok: false as const, reason: "rate_limited" as const }
+  }
+
   const turnAction = isTurnLifecycleAction(args.action)
   const turnSnapBefore = turnAction ? await getTableAuthoritySnapshot(tableId) : null
   if (args.action.type === "ADD_LOG" && args.action.entry?.fromPlayer?.isBot) {

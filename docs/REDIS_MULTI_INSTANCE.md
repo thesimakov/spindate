@@ -20,6 +20,12 @@ REDIS_URL=redis://:password@host:6379/0
 - `live:state` — присутствие игроков и рассадка по столам (один JSON-блоб, обновление через `WATCH`/`MULTI`).
 - `authority:{tableId}` — авторитетный снапшот стола.
 - `events:{tableId}` — лента событий стола.
+- `profile_bundle:{userId}` — кеш ответа профиля для `/api/auth/me` (TTL 5 минут, ключ `spindate:v1:profile_bundle:{userId}`).
+- `rl:chat:*`, `rl:action:*` — скользящие окна анти-флуда (`spindate:v1:rl:chat:table:{id}` и др.).
+
+## Pub/Sub (несколько процессов WebSocket)
+
+Каналы `spindate:v1:ws_room:{roomId}` — рассылка сообщений лобби-комнат между процессами `custom-server` ([`lib/ws-room-redis.ts`](../lib/ws-room-redis.ts)). Без этого при нескольких realtime-инстансах игроки на разных узлах не видят общий чат комнаты.
 
 ## Локальная разработка
 

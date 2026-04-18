@@ -10,7 +10,8 @@
     "start": "next start",
     "start:ws": "NODE_ENV=production tsx server/custom-server.ts",
     "lint": "eslint .",
-    "test": "node --import tsx --test tests/**/*.test.ts"
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "worker": "tsx server/background-worker.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -45,6 +46,7 @@
     "@vkontakte/vk-bridge": "^2.15.11",
     "autoprefixer": "^10.4.20",
     "better-sqlite3": "^12.6.2",
+    "bullmq": "^5.74.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
@@ -65,6 +67,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
     "server-only": "^0.0.1",
+    "socket.io-client": "^4.8.3",
     "sonner": "^1.7.1",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",

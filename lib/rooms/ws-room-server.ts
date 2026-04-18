@@ -11,6 +11,9 @@ import { toLivePlayer } from "@/lib/rooms/room-manager"
 import { ROOM_MAX_PLAYERS } from "@/lib/rooms/bot-manager"
 import { parsePlayerFromClientBody } from "@/lib/rooms/parse-live-player"
 import { addUserRoom, loadRoomRegistry } from "@/lib/rooms/room-registry"
+import { rateLimitWsRoomChat } from "@/lib/rate-limit-redis"
+import { ensureWsRoomSubscriber, publishWsRoomMessage } from "@/lib/ws-room-redis"
+import { getRedis } from "@/lib/redis"
 
 function send(ws: WebSocket, msg: ServerToClientMessage): void {
   if (ws.readyState === ws.OPEN) {
@@ -32,6 +35,9 @@ export class WsRoomServer {
     this.rooms = s.rooms
     this.chat = s.chat
     this.reconnect = s.reconnect
+    ensureWsRoomSubscriber((roomId, msg) => {
+      this.deliverRoomLocal(roomId, msg)
+    })
   }
 
   onConnection(ws: WebSocket): void {
@@ -228,6 +234,11 @@ export class WsRoomServer {
     }
     const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 2000) : ""
     if (!text) return
+    const rl = await rateLimitWsRoomChat(ctx.player.id)
+    if (!rl.ok) {
+      send(ws, { type: "error", code: "rate_limited", message: "Слишком много сообщений", clientRequestId: reqId })
+      return
+    }
     const full = await this.chat.appendMessage(ctx.roomId, {
       senderId: ctx.player.id,
       senderName: ctx.player.name,
@@ -346,11 +357,20 @@ export class WsRoomServer {
     await this.broadcastLobby()
   }
 
-  private broadcastRoom(roomId: number, msg: ServerToClientMessage): void {
+  /** Доставка только локальным сокетам (в т.ч. из Redis Pub/Sub на других узлах). */
+  private deliverRoomLocal(roomId: number, msg: ServerToClientMessage): void {
     const payload = JSON.stringify(msg)
     for (const sock of this.players.socketsInRoom(roomId)) {
       if (sock.readyState === sock.OPEN) sock.send(payload)
     }
+  }
+
+  private broadcastRoom(roomId: number, msg: ServerToClientMessage): void {
+    if (getRedis()) {
+      void publishWsRoomMessage(roomId, msg)
+      return
+    }
+    this.deliverRoomLocal(roomId, msg)
   }
 
   private async broadcastLobby(): Promise<void> {

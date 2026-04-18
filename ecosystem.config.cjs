@@ -10,7 +10,10 @@
  *  Общие секреты: один или оба файла (поздний в списке перекрывает ранний):
  *  - ../shared/.env.local — типично /var/www/shared при приложении в /var/www/spindate
  *  - ../../shared/.env.local — при каталоге релиза releases/…/current (два уровня вверх до корня деплоя)
- *  PM2 подмешивает их в env процесса — видно в `pm2 env 0`, Next тоже их видит. */
+ *  PM2 подмешивает их в env процесса — видно в `pm2 env 0`, Next тоже их видит.
+ *
+ *  Фоновый воркер BullMQ (опционально, нужен REDIS_URL): `npm run worker` или
+ *  `pm2 start node_modules/tsx/dist/cli.mjs --name spindate-worker --cwd . -- server/background-worker.ts` — см. docs/SCALING.md */
 const fs = require("node:fs")
 const path = require("node:path")
 

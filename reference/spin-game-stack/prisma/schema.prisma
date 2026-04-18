@@ -1,0 +1,158 @@
+// Эталонная схема PostgreSQL для VK Mini App «spin the bottle».
+// Запуск: cd reference/spin-game-stack && npm i && npx prisma migrate dev
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  vkId      String   @unique @map("vk_id")
+  username  String
+  avatar    String?
+  gender    String?
+  age       Int?
+  coins     Int      @default(0)
+  popularity Int     @default(0)
+
+  kissesReceived Int @default(0) @map("kisses_received")
+  giftsReceived  Int @default(0) @map("gifts_received")
+  likes          Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  roomMembers     RoomMember[]
+  sentKisses      KissEvent[]      @relation("KissSender")
+  receivedKisses  KissEvent[]      @relation("KissReceiver")
+  secretKissesOut SecretKiss[]     @relation("SecretSender")
+  secretKissesIn  SecretKiss[]     @relation("SecretReceiver")
+  giftPurchases   GiftPurchase[]
+  invitesSent     Invite[]         @relation("Inviter")
+  missionProgress MissionProgress[]
+
+  @@map("users")
+}
+
+model Room {
+  id              String   @id @default(cuid())
+  name            String
+  maxPlayers      Int      @map("max_players")
+  currentPlayers  Int      @default(0) @map("current_players")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  members   RoomMember[]
+  kissEvents KissEvent[]
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  roomId   String   @map("room_id")
+  userId   String   @map("user_id")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@map("room_members")
+}
+
+model GiftCatalog {
+  id        String @id @default(cuid())
+  name      String
+  price     Int
+  animation String @db.Text // JSON: { "url": "...", "type": "lottie" }
+
+  purchases GiftPurchase[]
+
+  @@map("gift_catalog")
+}
+
+model GiftPurchase {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  giftId    String   @map("gift_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gift GiftCatalog @relation(fields: [giftId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("gift_purchases")
+}
+
+model KissEvent {
+  id         String   @id @default(cuid())
+  roomId     String   @map("room_id")
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  action     String // kiss | reject | gift
+  giftId     String?  @map("gift_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  room     Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender   User @relation("KissSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("KissReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@map("kiss_events")
+}
+
+model SecretKiss {
+  id         String   @id @default(cuid())
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  revealed   Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  sender   User @relation("SecretSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("SecretReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, revealed])
+  @@map("secret_kisses")
+}
+
+model Invite {
+  id           String   @id @default(cuid())
+  inviterId    String   @map("inviter_id")
+  inviteeVkId  String   @map("invitee_vk_id")
+  rewardGiven  Boolean  @default(false) @map("reward_given")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  inviter User @relation("Inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@unique([inviterId, inviteeVkId])
+  @@map("invites")
+}
+
+model DailyMission {
+  id          String @id @default(cuid())
+  key         String @unique
+  title       String
+  targetCount Int    @map("target_count")
+  rewardCoins Int    @map("reward_coins")
+
+  progress MissionProgress[]
+
+  @@map("daily_missions")
+}
+
+model MissionProgress {
+  userId    String   @map("user_id")
+  missionId String   @map("mission_id")
+  day       String // YYYY-MM-DD UTC
+  progress  Int      @default(0)
+  completed Boolean  @default(false)
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission DailyMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, missionId, day])
+  @@map("mission_progress")
+}

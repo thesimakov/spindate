@@ -40,7 +40,8 @@ export async function POST(req: Request) {
         "reason" in result && typeof result.reason === "string" && result.reason.trim()
           ? result.reason
           : "event_rejected"
-      return NextResponse.json({ ok: false, error: "Событие отклонено", reason }, { status: 400, headers: NO_CACHE })
+      const status = reason === "rate_limited" ? 429 : 400
+      return NextResponse.json({ ok: false, error: "Событие отклонено", reason }, { status, headers: NO_CACHE })
     }
     const debug =
       process.env.NODE_ENV === "development" && typeof result.turnKey === "string" && result.turnKey

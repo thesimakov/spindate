@@ -4358,7 +4358,6 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
       <div className="pointer-events-none absolute inset-0 z-0" style={{ background: tableStyleOverlay }} />
       {tableStyle === "cosmic_rockets" && <SpaceRocketsLayer />}
       {tableStyle === "nebula_mockup" && <NebulaMockupSkinLayer />}
-      {toast && <InlineToast toast={toast} />}
       <GiftAchievementModal
         open={giftAchievementOpen}
         imageUrl={publicUrl(GIFT_ACHIEVEMENT_IMAGE_PATH)}
@@ -5571,7 +5570,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         {/* Блок стола: по центру колонки по вертикали и горизонтали; при переполнении — прокрутка */}
         <div
           className={cn(
-            "flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center",
+            "relative flex min-h-0 w-full min-w-0 flex-1 flex-col justify-center",
             isMobile ? "items-stretch gap-1.5" : "items-center",
             isPcLayout &&
               "mx-auto max-h-full justify-between overflow-y-auto overflow-x-visible px-2 pt-0 lg:px-3",
@@ -5728,6 +5727,10 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               </div>
             </div>
           </div>
+        )}
+
+        {toast && (
+          <InlineToast toast={toast} inline inlineUnderBankBar={isPcLayout} />
         )}
 
         {/* Стол ~60:50 (ширина/высота): моб — 90% / max 420px; ПК — вписать в min(72vh,78dvh) по высоте */}
