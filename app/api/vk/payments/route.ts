@@ -14,12 +14,16 @@ import { getDb } from "@/lib/db"
 
 /**
  * Защищённый ключ приложения (как в кабинете VK).
- * Дублирует логику `app/api/auth/vk`: сначала `VK_PAYMENTS_SECRET`, иначе `VK_MINI_APP_SECRET` — один и тот же ключ.
+ * Приоритет:
+ * 1) VK_PAYMENTS_SECRET / VK_MINI_APP_SECRET — явный ключ для callback /api/vk/payments
+ * 2) VK_SECRET_KEY / VK_APP_SECRET_KEY — обратная совместимость (уже используется в /api/payment/sign)
  */
 function vkPaymentsSecretFromEnv(): string {
   const a = process.env.VK_PAYMENTS_SECRET?.trim()
   const b = process.env.VK_MINI_APP_SECRET?.trim()
-  return a || b || ""
+  const c = process.env.VK_SECRET_KEY?.trim()
+  const d = process.env.VK_APP_SECRET_KEY?.trim()
+  return a || b || c || d || ""
 }
 
 const JSON_VK = { "Content-Type": "application/json; encoding=utf-8" } as const
