@@ -80,8 +80,10 @@ npm run spin-game:migrate
 npm run spin-game:seed
 ```
 
-Если **`P1001 Can't reach database`** — Postgres не слушает `localhost:5432` или неверный URL; исправьте и повторите `npm run spin-game:migrate`.
+Если **`P1001 Can't reach database`** — PostgreSQL не установлен, не запущен или **неверный `DATABASE_URL`** (хост не `localhost`, другой порт, нет БД `spin_game`). Пока P1001 не устранён, **ни migrate, ни seed не выполнятся**. Проверка: `sudo systemctl status postgresql` и `ss -tlnp | grep 5432`.
 
-Если миграция ещё не проходила, а нужен только сгенерированный клиент: `npm run spin-game:generate` (после `npm run spin-game:install` скрипт `postinstall` в подпроекте уже выполняет `prisma generate`).
+Если в корне **нет** скрипта `spin-game:generate` — сделайте `git pull` или вручную: `cd reference/spin-game-stack && npx prisma generate`.
+
+Скрипт **`db:seed`** в подпроекте перед сидом сам вызывает **`prisma generate`**, чтобы не было ошибки «@prisma/client did not initialize».
 
 Первая миграция уже с именем `init` в скрипте `db:migrate:init`. Основное приложение spindate по умолчанию использует **SQLite**; Prisma здесь только для этого эталонного стека.
