@@ -20,8 +20,17 @@ import { getDb } from "@/lib/db"
  * 1) VK_PAYMENTS_SECRET / VK_MINI_APP_SECRET — явный ключ для callback /api/vk/payments
  * 2) VK_PAYMENT_SECRET — опечатка в старых инструкциях (без «S» в PAYMENTS)
  * 3) VK_SECRET_KEY / VK_APP_SECRET_KEY — обратная совместимость (уже используется в /api/payment/sign)
- * 4) файл: VK_PAYMENTS_SECRET_FILE или `.vk_payments_secret` в process.cwd() (одна строка — ключ)
+ * 4) файл: VK_PAYMENTS_SECRET_FILE или `.vk_payments_secret` (cwd и до двух уровней вверх)
+ * 5) разбор `.env*` на диске — если ключ есть в файле, но не в process.env (PM2/Next не подмешали)
  */
+const VK_PAYMENTS_SECRET_ENV_KEYS = [
+  "VK_PAYMENTS_SECRET",
+  "VK_MINI_APP_SECRET",
+  "VK_PAYMENT_SECRET",
+  "VK_SECRET_KEY",
+  "VK_APP_SECRET_KEY",
+] as const
+
 function vkPaymentsSecretFromEnvVars(): string {
   const a = process.env.VK_PAYMENTS_SECRET?.trim()
   const b = process.env.VK_MINI_APP_SECRET?.trim()
@@ -31,6 +40,11 @@ function vkPaymentsSecretFromEnvVars(): string {
   return a || b || typo || c || d || ""
 }
 
+function vkPaymentsSecretCandidateDirs(): string[] {
+  const cwd = process.cwd()
+  return [...new Set([cwd, path.resolve(cwd, ".."), path.resolve(cwd, "..", "..")])]
+}
+
 /** Кэш после первой попытки чтения файла (undefined = ещё не читали). */
 let vkPaymentsSecretFileCache: string | undefined
 
@@ -38,10 +52,15 @@ function vkPaymentsSecretFromFile(): string {
   if (vkPaymentsSecretFileCache !== undefined) return vkPaymentsSecretFileCache
   vkPaymentsSecretFileCache = ""
   const fromEnv = process.env.VK_PAYMENTS_SECRET_FILE?.trim()
-  const candidates = [fromEnv, path.join(process.cwd(), ".vk_payments_secret")].filter(
-    (x): x is string => Boolean(x),
-  )
+  const candidates: string[] = []
+  if (fromEnv) candidates.push(fromEnv)
+  for (const dir of vkPaymentsSecretCandidateDirs()) {
+    candidates.push(path.join(dir, ".vk_payments_secret"))
+  }
+  const seen = new Set<string>()
   for (const file of candidates) {
+    if (!file || seen.has(file)) continue
+    seen.add(file)
     try {
       if (!fs.existsSync(file)) continue
       const raw = fs.readFileSync(file, "utf8")
@@ -57,13 +76,70 @@ function vkPaymentsSecretFromFile(): string {
   return vkPaymentsSecretFileCache || ""
 }
 
+function parseDotEnvFileKeys(
+  filePath: string,
+  keys: readonly string[],
+): Partial<Record<string, string>> {
+  const want = new Set(keys)
+  const out: Partial<Record<string, string>> = {}
+  try {
+    const text = fs.readFileSync(filePath, "utf8")
+    for (let line of text.split("\n")) {
+      line = line.trim()
+      if (!line || line.startsWith("#")) continue
+      const eq = line.indexOf("=")
+      if (eq <= 0) continue
+      const key = line.slice(0, eq).trim()
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || !want.has(key)) continue
+      let val = line.slice(eq + 1).trim()
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1)
+      }
+      out[key] = val
+    }
+  } catch {
+    // ignore
+  }
+  return out
+}
+
+let vkPaymentsDotEnvSecretCache: string | undefined
+
+function vkPaymentsSecretFromDotEnvFiles(): string {
+  if (vkPaymentsDotEnvSecretCache !== undefined) return vkPaymentsDotEnvSecretCache
+  vkPaymentsDotEnvSecretCache = ""
+  const dirs = vkPaymentsSecretCandidateDirs()
+  const fileNames = [".env.production.local", ".env.local", ".env.production", ".env"]
+  outer: for (const dir of dirs) {
+    for (const name of fileNames) {
+      const full = path.join(dir, name)
+      if (!fs.existsSync(full)) continue
+      const parsed = parseDotEnvFileKeys(full, VK_PAYMENTS_SECRET_ENV_KEYS)
+      for (const k of VK_PAYMENTS_SECRET_ENV_KEYS) {
+        const v = parsed[k]?.trim()
+        if (v) {
+          vkPaymentsDotEnvSecretCache = v
+          break outer
+        }
+      }
+    }
+  }
+  return vkPaymentsDotEnvSecretCache || ""
+}
+
 function vkPaymentsSecretResolved(): string {
-  return vkPaymentsSecretFromEnvVars() || vkPaymentsSecretFromFile()
+  return vkPaymentsSecretFromEnvVars() || vkPaymentsSecretFromFile() || vkPaymentsSecretFromDotEnvFiles()
 }
 
 /** Только флаги наличия — без значений, для логов при отсутствии секрета. */
 function vkPaymentSecretEnvFlags() {
-  const dotFile = path.join(process.cwd(), ".vk_payments_secret")
+  const dirs = vkPaymentsSecretCandidateDirs()
+  const dotvkAny = dirs.some((d) => fs.existsSync(path.join(d, ".vk_payments_secret")))
+  const dotEnvNames = [".env.production.local", ".env.local", ".env.production", ".env"]
+  const dotenvAny = dirs.some((d) => dotEnvNames.some((n) => fs.existsSync(path.join(d, n))))
   return {
     VK_PAYMENTS_SECRET: Boolean(process.env.VK_PAYMENTS_SECRET?.trim()),
     VK_MINI_APP_SECRET: Boolean(process.env.VK_MINI_APP_SECRET?.trim()),
@@ -72,7 +148,8 @@ function vkPaymentSecretEnvFlags() {
     VK_APP_SECRET_KEY: Boolean(process.env.VK_APP_SECRET_KEY?.trim()),
     VK_PAYMENTS_SECRET_FILE: Boolean(process.env.VK_PAYMENTS_SECRET_FILE?.trim()),
     cwd: process.cwd(),
-    dotvk_payments_secret_exists: fs.existsSync(dotFile),
+    dotvk_payments_secret_in_search_dirs: dotvkAny,
+    dotenv_file_in_search_dirs: dotenvAny,
   }
 }
 
