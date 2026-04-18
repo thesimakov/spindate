@@ -22,6 +22,7 @@ export interface UseGameTimersParams {
   tableId: number
   roundNumber: number
   currentTurnIndex: number
+  turnStartedAtMs?: number | null
   currentTurnPlayer: Player | undefined
   currentUser: Player | null
   isSpinning: boolean
@@ -55,6 +56,7 @@ export function useGameTimers({
   tableId,
   roundNumber,
   currentTurnIndex,
+  turnStartedAtMs,
   currentTurnPlayer,
   currentUser,
   isSpinning,
@@ -153,6 +155,7 @@ export function useGameTimers({
   useEffect(() => {
     const isEligible =
       !tableLoading &&
+      seatConfirmed &&
       !!currentTurnPlayer &&
       !currentTurnPlayer.isBot &&
       currentUser?.id === currentTurnPlayer.id &&
@@ -184,7 +187,11 @@ export function useGameTimers({
 
     if (turnGuardRef.current.key === key && turnGuardRef.current.deadlineTs > 0) return
 
-    const deadlineTs = Date.now() + TURN_MS
+    const startTs =
+      typeof turnStartedAtMs === "number" && Number.isFinite(turnStartedAtMs)
+        ? turnStartedAtMs
+        : Date.now()
+    const deadlineTs = startTs + TURN_MS
     turnGuardRef.current.key = key
     turnGuardRef.current.deadlineTs = deadlineTs
 
@@ -224,11 +231,12 @@ export function useGameTimers({
       if (turnTimerRef.current) { clearInterval(turnTimerRef.current); turnTimerRef.current = null }
       if (turnGuardRef.current.skipTimeout) { clearTimeout(turnGuardRef.current.skipTimeout); turnGuardRef.current.skipTimeout = null }
     }
-  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading, isRoundDriver, emitTurnSyncClientLog])
+  }, [tableId, roundNumber, currentTurnIndex, turnStartedAtMs, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading, seatConfirmed, isRoundDriver, emitTurnSyncClientLog])
 
   // --- Auto-skip for OTHER live players who went AFK ---
   useEffect(() => {
     if (tableLoading) return
+    if (!seatConfirmed) return
     if (!currentTurnPlayer || currentTurnPlayer.isBot) return
     if (!currentUser || currentUser.id === currentTurnPlayer.id) return
     if (isSpinning || showResult || countdown !== null) return
@@ -262,7 +270,7 @@ export function useGameTimers({
         afkTimeoutRef.current = null
       }
     }
-  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading, roundNumber, currentTurnIndex, emitTurnSyncClientLog])
+  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading, seatConfirmed, roundNumber, currentTurnIndex, emitTurnSyncClientLog])
 
   // --- Result timer + auto-advance ---
   const resultTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -274,7 +282,7 @@ export function useGameTimers({
   }, [])
 
   useEffect(() => {
-    if (!showResult || tableLoading || pairKissCenterUi) {
+    if (!showResult || tableLoading || pairKissCenterUi || !seatConfirmed) {
       clearResultTimers()
       return
     }
@@ -292,20 +300,20 @@ export function useGameTimers({
     }, RESULT_AUTO_ADVANCE_MS)
 
     return clearResultTimers
-  }, [showResult, pairKissCenterUi, dispatch, clearResultTimers, tableLoading, roundNumber, currentTurnIndex])
+  }, [showResult, pairKissCenterUi, dispatch, clearResultTimers, tableLoading, seatConfirmed, roundNumber, currentTurnIndex])
 
   // --- Prediction timer ---
   const [predictionTimer, setPredictionTimer] = useState<number>(PREDICTION_DURATION)
   const predictionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    if (casualMode) return
+    if (casualMode || !seatConfirmed) return
     setPredictionTimer(PREDICTION_DURATION)
     if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
-  }, [roundNumber, casualMode])
+  }, [roundNumber, casualMode, seatConfirmed])
 
   useEffect(() => {
-    if (casualMode || tableLoading) return
+    if (casualMode || tableLoading || !seatConfirmed) return
     if (!predictionPhase || isSpinning || showResult) {
       if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
       return
@@ -329,19 +337,19 @@ export function useGameTimers({
     return () => {
       if (predictionTimerRef.current) clearInterval(predictionTimerRef.current)
     }
-  }, [predictionPhase, isSpinning, showResult, casualMode, tableLoading, roundNumber, currentTurnIndex])
+  }, [predictionPhase, isSpinning, showResult, casualMode, tableLoading, seatConfirmed, roundNumber, currentTurnIndex])
 
   useEffect(() => {
-    if (casualMode || tableLoading) return
+    if (casualMode || tableLoading || !seatConfirmed) return
     if (predictionTimer === 0 && predictionPhase && !isSpinning && !showResult && countdown === null) {
       handleSpin()
     }
-  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin, casualMode, tableLoading])
+  }, [predictionTimer, predictionPhase, isSpinning, showResult, countdown, handleSpin, casualMode, tableLoading, seatConfirmed])
 
   // --- Фоновые вкладки тормозят setTimeout: при возврате догоняем просроченные ходы ---
   useEffect(() => {
     const flush = () => {
-      if (document.visibilityState !== "visible" || tableLoading) return
+      if (document.visibilityState !== "visible" || tableLoading || !seatConfirmedRef.current) return
 
       const g = turnGuardRef.current
       const tp = currentTurnPlayerRef.current

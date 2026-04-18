@@ -8,38 +8,8 @@ import { composeTablePlayers } from "@/lib/table-composition"
 import { registerTableSyncDispatch } from "@/lib/table-sync-registry"
 import { generateLogId } from "@/lib/ids"
 import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
+import { isTableSyncedAction } from "@/lib/sync-invariants"
 import type { Player, GameAction, TableAuthorityPayload } from "@/lib/game-types"
-
-function isTableSyncedAction(action: GameAction): boolean {
-  switch (action.type) {
-    case "START_COUNTDOWN":
-    case "TICK_COUNTDOWN":
-    case "START_SPIN":
-    case "STOP_SPIN":
-    case "BEGIN_PAIR_KISS_PHASE":
-    case "SET_PAIR_KISS_CHOICE":
-    case "FINALIZE_PAIR_KISS":
-    case "NEXT_TURN":
-    case "REQUEST_EXTRA_TURN":
-    case "ADD_LOG":
-    case "SEND_GENERAL_CHAT":
-    case "SET_AVATAR_FRAME":
-    case "ADD_DRUNK_TIME":
-    case "SET_BOTTLE_SKIN":
-    case "SET_BOTTLE_DONOR":
-    case "SET_BOTTLE_TABLE_PURCHASE":
-    case "RESET_ROUND":
-    case "SET_BOTTLE_COOLDOWN_UNTIL":
-    case "SET_CLIENT_TAB_AWAY":
-    case "START_PREDICTION_PHASE":
-    case "END_PREDICTION_PHASE":
-    case "ADD_PREDICTION":
-    case "PLACE_BET":
-      return true
-    default:
-      return false
-  }
-}
 
 const LIVE_POLL_MS = 1800
 const AUTHORITY_POLL_MS = 800
@@ -169,10 +139,24 @@ export function useSyncEngine(): SyncEngineResult {
           if (res.ok) {
             pullAuthoritySoon()
           } else {
+            const failure = await res.json().catch(() => null) as { reason?: string; error?: string } | null
+            emitSeatSyncLog("push_rejected", {
+              tableId: tid,
+              userId: current.userId,
+              actionType: action.type,
+              reason: failure?.reason ?? null,
+              error: failure?.error ?? null,
+              status: res.status,
+            })
             // Сервер отклонил событие или снимок не изменился — подтянуть авторитет сразу, иначе локальный спин/ход может «залипнуть».
             pullAuthoritySoon()
           }
         } catch {
+          emitSeatSyncLog("push_failed_network", {
+            tableId: tid,
+            userId: current.userId,
+            actionType: action.type,
+          })
           pullAuthoritySoon()
         }
       })
@@ -339,8 +323,15 @@ export function useSyncEngine(): SyncEngineResult {
             if (res.ok && data?.ok && data.snapshot) {
               const snap = data.snapshot as TableAuthorityPayload
               const changed = data.changed !== false
+              const prevRevision = lastAuthorityRevisionRef.current
               if (snap.revision > lastAuthorityRevisionRef.current) {
                 applyAuthoritySnapshot(snap)
+              } else if (snap.revision < prevRevision) {
+                emitSeatSyncLog("authority_revision_regression", {
+                  tableId: tid,
+                  previousRevision: prevRevision,
+                  receivedRevision: snap.revision,
+                })
               }
               if (changed) {
                 authorityStablePollCountRef.current = 0
@@ -690,6 +681,13 @@ export function useSyncEngine(): SyncEngineResult {
           return
         }
 
+        if (data.currentSeq < cur.seq) {
+          emitSeatSyncLog("events_seq_regression", {
+            tableId: tid,
+            previousSeq: cur.seq,
+            receivedSeq: data.currentSeq,
+          })
+        }
         tableEventsCursorRef.current = { seq: data.currentSeq, initialized: true }
         if (Array.isArray(data.events) && data.events.length > 0) {
           const pull = fetchTableAuthorityRef.current

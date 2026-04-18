@@ -42,6 +42,7 @@ const initialState: GameState = {
   currentUser: null,
   players: [],
   currentTurnIndex: 0,
+  turnStartedAtMs: null,
   isSpinning: false,
   countdown: null,
   bottleAngle: 0,
@@ -598,6 +599,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       const resetActive = turnPlayerLeft ? {
         isSpinning: false,
         countdown: null as number | null,
+        turnStartedAtMs: Date.now(),
         showResult: false,
         resultAction: null as string | null,
         targetPlayer: null as Player | null,
@@ -711,6 +713,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         tableId: action.tableId,
         roomCreatorPlayerId: nextRoomCreator,
         currentTurnIndex: spinnerIdx,
+        turnStartedAtMs: now,
         spinSkips: nextSpinSkips,
         currentTurnDidSpin: false,
         isSpinning: false,
@@ -741,7 +744,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       return { ...state, tablesCount: action.tablesCount }
     case "START_COUNTDOWN":
       if (state.countdown !== null || state.isSpinning) return state
-      return { ...state, countdown: 3 }
+      return { ...state, countdown: 3, turnStartedAtMs: state.turnStartedAtMs ?? Date.now() }
     case "TICK_COUNTDOWN":
       return {
         ...state,
@@ -866,6 +869,7 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         spinSkips: nextSpinSkips,
         currentTurnDidSpin: false,
         currentTurnIndex: nextIndex,
+        turnStartedAtMs: Date.now(),
         showResult: false,
         targetPlayer: null,
         targetPlayer2: null,
@@ -1478,6 +1482,10 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
         ...state,
         players: mergedPlayers,
         currentTurnIndex: p.currentTurnIndex,
+        turnStartedAtMs:
+          typeof p.turnStartedAtMs === "number"
+            ? p.turnStartedAtMs
+            : (p.turnStartedAtMs === null ? null : state.turnStartedAtMs),
         isSpinning: keepLocalSpinState ? state.isSpinning : p.isSpinning,
         countdown: keepLocalCountdown ? state.countdown : p.countdown,
         bottleAngle: keepLocalAngle ? state.bottleAngle : p.bottleAngle,

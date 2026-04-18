@@ -1133,6 +1133,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
   const {
     players,
     currentTurnIndex,
+    turnStartedAtMs,
     isSpinning,
     countdown,
     bottleAngle,
@@ -2400,6 +2401,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     tableId,
     roundNumber,
     currentTurnIndex,
+    turnStartedAtMs,
     currentTurnPlayer,
     currentUser,
     isSpinning,

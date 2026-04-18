@@ -5,6 +5,7 @@ import { applyAuthorityEvent, getTableAuthoritySnapshot } from "@/lib/table-auth
 import { getRedis } from "@/lib/redis"
 import { readModifyWriteKey } from "@/lib/redis-rmw"
 import { scheduleVkNotificationForTableAction } from "@/lib/vk-app-notifications-server"
+import { isTableSyncedAction } from "@/lib/sync-invariants"
 
 type TableEvent = {
   seq: number
@@ -123,34 +124,7 @@ function emitTurnSyncLog(
 }
 
 function isActionAllowed(action: GameAction): boolean {
-  switch (action.type) {
-    case "START_COUNTDOWN":
-    case "TICK_COUNTDOWN":
-    case "START_SPIN":
-    case "STOP_SPIN":
-    case "BEGIN_PAIR_KISS_PHASE":
-    case "SET_PAIR_KISS_CHOICE":
-    case "FINALIZE_PAIR_KISS":
-    case "NEXT_TURN":
-    case "REQUEST_EXTRA_TURN":
-    case "ADD_LOG":
-    case "SEND_GENERAL_CHAT":
-    case "SET_AVATAR_FRAME":
-    case "ADD_DRUNK_TIME":
-    case "SET_BOTTLE_SKIN":
-    case "SET_BOTTLE_DONOR":
-    case "SET_BOTTLE_TABLE_PURCHASE":
-    case "RESET_ROUND":
-    case "SET_BOTTLE_COOLDOWN_UNTIL":
-    case "SET_CLIENT_TAB_AWAY":
-    case "START_PREDICTION_PHASE":
-    case "END_PREDICTION_PHASE":
-    case "ADD_PREDICTION":
-    case "PLACE_BET":
-      return true
-    default:
-      return false
-  }
+  return isTableSyncedAction(action)
 }
 
 function senderMatchesActionSync(senderId: number, action: GameAction): boolean {
@@ -259,12 +233,26 @@ async function senderCanDriveTurnLifecycleFromSnapshot(
   return roundDriverId != null && senderId === roundDriverId
 }
 
+async function senderInCurrentTable(tableId: number, senderId: number): Promise<boolean> {
+  const snap = await getTableAuthoritySnapshot(tableId)
+  if (!snap) return false
+  return snap.players.some((p) => p.id === senderId)
+}
+
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
   const now = Date.now()
   const tableId = Math.floor(args.tableId)
   if (!Number.isInteger(tableId) || tableId <= 0) return { ok: false as const }
   if (!Number.isInteger(args.senderId) || args.senderId <= 0) return { ok: false as const }
   if (!isActionAllowed(args.action)) return { ok: false as const }
+  if (!(await senderInCurrentTable(tableId, args.senderId))) {
+    emitDebugLog("Rejected event: sender is not seated at table", {
+      tableId,
+      senderId: args.senderId,
+      actionType: args.action.type,
+    })
+    return { ok: false as const, reason: "sender_not_in_table" as const }
+  }
   const turnAction = isTurnLifecycleAction(args.action)
   const turnSnapBefore = turnAction ? await getTableAuthoritySnapshot(tableId) : null
   if (args.action.type === "ADD_LOG" && args.action.entry?.fromPlayer?.isBot) {

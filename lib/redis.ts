@@ -3,6 +3,17 @@ import "server-only"
 import Redis from "ioredis"
 
 let client: Redis | null | undefined
+let redisWarningLogged = false
+
+function logRedisFallbackOnce(reason: "missing_url" | "client_init_failed") {
+  if (redisWarningLogged) return
+  if (process.env.NODE_ENV !== "production") return
+  redisWarningLogged = true
+  console.warn(
+    "[sync/redis] Redis is unavailable, runtime falls back to in-memory state. Multi-instance sync can diverge.",
+    JSON.stringify({ reason }),
+  )
+}
 
 /**
  * Redis для общего состояния между инстансами Next.js.
@@ -13,6 +24,7 @@ export function getRedis(): Redis | null {
   const url = process.env.REDIS_URL?.trim()
   if (!url) {
     client = null
+    logRedisFallbackOnce("missing_url")
     return client
   }
   try {
@@ -23,6 +35,7 @@ export function getRedis(): Redis | null {
     })
   } catch {
     client = null
+    logRedisFallbackOnce("client_init_failed")
   }
   return client
 }

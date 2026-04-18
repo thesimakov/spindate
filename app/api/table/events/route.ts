@@ -36,7 +36,11 @@ export async function POST(req: Request) {
     }
     const result = await pushTableEvent({ tableId, senderId, action })
     if (!result.ok) {
-      return NextResponse.json({ ok: false, error: "Событие отклонено" }, { status: 400 })
+      const reason =
+        "reason" in result && typeof result.reason === "string" && result.reason.trim()
+          ? result.reason
+          : "event_rejected"
+      return NextResponse.json({ ok: false, error: "Событие отклонено", reason }, { status: 400, headers: NO_CACHE })
     }
     const debug =
       process.env.NODE_ENV === "development" && typeof result.turnKey === "string" && result.turnKey

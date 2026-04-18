@@ -327,6 +327,8 @@ export interface GameState {
   currentUser: Player | null
   players: Player[]
   currentTurnIndex: number
+  /** Серверное время начала текущего хода. Используется для устойчивого клиентского таймера без дрейфа. */
+  turnStartedAtMs?: number | null
   isSpinning: boolean
   countdown: number | null
   bottleAngle: number
