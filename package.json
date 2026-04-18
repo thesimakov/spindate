@@ -11,7 +11,10 @@
     "start:ws": "NODE_ENV=production tsx server/custom-server.ts",
     "lint": "eslint .",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "worker": "tsx server/background-worker.ts"
+    "worker": "tsx server/background-worker.ts",
+    "spin-game:install": "npm install --prefix reference/spin-game-stack",
+    "spin-game:migrate": "npm run db:migrate:init --prefix reference/spin-game-stack",
+    "spin-game:seed": "npm run db:seed --prefix reference/spin-game-stack"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

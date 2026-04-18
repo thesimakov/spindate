@@ -56,3 +56,19 @@ pm2 restart spindate
 ```
 
 Или используй деплой с GitHub (настрой секреты по [docs/GITHUB_DEPLOY_SECRETS.md](./docs/GITHUB_DEPLOY_SECRETS.md)) — после push в `main` сборка и выкладка на сервер выполняются автоматически.
+
+## 6. Эталонный API spin-game (PostgreSQL, `reference/spin-game-stack`)
+
+Это **отдельный** сервис (Express + Prisma), не основной Next.js. Папка **`reference/spin-game-stack`** должна быть в репозитории; если на сервере её нет — сделай **`git pull`** с ветки, где она уже закоммичена (или скопируй каталог с машины разработчика).
+
+Из **корня** репозитория:
+
+```bash
+npm run spin-game:install
+cp reference/spin-game-stack/.env.example reference/spin-game-stack/.env
+# задать DATABASE_URL в reference/spin-game-stack/.env
+npm run spin-game:migrate
+npm run spin-game:seed
+```
+
+Первая миграция уже с именем `init` в скрипте `db:migrate:init`. Основное приложение spindate по умолчанию использует **SQLite**; Prisma здесь только для этого эталонного стека.
