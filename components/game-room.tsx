@@ -2013,7 +2013,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
         return
       }
       const b = bottleEl.getBoundingClientRect()
-      const a = surface.querySelector<HTMLElement>(`[data-turn-arrow-player-id="${pid}"]`)
+      const allMatches = surface.querySelectorAll<HTMLElement>(`[data-turn-arrow-player-id="${pid}"]`)
+      const a = allMatches[0]
       if (!a) {
         setTurnArrowPosPx(null)
         setTurnArrowTargetPx(null)
@@ -3417,11 +3418,21 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     if (!roundKey || pairKissPhase != null) return
     if (playedNextKissAnnouncementRoundKeyRef.current === roundKey) return
     if (!currentTurnPlayer) return
+
     setNextKissAnnouncementPlayerId(currentTurnPlayer.id)
     setNextKissAnnouncementUntilMs(Date.now() + NEXT_KISS_ANNOUNCE_MS)
     playedNextKissAnnouncementRoundKeyRef.current = roundKey
     pendingNextKissAnnouncementRoundKeyRef.current = null
   }, [pairKissPhase, currentTurnPlayer?.id, roundNumber])
+
+  /** Пока открыт анонс «следующий целуется», держим id в lockstep с players[currentTurnIndex] (стрелка/ход), иначе после синка/гонки текст и стрелка расходятся. */
+  useEffect(() => {
+    if (nextKissAnnouncementUntilMs == null) return
+    if (nextKissAnnouncementPlayerId == null) return
+    if (currentTurnPlayer?.id == null) return
+    if (nextKissAnnouncementPlayerId === currentTurnPlayer.id) return
+    setNextKissAnnouncementPlayerId(currentTurnPlayer.id)
+  }, [nextKissAnnouncementUntilMs, nextKissAnnouncementPlayerId, currentTurnPlayer?.id])
 
   useEffect(() => {
     if (nextKissAnnouncementUntilMs == null) return

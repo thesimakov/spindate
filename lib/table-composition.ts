@@ -119,5 +119,15 @@ export function composeTablePlayers({
   // лишние боты отваливаются (neededBots уменьшается), а не «толкают» живых.
   const humans = merged.filter((p) => !p.isBot)
   const bots = merged.filter((p) => p.isBot)
-  return [...humans, ...bots].slice(0, maxTableSize)
+  const out = [...humans, ...bots].slice(0, maxTableSize)
+  // generateBots повторяет имена по модулю длины списка — на одном столе могут оказаться две «Марии» с разными id.
+  const botNameSeen = new Map<string, number>()
+  const outUnique = out.map((p) => {
+    if (!p.isBot) return p
+    const n = botNameSeen.get(p.name) ?? 0
+    botNameSeen.set(p.name, n + 1)
+    if (n === 0) return p
+    return { ...p, name: `${p.name} ${n + 1}` }
+  })
+  return outUnique
 }
