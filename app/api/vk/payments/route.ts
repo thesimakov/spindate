@@ -16,14 +16,27 @@ import { getDb } from "@/lib/db"
  * Защищённый ключ приложения (как в кабинете VK).
  * Приоритет:
  * 1) VK_PAYMENTS_SECRET / VK_MINI_APP_SECRET — явный ключ для callback /api/vk/payments
- * 2) VK_SECRET_KEY / VK_APP_SECRET_KEY — обратная совместимость (уже используется в /api/payment/sign)
+ * 2) VK_PAYMENT_SECRET — опечатка в старых инструкциях (без «S» в PAYMENTS)
+ * 3) VK_SECRET_KEY / VK_APP_SECRET_KEY — обратная совместимость (уже используется в /api/payment/sign)
  */
 function vkPaymentsSecretFromEnv(): string {
   const a = process.env.VK_PAYMENTS_SECRET?.trim()
   const b = process.env.VK_MINI_APP_SECRET?.trim()
+  const typo = process.env.VK_PAYMENT_SECRET?.trim()
   const c = process.env.VK_SECRET_KEY?.trim()
   const d = process.env.VK_APP_SECRET_KEY?.trim()
-  return a || b || c || d || ""
+  return a || b || typo || c || d || ""
+}
+
+/** Только флаги наличия — без значений, для логов при отсутствии секрета. */
+function vkPaymentSecretEnvFlags() {
+  return {
+    VK_PAYMENTS_SECRET: Boolean(process.env.VK_PAYMENTS_SECRET?.trim()),
+    VK_MINI_APP_SECRET: Boolean(process.env.VK_MINI_APP_SECRET?.trim()),
+    VK_PAYMENT_SECRET: Boolean(process.env.VK_PAYMENT_SECRET?.trim()),
+    VK_SECRET_KEY: Boolean(process.env.VK_SECRET_KEY?.trim()),
+    VK_APP_SECRET_KEY: Boolean(process.env.VK_APP_SECRET_KEY?.trim()),
+  }
 }
 
 const JSON_VK = { "Content-Type": "application/json; encoding=utf-8" } as const
@@ -289,7 +302,8 @@ export async function POST(req: NextRequest) {
 
     if (!VK_PAYMENTS_SECRET) {
       console.error(
-        "[vk/payments] Neither VK_PAYMENTS_SECRET nor VK_MINI_APP_SECRET is configured — rejecting request",
+        "[vk/payments] Payment secret not configured — env flags (true = set, length hidden):",
+        JSON.stringify(vkPaymentSecretEnvFlags()),
       )
       return vkError(10, "Payment secret not configured", true)
     }
