@@ -36,6 +36,8 @@ export interface UseGameTimersParams {
   casualMode: boolean
   /** Пока true — все таймеры заблокированы (стол ещё загружается). */
   tableLoading?: boolean
+  /** Сервер подтвердил место игрока за live-столом. */
+  seatConfirmed?: boolean
 }
 
 export interface UseGameTimersResult {
@@ -65,6 +67,7 @@ export function useGameTimers({
   playersRef,
   casualMode,
   tableLoading = false,
+  seatConfirmed = false,
 }: UseGameTimersParams): UseGameTimersResult {
   const currentTurnPlayerRef = useRef(currentTurnPlayer)
   const currentUserRef = useRef(currentUser)
@@ -73,6 +76,7 @@ export function useGameTimers({
   const predictionPhaseRef = useRef(predictionPhase)
   const isSpinningRef = useRef(isSpinning)
   const countdownRef = useRef(countdown)
+  const seatConfirmedRef = useRef(seatConfirmed)
   useEffect(() => {
     currentTurnPlayerRef.current = currentTurnPlayer
   }, [currentTurnPlayer])
@@ -94,12 +98,39 @@ export function useGameTimers({
   useEffect(() => {
     countdownRef.current = countdown
   }, [countdown])
+  useEffect(() => {
+    seatConfirmedRef.current = seatConfirmed
+  }, [seatConfirmed])
+
   const isRoundDriver = useCallback(() => {
     const me = currentUserRef.current
     if (!me) return false
     const id = getRoundDriverPlayerId(playersRef.current)
     return id != null && id === me.id
   }, [playersRef])
+
+  const emitTurnSyncClientLog = useCallback(
+    (
+      reason: "skip_timer" | "skip_afk" | "flush_skip_timer" | "flush_skip_afk",
+      turnPlayer: Player | null | undefined,
+    ) => {
+      if (process.env.NODE_ENV !== "development") return
+      const pid = turnPlayer?.id ?? null
+      const turnKey = pid != null ? `${tableId}:${roundNumber}:${currentTurnIndex}:${pid}` : null
+      console.debug("[turn-sync]", {
+        source: "client",
+        reason,
+        tableId,
+        roundNumber,
+        currentTurnIndex,
+        turnPlayerId: pid,
+        turnKey,
+        isRoundDriver: isRoundDriver(),
+        seatConfirmed: seatConfirmedRef.current,
+      })
+    },
+    [tableId, roundNumber, currentTurnIndex, isRoundDriver],
+  )
 
   const afkGuardRef = useRef<{ key: string | null; startedAt: number }>({ key: null, startedAt: 0 })
   const afkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -174,6 +205,8 @@ export function useGameTimers({
     turnGuardRef.current.skipTimeout = setTimeout(() => {
       if (turnGuardRef.current.key !== key) return
       if (!currentTurnPlayer) return
+      if (!isRoundDriver()) return
+      emitTurnSyncClientLog("skip_timer", currentTurnPlayer)
       dispatch({
         type: "ADD_LOG",
         entry: {
@@ -191,7 +224,7 @@ export function useGameTimers({
       if (turnTimerRef.current) { clearInterval(turnTimerRef.current); turnTimerRef.current = null }
       if (turnGuardRef.current.skipTimeout) { clearTimeout(turnGuardRef.current.skipTimeout); turnGuardRef.current.skipTimeout = null }
     }
-  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading])
+  }, [tableId, roundNumber, currentTurnIndex, currentTurnPlayer?.id, currentTurnPlayer?.isBot, currentUser?.id, isSpinning, showResult, countdown, dispatch, tableLoading, isRoundDriver, emitTurnSyncClientLog])
 
   // --- Auto-skip for OTHER live players who went AFK ---
   useEffect(() => {
@@ -209,6 +242,7 @@ export function useGameTimers({
       const rd = getRoundDriverPlayerId(playersRef.current)
       if (!currentUser || rd !== currentUser.id) return
 
+      emitTurnSyncClientLog("skip_afk", currentTurnPlayer)
       dispatch({
         type: "ADD_LOG",
         entry: {
@@ -228,7 +262,7 @@ export function useGameTimers({
         afkTimeoutRef.current = null
       }
     }
-  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading, roundNumber, currentTurnIndex])
+  }, [currentTurnPlayer, currentUser, isSpinning, showResult, countdown, dispatch, playersRef, tableLoading, roundNumber, currentTurnIndex, emitTurnSyncClientLog])
 
   // --- Result timer + auto-advance ---
   const resultTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -322,27 +356,30 @@ export function useGameTimers({
           !showResultRef.current &&
           countdownRef.current === null
         ) {
-          if (g.skipTimeout) {
-            clearTimeout(g.skipTimeout)
-            g.skipTimeout = null
+          if (isRoundDriver()) {
+            if (g.skipTimeout) {
+              clearTimeout(g.skipTimeout)
+              g.skipTimeout = null
+            }
+            if (turnTimerRef.current) {
+              clearInterval(turnTimerRef.current)
+              turnTimerRef.current = null
+            }
+            emitTurnSyncClientLog("flush_skip_timer", tp)
+            dispatch({
+              type: "ADD_LOG",
+              entry: {
+                id: generateLogId(),
+                type: "system",
+                fromPlayer: tp,
+                text: `${tp.name} пропускает ход`,
+                timestamp: Date.now(),
+              },
+            })
+            dispatch({ type: "NEXT_TURN" })
+            g.key = null
+            g.deadlineTs = 0
           }
-          if (turnTimerRef.current) {
-            clearInterval(turnTimerRef.current)
-            turnTimerRef.current = null
-          }
-          dispatch({
-            type: "ADD_LOG",
-            entry: {
-              id: generateLogId(),
-              type: "system",
-              fromPlayer: tp,
-              text: `${tp.name} пропускает ход`,
-              timestamp: Date.now(),
-            },
-          })
-          dispatch({ type: "NEXT_TURN" })
-          g.key = null
-          g.deadlineTs = 0
         }
       }
 
@@ -365,6 +402,7 @@ export function useGameTimers({
               clearTimeout(afkTimeoutRef.current)
               afkTimeoutRef.current = null
             }
+            emitTurnSyncClientLog("flush_skip_afk", ctp)
             dispatch({
               type: "ADD_LOG",
               entry: {
@@ -415,7 +453,7 @@ export function useGameTimers({
       document.removeEventListener("visibilitychange", flush)
       window.removeEventListener("focus", flush)
     }
-  }, [tableLoading, dispatch, playersRef, casualMode, isRoundDriver])
+  }, [tableLoading, dispatch, playersRef, casualMode, isRoundDriver, emitTurnSyncClientLog])
 
   // --- Steam fog tick ---
   const [steamFogTick, setSteamFogTick] = useState(0)

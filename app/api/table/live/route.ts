@@ -74,6 +74,10 @@ export async function POST(req: Request) {
     if (Number.isInteger(userId) && userId > 0) {
       await leaveLiveTable(userId)
     }
+    const leaveTableId = Number(body?.tableId)
+    if (Number.isInteger(leaveTableId) && leaveTableId > 0) {
+      await ensureTableAuthority(leaveTableId)
+    }
     return NextResponse.json({ ok: true }, { headers: NO_CACHE })
   }
 

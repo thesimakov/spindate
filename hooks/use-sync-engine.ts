@@ -41,11 +41,11 @@ function isTableSyncedAction(action: GameAction): boolean {
   }
 }
 
-const LIVE_POLL_MS = 3000
+const LIVE_POLL_MS = 1800
 const AUTHORITY_POLL_MS = 800
 /** Опрос ленты /api/table/events (pull), чтобы подтянуть рамки/лог и пр. без ожидания «медленного» authority-poll. */
 const TABLE_EVENTS_POLL_MS = 650
-const LIVE_POLL_HIDDEN_MS = 6000
+const LIVE_POLL_HIDDEN_MS = 3000
 const AUTHORITY_POLL_HIDDEN_MS = 5000
 const AUTHORITY_POLL_IDLE_MAX_MS = 3200
 /** Первый pull с sinceSeq выше любого seq — только currentSeq, без скачивания истории событий. */
@@ -88,6 +88,10 @@ export interface SyncEngineResult {
 export function useSyncEngine(): SyncEngineResult {
   const { state, dispatch: rawDispatch } = useGame()
   const { currentUser, tableId, players, tablePaused, isSpinning, showResult, countdown } = state
+  const emitSeatSyncLog = useCallback((event: string, data?: Record<string, unknown>) => {
+    if (process.env.NODE_ENV !== "development") return
+    console.debug("[seat-sync]", { event, ...(data ?? {}) })
+  }, [])
 
   const remoteActionRef = useRef(false)
   const playersRef = useRef(players)
@@ -133,6 +137,11 @@ export function useSyncEngine(): SyncEngineResult {
         const tid = Math.floor(Number(current.tableId))
         if (!current.userId || !Number.isInteger(tid) || tid <= 0) return
         if (!seatConfirmedRef.current) {
+          emitSeatSyncLog("push_blocked_no_seat", {
+            tableId: tid,
+            userId: current.userId,
+            actionType: action.type,
+          })
           return
         }
         const pullAuthoritySoon = () => {
@@ -167,7 +176,7 @@ export function useSyncEngine(): SyncEngineResult {
         }
       })
     void pushChainRef.current
-  }, [])
+  }, [emitSeatSyncLog])
 
   const dispatch = useCallback((action: GameAction) => {
     rawDispatch(action)
@@ -235,8 +244,17 @@ export function useSyncEngine(): SyncEngineResult {
   const [liveHumanCount, setLiveHumanCount] = useState(0)
 
   useEffect(() => {
+    const prev = seatConfirmedRef.current
     seatConfirmedRef.current = seatConfirmed
-  }, [seatConfirmed])
+    if (prev !== seatConfirmed) {
+      emitSeatSyncLog("seat_confirmed_changed", {
+        tableId: tableIdRef.current,
+        userId: currentUser?.id ?? null,
+        previous: prev,
+        next: seatConfirmed,
+      })
+    }
+  }, [seatConfirmed, emitSeatSyncLog, currentUser?.id])
 
   /** Краткая задержка перед сбросом «места», чтобы не мигало при редком ответе без seated */
   const loseSeatDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -399,6 +417,13 @@ export function useSyncEngine(): SyncEngineResult {
         const livePlayers = data.livePlayers.map((p: Player) => ({ ...p, isBot: false }))
         const seated = livePlayers.some((p: Player) => p.id === currentUser.id)
         if (!seated) {
+          emitSeatSyncLog("live_sync_not_seated", {
+            mode,
+            tableId: currentTableId,
+            userId: currentUser.id,
+            livePlayersCount: livePlayers.length,
+          })
+          seatConfirmedRef.current = false
           prevLiveHumanIdsRef.current = new Set()
           if (!loseSeatDebounceRef.current) {
             loseSeatDebounceRef.current = setTimeout(() => {
@@ -506,7 +531,7 @@ export function useSyncEngine(): SyncEngineResult {
   const initialJoinDoneRef = useRef(false)
   useEffect(() => {
     initialJoinDoneRef.current = false
-  }, [currentUser?.id])
+  }, [currentUser?.id, tableId])
 
   useEffect(() => {
     if (!currentUser || tablePaused) return
@@ -662,7 +687,7 @@ export function useSyncEngine(): SyncEngineResult {
   useEffect(() => {
     if (!currentUserId) return
     leaveSentRef.current = false
-    const payload = JSON.stringify({ mode: "leave", userId: currentUserId })
+    const payload = JSON.stringify({ mode: "leave", userId: currentUserId, tableId: tableIdRef.current })
     const sendLeave = (_reason: string) => {
       if (leaveSentRef.current) {
         return
@@ -692,7 +717,7 @@ export function useSyncEngine(): SyncEngineResult {
       window.removeEventListener("pagehide", onPageHide)
       sendLeave("unmount_cleanup")
     }
-  }, [currentUserId])
+  }, [currentUserId, tableId])
 
   return useMemo(() => ({
     dispatch,

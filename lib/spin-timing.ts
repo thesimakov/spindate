@@ -7,3 +7,5 @@ export const SPIN_HANG_FAILSAFE_MS = 20_000
 export const SERVER_SPIN_STUCK_MS = 16_000
 /** Если бот-ход не продвинулся ни в спин, ни в результат — сервер принудительно переводит ход дальше. */
 export const SERVER_BOT_TURN_STUCK_MS = 12_000
+/** Если живой ход «завис» (игрок вышел/AFK, а клиентский skip не пришёл), сервер продвигает ход сам. */
+export const SERVER_HUMAN_TURN_STUCK_MS = 18_000

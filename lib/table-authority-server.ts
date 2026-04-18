@@ -11,7 +11,7 @@ import { loadRoomRegistry } from "@/lib/rooms/room-registry"
 import { normalizeRoomBottleSkin } from "@/lib/rooms/room-appearance"
 import { resolveEffectiveTableStyle } from "@/lib/table-style-global-server"
 import { authoritySnapshotExpiredBottleLease } from "@/lib/bottle-lease-expiry"
-import { SERVER_BOT_TURN_STUCK_MS, SERVER_SPIN_STUCK_MS } from "@/lib/spin-timing"
+import { SERVER_BOT_TURN_STUCK_MS, SERVER_HUMAN_TURN_STUCK_MS, SERVER_SPIN_STUCK_MS } from "@/lib/spin-timing"
 
 declare global {
   var __spindateTableAuthorityMemory: Map<number, TableAuthorityPayload> | undefined
@@ -137,6 +137,19 @@ function stabilizeAuthoritySnapshot(
     turnPlayer?.isBot &&
     !phaseActive &&
     turnAgeMs >= SERVER_BOT_TURN_STUCK_MS
+  ) {
+    const recovered = applyTableAuthorityAction(next, { type: "NEXT_TURN" })
+    if (recovered) {
+      next = recovered
+      changed = true
+    }
+  }
+
+  if (
+    turnPlayer &&
+    !turnPlayer.isBot &&
+    !phaseActive &&
+    turnAgeMs >= SERVER_HUMAN_TURN_STUCK_MS
   ) {
     const recovered = applyTableAuthorityAction(next, { type: "NEXT_TURN" })
     if (recovered) {

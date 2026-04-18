@@ -38,7 +38,11 @@ export async function POST(req: Request) {
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: "Событие отклонено" }, { status: 400 })
     }
-    return NextResponse.json({ ok: true, seq: result.seq }, { headers: NO_CACHE })
+    const debug =
+      process.env.NODE_ENV === "development" && typeof result.turnKey === "string" && result.turnKey
+        ? { turnKey: result.turnKey }
+        : undefined
+    return NextResponse.json({ ok: true, seq: result.seq, ...(debug ? { debug } : {}) }, { headers: NO_CACHE })
   }
 
   const sinceSeq = parseIntSafe(body?.sinceSeq, 0)

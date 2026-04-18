@@ -1,4 +1,4 @@
-import type { GameAction } from "@/lib/game-types"
+import type { GameAction, TableAuthorityPayload } from "@/lib/game-types"
 import { tryInsertGlobalRatingFromAddLog } from "@/lib/global-rating-store"
 import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 import { applyAuthorityEvent, getTableAuthoritySnapshot } from "@/lib/table-authority-server"
@@ -72,6 +72,54 @@ function cleanupMemory(store: Map<number, TableEventsBucket>, now: number) {
 function emitDebugLog(message: string, data: Record<string, unknown>) {
   if (process.env.NODE_ENV !== "development") return
   console.debug("[table-events]", message, data)
+}
+
+function isTurnLifecycleAction(action: GameAction): boolean {
+  return (
+    action.type === "START_PREDICTION_PHASE" ||
+    action.type === "END_PREDICTION_PHASE" ||
+    action.type === "START_COUNTDOWN" ||
+    action.type === "TICK_COUNTDOWN" ||
+    action.type === "START_SPIN" ||
+    action.type === "STOP_SPIN" ||
+    action.type === "NEXT_TURN"
+  )
+}
+
+function buildTurnDebugContext(tableId: number, snap: TableAuthorityPayload | null): Record<string, unknown> {
+  const turnIndex = snap?.currentTurnIndex ?? null
+  const turnPlayer = turnIndex != null ? snap?.players?.[turnIndex] : null
+  const roundNumber = snap?.roundNumber ?? null
+  const turnPlayerId = turnPlayer?.id ?? null
+  const turnPlayerIsBot = turnPlayer?.isBot ?? null
+  const turnKey =
+    roundNumber != null && turnIndex != null && turnPlayerId != null
+      ? `${tableId}:${roundNumber}:${turnIndex}:${turnPlayerId}`
+      : null
+  return {
+    roundNumber,
+    currentTurnIndex: turnIndex,
+    turnPlayerId,
+    turnPlayerIsBot,
+    roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
+    turnKey,
+  }
+}
+
+function emitTurnSyncLog(
+  reason: "accepted" | "rejected_sender" | "rejected_apply_no_change",
+  args: { tableId: number; senderId: number; actionType: string; snap: TableAuthorityPayload | null; extra?: Record<string, unknown> },
+) {
+  if (process.env.NODE_ENV !== "development") return
+  const ctx = buildTurnDebugContext(args.tableId, args.snap)
+  console.debug("[turn-sync]", {
+    reason,
+    tableId: args.tableId,
+    senderId: args.senderId,
+    actionType: args.actionType,
+    ...ctx,
+    ...(args.extra ?? {}),
+  })
 }
 
 function isActionAllowed(action: GameAction): boolean {
@@ -197,7 +245,7 @@ async function senderCanFinalizePairKissFromSnapshot(
   return timedOut || bothAnswered
 }
 
-/** Turn-actions (countdown/spin lifecycle): только активный игрок; для хода бота — только round driver. */
+/** Turn-actions (countdown/spin lifecycle): активный игрок или round driver (AFK/бот-ходы). */
 async function senderCanDriveTurnLifecycleFromSnapshot(
   tableId: number,
   senderId: number,
@@ -207,10 +255,8 @@ async function senderCanDriveTurnLifecycleFromSnapshot(
   const turnPlayer = snap.players[snap.currentTurnIndex]
   if (!turnPlayer) return false
   const roundDriverId = getRoundDriverPlayerId(snap.players)
-  if (turnPlayer.isBot) {
-    return roundDriverId != null && senderId === roundDriverId
-  }
-  return senderId === turnPlayer.id
+  if (senderId === turnPlayer.id) return true
+  return roundDriverId != null && senderId === roundDriverId
 }
 
 export async function pushTableEvent(args: { tableId: number; senderId: number; action: GameAction }) {
@@ -219,6 +265,8 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
   if (!Number.isInteger(tableId) || tableId <= 0) return { ok: false as const }
   if (!Number.isInteger(args.senderId) || args.senderId <= 0) return { ok: false as const }
   if (!isActionAllowed(args.action)) return { ok: false as const }
+  const turnAction = isTurnLifecycleAction(args.action)
+  const turnSnapBefore = turnAction ? await getTableAuthoritySnapshot(tableId) : null
   if (args.action.type === "ADD_LOG" && args.action.entry?.fromPlayer?.isBot) {
     if (!(await senderMatchesAddLogBotFromSnapshot(tableId, args.senderId, args.action))) {
       emitDebugLog("Rejected ADD_LOG from bot sender mismatch", {
@@ -226,6 +274,14 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
         senderId: args.senderId,
         actionType: args.action.type,
       })
+      if (turnAction) {
+        emitTurnSyncLog("rejected_sender", {
+          tableId,
+          senderId: args.senderId,
+          actionType: args.action.type,
+          snap: turnSnapBefore,
+        })
+      }
       return { ok: false as const }
     }
   } else if (args.action.type === "SET_PAIR_KISS_CHOICE") {
@@ -236,6 +292,14 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
         actionType: args.action.type,
         playerId: args.action.playerId,
       })
+      if (turnAction) {
+        emitTurnSyncLog("rejected_sender", {
+          tableId,
+          senderId: args.senderId,
+          actionType: args.action.type,
+          snap: turnSnapBefore,
+        })
+      }
       return { ok: false as const }
     }
   } else if (args.action.type === "BEGIN_PAIR_KISS_PHASE") {
@@ -250,29 +314,40 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
         turnPlayerIsBot: snap?.players[snap.currentTurnIndex]?.isBot ?? null,
         roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
       })
+      if (turnAction) {
+        emitTurnSyncLog("rejected_sender", {
+          tableId,
+          senderId: args.senderId,
+          actionType: args.action.type,
+          snap: snap ?? turnSnapBefore,
+        })
+      }
       return { ok: false as const }
     }
   } else if (args.action.type === "SET_AVATAR_FRAME") {
-    if (!(await senderCanSetAvatarFrameFromSnapshot(tableId, args.senderId, args.action))) {
+    const frameAction = args.action
+    if (!(await senderCanSetAvatarFrameFromSnapshot(tableId, args.senderId, frameAction))) {
       const snap = await getTableAuthoritySnapshot(tableId)
       emitDebugLog("Rejected SET_AVATAR_FRAME by snapshot rules", {
         tableId,
         senderId: args.senderId,
-        actionType: args.action.type,
-        playerId: args.action.playerId,
+        actionType: frameAction.type,
+        playerId: frameAction.playerId,
         senderInTable: snap?.players.some((p) => p.id === args.senderId) ?? null,
-        targetInTable: snap?.players.some((p) => p.id === args.action.playerId) ?? null,
+        targetInTable: snap?.players.some((p) => p.id === frameAction.playerId) ?? null,
       })
+      if (turnAction) {
+        emitTurnSyncLog("rejected_sender", {
+          tableId,
+          senderId: args.senderId,
+          actionType: frameAction.type,
+          snap: snap ?? turnSnapBefore,
+        })
+      }
       return { ok: false as const }
     }
   } else if (
-    args.action.type === "START_PREDICTION_PHASE" ||
-    args.action.type === "END_PREDICTION_PHASE" ||
-    args.action.type === "START_COUNTDOWN" ||
-    args.action.type === "TICK_COUNTDOWN" ||
-    args.action.type === "START_SPIN" ||
-    args.action.type === "STOP_SPIN" ||
-    args.action.type === "NEXT_TURN"
+    turnAction
   ) {
     if (!(await senderCanDriveTurnLifecycleFromSnapshot(tableId, args.senderId))) {
       const snap = await getTableAuthoritySnapshot(tableId)
@@ -285,6 +360,12 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
         turnPlayerIsBot: snap?.players[snap.currentTurnIndex]?.isBot ?? null,
         roundDriverId: snap ? getRoundDriverPlayerId(snap.players) : null,
         playersCount: snap?.players.length ?? null,
+      })
+      emitTurnSyncLog("rejected_sender", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        snap: snap ?? turnSnapBefore,
       })
       return { ok: false as const }
     }
@@ -318,7 +399,24 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
       senderId: args.senderId,
       actionType: args.action.type,
     })
+    if (turnAction) {
+      emitTurnSyncLog("rejected_apply_no_change", {
+        tableId,
+        senderId: args.senderId,
+        actionType: args.action.type,
+        snap: turnSnapBefore,
+      })
+    }
     return { ok: false as const }
+  }
+  const turnCtx = buildTurnDebugContext(tableId, applied)
+  if (turnAction) {
+    emitTurnSyncLog("accepted", {
+      tableId,
+      senderId: args.senderId,
+      actionType: args.action.type,
+      snap: applied,
+    })
   }
 
   const redis = getRedis()
@@ -345,7 +443,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     })
     scheduleVkNotificationForTableAction(args.action)
     tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
-    return { ok: true as const, seq }
+    return { ok: true as const, seq, turnKey: turnCtx.turnKey as string | null }
   }
 
   return runMemoryEventsOp(tableId, async () => {
@@ -366,7 +464,7 @@ export async function pushTableEvent(args: { tableId: number; senderId: number; 
     store.set(tableId, bucket)
     scheduleVkNotificationForTableAction(args.action)
     tryInsertGlobalRatingFromAddLog({ tableId, action: args.action, createdAtMs: now })
-    return { ok: true as const, seq: bucket.seq }
+    return { ok: true as const, seq: bucket.seq, turnKey: turnCtx.turnKey as string | null }
   })
 }
 

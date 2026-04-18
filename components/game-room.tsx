@@ -2409,6 +2409,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
     playersRef: playersRef as React.RefObject<Player[]>,
     casualMode: CASUAL_MODE,
     tableLoading,
+    seatConfirmed,
   })
 
   /* ---- auto-scroll чата: в TableChatPanel (только у низа списка) ---- */
