@@ -86,8 +86,9 @@ function SideMenuPanelInner({
 
   const darkBtnStyle = {
     background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-    border: "1px solid rgba(56,189,248,0.28)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+    border: "1px solid rgba(56,189,248,0.45)",
+    boxShadow:
+      "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
   }
 
   return (
@@ -147,12 +148,17 @@ function SideMenuPanelInner({
           }
           style={{
             background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-            border: "1px solid rgba(56,189,248,0.28)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+            border: "1px solid rgba(56,189,248,0.45)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
           }}
         >
           <div className={"flex min-w-0 flex-1 items-center gap-1.5" + (!leftSideMenuExpanded ? " max-lg:justify-center max-lg:flex-none" : "")}>
-            <Heart className="h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]" style={{ color: "#fde68a" }} fill="currentColor" />
+            <Heart
+              className="h-6 w-6 shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]"
+              style={{ color: "#fde047" }}
+              fill="currentColor"
+            />
             <span
               className="text-[15px] font-black tabular-nums leading-none shrink-0 sm:text-base"
               style={{ color: "#fff" }}
@@ -177,18 +183,27 @@ function SideMenuPanelInner({
               title="Пополнить банк"
               aria-label="Открыть магазин сердец"
             >
-              <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden />
+              <Plus className="h-5 w-5 drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]" strokeWidth={2.75} aria-hidden />
             </button>
           </div>
         </div>
 
-        <button onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })} className={sideBtnClass} style={{ background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)", border: "1px solid rgba(245, 158, 11, 0.8)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 20px rgba(251,146,60,0.35)" }}>
-          <Gift className="h-4 w-4" style={{ color: "#1f2937" }} />
+        <button
+          onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "shop" })}
+          className={sideBtnClass}
+          style={{
+            background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)",
+            border: "1px solid rgba(245, 158, 11, 0.95)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.35), 0 10px 24px rgba(251,146,60,0.45), 0 0 0 1px rgba(251,191,36,0.25)",
+          }}
+        >
+          <Gift className="h-5 w-5" style={{ color: "#0f172a", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }} strokeWidth={2.5} aria-hidden />
           <span className={sideBtnTextClass} style={{ color: "#1f2937" }}>{"Магазин"}</span>
         </button>
 
         <button onClick={() => dispatch({ type: "SET_GAME_SIDE_PANEL", panel: "profile" })} className={sideBtnClass} style={darkBtnStyle}>
-          <User className="h-4 w-4" style={{ color: "#e8c06a" }} />
+          <User className="h-5 w-5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" style={{ color: "#fde047" }} strokeWidth={2.5} aria-hidden />
           <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Профиль"}</span>
         </button>
 
@@ -210,7 +225,7 @@ function SideMenuPanelInner({
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <button type="button" className={sideBtnClass} style={darkBtnStyle}>
-              <Menu className="h-4 w-4" style={{ color: "#e8c06a" }} />
+              <Menu className="h-5 w-5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" style={{ color: "#fde047" }} strokeWidth={2.5} aria-hidden />
               <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Меню"}</span>
             </button>
           </DropdownMenuTrigger>
@@ -258,7 +273,7 @@ function SideMenuPanelInner({
         {SHOW_SIDE_MENU_PRIVATE_MESSAGES_BUTTON && (
           <div className="lg:hidden w-full">
             <button onClick={onOpenChatList} className={`${sideBtnClass} w-full justify-start`} style={darkBtnStyle}>
-              <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "#e8c06a" }} />
+              <MessageCircle className="h-5 w-5 shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]" style={{ color: "#fde047" }} strokeWidth={2.5} aria-hidden />
               <span className={sideBtnTextClass} style={{ color: "#f0e0c8" }}>{"Сообщения"}</span>
             </button>
           </div>

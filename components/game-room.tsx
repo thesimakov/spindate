@@ -4998,7 +4998,7 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
           {(() => {
             const sideBtnClass =
               isPcLayout
-                ? "group relative flex h-14 w-14 items-center justify-center rounded-full border transition-all hover:-translate-y-[1px] hover:brightness-110 [&_svg]:h-5 [&_svg]:w-5"
+                ? "group relative flex h-14 w-14 items-center justify-center rounded-full border transition-all hover:-translate-y-[1px] hover:brightness-110 [&_svg]:h-6 [&_svg]:w-6 [&_svg]:shrink-0 [&_svg]:drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
                 : "flex items-center gap-2 rounded-[999px] px-3 py-2 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[40px]" +
                   (!leftSideMenuExpanded
                     ? " max-lg:min-h-[44px] max-lg:w-11 max-lg:min-w-[44px] max-lg:justify-center max-lg:rounded-full max-lg:px-2 max-lg:gap-0"
@@ -5009,15 +5009,16 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 : "text-[13px] font-semibold leading-none" + (!leftSideMenuExpanded ? " max-lg:hidden" : "")
             const darkSideBtnStyle: CSSProperties = {
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+              border: "1px solid rgba(56,189,248,0.45)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
             }
             const sideBtnPairWrap =
               "flex w-full gap-1.5 " +
               (isPcLayout ? "flex-col items-start" : leftSideMenuExpanded ? "flex-row" : "flex-row max-lg:flex-col max-lg:items-stretch")
             const sideBtnCompactClass =
               isPcLayout
-                ? "group relative flex h-14 w-14 items-center justify-center rounded-full border transition-all hover:-translate-y-[1px] hover:brightness-110 [&_svg]:h-5 [&_svg]:w-5"
+                ? "group relative flex h-14 w-14 items-center justify-center rounded-full border transition-all hover:-translate-y-[1px] hover:brightness-110 [&_svg]:h-6 [&_svg]:w-6 [&_svg]:shrink-0 [&_svg]:drop-shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
                 : "relative flex items-center gap-1.5 rounded-[999px] px-2.5 py-1.5 transition-all hover:brightness-110 hover:-translate-y-[1px] min-h-[36px] " +
                   (leftSideMenuExpanded
                     ? "flex-1 min-w-0 justify-center"
@@ -5061,14 +5062,15 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               className="group relative flex h-auto min-h-[4.5rem] w-12 flex-col items-center justify-center gap-1 rounded-full border px-1.5 py-2 transition-all hover:-translate-y-[1px] hover:brightness-110"
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                borderColor: "rgba(56,189,248,0.35)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                borderColor: "rgba(56,189,248,0.5)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.14)",
               }}
               aria-label={`Ваш банк: ${voiceBalance}`}
             >
               <Heart
-                className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-6 w-6 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
-                style={{ color: "#fde68a" }}
+                className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-7 w-7 shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]`}
+                style={{ color: "#fde047" }}
                 fill="currentColor"
                 aria-hidden
               />
@@ -5087,8 +5089,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               }
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(56,189,248,0.28)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                border: "1px solid rgba(56,189,248,0.45)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
               }}
             >
               <div
@@ -5098,8 +5101,8 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 }
               >
                 <Heart
-                  className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-5 w-5 shrink-0 drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)]`}
-                  style={{ color: "#fde68a" }}
+                  className={`bank-heart-beat ${bankHeartPulseActive ? "scale-110" : ""} h-6 w-6 shrink-0 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]`}
+                  style={{ color: "#fde047" }}
                   fill="currentColor"
                 />
                 <BankHeartBalanceTooltip
@@ -5153,11 +5156,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             className={sideBtnClass}
             style={{
               background: "linear-gradient(135deg, #facc15 0%, #fb923c 100%)",
-              border: "1px solid rgba(245, 158, 11, 0.8)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 20px rgba(251,146,60,0.35)",
+              border: "1px solid rgba(245, 158, 11, 0.95)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.35), 0 10px 24px rgba(251,146,60,0.45), 0 0 0 1px rgba(251,191,36,0.25)",
             }}
           >
-            <Gift className="h-4 w-4" style={{ color: "#1f2937" }} />
+            <Gift
+              className={cn("shrink-0", isPcLayout ? "h-6 w-6" : "h-4 w-4")}
+              style={{ color: "#0f172a", filter: isPcLayout ? "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" : undefined }}
+              strokeWidth={isPcLayout ? 2.5 : 2.25}
+              aria-hidden
+            />
             <span className={sideBtnTextClass} style={{ color: isPcLayout ? "#f8fafc" : "#1f2937" }}>{"Магазин"}</span>
           </button>
 
@@ -5190,7 +5199,12 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                   />
                 </span>
               ) : (
-                <User className="h-3.5 w-3.5 shrink-0" style={{ color: "#e8c06a" }} aria-hidden />
+                <User
+                  className={cn("shrink-0", isPcLayout ? "h-6 w-6" : "h-3.5 w-3.5")}
+                  style={{ color: "#fde047" }}
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
               )}
               <span className={sideBtnCompactTextClass} style={{ color: "#f0e0c8" }}>
                 {"Профиль"}
@@ -5204,8 +5218,18 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               title="Личные сообщения"
               aria-label="Открыть личные сообщения"
             >
-              <span className="relative z-[1] flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-visible">
-                <MessageCircle className="h-3.5 w-3.5" style={{ color: "#e8c06a" }} />
+              <span
+                className={cn(
+                  "relative z-[1] flex shrink-0 items-center justify-center overflow-visible",
+                  isPcLayout ? "h-6 w-6" : "h-3.5 w-3.5",
+                )}
+              >
+                <MessageCircle
+                  className={cn(isPcLayout ? "h-6 w-6" : "h-3.5 w-3.5")}
+                  style={{ color: "#fde047" }}
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
                 {(pmUnreadCount > 0 || chatRequestPrompt != null) && (
                   <div className="music-lure-layer--icon" aria-hidden>
                     <span className="music-lure-note music-lure-note--1">💬</span>
@@ -5252,8 +5276,9 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
             )}
             style={{
               background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-              border: "1px solid rgba(56,189,248,0.28)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+              border: "1px solid rgba(56,189,248,0.45)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
             }}
           >
             <span
@@ -5290,16 +5315,19 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 className={`${sideBtnClass} relative z-[1]`}
                 style={{
                   background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                  border: "1px solid rgba(56,189,248,0.45)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
                 }}
                 title={musicEnabled ? "Музыка: вкл" : "Музыка: выкл"}
                 aria-label={musicEnabled ? "Выключить музыку" : "Включить музыку"}
               >
-                <span className="relative z-[1] flex h-5 w-5 items-center justify-center overflow-visible">
+                <span className="relative z-[1] flex h-6 w-6 items-center justify-center overflow-visible">
                   <Music
-                    className="relative z-0 h-5 w-5"
-                    style={{ color: musicEnabled ? "#facc15" : "#94a3b8" }}
+                    className="relative z-0 h-6 w-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
+                    style={{ color: musicEnabled ? "#fde047" : "#cbd5e1" }}
+                    strokeWidth={2.5}
+                    aria-hidden
                   />
                   {!musicEnabled && (
                     <span
@@ -5330,14 +5358,20 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
               className={sideBtnClass}
               style={{
                 background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                border: "1px solid rgba(56,189,248,0.28)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                border: "1px solid rgba(56,189,248,0.45)",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
               }}
               title={soundsEnabled === false ? "Звуки: выкл" : "Звуки: вкл"}
               aria-label={soundsEnabled === false ? "Включить звуки" : "Выключить звуки"}
             >
-              <span className="relative flex h-5 w-5 items-center justify-center">
-                <Headphones className="h-5 w-5" style={{ color: soundsEnabled === false ? "#94a3b8" : "#facc15" }} />
+              <span className="relative flex h-6 w-6 items-center justify-center">
+                <Headphones
+                  className="h-6 w-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]"
+                  style={{ color: soundsEnabled === false ? "#cbd5e1" : "#fde047" }}
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
                 {soundsEnabled === false && (
                   <span
                     className="pointer-events-none absolute h-[2px] w-[18px] -rotate-45 rounded-full"
@@ -5359,11 +5393,17 @@ export function GameRoom({ pmUnreadCount = 0 }: GameRoomProps = {}) {
                 className={sideBtnClass}
                 style={{
                   background: "linear-gradient(135deg, rgba(15,23,42,0.9) 0%, rgba(10,20,40,0.92) 100%)",
-                  border: "1px solid rgba(56,189,248,0.28)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 20px rgba(2,6,23,0.45)",
+                  border: "1px solid rgba(56,189,248,0.45)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 22px rgba(2,6,23,0.5), 0 0 0 1px rgba(56,189,248,0.12)",
                 }}
               >
-                <Menu className="h-4 w-4" style={{ color: "#e8c06a" }} />
+                <Menu
+                  className={cn("shrink-0", isPcLayout ? "h-6 w-6" : "h-4 w-4")}
+                  style={{ color: "#fde047" }}
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
                 <span className={sideBtnTextClass} style={{ color: isPcLayout ? "#f8fafc" : "#f0e0c8" }}>{"Меню"}</span>
               </button>
             </DropdownMenuTrigger>
