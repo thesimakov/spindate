@@ -34,7 +34,16 @@ export function mergeLivePlayersIntoAuthority(
   let nextIndex = 0
   if (current) {
     const idx = nextPlayers.findIndex((p) => p.id === current.id)
-    nextIndex = idx !== -1 ? idx : 0
+    if (idx !== -1) {
+      nextIndex = idx
+    } else if (current.isBot) {
+      // Полная пересборка ботов (лобби / forceReshuffle): старый id пропал из состава.
+      // Не ставим ход на индекс 0 — там почти всегда первый живой; имитация «идущей игры» ломается.
+      const botIdx = nextPlayers.findIndex((p) => p.isBot)
+      nextIndex = botIdx !== -1 ? botIdx : 0
+    } else {
+      nextIndex = 0
+    }
   }
   const prevTurnPlayerId = snapshot.players[snapshot.currentTurnIndex]?.id ?? null
   const nextTurnPlayerId = nextPlayers[nextIndex]?.id ?? null

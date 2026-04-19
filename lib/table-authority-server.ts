@@ -48,6 +48,23 @@ function playerIdsKey(players: Player[]): string {
   return players.map((p) => p.id).join(",")
 }
 
+/** Смена аватара/имени/status у тех же id — клиенты фильтруют по revision; без бампа снимок не применяют. */
+function playersPresenceKey(players: Player[]): string {
+  return players
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .map((p) =>
+      [
+        p.id,
+        (p.avatar ?? "").trim(),
+        (p.name ?? "").trim(),
+        (p.status ?? "").trim(),
+        p.isBot ? 1 : 0,
+      ].join(":"),
+    )
+    .join("|")
+}
+
 function targetsForTable(maxTableSize: number): { males: number; females: number } {
   return maxTableSize <= 6 ? { males: 3, females: 3 } : { males: 5, females: 5 }
 }
@@ -209,6 +226,9 @@ function computeEnsureAuthority(
 
   const mergedCore = mergeLivePlayersIntoAuthority(prev, composed, anchor)
   const idsChanged = playerIdsKey(mergedCore.players) !== playerIdsKey(prev.players)
+  const presenceChanged =
+    playersPresenceKey(mergedCore.players) !== playersPresenceKey(prev.players)
+  const shouldBumpRevision = idsChanged || presenceChanged
   return {
     ...mergedCore,
     bottleSkin: mergedCore.bottleSkin ?? roomDefaults.bottleSkin ?? "classic",
@@ -216,7 +236,7 @@ function computeEnsureAuthority(
     predictions: mergedCore.predictions ?? prev.predictions ?? [],
     bets: mergedCore.bets ?? prev.bets ?? [],
     pot: mergedCore.pot ?? prev.pot ?? 0,
-    revision: idsChanged ? prev.revision + 1 : prev.revision,
+    revision: shouldBumpRevision ? prev.revision + 1 : prev.revision,
   }
 }
 

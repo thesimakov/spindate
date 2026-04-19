@@ -1479,8 +1479,13 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
       const mergedPlayers = p.players.map((pl) => {
         const prev = localById.get(pl.id)
         const currentStatus = state.currentUser?.id === pl.id ? state.currentUser.status : undefined
+        const currentAvatar = state.currentUser?.id === pl.id ? state.currentUser.avatar : undefined
         return {
           ...pl,
+          avatar:
+            state.currentUser?.id === pl.id
+              ? (currentAvatar ?? pl.avatar)
+              : (pl.avatar || prev?.avatar),
           status: pl.status ?? currentStatus ?? prev?.status,
           showVkAfterCare: "showVkAfterCare" in pl ? pl.showVkAfterCare : prev?.showVkAfterCare,
           openToChatInvites: "openToChatInvites" in pl ? pl.openToChatInvites : prev?.openToChatInvites,

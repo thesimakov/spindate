@@ -9,6 +9,7 @@ import { getRoundDriverPlayerId } from "@/lib/round-driver-id"
 import { registerTableSyncDispatch } from "@/lib/table-sync-registry"
 import { generateLogId } from "@/lib/ids"
 import { tableJoinAnnouncementText } from "@/lib/join-table-announcement"
+import { STARS_MONTH_FRAME_ID } from "@/lib/popularity-frames"
 import { isTableSyncedAction } from "@/lib/sync-invariants"
 import type { Player, GameAction, TableAuthorityPayload } from "@/lib/game-types"
 
@@ -68,6 +69,7 @@ export function useSyncEngine(): SyncEngineResult {
     countdown,
     avatarFrames,
     authorityRevision,
+    popularityStats,
   } = state
   const emitSeatSyncLog = useCallback((event: string, data?: Record<string, unknown>) => {
     if (process.env.NODE_ENV !== "development") return
@@ -302,16 +304,20 @@ export function useSyncEngine(): SyncEngineResult {
    */
   useEffect(() => {
     if (!currentUser || tablePaused || !seatConfirmed || !tableAuthorityReady) return
-    const frameId = avatarFrames?.[currentUser.id]
+    const monthlyTop = Boolean(popularityStats?.monthlyTopFrame)
+    const frameId = monthlyTop
+      ? STARS_MONTH_FRAME_ID
+      : (avatarFrames?.[currentUser.id] ?? "none")
     if (!frameId || frameId === "none") return
-    const syncKey = `${tableId}:${currentUser.id}:${frameId}`
+    const syncKey = `${tableId}:${currentUser.id}:${frameId}:mt:${monthlyTop ? 1 : 0}`
     if (frameResyncKeyRef.current === syncKey) return
     frameResyncKeyRef.current = syncKey
-    pushTableAction({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId })
+    dispatch({ type: "SET_AVATAR_FRAME", playerId: currentUser.id, frameId })
     emitSeatSyncLog("resync_avatar_frame_after_join", {
       tableId,
       userId: currentUser.id,
       frameId,
+      monthlyTop,
     })
   }, [
     currentUser?.id,
@@ -320,7 +326,8 @@ export function useSyncEngine(): SyncEngineResult {
     seatConfirmed,
     tableAuthorityReady,
     avatarFrames,
-    pushTableAction,
+    popularityStats?.monthlyTopFrame,
+    dispatch,
     emitSeatSyncLog,
   ])
 
