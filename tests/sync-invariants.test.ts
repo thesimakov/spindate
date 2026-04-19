@@ -13,7 +13,7 @@ test("sync whitelist includes required multiplayer lifecycle actions", () => {
 })
 
 test("sync whitelist excludes local economy-only actions", () => {
-  const set = new Set(TABLE_SYNCED_ACTION_TYPES)
+  const set = new Set<string>(TABLE_SYNCED_ACTION_TYPES)
   assert.equal(set.has("PAY_VOICES"), false)
   assert.equal(set.has("ADD_VOICES"), false)
   assert.equal(set.has("ADD_BONUS"), false)

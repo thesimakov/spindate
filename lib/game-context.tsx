@@ -1484,8 +1484,8 @@ function gameReducerCore(state: GameState, action: GameAction): GameState {
           ...pl,
           avatar:
             state.currentUser?.id === pl.id
-              ? (currentAvatar ?? pl.avatar)
-              : (pl.avatar || prev?.avatar),
+              ? (currentAvatar ?? pl.avatar ?? prev?.avatar ?? "")
+              : (pl.avatar ?? prev?.avatar ?? ""),
           status: pl.status ?? currentStatus ?? prev?.status,
           showVkAfterCare: "showVkAfterCare" in pl ? pl.showVkAfterCare : prev?.showVkAfterCare,
           openToChatInvites: "openToChatInvites" in pl ? pl.openToChatInvites : prev?.openToChatInvites,
